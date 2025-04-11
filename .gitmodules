@@ -1,0 +1,3 @@
+[submodule "hardware/deps/spatz"]
+	path = hardware/deps/spatz
+	url = https://github.com/pulp-platform/spatz.git

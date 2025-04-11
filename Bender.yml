@@ -1,0 +1,23 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.1
+
+package:
+  name: cachepool
+
+dependencies:
+  snitch:               { path: "hardware/deps/snitch" }
+  spatz:                { path: "hardware/deps/spatz"  }
+
+workspace:
+  checkout_dir: "./hardware/deps"
+
+export_include_dirs:
+
+sources:
+  - hardware/src/cachepool_pkg.sv
+  # - hardware/src/cachepool_tile_simple.sv
+  - hardware/src/cachepool_cluster_simple.sv
+  # testbench
+  - hardware/tb/cachepool_cluster_wrapepr.sv
+  - hardware/tb/cachepool_simple_tb.sv
