@@ -10,4 +10,28 @@ Make sure you clone this repository recursively to get all the necessary submodu
 ```bash
 git submodule update --init --recursive
 ```
->>>>>>> 0d74201... [Spatz] Add Spatz dependency and some simple setup for CachePool
+
+Then, initialize and generated the needed hardware with:
+
+```bash
+make init
+make generate
+```
+
+You can build the software only with:
+
+```bash
+make sw
+```
+
+Or, build the software and hardware together with (only support QuestaSim for now):
+
+```bash
+make vsim
+```
+
+The QuestaSim simulation can be run with:
+
+```bash
+./bin/spatz_cluster.vsim.gui ./software/build/TESTNAME
+```
