@@ -93,6 +93,7 @@ VLOG_FLAGS += -64
 
 USE_CACHE ?= 1
 USE_PRINT ?= 1
+ENABLE_CACHEPOOL_TESTS ?= 1
 
 
 ############
@@ -101,7 +102,9 @@ USE_PRINT ?= 1
 # Currently highjack the simulation flow from spatz
 .PHONY: sw
 sw:
-	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw DEFS="-t cachepool" USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT)
+	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw DEFS="-t cachepool" \
+		USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT) \
+		ENABLE_CACHEPOOL_TESTS=$(ENABLE_CACHEPOOL_TESTS) CACHEPOOL_DIR=$(CACHEPOOL_DIR)
 	rm -rf ${ROOT_DIR}/${SOFTWARE_DIR}/build
 	mkdir -p ${ROOT_DIR}/${SOFTWARE_DIR}/build
 	cp -r $(SPATZ_DIR)/hw/system/spatz_cluster/sw/build ${ROOT_DIR}/${SOFTWARE_DIR}/
@@ -109,7 +112,9 @@ sw:
 
 .PHONY: vsim
 vsim:
-	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw.vsim DEFS="-t cachepool" USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT)
+	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw.vsim DEFS="-t cachepool" \
+		USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT) \
+		ENABLE_CACHEPOOL_TESTS=$(ENABLE_CACHEPOOL_TESTS) CACHEPOOL_DIR=$(CACHEPOOL_DIR)
 	rm -rf bin
 	mkdir -p bin
 	cp -r $(SPATZ_DIR)/hw/system/spatz_cluster/bin/* bin/

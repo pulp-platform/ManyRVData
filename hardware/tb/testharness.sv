@@ -98,7 +98,7 @@ module testharness (
   reqrsp_cluster_in_rsp_t to_cluster_rsp;
 
   reqrsp_to_axi #(
-    .DataWidth   (DataWidth              ),
+    .DataWidth   (SpatzDataWidth         ),
     .UserWidth   (SpatzAxiUserWidth      ),
     .axi_req_t   (spatz_axi_in_req_t     ),
     .axi_rsp_t   (spatz_axi_in_resp_t    ),

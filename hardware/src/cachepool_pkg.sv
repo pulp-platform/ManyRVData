@@ -19,13 +19,13 @@ package cachepool_pkg;
   ///////////
 
   // AXI Data Width
-  localparam int unsigned SpatzAxiDataWidth = 256;
-  localparam int unsigned SpatzAxiStrbWidth = SpatzAxiDataWidth / 8;
+  localparam int unsigned SpatzAxiDataWidth  = 256;
+  localparam int unsigned SpatzAxiStrbWidth  = SpatzAxiDataWidth / 8;
   localparam int unsigned SpatzAxiNarrowDataWidth = 64;
   // AXI Address Width
-  localparam int unsigned SpatzAxiAddrWidth = 32;
+  localparam int unsigned SpatzAxiAddrWidth  = 32;
   // AXI ID Width
-  localparam int unsigned SpatzAxiIdInWidth = 6;
+  localparam int unsigned SpatzAxiIdInWidth  = 6;
   localparam int unsigned SpatzAxiIdOutWidth = 2;
 
   // FIXED AxiIdOutWidth
@@ -55,10 +55,13 @@ package cachepool_pkg;
   ////////////////////
 
   localparam int unsigned NumCores   = 4;
+  // TODO: read from CFG
+  localparam int unsigned NumBank    = 16;
+  localparam int unsigned TCDMDepth  = 1024;
 
-  localparam int unsigned DataWidth  = 64;
-  localparam int unsigned BeWidth    = DataWidth / 8;
-  localparam int unsigned ByteOffset = $clog2(BeWidth);
+  localparam int unsigned SpatzDataWidth  = 64;
+  localparam int unsigned BeWidth         = SpatzDataWidth / 8;
+  localparam int unsigned ByteOffset      = $clog2(BeWidth);
 
   localparam int unsigned ICacheLineWidth = 128;
   localparam int unsigned ICacheLineCount = 128;
@@ -119,28 +122,50 @@ package cachepool_pkg;
 
   localparam fpu_implementation_t FPUImplementation [NumCores] = '{default: FPUImplementation_Core};
 
-
   ////////////////////
   //  CachePool L1  //
   ////////////////////
 
-  // Number of Cache Banks per Tile
-  // localparam int unsigned L1CacheBank     = 1;
+  // Address width of cache
+  localparam int unsigned L1AddrWidth         = 32;
+  // Cache lane width
+  localparam int unsigned L1LineWidth         = SpatzAxiDataWidth;
+  // Coalecser window
+  localparam int unsigned L1CoalFactor        = 2;
+  // Total number of Data banks
+  localparam int unsigned L1NumDataBank       = 128;
+  // Number of bank wraps SPM can see
+  localparam int unsigned L1NumWrapper        = NumBank;
+  // SPM view: Number of banks in each bank wrap (Use to mitigate routing complexity of such many banks)
+  localparam int unsigned L1BankPerWP         = L1NumDataBank / NumBank;
+  // Pesudo dual bank
+  localparam int unsigned L1BankFactor        = 2;
+  // Cache ways (total way number across multiple cache controllers)
+  localparam int unsigned L1Associativity     = L1NumDataBank / (L1LineWidth / SpatzDataWidth) / L1BankFactor;
+  // 8 * 1024 * 64 / 512 = 1024)
+  // Number of entrys of L1 Cache (total number across multiple cache controllers)
+  localparam int unsigned L1NumEntry          = NumBank * TCDMDepth * SpatzDataWidth / L1LineWidth;
+  // Number of cache entries each cache way has
+  localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1Associativity;
+  // Number of cache sets each cache way has
+  localparam int unsigned L1NumSet            = L1CacheWayEntry / L1BankFactor;
+  // Number of Tag banks
+  localparam int unsigned L1NumTagBank        = L1BankFactor * L1Associativity;
+  // Number of lines per bank unit
+  localparam int unsigned DepthPerBank        = TCDMDepth / L1BankPerWP;
+  // Cache total size in KB
+  localparam int unsigned L1Size              = NumBank * TCDMDepth * BeWidth / 1024;
 
-  // // L1 Cache
-  // localparam int unsigned L1AddrWidth     = 32;
-  // localparam int unsigned L1LineWidth     = 256;
-  // localparam int unsigned L1Associativity = 4;
-  // localparam int unsigned L1BankFactor    = 2;
-  // localparam int unsigned L1CoalFactor    = 2;
-  // // 8 * 1024 * 64 / 512 = 1024)
-  // localparam int unsigned L1NumEntry      = NrBanks * TCDMDepth * DataWidth / L1LineWidth;
-  // localparam int unsigned L1NumWrapper    = L1LineWidth / DataWidth;
-  // localparam int unsigned L1BankPerWP     = L1BankFactor * L1Associativity;
-  // localparam int unsigned L1BankPerWay    = L1BankFactor * L1NumWrapper;
-  // localparam int unsigned L1CacheWayEntry = L1NumEntry / L1Associativity;
-  // localparam int unsigned L1NumSet        = L1CacheWayEntry / L1BankFactor;
-  // localparam int unsigned L1NumTagBank    = L1BankFactor * L1Associativity;
-  // localparam int unsigned L1NumDataBank   = L1BankFactor * L1NumWrapper * L1Associativity;
+  // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
+  localparam int unsigned NumL1CacheCtrl      = NumCores;
+  // Number of data banks assigned to each cache controller
+  localparam int unsigned NumDataBankPerCtrl  = L1NumDataBank / NumL1CacheCtrl;
+  // Number of tag banks assigned to each cache controller
+  localparam int unsigned NumTagBankPerCtrl   = L1NumTagBank / NumL1CacheCtrl;
+  // Number of ways per cache controller
+  localparam int unsigned L1AssoPerCtrl       = L1Associativity / NumL1CacheCtrl;
+  // Number of entries per cache controller
+  localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
+
 
 endpackage : cachepool_pkg

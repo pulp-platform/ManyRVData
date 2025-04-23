@@ -70,7 +70,7 @@ module cachepool_cluster_wrapper
     .slv_resp_o             ( axi_from_cluster_iwc_resp ),
     .mst_req_o              ( axi_out_req_o             ),
     .mst_resp_i             ( axi_out_resp_i            )
-   );
+  );
 
   axi_iw_converter #(
     .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
@@ -108,8 +108,8 @@ module cachepool_cluster_wrapper
     .L2Size                   (L2Size                   ),
     .ClusterPeriphSize        (64                       ),
     .NrCores                  (NumCores                 ),
-    .TCDMDepth                (1024                     ),
-    .NrBanks                  (16                       ),
+    .TCDMDepth                (TCDMDepth                ),
+    .NrBanks                  (NumBank                  ),
     .ICacheLineWidth          (ICacheLineWidth          ),
     .ICacheLineCount          (ICacheLineCount          ),
     .ICacheSets               (ICacheSets               ),

@@ -20,7 +20,7 @@
 
 /// A single-tile cluster implementation for CachePool
 module cachepool_cluster_simple
-  // import cachepool_pkg::*;
+  import cachepool_pkg::*;
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
@@ -162,7 +162,7 @@ module cachepool_cluster_simple
   /// Minimum width to hold the core number.
   localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
-  localparam int unsigned TCDMSize          = NrBanks * TCDMDepth * (DataWidth/8);
+  localparam int unsigned TCDMSize          = NrBanks * TCDMDepth * BeWidth;
   // The short address for SPM
   localparam int unsigned SPMAddrWidth      = $clog2(TCDMSize);
   // Enlarge the address width for Spatz due to cache
@@ -240,47 +240,6 @@ module cachepool_cluster_simple
     default           : '0
   };
 
-  /*********** TODO: Move into package ***********/
-  // Address width of cache
-  localparam int unsigned L1AddrWidth     = 32;
-  // Cache lane width
-  localparam int unsigned L1LineWidth     = AxiDataWidth;
-  // Coalecser window
-  localparam int unsigned L1CoalFactor    = 2;
-  // Total number of Data banks
-  localparam int unsigned L1NumDataBank   = 128;
-  // Number of bank wraps SPM can see
-  localparam int unsigned L1NumWrapper    = NrBanks;
-  // SPM view: Number of banks in each bank wrap (Use to mitigate routing complexity of such many banks)
-  localparam int unsigned L1BankPerWP     = L1NumDataBank / NrBanks;
-  // Pesudo dual bank
-  localparam int unsigned L1BankFactor    = 2;
-  // Cache ways (total way number across multiple cache controllers)
-  localparam int unsigned L1Associativity = L1NumDataBank / (L1LineWidth / DataWidth) / L1BankFactor;
-  // 8 * 1024 * 64 / 512 = 1024)
-  // Number of entrys of L1 Cache (total number across multiple cache controllers)
-  localparam int unsigned L1NumEntry      = NrBanks * TCDMDepth * DataWidth / L1LineWidth;
-  // Number of cache entries each cache way has
-  localparam int unsigned L1CacheWayEntry = L1NumEntry / L1Associativity;
-  // Number of cache sets each cache way has
-  localparam int unsigned L1NumSet        = L1CacheWayEntry / L1BankFactor;
-  // Number of Tag banks
-  localparam int unsigned L1NumTagBank    = L1BankFactor * L1Associativity;
-  // Number of lines per bank unit
-  localparam int unsigned DepthPerBank    = TCDMDepth / L1BankPerWP;
-  // Cache total size in KB
-  localparam int unsigned L1Size          = NrBanks * TCDMDepth * DataWidth / 8 / 1024;
-  // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
-  localparam int unsigned NumL1CacheCtrl      = NrCores;
-  // Number of data banks assigned to each cache controller
-  localparam int unsigned NumDataBankPerCtrl  = L1NumDataBank / NumL1CacheCtrl;
-  // Number of tag banks assigned to each cache controller
-  localparam int unsigned NumTagBankPerCtrl   = L1NumTagBank / NumL1CacheCtrl;
-  // Number of ways per cache controller
-  localparam int unsigned L1AssoPerCtrl       = L1Associativity / NumL1CacheCtrl;
-  // Number of entries per cache controller
-  localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
-
   // --------
   // Typedefs
   // --------
@@ -309,6 +268,7 @@ module cachepool_cluster_simple
   typedef struct packed {
     logic [CoreIDWidth-1:0] core_id;
     logic is_core;
+    logic is_amo;
     reqid_t req_id;
   } tcdm_user_t;
 
@@ -507,8 +467,8 @@ module cachepool_cluster_simple
   tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req, strb_hdl_req;
   tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp, strb_hdl_rsp;
 
-  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req;
-  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp;
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req, cache_amo_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp, cache_amo_rsp;
 
   logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
   logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
@@ -873,10 +833,7 @@ module cachepool_cluster_simple
   end
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready, strb_hdl_pready;
-  logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready;
-  // Currently assume SPM is full 128 KiB
-  // assign spm_size        = 128 * 1024;
-  // assign spm_size        = cfg_spm_size * 1024;
+  logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready, cache_amo_pready;
 
   // split the requests for spm or cache from core side
   spatz_addr_mapper #(
@@ -909,47 +866,8 @@ module cachepool_cluster_simple
     .cache_rsp_i          (unmerge_rsp     )
   );
 
-
-  // spatz_strbreq_merge_tree #(
-  //   .NumIO              (NrTCDMPortsCores             ),
-  //   .NumOutstandingMem  (NumSpatzOutstandingLoads[0]  ),
-  //   .MergeNum           (NrTCDMPortsCores - NrCores   ),
-  //   .DataWidth          (DataWidth                    ),
-  //   .mem_req_t          (tcdm_req_t                   ),
-  //   .mem_rsp_t          (tcdm_rsp_t                   ),
-  //   .req_id_t           (reqid_t                      ),
-  //   .tcdm_user_t        (tcdm_user_t                  )
-  // ) i_strbreq_merge_tree (
-  //   .clk_i           (clk_i),
-  //   .rst_ni          (rst_ni),
-  //   .unmerge_req_i   (unmerge_req       ),
-  //   .unmerge_pready_i(unmerge_pready    ),
-  //   .merge_rsp_i     (strb_hdl_rsp      ),
-  //   .merge_req_o     (strb_hdl_req      ),
-  //   .merge_pready_o  (strb_hdl_pready   ),
-  //   .unmerge_rsp_o   (unmerge_rsp       )
-  // );
-
-
-  // TODO: Should be NrCore instead of CacheBank here
-  for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin: gen_strb_hdlr
+  for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
     for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin
-    //   spatz_strbreq_handler #(
-    //     .DataWidth      (DataWidth    ),
-    //     .mem_req_t      (tcdm_req_t   ),
-    //     .mem_rsp_t      (tcdm_rsp_t   ),
-    //     .reqrsp_user_t  (tcdm_user_t  )
-    //   ) i_strbreq_handler (
-    //     .clk_i            (clk_i              ),
-    //     .rst_ni           (rst_ni             ),
-    //     .strb_req_i       (strb_hdl_req   [cb*NrTCDMPortsPerCore+j]),
-    //     .strb_rsp_ready_i (strb_hdl_pready[cb*NrTCDMPortsPerCore+j]),
-    //     .strb_rsp_i       (cache_rsp      [j][cb]              ),
-    //     .strb_req_o       (cache_req      [j][cb]              ),
-    //     .strb_rsp_ready_o (cache_pready   [j][cb]              ),
-    //     .strb_rsp_o       (strb_hdl_rsp   [cb*NrTCDMPortsPerCore+j])
-    //   );
-    // end
       assign cache_req   [j][cb] = unmerge_req   [cb*NrTCDMPortsPerCore+j];
       assign cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
       assign unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
@@ -965,6 +883,7 @@ module cachepool_cluster_simple
     tcdm_cache_interco #(
       .NumCore               (NrCores             ),
       .NumCache              (NumL1CacheCtrl      ),
+      .AddrWidth             (32'd32              ),
       .tcdm_req_t            (tcdm_req_t          ),
       .tcdm_rsp_t            (tcdm_rsp_t          ),
       .tcdm_req_chan_t       (tcdm_req_chan_t     ),
@@ -973,33 +892,50 @@ module cachepool_cluster_simple
       .clk_i            (clk_i                  ),
       .rst_ni           (rst_ni                 ),
       .dynamic_offset_i (dynamic_offset         ),
-      .core_req_i       (cache_req[j]           ),
-      .core_rsp_ready_i (cache_pready[j]        ),
-      .core_rsp_o       (cache_rsp[j]           ),
-      .mem_req_o        (cache_xbar_req[j]      ),
+      .core_req_i       (cache_req        [j]   ),
+      .core_rsp_ready_i (cache_pready     [j]   ),
+      .core_rsp_o       (cache_rsp        [j]   ),
+      .mem_req_o        (cache_xbar_req   [j]   ),
       .mem_rsp_ready_o  (cache_xbar_pready[j]   ),
-      .mem_rsp_i        (cache_xbar_rsp[j]      )
+      .mem_rsp_i        (cache_xbar_rsp   [j]   )
     );
   end
 
-  // Re-organize the wire for easier connection
-  for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin
-    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
-      assign cache_req_valid[cb][j] = cache_xbar_req[j][cb].q_valid;
-      assign cache_req_addr [cb][j] = cache_xbar_req[j][cb].q.addr;
-      assign cache_req_meta [cb][j] = cache_xbar_req[j][cb].q.user;
-      assign cache_req_write[cb][j] = cache_xbar_req[j][cb].q.write;
-      assign cache_req_data [cb][j] = cache_xbar_req[j][cb].q.data;
+  for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin : gen_cache_connect
+    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_amo
+      spatz_cache_amo #(
+        .DataWidth        ( DataWidth        ),
+        .CoreIDWidth      ( CoreIDWidth      ),
+        .tcdm_req_t       ( tcdm_req_t       ),
+        .tcdm_rsp_t       ( tcdm_rsp_t       ),
+        .tcdm_req_chan_t  ( tcdm_req_chan_t  ),
+        .tcdm_rsp_chan_t  ( tcdm_rsp_chan_t  ),
+        .tcdm_user_t      ( tcdm_user_t      )
+      ) i_cache_amo (
+        .clk_i            (clk_i                    ),
+        .rst_ni           (rst_ni                   ),
+        .core_req_i       (cache_xbar_req   [j][cb] ),
+        .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
+        .core_rsp_o       (cache_xbar_rsp   [j][cb] ),
+        .mem_req_o        (cache_amo_req    [j][cb] ),
+        .mem_rsp_ready_o  (cache_amo_pready [j][cb] ),
+        .mem_rsp_i        (cache_amo_rsp    [j][cb] )
+      );
+      assign cache_req_valid[cb][j] = cache_amo_req[j][cb].q_valid;
+      assign cache_req_addr [cb][j] = cache_amo_req[j][cb].q.addr;
+      assign cache_req_meta [cb][j] = cache_amo_req[j][cb].q.user;
+      assign cache_req_write[cb][j] = cache_amo_req[j][cb].q.write;
+      assign cache_req_data [cb][j] = cache_amo_req[j][cb].q.data;
 
       // assign cache_rsp_ready[cb][j] = 1'b1;
-      assign cache_rsp_ready[cb][j] = cache_xbar_pready[j][cb];
+      assign cache_rsp_ready[cb][j] = cache_amo_pready[j][cb];
 
-      assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
-      assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
-      assign cache_xbar_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
-      assign cache_xbar_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
+      assign cache_amo_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
+      assign cache_amo_rsp[j][cb].q_ready = cache_req_ready[cb][j];
+      assign cache_amo_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
+      assign cache_amo_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
 
-      assign cache_xbar_rsp[j][cb].p.write = cache_rsp_write[cb][j];
+      assign cache_amo_rsp[j][cb].p.write = cache_rsp_write[cb][j];
     end
   end
 
@@ -1080,10 +1016,10 @@ module cachepool_cluster_simple
         .SimInit   ("zeros"                     ),
         .impl_in_t (impl_in_t                   )
       ) i_meta_bank (
-        .clk_i  (clk_i               ),
-        .rst_ni (rst_ni              ),
-        .impl_i ('0                  ),
-        .impl_o (/* unsed */         ),
+        .clk_i  (clk_i                   ),
+        .rst_ni (rst_ni                  ),
+        .impl_i ('0                      ),
+        .impl_o (/* unsed */             ),
         .req_i  (l1_tag_bank_req  [cb][j]),
         .we_i   (l1_tag_bank_we   [cb][j]),
         .addr_i (l1_tag_bank_addr [cb][j]),
@@ -1102,10 +1038,10 @@ module cachepool_cluster_simple
         .Latency    (1),
         .SimInit    ("zeros")
       ) i_data_bank (
-        .clk_i  (clk_i                   ),
-        .rst_ni (rst_ni                  ),
-        .impl_i ('0                      ),
-        .impl_o (/* unsed */             ),
+        .clk_i  (clk_i                    ),
+        .rst_ni (rst_ni                   ),
+        .impl_i ('0                       ),
+        .impl_o (/* unsed */              ),
         .req_i  (l1_data_bank_req  [cb][j]),
         .we_i   (l1_data_bank_we   [cb][j]),
         .addr_i (l1_data_bank_addr [cb][j]),
