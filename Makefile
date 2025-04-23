@@ -10,8 +10,8 @@ ROOT_DIR := $(patsubst %/,%, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CACHEPOOL_DIR)
 
 # Include configuration
-config_mk = $(abspath $(ROOT_DIR)/config/config.mk)
-include $(config_mk)
+# config_mk = $(abspath $(ROOT_DIR)/config/config.mk)
+# include $(config_mk)
 
 # Directories
 INSTALL_PREFIX        ?= install
