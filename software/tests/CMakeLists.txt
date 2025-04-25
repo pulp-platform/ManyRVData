@@ -22,8 +22,15 @@ add_compile_options(-DELEN=64)
 include_directories(include)
 include_directories(${SNRUNTIME_INCLUDE_DIRS})
 
+add_library(debug_print multi_producer_single_consumer_double_linked_list/kernel/debug.c)
+add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
+add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
+add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
+
 # Tests
 enable_testing()
 set(SNITCH_TEST_PREFIX cachepool-)
 
 add_snitch_test(spin-lock  spin-lock/main.c)
+
+add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
