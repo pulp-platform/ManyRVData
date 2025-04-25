@@ -2,6 +2,7 @@
 #define LLIST_C
 
 #include "llist.h"
+#include "rlc.h"
 #include <snrt.h>
 #include <stdio.h>
 #include <stddef.h>
@@ -11,10 +12,10 @@
 #include "debug.h"
 
 void list_init(LinkedList *list) {
-    list->head = NULL;
-    list->tail = NULL;
+    rlc_ctx.list.head = NULL;
+    rlc_ctx.list.tail = NULL;
     /* Set the list lock to 0 (unlocked) */
-    list->lock = 0;
+    rlc_ctx.list.lock = 0;
 }
 
 void list_push_back(LinkedList *list, Node *node) {
@@ -23,14 +24,14 @@ void list_push_back(LinkedList *list, Node *node) {
     spin_lock(&llist_lock);
     debug_printf("[core_id %u][list_push_back] spin_lock\n", snrt_cluster_core_idx());
     node->next = NULL;
-    node->prev = list->tail;
-    if (list->tail != NULL) {
-        list->tail->next = node;
+    node->prev = rlc_ctx.list.tail;
+    if (rlc_ctx.list.tail != NULL) {
+        rlc_ctx.list.tail->next = node;
     } else {
         /* If the list is empty, set the head to the new node */
-        list->head = node;
+        rlc_ctx.list.head = node;
     }
-    list->tail = node;
+    rlc_ctx.list.tail = node;
     debug_printf("[core_id %u][list_push_back] spin_unlock\n", snrt_cluster_core_idx());
     // spin_unlock(&list->lock);
     spin_unlock(&llist_lock);
@@ -41,14 +42,14 @@ Node *list_pop_front(LinkedList *list) {
     // spin_lock(&list->lock);
     spin_lock(&llist_lock);
     debug_printf("[core_id %u][list_pop_front] spin_lock\n", snrt_cluster_core_idx());
-    if (list->head != NULL) {
-        node = list->head;
-        list->head = node->next;
-        if (list->head != NULL) {
-            list->head->prev = NULL;
+    if (rlc_ctx.list.head != NULL) {
+        node = rlc_ctx.list.head;
+        rlc_ctx.list.head = node->next;
+        if (rlc_ctx.list.head != NULL) {
+            rlc_ctx.list.head->prev = NULL;
         } else {
             /* List becomes empty, so tail is also NULL */
-            list->tail = NULL;
+            rlc_ctx.list.tail = NULL;
         }
         node->next = NULL;
         node->prev = NULL;
@@ -67,13 +68,13 @@ void list_remove(LinkedList *list, Node *node) {
         node->prev->next = node->next;
     } else {
         /* If removing the head */
-        list->head = node->next;
+        rlc_ctx.list.head = node->next;
     }
     if (node->next != NULL) {
         node->next->prev = node->prev;
     } else {
         /* If removing the tail */
-        list->tail = node->prev;
+        rlc_ctx.list.tail = node->prev;
     }
     node->prev = NULL;
     node->next = NULL;

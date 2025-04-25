@@ -29,7 +29,7 @@ static void consumer(const unsigned int core_id) {
     while (1) {
         Node *node = list_pop_front(&rlc_ctx.list);
         if (node != 0) {
-            printf("Consumer (core %u): processing node %p with data size %zu\n",
+            debug_printf_locked("Consumer (core %u): processing node %p with data size %zu\n",
                    core_id, (void *)node, node->data_size);
             delay(100);  /* Simulate processing delay */
             mm_free(node);
@@ -44,7 +44,7 @@ static void producer(const unsigned int core_id) {
     while (1) {
         Node *node = (Node *)mm_alloc(rlc_ctx.mm_ctx);
         if (!node) {
-            printf("Producer (core %u): Out of memory\n", core_id);
+            debug_printf_locked("Producer (core %u): Out of memory\n", core_id);
             delay(200);  /* Delay before retrying */
             continue;
         }
@@ -59,7 +59,7 @@ static void producer(const unsigned int core_id) {
         mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
         list_push_back(&rlc_ctx.list, node);
-        printf("Producer (core %u): added node %p\n", core_id, (void *)node);
+        debug_printf_locked("Producer (core %u): added node %p\n", core_id, (void *)node);
         delay(200);  /* Delay between node productions */
     }
 }
