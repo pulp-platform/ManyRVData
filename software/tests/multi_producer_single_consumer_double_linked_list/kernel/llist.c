@@ -19,7 +19,8 @@ void list_init(LinkedList *list) {
 
 void list_push_back(LinkedList *list, Node *node) {
     /* Acquire the list lock to ensure exclusive access while modifying the list */
-    spin_lock(&list->lock);
+    // spin_lock(&list->lock);
+    spin_lock(&llist_lock);
     debug_printf("[core_id %u][list_push_back] spin_lock\n", snrt_cluster_core_idx());
     node->next = NULL;
     node->prev = list->tail;
@@ -31,12 +32,14 @@ void list_push_back(LinkedList *list, Node *node) {
     }
     list->tail = node;
     debug_printf("[core_id %u][list_push_back] spin_unlock\n", snrt_cluster_core_idx());
-    spin_unlock(&list->lock);
+    // spin_unlock(&list->lock);
+    spin_unlock(&llist_lock);
 }
 
 Node *list_pop_front(LinkedList *list) {
     Node *node = NULL;
-    spin_lock(&list->lock);
+    // spin_lock(&list->lock);
+    spin_lock(&llist_lock);
     debug_printf("[core_id %u][list_pop_front] spin_lock\n", snrt_cluster_core_idx());
     if (list->head != NULL) {
         node = list->head;
@@ -51,12 +54,14 @@ Node *list_pop_front(LinkedList *list) {
         node->prev = NULL;
     }
     debug_printf("[core_id %u][list_pop_front] spin_unlock\n", snrt_cluster_core_idx());
-    spin_unlock(&list->lock);
+    // spin_unlock(&list->lock);
+    spin_unlock(&llist_lock);
     return node;
 }
 
 void list_remove(LinkedList *list, Node *node) {
-    spin_lock(&list->lock);
+    // spin_lock(&list->lock);
+    spin_lock(&llist_lock);
     debug_printf("[core_id %u][list_remove] spin_lock\n", snrt_cluster_core_idx());
     if (node->prev != NULL) {
         node->prev->next = node->next;
@@ -73,7 +78,8 @@ void list_remove(LinkedList *list, Node *node) {
     node->prev = NULL;
     node->next = NULL;
     debug_printf("[core_id %u][list_remove] spin_unlock\n", snrt_cluster_core_idx());
-    spin_unlock(&list->lock);
+    // spin_unlock(&list->lock);
+    spin_unlock(&llist_lock);
 }
 
 

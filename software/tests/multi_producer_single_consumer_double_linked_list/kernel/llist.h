@@ -7,6 +7,8 @@
 /* We use a volatile int as a spinlock. Zero means unlocked. */
 typedef volatile int spinlock_t __attribute__((aligned(8)));
 
+spinlock_t llist_lock;
+
 static inline void spin_lock(spinlock_t *lock) {
     while (__sync_lock_test_and_set(lock, 1)) { }
 }

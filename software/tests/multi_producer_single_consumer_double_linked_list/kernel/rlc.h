@@ -13,17 +13,19 @@ typedef struct {
     mm_context_t *mm_ctx;
 } rlc_context_t;
 
+rlc_context_t rlc_ctx;
+
 /* 
    rlc_start() initializes shared RLC resources and starts the RLC kernel 
    for the current core. The core ID, obtained in main(), is passed here.
 */
-void rlc_start(rlc_context_t *ctx, const unsigned int core_id);
+void rlc_start(const unsigned int core_id);
 
 /*
    cluster_entry() is the per-core entry function for the RLC kernel.
    Depending on the core ID (passed as a parameter), it calls consumer() if core_id is 0,
    or producer() otherwise.
 */
-void cluster_entry(rlc_context_t *ctx, const unsigned int core_id);
+void cluster_entry(const unsigned int core_id);
 
 #endif

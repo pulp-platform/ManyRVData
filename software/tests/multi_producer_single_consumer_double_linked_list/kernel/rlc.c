@@ -25,14 +25,14 @@ static void delay(volatile int iterations) {
 }
 
 /* Consumer behavior (runs on core 0) */
-static void consumer(rlc_context_t *ctx, const unsigned int core_id) {
+static void consumer(const unsigned int core_id) {
     while (1) {
-        Node *node = list_pop_front(&ctx->list);
+        Node *node = list_pop_front(&rlc_ctx.list);
         if (node != 0) {
             printf("Consumer (core %u): processing node %p with data size %zu\n",
                    core_id, (void *)node, node->data_size);
             delay(100);  /* Simulate processing delay */
-            mm_free(ctx->mm_ctx, node);
+            mm_free(node);
         } else {
             delay(10);   /* Wait briefly if list is empty */
         }
@@ -40,10 +40,9 @@ static void consumer(rlc_context_t *ctx, const unsigned int core_id) {
 }
 
 /* Producer behavior (runs on cores other than 0) */
-static void producer(rlc_context_t *ctx, const unsigned int core_id) {
-    ctx->mm_ctx->lock = 0;
+static void producer(const unsigned int core_id) {
     while (1) {
-        Node *node = (Node *)mm_alloc(ctx->mm_ctx);
+        Node *node = (Node *)mm_alloc(rlc_ctx.mm_ctx);
         if (!node) {
             printf("Producer (core %u): Out of memory\n", core_id);
             delay(200);  /* Delay before retrying */
@@ -59,25 +58,25 @@ static void producer(rlc_context_t *ctx, const unsigned int core_id) {
         /* Zero-initialize the payload using our custom mm_memset */
         mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
-        list_push_back(&ctx->list, node);
+        list_push_back(&rlc_ctx.list, node);
         printf("Producer (core %u): added node %p\n", core_id, (void *)node);
         delay(200);  /* Delay between node productions */
     }
 }
 
 /* cluster_entry() dispatches behavior based on core_id */
-void cluster_entry(rlc_context_t *ctx, const unsigned int core_id) {
+void cluster_entry(const unsigned int core_id) {
     if (core_id == 0) {
-        consumer(ctx, core_id);
+        consumer(core_id);
     } else {
-        producer(ctx, core_id);
+        producer(core_id);
     }
 }
 
 
-void rlc_start(rlc_context_t *ctx, const unsigned int core_id) {
+void rlc_start(const unsigned int core_id) {
     /* Enter per-core processing based on core_id */
-    cluster_entry(ctx, core_id);
+    cluster_entry(core_id);
 }
 
 

@@ -11,8 +11,6 @@ int main(void) {
     /* Retrieve the core index only once in main */
     const unsigned int core_id = snrt_cluster_core_idx();
 
-    mm_context_t mm_ctx;
-    rlc_context_t rlc_ctx;
     
     if (core_id == 0) {
         /* Initalize the thread saft printf */
@@ -24,12 +22,15 @@ int main(void) {
 
         /* Initialize the linked list */
         list_init(&rlc_ctx.list);
+
+        mm_lock = 0;
+        llist_lock = 0;
     } 
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 
-    rlc_start(&rlc_ctx, core_id);
+    rlc_start(core_id);
     
     return 0;
 }
