@@ -15,7 +15,11 @@ CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CAC
 
 # Directories
 INSTALL_PREFIX        ?= install
-SOFTWARE_DIR          ?= software
+SOFTWARE_DIR          ?= ${CACHEPOOL_DIR}/software
+TOOLCHAIN_DIR 				?= ${SOFTWARE_DIR}/toolchain
+SPATZ_DIR        			?= $(CACHEPOOL_DIR)/hardware/deps/spatz
+
+
 INSTALL_DIR           ?= ${ROOT_DIR}/${INSTALL_PREFIX}
 GCC_INSTALL_DIR       ?= ${INSTALL_DIR}/riscv-gcc
 ISA_SIM_INSTALL_DIR   ?= ${INSTALL_DIR}/riscv-isa-sim
@@ -24,7 +28,6 @@ HALIDE_INSTALL_DIR    ?= ${INSTALL_DIR}/halide
 BENDER_INSTALL_DIR    ?= ${INSTALL_DIR}/bender
 VERILATOR_INSTALL_DIR ?= ${INSTALL_DIR}/verilator
 RISCV_TESTS_DIR       ?= ${ROOT_DIR}/${SOFTWARE_DIR}/riscv-tests
-SPATZ_DIR        			?= $(CACHEPOOL_DIR)/hardware/deps/spatz
 
 # Tools
 COMPILER ?= llvm
@@ -43,7 +46,7 @@ BENDER_VERSION = 0.28.1
 
 # Initialize, setup the toolchain for Spatz
 init:
-	git submodule update --init --recursive
+	git submodule update --init --recursive --jobs=8
 	ln -sf /usr/scratch2/calanda/diyou/flamingo/spatz-mx/spatz/install $(SPATZ_DIR)/install
 
 # Bender
@@ -69,9 +72,7 @@ rm-spatz:
 
 # Build bootrom and spatz
 .PHONY: generate
-generate:
-	rm -rf $(SPATZ_DIR)/sw/toolchain/riscv-opcodes
-	make -C $(SPATZ_DIR) update_opcodes;
+generate: update_opcodes
 	make -C $(SPATZ_DIR)/hw/system/spatz_cluster generate;
 
 
@@ -96,29 +97,49 @@ USE_PRINT ?= 1
 ENABLE_CACHEPOOL_TESTS ?= 1
 
 
+#############
+#  Opcodes  #
+#############
+
+.PHONY: update_opcodes
+update_opcodes: clean-opcodes ${TOOLCHAIN_DIR}/riscv-opcodes ${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h ${SPATZ_DIR}/hw/ip/snitch/src/riscv_instr.sv
+
+clean-opcodes:
+	rm -rf ${TOOLCHAIN_DIR}/riscv-opcodes
+
+${TOOLCHAIN_DIR}/riscv-opcodes: ${TOOLCHAIN_DIR}/riscv-opcodes.version
+	mkdir -p ${TOOLCHAIN_DIR}
+	cd ${TOOLCHAIN_DIR} && git clone https://github.com/mp-17/riscv-opcodes.git
+	cd ${TOOLCHAIN_DIR}/riscv-opcodes &&                 \
+		git checkout `cat ../riscv-opcodes.version` && \
+		git submodule update --init --recursive --jobs=8 .
+
+${SPATZ_DIR}hw/ip/snitch/src/riscv_instr.sv: ${TOOLCHAIN_DIR}/riscv-opcodes
+	MY_OPCODES=$(OPCODES) make -C ${TOOLCHAIN_DIR}/riscv-opcodes inst.sverilog
+	mv ${TOOLCHAIN_DIR}/riscv-opcodes/inst.sverilog $@
+
+${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h:
+	MY_OPCODES=$(OPCODES) make -C ${TOOLCHAIN_DIR}/riscv-opcodes all
+	cp ${TOOLCHAIN_DIR}/riscv-opcodes/encoding_out.h $@
+
+
+
 ############
 # Modelsim #
 ############
 # Currently highjack the simulation flow from spatz
 .PHONY: sw
 sw:
-	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw DEFS="-t cachepool" \
-		USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT) \
-		ENABLE_CACHEPOOL_TESTS=$(ENABLE_CACHEPOOL_TESTS) CACHEPOOL_DIR=$(CACHEPOOL_DIR)
-	rm -rf ${ROOT_DIR}/${SOFTWARE_DIR}/build
-	mkdir -p ${ROOT_DIR}/${SOFTWARE_DIR}/build
-	cp -r $(SPATZ_DIR)/hw/system/spatz_cluster/sw/build ${ROOT_DIR}/${SOFTWARE_DIR}/
+	make -BC ${SPATZ_DIR}/hw/system/spatz_cluster sw DEFS="-t cachepool" \
+		USE_CACHE=${USE_CACHE} ENABLE_PRINT=${USE_PRINT} RUNTIME_DIR=${CACHEPOOL_DIR}/software \
+		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software
 
 
 .PHONY: vsim
 vsim:
-	make -BC $(SPATZ_DIR)/hw/system/spatz_cluster sw.vsim DEFS="-t cachepool" \
-		USE_CACHE=$(USE_CACHE) ENABLE_PRINT=$(USE_PRINT) \
-		ENABLE_CACHEPOOL_TESTS=$(ENABLE_CACHEPOOL_TESTS) CACHEPOOL_DIR=$(CACHEPOOL_DIR)
-	rm -rf bin
-	mkdir -p bin
-	cp -r $(SPATZ_DIR)/hw/system/spatz_cluster/bin/* bin/
-	rm -rf ${ROOT_DIR}/${SOFTWARE_DIR}/build
-	mkdir -p ${ROOT_DIR}/${SOFTWARE_DIR}/build
-	cp -r $(SPATZ_DIR)/hw/system/spatz_cluster/sw/build ${ROOT_DIR}/${SOFTWARE_DIR}/
-
+	make -BC ${SPATZ_DIR}/hw/system/spatz_cluster sw.vsim DEFS="-t cachepool" \
+		USE_CACHE=${USE_CACHE} ENABLE_PRINT=${USE_PRINT} RUNTIME_DIR=${CACHEPOOL_DIR}/software BIN_DIR=${CACHEPOOL_DIR} \
+		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software
+# 	rm -rf bin
+# 	mkdir -p bin
+# 	cp -r ${SPATZ_DIR}/hw/system/spatz_cluster/bin/* bin/
