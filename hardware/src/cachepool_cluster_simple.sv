@@ -464,8 +464,8 @@ module cachepool_cluster_simple
   spm_req_t   [NrTCDMPortsCores-1:0] spm_req;
   spm_rsp_t   [NrTCDMPortsCores-1:0] spm_rsp;
 
-  tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req, strb_hdl_req;
-  tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp, strb_hdl_rsp;
+  tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req;
+  tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp;
 
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req, cache_amo_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp, cache_amo_rsp;
@@ -498,32 +498,10 @@ module cachepool_cluster_simple
   data_t           [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
   logic            [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
 
-  logic            [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_req;
-  logic            [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_we;
-  tcdm_bank_addr_t [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_addr;
-  data_t           [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_wdata;
-  strb_t           [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_be;
-  data_t           [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_rdata;
-  logic            [L1NumWrapper-1:0][L1BankPerWP-1:0]      l1_cache_wp_gnt;
-
-  // Used to bridge `l1_data_bank*` and `l1_cache_wp*` signals
-  logic            [L1NumDataBank-1:0] l1_data_bank_req_flat;
-  logic            [L1NumDataBank-1:0] l1_data_bank_we_flat;
-  tcdm_bank_addr_t [L1NumDataBank-1:0] l1_data_bank_addr_flat;
-  data_t           [L1NumDataBank-1:0] l1_data_bank_wdata_flat;
-  logic            [L1NumDataBank-1:0] l1_data_bank_be_flat;
-  data_t           [L1NumDataBank-1:0] l1_data_bank_rdata_flat;
-  logic            [L1NumDataBank-1:0] l1_data_bank_gnt_flat;
-
-  // Requests/Response to/from outside DRAM from cache controllers
-  axi_mst_dma_req_t  [NumL1CacheCtrl-1:0] wide_dcache_mst_req;
-  axi_mst_dma_resp_t [NumL1CacheCtrl-1:0] wide_dcache_mst_rsp;
-
   logic                       l1d_insn_valid;
   logic [NumL1CacheCtrl-1:0]  l1d_insn_ready;
   logic [1:0]                 l1d_insn;
   tcdm_bank_addr_t            cfg_spm_size;
-  tcdm_addr_t                 spm_size;
   logic                       l1d_busy;
 
   // High if a port access an illegal SPM region (mapped to cache)
@@ -832,7 +810,7 @@ module cachepool_cluster_simple
     end
   end
 
-  logic  [NrTCDMPortsCores-1:0] unmerge_pready, strb_hdl_pready;
+  logic  [NrTCDMPortsCores-1:0] unmerge_pready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready, cache_amo_pready;
 
   // split the requests for spm or cache from core side
@@ -1184,7 +1162,6 @@ module cachepool_cluster_simple
       .TCDMAddrWidth           (SPMAddrWidth               )
     ) i_spatz_cc (
       .clk_i            (clk_i                               ),
-      .clk_d2_i         (clk_i                               ),
       .rst_ni           (rst_ni                              ),
       .testmode_i       (1'b0                                ),
       .hart_id_i        (hart_id                             ),
@@ -1464,7 +1441,8 @@ module cachepool_cluster_simple
     .l1d_spm_size_o           (cfg_spm_size          ),
     .l1d_insn_o               (l1d_insn              ),
     .l1d_insn_valid_o         (l1d_insn_valid        ),
-    .l1d_insn_ready_i         (&l1d_insn_ready       ),
+    // TODO: Here we only check controller 0
+    .l1d_insn_ready_i         (l1d_insn_ready[0]     ),
     .l1d_busy_o               (l1d_busy              )
   );
 
