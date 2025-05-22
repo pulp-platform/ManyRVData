@@ -1,0 +1,441 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// Solderpad Hardware License, Version 0.51, see LICENSE for details.
+// SPDX-License-Identifier: SHL-0.51
+
+// Author: Diyou Shen <dishen@iis.ee.ethz.ch>
+
+`include "axi/assign.svh"
+`include "axi/typedef.svh"
+`include "common_cells/assertions.svh"
+`include "common_cells/registers.svh"
+`include "mem_interface/assign.svh"
+`include "mem_interface/typedef.svh"
+`include "register_interface//assign.svh"
+`include "register_interface/typedef.svh"
+`include "reqrsp_interface/assign.svh"
+`include "reqrsp_interface/typedef.svh"
+`include "snitch_vm/typedef.svh"
+`include "tcdm_interface/assign.svh"
+`include "tcdm_interface/typedef.svh"
+
+/// A single-tile cluster implementation for CachePool
+module cachepool_cluster
+  import cachepool_pkg::*;
+  import spatz_pkg::*;
+  import fpnew_pkg::fpu_implementation_t;
+  import snitch_pma_pkg::snitch_pma_t;
+  #(
+    /// Width of physical address.
+    parameter int                     unsigned               AxiAddrWidth                       = 48,
+    /// Width of AXI port.
+    parameter int                     unsigned               AxiDataWidth                       = 512,
+    /// AXI: id width in.
+    parameter int                     unsigned               AxiIdWidthIn                       = 2,
+    /// AXI: id width out.
+    parameter int                     unsigned               AxiIdWidthOut                      = 2,
+    /// AXI: user width.
+    parameter int                     unsigned               AxiUserWidth                       = 1,
+    /// Address from which to fetch the first instructions.
+    parameter logic                            [31:0]        BootAddr                           = 32'h0,
+    /// Address to indicate start of L2
+    parameter logic                   [AxiAddrWidth-1:0]     L2Addr                             = 48'h0,
+    parameter logic                   [AxiAddrWidth-1:0]     L2Size                             = 48'h0,
+    /// The total amount of cores.
+    parameter int                     unsigned               NrCores                            = 8,
+    /// Data/TCDM memory depth per cut (in words).
+    parameter int                     unsigned               TCDMDepth                          = 1024,
+    /// Cluster peripheral address region size (in kB).
+    parameter int                     unsigned               ClusterPeriphSize                  = 64,
+    /// Number of TCDM Banks.
+    parameter int                     unsigned               NrBanks                            = 2 * NrCores,
+    /// Size of DMA AXI buffer.
+    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
+    /// Size of DMA request fifo.
+    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
+    /// Width of a single icache line.
+    parameter                         unsigned               ICacheLineWidth                    = 0,
+    /// Number of icache lines per set.
+    parameter int                     unsigned               ICacheLineCount                    = 0,
+    /// Number of icache sets.
+    parameter int                     unsigned               ICacheSets                         = 0,
+    // PMA Configuration
+    parameter snitch_pma_t                                   SnitchPMACfg                       = '{default: 0},
+    /// # Core-global parameters
+    /// FPU configuration.
+    parameter fpu_implementation_t                           FPUImplementation        [NrCores] = '{default: fpu_implementation_t'(0)},
+    /// Spatz FPU/IPU Configuration
+    parameter int                     unsigned               NumSpatzFPUs                       = 4,
+    parameter int                     unsigned               NumSpatzIPUs                       = 1,
+    /// Per-core enabling of the custom `Xdma` ISA extensions.
+    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
+    /// # Per-core parameters
+    /// Per-core integer outstanding loads
+    parameter int                     unsigned               NumIntOutstandingLoads   [NrCores] = '{default: '0},
+    /// Per-core integer outstanding memory operations (load and stores)
+    parameter int                     unsigned               NumIntOutstandingMem     [NrCores] = '{default: '0},
+    /// Per-core Spatz outstanding loads
+    parameter int                     unsigned               NumSpatzOutstandingLoads [NrCores] = '{default: '0},
+    /// ## Timing Tuning Parameters
+    /// Insert Pipeline registers into off-loading path (response)
+    parameter bit                                            RegisterOffloadRsp                 = 1'b0,
+    /// Insert Pipeline registers into data memory path (request)
+    parameter bit                                            RegisterCoreReq                    = 1'b0,
+    /// Insert Pipeline registers into data memory path (response)
+    parameter bit                                            RegisterCoreRsp                    = 1'b0,
+    /// Insert Pipeline registers after each memory cut
+    parameter bit                                            RegisterTCDMCuts                   = 1'b0,
+    /// Decouple external AXI plug
+    parameter bit                                            RegisterExt                        = 1'b0,
+    parameter axi_pkg::xbar_latency_e                        XbarLatency                        = axi_pkg::CUT_ALL_PORTS,
+    /// Outstanding transactions on the AXI network
+    parameter int                     unsigned               MaxMstTrans                        = 4,
+    parameter int                     unsigned               MaxSlvTrans                        = 4,
+    /// # Interface
+    /// AXI Ports
+    parameter type                                           axi_in_req_t                       = logic,
+    parameter type                                           axi_in_resp_t                      = logic,
+    parameter type                                           axi_out_req_t                      = logic,
+    parameter type                                           axi_out_resp_t                     = logic,
+    /// SRAM configuration
+    parameter type                                           impl_in_t                          = logic,
+    // Memory latency parameter. Most of the memories have a read latency of 1. In
+    // case you have memory macros which are pipelined you want to adjust this
+    // value here. This only applies to the TCDM. The instruction cache macros will break!
+    // In case you are using the `RegisterTCDMCuts` feature this adds an
+    // additional cycle latency, which is taken into account here.
+    parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
+    /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
+    /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
+    parameter int                     unsigned               NrSramCfg                          = 1
+  ) (
+    /// System clock.
+    input  logic                             clk_i,
+    /// Asynchronous active high reset. This signal is assumed to be _async_.
+    input  logic                             rst_ni,
+    /// Per-core debug request signal. Asserting this signals puts the
+    /// corresponding core into debug mode. This signal is assumed to be _async_.
+    input  logic          [NrCores-1:0]      debug_req_i,
+    /// Machine external interrupt pending. Usually those interrupts come from a
+    /// platform-level interrupt controller. This signal is assumed to be _async_.
+    input  logic          [NrCores-1:0]      meip_i,
+    /// Machine timer interrupt pending. Usually those interrupts come from a
+    /// core-local interrupt controller such as a timer/RTC. This signal is
+    /// assumed to be _async_.
+    input  logic          [NrCores-1:0]      mtip_i,
+    /// Core software interrupt pending. Usually those interrupts come from
+    /// another core to facilitate inter-processor-interrupts. This signal is
+    /// assumed to be _async_.
+    input  logic          [NrCores-1:0]      msip_i,
+    /// First hartid of the cluster. Cores of a cluster are monotonically
+    /// increasing without a gap, i.e., a cluster with 8 cores and a
+    /// `hart_base_id_i` of 5 get the hartids 5 - 12.
+    input  logic          [9:0]              hart_base_id_i,
+    /// Base address of cluster. TCDM and cluster peripheral location are derived from
+    /// it. This signal is pseudo-static.
+    input  logic          [AxiAddrWidth-1:0] cluster_base_addr_i,
+    /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
+    /// to the overall system that the cluster is executing something.
+    output logic          [NumTiles-1:0]     cluster_probe_o,
+    /// AXI Core cluster in-port.
+    input  axi_in_req_t   [NumTiles-1:0]     axi_in_req_i,
+    output axi_in_resp_t  [NumTiles-1:0]     axi_in_resp_o,
+    /// AXI Core cluster out-port to core.
+    output axi_out_req_t                     axi_out_req_o,
+    input  axi_out_resp_t                    axi_out_resp_i,
+    /// AXI Core cluster out-port to L2 Mem.
+    output axi_out_req_t                     axi_out_l2_req_o,
+    input  axi_out_resp_t                    axi_out_l2_resp_i,
+    /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
+    input  impl_in_t      [NrSramCfg-1:0]    impl_i,
+    /// Indicate the program execution is error
+    output logic                             error_o
+  );
+  // ---------
+  // Imports
+  // ---------
+  import snitch_pkg::*;
+  import snitch_icache_pkg::icache_events_t;
+
+  // ---------
+  // Constants
+  // ---------
+  /// Minimum width to hold the core number.
+  localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
+
+  // Enlarge the address width for Spatz due to cache
+  localparam int unsigned TCDMAddrWidth     = 32;
+
+
+  // Core Request, SoC Request
+  localparam int unsigned NrNarrowMasters = 2;
+
+  // Narrow AXI network parameters
+  localparam int unsigned NarrowIdWidthIn  = AxiIdWidthIn;
+  localparam int unsigned NarrowIdWidthOut = NarrowIdWidthIn + $clog2(NrNarrowMasters);
+  localparam int unsigned NarrowDataWidth  = ELEN;
+  localparam int unsigned NarrowUserWidth  = AxiUserWidth;
+
+  localparam int unsigned WideIdWidthOut = AxiIdWidthOut;
+  localparam int unsigned WideIdWidthIn  = WideIdWidthOut - $clog2(NumClusterAxiMst);
+
+  // Cache XBar configuration struct
+  localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
+    NoSlvPorts        : NumClusterAxiMst*NumTiles,
+    NoMstPorts        : NumClusterAxiSlv,
+    MaxMstTrans       : MaxMstTrans,
+    MaxSlvTrans       : MaxSlvTrans,
+    FallThrough       : 1'b0,
+    LatencyMode       : XbarLatency,
+    AxiIdWidthSlvPorts: WideIdWidthIn,
+    AxiIdUsedSlvPorts : WideIdWidthIn,
+    UniqueIds         : 1'b0,
+    AxiAddrWidth      : AxiAddrWidth,
+    AxiDataWidth      : AxiDataWidth,
+    NoAddrRules       : NumClusterAxiSlv - 1,
+    default           : '0
+  };
+
+  // --------
+  // Typedefs
+  // --------
+  typedef logic [AxiAddrWidth-1:0]      addr_t;
+  typedef logic [NarrowDataWidth-1:0]   data_t;
+  typedef logic [NarrowDataWidth/8-1:0] strb_t;
+  typedef logic [AxiDataWidth-1:0]      data_cache_t;
+  typedef logic [AxiDataWidth/8-1:0]    strb_cache_t;
+  typedef logic [NarrowIdWidthIn-1:0]   id_mst_t;
+  typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
+  typedef logic [WideIdWidthIn-1:0]     id_cache_mst_t;
+  typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
+  typedef logic [WideIdWidthIn-$clog2(NumL1CacheCtrl)-1:0] id_dcache_mst_t;
+  typedef logic [NarrowUserWidth-1:0]   user_t;
+  typedef logic [AxiUserWidth-1:0]      user_cache_t;
+
+  // Regbus peripherals.
+  `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)
+  `AXI_TYPEDEF_ALL(axi_slv, addr_t, id_slv_t, data_t, strb_t, user_t)
+  /// TODO: fix naming
+  `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
+  `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
+
+  `REG_BUS_TYPEDEF_ALL(reg_cache, addr_t, data_cache_t, strb_cache_t)
+
+  typedef struct packed {
+    int unsigned idx;
+    addr_t start_addr;
+    addr_t end_addr;
+  } xbar_rule_t;
+
+  `SNITCH_VM_TYPEDEF(AxiAddrWidth)
+
+  // -----------
+  // Assignments
+  // -----------
+  // Calculate start and end address of TCDM based on the `cluster_base_addr_i`.
+
+  addr_t cluster_l2_start_address, cluster_l2_end_address;
+  assign cluster_l2_start_address = L2Addr;
+  assign cluster_l2_end_address   = L2Addr + L2Size;
+
+  // ----------------
+  // Wire Definitions
+  // ----------------
+  // 1. AXI
+  axi_mst_cache_req_t  [NumTiles*NumL1CacheCtrl-1 :0]   axi_cache_req;
+  axi_mst_cache_resp_t [NumTiles*NumL1CacheCtrl-1 :0]   axi_cache_rsp;
+  axi_mst_cache_req_t  [NumTiles*NumTileWideAxi-1 :0]   axi_tile_req;
+  axi_mst_cache_resp_t [NumTiles*NumTileWideAxi-1 :0]   axi_tile_rsp;
+  axi_slv_cache_req_t  [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_req;
+  axi_slv_cache_resp_t [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_rsp;
+
+  // 2. BootROM
+  reg_cache_req_t bootrom_reg_req;
+  reg_cache_rsp_t bootrom_reg_rsp;
+
+  // ---------------
+  // CachePool Tile
+  // ---------------
+
+  for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
+    cachepool_tile #(
+      .AxiAddrWidth             ( AxiAddrWidth             ),
+      .AxiDataWidth             ( AxiDataWidth             ),
+      .AxiIdWidthIn             ( AxiIdWidthIn             ),
+      .AxiIdWidthOut            ( WideIdWidthIn            ),
+      .AxiUserWidth             ( AxiUserWidth             ),
+      .BootAddr                 ( BootAddr                 ),
+      .L2Addr                   ( L2Addr                   ),
+      .L2Size                   ( L2Size                   ),
+      .ClusterPeriphSize        ( ClusterPeriphSize        ),
+      .NrCores                  ( NrCores                  ),
+      .TCDMDepth                ( TCDMDepth                ),
+      .NrBanks                  ( NrBanks                  ),
+      .ICacheLineWidth          ( ICacheLineWidth          ),
+      .ICacheLineCount          ( ICacheLineCount          ),
+      .ICacheSets               ( ICacheSets               ),
+      .FPUImplementation        ( FPUImplementation        ),
+      .NumSpatzFPUs             ( NumSpatzFPUs             ),
+      .NumSpatzIPUs             ( NumSpatzIPUs             ),
+      .SnitchPMACfg             ( SnitchPMACfg             ),
+      .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+      .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+      .axi_in_req_t             ( axi_in_req_t             ),
+      .axi_in_resp_t            ( axi_in_resp_t            ),
+      .axi_out_req_t            ( axi_mst_cache_req_t      ),
+      .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+      .Xdma                     ( Xdma                     ),
+      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
+      .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
+      .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+      .RegisterCoreReq          ( RegisterCoreReq          ),
+      .RegisterCoreRsp          ( RegisterCoreRsp          ),
+      .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+      .RegisterExt              ( RegisterExt              ),
+      .XbarLatency              ( XbarLatency              ),
+      .MaxMstTrans              ( MaxMstTrans              ),
+      .MaxSlvTrans              ( MaxSlvTrans              )
+    ) i_tile (
+      .clk_i                    ( clk_i                    ),
+      .rst_ni                   ( rst_ni                   ),
+      .impl_i                   ( impl_i                   ),
+      .error_o                  (                          ),
+      .debug_req_i              ( debug_req_i              ),
+      .meip_i                   ( meip_i                   ),
+      .mtip_i                   ( mtip_i                   ),
+      .msip_i                   ( msip_i                   ),
+      .hart_base_id_i           ( hart_base_id_i           ),
+      .cluster_base_addr_i      ( cluster_base_addr_i      ),
+      .tile_probe_o             ( cluster_probe_o[t]       ),
+      .axi_in_req_i             ( axi_in_req_i [t]         ),
+      .axi_in_resp_o            ( axi_in_resp_o[t]         ),
+      // AXI Master Port
+      .axi_cache_req_o          ( axi_cache_req[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      .axi_cache_rsp_i          ( axi_cache_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi] ),
+      .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi] )
+    );
+  end
+  logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
+  xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
+
+  assign cache_xbar_default_port = '{default: ClusterL2};
+  assign cache_xbar_rule         = '{
+    '{
+      idx       : ClusterL2,
+      start_addr: cluster_l2_start_address,
+      end_addr  : cluster_l2_end_address
+    }
+  };
+
+  localparam bit [CacheXbarCfg.NoSlvPorts-1:0] CacheEnDefaultMstPort = '1;
+
+  axi_xbar #(
+    .Cfg           (CacheXbarCfg           ),
+    .ATOPs         (0                      ),
+    .slv_aw_chan_t (axi_mst_cache_aw_chan_t),
+    .mst_aw_chan_t (axi_slv_cache_aw_chan_t),
+    .w_chan_t      (axi_mst_cache_w_chan_t ),
+    .slv_b_chan_t  (axi_mst_cache_b_chan_t ),
+    .mst_b_chan_t  (axi_slv_cache_b_chan_t ),
+    .slv_ar_chan_t (axi_mst_cache_ar_chan_t),
+    .mst_ar_chan_t (axi_slv_cache_ar_chan_t),
+    .slv_r_chan_t  (axi_mst_cache_r_chan_t ),
+    .mst_r_chan_t  (axi_slv_cache_r_chan_t ),
+    .slv_req_t     (axi_mst_cache_req_t    ),
+    .slv_resp_t    (axi_mst_cache_resp_t   ),
+    .mst_req_t     (axi_slv_cache_req_t    ),
+    .mst_resp_t    (axi_slv_cache_resp_t   ),
+    .rule_t        (xbar_rule_t            )
+  ) i_axi_dma_xbar (
+    .clk_i                 (clk_i                                  ),
+    .rst_ni                (rst_ni                                 ),
+    .test_i                (1'b0                                   ),
+    .slv_ports_req_i       ({axi_cache_req, axi_tile_req[TileMem]} ),
+    .slv_ports_resp_o      ({axi_cache_rsp, axi_tile_rsp[TileMem]} ),
+    .mst_ports_req_o       (wide_axi_slv_req                       ),
+    .mst_ports_resp_i      (wide_axi_slv_rsp                       ),
+    .addr_map_i            (cache_xbar_rule                        ),
+    .en_default_mst_port_i (CacheEnDefaultMstPort                  ),
+    .default_mst_port_i    (cache_xbar_default_port                )
+  );
+
+
+  // -------------
+  // DMA Subsystem
+  // -------------
+  // Optionally decouple the external wide AXI master port.
+  axi_cut #(
+    .Bypass     (!RegisterExt               ),
+    .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
+    .w_chan_t   (axi_slv_cache_w_chan_t     ),
+    .b_chan_t   (axi_slv_cache_b_chan_t     ),
+    .ar_chan_t  (axi_slv_cache_ar_chan_t    ),
+    .r_chan_t   (axi_slv_cache_r_chan_t     ),
+    .axi_req_t  (axi_slv_cache_req_t        ),
+    .axi_resp_t (axi_slv_cache_resp_t       )
+  ) i_cut_ext_wide_out (
+    .clk_i      (clk_i                      ),
+    .rst_ni     (rst_ni                     ),
+    .slv_req_i  (wide_axi_slv_req[ClusterL3]),
+    .slv_resp_o (wide_axi_slv_rsp[ClusterL3]),
+    .mst_req_o  (axi_out_req_o              ),
+    .mst_resp_i (axi_out_resp_i             )
+  );
+
+  axi_cut #(
+    .Bypass     (!RegisterExt               ),
+    .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
+    .w_chan_t   (axi_slv_cache_w_chan_t     ),
+    .b_chan_t   (axi_slv_cache_b_chan_t     ),
+    .ar_chan_t  (axi_slv_cache_ar_chan_t    ),
+    .r_chan_t   (axi_slv_cache_r_chan_t     ),
+    .axi_req_t  (axi_slv_cache_req_t        ),
+    .axi_resp_t (axi_slv_cache_resp_t       )
+  ) i_cut_ext_l2_wide_out (
+    .clk_i      (clk_i                      ),
+    .rst_ni     (rst_ni                     ),
+    .slv_req_i  (wide_axi_slv_req[ClusterL2]),
+    .slv_resp_o (wide_axi_slv_rsp[ClusterL2]),
+    .mst_req_o  (axi_out_l2_req_o           ),
+    .mst_resp_i (axi_out_l2_resp_i          )
+  );
+
+  // ---------
+  // Slaves
+  // ---------
+
+  // TODO: Add MUX for multi-Tile
+  // BootROM
+  axi_to_reg #(
+    .ADDR_WIDTH         (AxiAddrWidth      ),
+    .DATA_WIDTH         (AxiDataWidth      ),
+    .AXI_MAX_WRITE_TXNS (1                 ),
+    .AXI_MAX_READ_TXNS  (1                 ),
+    .DECOUPLE_W         (0                 ),
+    .ID_WIDTH           (WideIdWidthIn     ),
+    .USER_WIDTH         (AxiUserWidth      ),
+    .axi_req_t          (axi_mst_cache_req_t ),
+    .axi_rsp_t          (axi_mst_cache_resp_t),
+    .reg_req_t          (reg_cache_req_t     ),
+    .reg_rsp_t          (reg_cache_rsp_t     )
+  ) i_axi_to_reg_bootrom (
+    .clk_i      (clk_i                    ),
+    .rst_ni     (rst_ni                   ),
+    .testmode_i (1'b0                     ),
+    .axi_req_i  (axi_tile_req[TileBootROM]),
+    .axi_rsp_o  (axi_tile_rsp[TileBootROM]),
+    .reg_req_o  (bootrom_reg_req          ),
+    .reg_rsp_i  (bootrom_reg_rsp          )
+  );
+
+  bootrom i_bootrom (
+    .clk_i  (clk_i                        ),
+    .req_i  (bootrom_reg_req.valid        ),
+    .addr_i (addr_t'(bootrom_reg_req.addr)),
+    .rdata_o(bootrom_reg_rsp.rdata        )
+  );
+  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+  assign bootrom_reg_rsp.error = 1'b0;
+
+endmodule

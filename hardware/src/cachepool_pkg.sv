@@ -29,7 +29,8 @@ package cachepool_pkg;
   localparam int unsigned SpatzAxiIdOutWidth = 2;
 
   // FIXED AxiIdOutWidth
-  localparam int unsigned IwcAxiIdOutWidth = 3 + $clog2(4);
+  // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
+  localparam int unsigned IwcAxiIdOutWidth = 3 + $clog2(4) + 3;
 
   // AXI User Width
   localparam int unsigned SpatzAxiUserWidth = 10;
@@ -167,5 +168,25 @@ package cachepool_pkg;
   // Number of entries per cache controller
   localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
 
+  // Do we need to keep DMA here?
+  localparam int unsigned NumTileWideAxi          = 2;
+  typedef enum integer {
+    TileBootROM       = 0,
+    TileMem           = 1
+  } tile_wide_e;
+
+  localparam int unsigned NumTileNarrowAxi        = 1;
+  typedef enum integer {
+    TilePeriph           = 0
+  } tile_narrow_e;
+
+  // TODO: multi-tile support
+  localparam int unsigned NumClusterAxiMst        = 1 + NumL1CacheCtrl;
+  localparam int unsigned NumClusterAxiSlv        = 2;
+
+  typedef enum integer {
+    ClusterL2       = 0,
+    ClusterL3       = 1
+  } cluster_slv_e;
 
 endpackage : cachepool_pkg

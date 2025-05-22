@@ -46,6 +46,22 @@ static inline void spin_unlock(spinlock_t *lock) {
   __sync_lock_release(lock);
 }
 
+void start_kernel() {
+  uint32_t *bench =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);
+  *bench = 1;
+  // snrt_start_perf_counter(SNRT_PERF_CNT0, SNRT_PERF_CNT_CYCLES, 0);
+}
+
+void stop_kernel() {
+  // snrt_stop_perf_counter(SNRT_PERF_CNT0);
+  uint32_t *bench =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);
+  *bench = 0;
+}
+
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
   const unsigned int cid = snrt_cluster_core_idx();
@@ -62,6 +78,10 @@ int main() {
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
+  if (cid == 0)
+    start_kernel();
+
+
   // Fetch lock
   spin_lock (&lock);
 
@@ -77,6 +97,7 @@ int main() {
   snrt_cluster_hw_barrier();
 
   if (cid == 0) {
+    stop_kernel();
     printf("result: %f\n", result);
   }
 

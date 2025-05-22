@@ -97,7 +97,7 @@ module cachepool_cluster_wrapper
    );
 
   // Spatz cluster under test.
-  cachepool_cluster_simple #(
+  cachepool_cluster #(
     .AxiAddrWidth             (AxiAddrWidth             ),
     .AxiDataWidth             (AxiDataWidth             ),
     .AxiIdWidthIn             (AxiInIdWidth             ),
