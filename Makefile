@@ -16,8 +16,8 @@ CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CAC
 # Directories
 INSTALL_PREFIX        ?= install
 SOFTWARE_DIR          ?= ${CACHEPOOL_DIR}/software
-TOOLCHAIN_DIR 				?= ${SOFTWARE_DIR}/toolchain
-SPATZ_DIR        			?= $(CACHEPOOL_DIR)/hardware/deps/spatz
+TOOLCHAIN_DIR         ?= ${SOFTWARE_DIR}/toolchain
+SPATZ_DIR             ?= $(CACHEPOOL_DIR)/hardware/deps/spatz
 
 
 INSTALL_DIR           ?= ${ROOT_DIR}/${INSTALL_PREFIX}
@@ -29,6 +29,10 @@ BENDER_INSTALL_DIR    ?= ${INSTALL_DIR}/bender
 VERILATOR_INSTALL_DIR ?= ${INSTALL_DIR}/verilator
 RISCV_TESTS_DIR       ?= ${ROOT_DIR}/${SOFTWARE_DIR}/riscv-tests
 
+# Configurations
+CFG_DIR               ?= ${CACHEPOOL_DIR}/cfg
+CFG                   ?= cachepool
+
 # Tools
 COMPILER ?= llvm
 
@@ -36,10 +40,10 @@ CMAKE ?= cmake
 # CC and CXX are Makefile default variables that are always defined in a Makefile. Hence, overwrite
 # the variable if it is only defined by the Makefile (its origin in the Makefile's default).
 ifeq ($(origin CC),default)
-  CC  ?= gcc
+	CC  ?= gcc
 endif
 ifeq ($(origin CXX),default)
-  CXX ?= g++
+	CXX ?= g++
 endif
 BENDER_VERSION = 0.28.1
 
@@ -132,14 +136,13 @@ ${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h:
 sw:
 	make -BC ${SPATZ_DIR}/hw/system/spatz_cluster sw DEFS="-t cachepool" \
 		USE_CACHE=${USE_CACHE} ENABLE_PRINT=${USE_PRINT} RUNTIME_DIR=${CACHEPOOL_DIR}/software \
-		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software
+		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} SPATZ_CLUSTER_CFG=${CFG_DIR}/${CFG}.hjson \
+		CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software
 
 
 .PHONY: vsim
 vsim:
 	make -BC ${SPATZ_DIR}/hw/system/spatz_cluster sw.vsim DEFS="-t cachepool" \
 		USE_CACHE=${USE_CACHE} ENABLE_PRINT=${USE_PRINT} RUNTIME_DIR=${CACHEPOOL_DIR}/software BIN_DIR=${CACHEPOOL_DIR} \
-		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software
-# 	rm -rf bin
-# 	mkdir -p bin
-# 	cp -r ${SPATZ_DIR}/hw/system/spatz_cluster/bin/* bin/
+		ENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} SPATZ_CLUSTER_CFG=${CFG_DIR}/${CFG}.hjson \
+		CACHEPOOL_DIR=${CACHEPOOL_DIR} BUILD_DIR=${CACHEPOOL_DIR}/software

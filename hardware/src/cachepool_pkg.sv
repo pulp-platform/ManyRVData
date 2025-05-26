@@ -19,21 +19,21 @@ package cachepool_pkg;
   ///////////
 
   // AXI Data Width
-  localparam int unsigned SpatzAxiDataWidth  = 256;
-  localparam int unsigned SpatzAxiStrbWidth  = SpatzAxiDataWidth / 8;
+  localparam int unsigned SpatzAxiDataWidth       = 256;
+  localparam int unsigned SpatzAxiStrbWidth       = SpatzAxiDataWidth / 8;
   localparam int unsigned SpatzAxiNarrowDataWidth = 64;
   // AXI Address Width
-  localparam int unsigned SpatzAxiAddrWidth  = 32;
+  localparam int unsigned SpatzAxiAddrWidth       = 32;
   // AXI ID Width
-  localparam int unsigned SpatzAxiIdInWidth  = 6;
-  localparam int unsigned SpatzAxiIdOutWidth = 2;
+  localparam int unsigned SpatzAxiIdInWidth       = 6;
+  localparam int unsigned SpatzAxiIdOutWidth      = 2;
 
   // FIXED AxiIdOutWidth
   // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
-  localparam int unsigned IwcAxiIdOutWidth = 3 + $clog2(4) + 3;
+  localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
 
   // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth = 10;
+  localparam int unsigned SpatzAxiUserWidth       = 10;
 
 
   typedef logic [SpatzAxiDataWidth-1:0] axi_data_t;
@@ -55,10 +55,10 @@ package cachepool_pkg;
   //  Spatz Cluster //
   ////////////////////
 
-  localparam int unsigned NumCores   = 4;
+  localparam int unsigned NumCores        = 4;
   // TODO: read from CFG
-  localparam int unsigned NumBank    = 16;
-  localparam int unsigned TCDMDepth  = 1024;
+  localparam int unsigned NumBank         = 16;
+  localparam int unsigned TCDMDepth       = 1024;
 
   localparam int unsigned SpatzDataWidth  = 64;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
@@ -66,18 +66,18 @@ package cachepool_pkg;
 
   localparam int unsigned ICacheLineWidth = 128;
   localparam int unsigned ICacheLineCount = 128;
-  localparam int unsigned ICacheSets = 2;
+  localparam int unsigned ICacheSets      = 2;
 
-  localparam int unsigned TCDMStartAddr = 32'h5100_0000;
-  localparam int unsigned TCDMSize      = 32'h2_0000;
+  localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
+  localparam int unsigned TCDMSize        = 32'h2_0000;
 
-  localparam int unsigned PeriStartAddr = TCDMStartAddr + TCDMSize;
+  localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
 
-  localparam int unsigned BootAddr      = 32'h1000;
+  localparam int unsigned BootAddr        = 32'h1000;
 
   // L2 Configuration
-  localparam int unsigned L2Addr        = 48'h5180_0000;
-  localparam int unsigned L2Size        = 48'h0080_0000;
+  localparam int unsigned L2Addr          = 48'h5180_0000;
+  localparam int unsigned L2Size          = 48'h0080_0000;
 
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
@@ -169,20 +169,20 @@ package cachepool_pkg;
   localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
 
   // Do we need to keep DMA here?
-  localparam int unsigned NumTileWideAxi          = 2;
+  localparam int unsigned NumTileWideAxi      = 2;
   typedef enum integer {
     TileBootROM       = 0,
     TileMem           = 1
   } tile_wide_e;
 
-  localparam int unsigned NumTileNarrowAxi        = 1;
+  localparam int unsigned NumTileNarrowAxi    = 1;
   typedef enum integer {
     TilePeriph           = 0
   } tile_narrow_e;
 
   // TODO: multi-tile support
-  localparam int unsigned NumClusterAxiMst        = 1 + NumL1CacheCtrl;
-  localparam int unsigned NumClusterAxiSlv        = 2;
+  localparam int unsigned NumClusterAxiMst    = 1 + NumL1CacheCtrl;
+  localparam int unsigned NumClusterAxiSlv    = 2;
 
   typedef enum integer {
     ClusterL2       = 0,

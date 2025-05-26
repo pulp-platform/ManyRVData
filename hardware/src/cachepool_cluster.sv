@@ -160,23 +160,16 @@ module cachepool_cluster
   // Constants
   // ---------
   /// Minimum width to hold the core number.
-  localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
+  localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
 
   // Enlarge the address width for Spatz due to cache
-  localparam int unsigned TCDMAddrWidth     = 32;
-
+  localparam int unsigned TCDMAddrWidth   = 32;
 
   // Core Request, SoC Request
   localparam int unsigned NrNarrowMasters = 2;
 
-  // Narrow AXI network parameters
-  localparam int unsigned NarrowIdWidthIn  = AxiIdWidthIn;
-  localparam int unsigned NarrowIdWidthOut = NarrowIdWidthIn + $clog2(NrNarrowMasters);
-  localparam int unsigned NarrowDataWidth  = ELEN;
-  localparam int unsigned NarrowUserWidth  = AxiUserWidth;
-
-  localparam int unsigned WideIdWidthOut = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn  = WideIdWidthOut - $clog2(NumClusterAxiMst);
+  localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
+  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterAxiMst);
 
   // Cache XBar configuration struct
   localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
@@ -199,22 +192,12 @@ module cachepool_cluster
   // Typedefs
   // --------
   typedef logic [AxiAddrWidth-1:0]      addr_t;
-  typedef logic [NarrowDataWidth-1:0]   data_t;
-  typedef logic [NarrowDataWidth/8-1:0] strb_t;
   typedef logic [AxiDataWidth-1:0]      data_cache_t;
   typedef logic [AxiDataWidth/8-1:0]    strb_cache_t;
-  typedef logic [NarrowIdWidthIn-1:0]   id_mst_t;
-  typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
   typedef logic [WideIdWidthIn-1:0]     id_cache_mst_t;
   typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
-  typedef logic [WideIdWidthIn-$clog2(NumL1CacheCtrl)-1:0] id_dcache_mst_t;
-  typedef logic [NarrowUserWidth-1:0]   user_t;
   typedef logic [AxiUserWidth-1:0]      user_cache_t;
 
-  // Regbus peripherals.
-  `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)
-  `AXI_TYPEDEF_ALL(axi_slv, addr_t, id_slv_t, data_t, strb_t, user_t)
-  /// TODO: fix naming
   `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
   `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
 
@@ -347,7 +330,7 @@ module cachepool_cluster
     .mst_req_t     (axi_slv_cache_req_t    ),
     .mst_resp_t    (axi_slv_cache_resp_t   ),
     .rule_t        (xbar_rule_t            )
-  ) i_axi_dma_xbar (
+  ) i_cluster_xbar (
     .clk_i                 (clk_i                                  ),
     .rst_ni                (rst_ni                                 ),
     .test_i                (1'b0                                   ),
