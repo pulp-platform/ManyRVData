@@ -18,6 +18,19 @@ make init
 make generate
 ```
 
+LLVM and GCC toolchain are required to be built for the project. You can build the toolchain using
+
+```bash
+make toolchain
+````
+
+Or, you can link the pre-built toolchain within ETH domain
+
+```bash
+make quick-init
+````
+
+
 You can build the software only with:
 
 ```bash
@@ -33,5 +46,5 @@ make vsim
 The QuestaSim simulation can be run with:
 
 ```bash
-./bin/spatz_cluster.vsim.gui ./software/build/TESTNAME
+./sim/bin/spatz_cluster.vsim.gui ./software/build/TESTNAME
 ```

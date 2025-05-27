@@ -6,8 +6,17 @@ package:
   name: cachepool
 
 dependencies:
-  snitch:               { path: "hardware/deps/snitch" }
-  spatz:                { path: "hardware/deps/spatz"  }
+  axi:                { git: "https://github.com/pulp-platform/axi.git",                version: =0.39.1-beta   }
+  axi_riscv_atomics:  { git: "https://github.com/pulp-platform/axi_riscv_atomics.git",  version: 0.7.0          }
+  common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",       version: 1.28.0         }
+  FPnew:              { git: "https://github.com/pulp-platform/cvfpu.git",              rev:     pulp-v0.1.3    }
+  idma:               { git: "https://github.com/pulp-platform/iDMA.git",               version: 0.4.2          }
+  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.8          }
+  riscv-dbg:          { git: "https://github.com/pulp-platform/riscv-dbg.git",          version: 0.7.0          }
+  tech_cells_generic: { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11         }
+  insitu-cache:       { git: "git@iis-git.ee.ethz.ch:flamingo/spatz_cache_wrapper.git", rev:     main           }
+  spatz:              { path: "hardware/deps/spatz"                                                             }
+  # dram_rtl_sim:         { path: "hardware/deps/dram_rtl_sim"  }
 
 workspace:
   checkout_dir: "./hardware/deps"
@@ -15,9 +24,10 @@ workspace:
 export_include_dirs:
 
 sources:
+  - hardware/src/tcdm_cache_interco.sv
   - hardware/src/cachepool_pkg.sv
-  # - hardware/src/cachepool_tile_simple.sv
-  - hardware/src/cachepool_cluster_simple.sv
+  - hardware/src/cachepool_tile.sv
+  - hardware/src/cachepool_cluster.sv
   # testbench
-  - hardware/tb/cachepool_cluster_wrapepr.sv
-  - hardware/tb/cachepool_simple_tb.sv
+  - hardware/tb/cachepool_cluster_wrapper.sv
+  - hardware/tb/testharness.sv
