@@ -178,13 +178,13 @@ ${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h:
 init:
 	git submodule update --init --recursive --jobs=8
 
-quick-init:
+quick-tool:
 	ln -sf /usr/scratch2/calanda/diyou/flamingo/spatz-mx/spatz/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz
 .PHONY: generate
 generate: update_opcodes
-	make -C $(SPZ_CLS_DIR) generate;
+	make -C $(SPZ_CLS_DIR) generate bootrom;
 
 .PHONY: cache-init
 cache-init:
