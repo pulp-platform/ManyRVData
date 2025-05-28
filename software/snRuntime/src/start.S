@@ -58,38 +58,38 @@ snrt.crt0.init_registers:
     csrr    t0, misa
     andi    t0, t0, (1 << 3) | (1 << 5) # D/F - single/double precision float extension
     beqz    t0, 3f
-    fcvt.d.w f0, zero
-    fcvt.d.w f1, zero
-    fcvt.d.w f2, zero
-    fcvt.d.w f3, zero
-    fcvt.d.w f4, zero
-    fcvt.d.w f5, zero
-    fcvt.d.w f6, zero
-    fcvt.d.w f7, zero
-    fcvt.d.w f8, zero
-    fcvt.d.w f9, zero
-    fcvt.d.w f10, zero
-    fcvt.d.w f11, zero
-    fcvt.d.w f12, zero
-    fcvt.d.w f13, zero
-    fcvt.d.w f14, zero
-    fcvt.d.w f15, zero
-    fcvt.d.w f16, zero
-    fcvt.d.w f17, zero
-    fcvt.d.w f18, zero
-    fcvt.d.w f19, zero
-    fcvt.d.w f20, zero
-    fcvt.d.w f21, zero
-    fcvt.d.w f22, zero
-    fcvt.d.w f23, zero
-    fcvt.d.w f24, zero
-    fcvt.d.w f25, zero
-    fcvt.d.w f26, zero
-    fcvt.d.w f27, zero
-    fcvt.d.w f28, zero
-    fcvt.d.w f29, zero
-    fcvt.d.w f30, zero
-    fcvt.d.w f31, zero
+    fcvt.s.w f0, zero
+    fcvt.s.w f1, zero
+    fcvt.s.w f2, zero
+    fcvt.s.w f3, zero
+    fcvt.s.w f4, zero
+    fcvt.s.w f5, zero
+    fcvt.s.w f6, zero
+    fcvt.s.w f7, zero
+    fcvt.s.w f8, zero
+    fcvt.s.w f9, zero
+    fcvt.s.w f10, zero
+    fcvt.s.w f11, zero
+    fcvt.s.w f12, zero
+    fcvt.s.w f13, zero
+    fcvt.s.w f14, zero
+    fcvt.s.w f15, zero
+    fcvt.s.w f16, zero
+    fcvt.s.w f17, zero
+    fcvt.s.w f18, zero
+    fcvt.s.w f19, zero
+    fcvt.s.w f20, zero
+    fcvt.s.w f21, zero
+    fcvt.s.w f22, zero
+    fcvt.s.w f23, zero
+    fcvt.s.w f24, zero
+    fcvt.s.w f25, zero
+    fcvt.s.w f26, zero
+    fcvt.s.w f27, zero
+    fcvt.s.w f28, zero
+    fcvt.s.w f29, zero
+    fcvt.s.w f30, zero
+    fcvt.s.w f31, zero
 3:
 
     # Read hartid and number of cores in the cluster.

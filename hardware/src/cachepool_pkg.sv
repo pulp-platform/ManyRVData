@@ -19,9 +19,9 @@ package cachepool_pkg;
   ///////////
 
   // AXI Data Width
-  localparam int unsigned SpatzAxiDataWidth       = 256;
+  localparam int unsigned SpatzAxiDataWidth       = 128;
   localparam int unsigned SpatzAxiStrbWidth       = SpatzAxiDataWidth / 8;
-  localparam int unsigned SpatzAxiNarrowDataWidth = 64;
+  localparam int unsigned SpatzAxiNarrowDataWidth = 32;
   // AXI Address Width
   localparam int unsigned SpatzAxiAddrWidth       = 32;
   // AXI ID Width
@@ -44,7 +44,7 @@ package cachepool_pkg;
   typedef logic [SpatzAxiUserWidth-1:0] axi_user_t;
 
 
-  `AXI_TYPEDEF_ALL(spatz_axi_in, axi_addr_t, axi_id_in_t, logic [63:0], logic [7:0], axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_in, axi_addr_t, axi_id_in_t, logic [SpatzAxiNarrowDataWidth-1:0], logic [(SpatzAxiNarrowDataWidth/8)-1:0], axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_out, axi_addr_t, axi_id_out_t, axi_data_t, axi_strb_t, axi_user_t)
 
   typedef logic [IwcAxiIdOutWidth-1:0] axi_id_out_iwc_t;
@@ -58,9 +58,9 @@ package cachepool_pkg;
   localparam int unsigned NumCores        = 4;
   // TODO: read from CFG
   localparam int unsigned NumBank         = 16;
-  localparam int unsigned TCDMDepth       = 1024;
+  localparam int unsigned TCDMDepth       = 2048;
 
-  localparam int unsigned SpatzDataWidth  = 64;
+  localparam int unsigned SpatzDataWidth  = 32;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
   localparam int unsigned ByteOffset      = $clog2(BeWidth);
 

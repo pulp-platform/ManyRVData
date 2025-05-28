@@ -23,7 +23,7 @@
             banks: 16,
         },
         cluster_periph_size: 64, // kB
-        dma_data_width: 256,
+        dma_data_width: 128,
         dma_axi_req_fifo_depth: 3,
         dma_req_fifo_depth: 3,
         // Spatz parameters
@@ -31,7 +31,7 @@
         n_fpu: 4,
         n_ipu: 4,
         spatz_fpu: true,
-        norvd: false,
+        norvd: true,
         // Timing parameters
         timing: {
             lat_comp_fp32: 1,
