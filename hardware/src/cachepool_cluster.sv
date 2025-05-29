@@ -391,13 +391,13 @@ module cachepool_cluster
   // TODO: Add MUX for multi-Tile
   // BootROM
   axi_to_reg #(
-    .ADDR_WIDTH         (AxiAddrWidth      ),
-    .DATA_WIDTH         (AxiDataWidth      ),
-    .AXI_MAX_WRITE_TXNS (1                 ),
-    .AXI_MAX_READ_TXNS  (1                 ),
-    .DECOUPLE_W         (0                 ),
-    .ID_WIDTH           (WideIdWidthIn     ),
-    .USER_WIDTH         (AxiUserWidth      ),
+    .ADDR_WIDTH         (AxiAddrWidth        ),
+    .DATA_WIDTH         (AxiDataWidth        ),
+    .AXI_MAX_WRITE_TXNS (1                   ),
+    .AXI_MAX_READ_TXNS  (1                   ),
+    .DECOUPLE_W         (0                   ),
+    .ID_WIDTH           (WideIdWidthIn       ),
+    .USER_WIDTH         (AxiUserWidth        ),
     .axi_req_t          (axi_mst_cache_req_t ),
     .axi_rsp_t          (axi_mst_cache_resp_t),
     .reg_req_t          (reg_cache_req_t     ),

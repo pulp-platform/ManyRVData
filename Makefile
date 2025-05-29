@@ -10,12 +10,13 @@ ROOT_DIR := $(patsubst %/,%, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CACHEPOOL_DIR)
 
 
-# Directories
+# Directoriy Path
 PYTHON                ?= python3.6
+
 ## Spatz related
 SPATZ_DIR             ?= $(CACHEPOOL_DIR)/hardware/deps/spatz
 SPZ_CLS_DIR           ?= ${SPATZ_DIR}/hw/system/spatz_cluster
-CACHE_PATH            := $(shell $(BENDER) path insitu-cache)
+
 ## Toolchain related
 TOOLCHAIN_DIR         ?= ${SOFTWARE_DIR}/toolchain
 INSTALL_PREFIX        ?= install
@@ -27,9 +28,11 @@ HALIDE_INSTALL_DIR    ?= ${INSTALL_DIR}/halide
 BENDER_INSTALL_DIR    ?= ${INSTALL_DIR}/bender
 VERILATOR_INSTALL_DIR ?= ${INSTALL_DIR}/verilator
 RISCV_TESTS_DIR       ?= ${ROOT_DIR}/${SOFTWARE_DIR}/riscv-tests
+
 ## Software related
 SOFTWARE_DIR          ?= ${CACHEPOOL_DIR}/software
 SPATZ_SW_DIR          ?= ${SPATZ_DIR}/sw
+
 ## Simulation related
 SIM_DIR               ?= ${CACHEPOOL_DIR}/sim
 ### local c lib for simulation
@@ -41,8 +44,9 @@ BOOTLIB_DIR           ?= ${SPZ_CLS_DIR}/test
 ### QuestaSim work directory
 WORK_DIR              ?= ${SIM_DIR}/work
 SIMBIN_DIR            ?= ${SIM_DIR}/bin
-
+## Bender
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
+CACHE_PATH            := $(shell $(BENDER) path insitu-cache)
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/cfg
@@ -87,7 +91,7 @@ $(BENDER_INSTALL_DIR)/bender:
 #  Toolchain  #
 ###############
 
-toolchain: download tc-llvm tc-riscv-gcc tc-riscv-isa-sim
+toolchain: download tc-llvm tc-riscv-gcc
 
 .PHONY: download
 download: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain ${TOOLCHAIN_DIR}/llvm-project ${TOOLCHAIN_DIR}/riscv-opcodes ${TOOLCHAIN_DIR}/riscv-isa-sim ${TOOLCHAIN_DIR}/dtc
@@ -112,6 +116,13 @@ ${TOOLCHAIN_DIR}/riscv-opcodes: ${TOOLCHAIN_DIR}/riscv-opcodes.version
 	cd ${TOOLCHAIN_DIR} && git clone https://github.com/mp-17/riscv-opcodes.git
 	cd ${TOOLCHAIN_DIR}/riscv-opcodes &&                 \
 		git checkout `cat ../riscv-opcodes.version` && \
+		git submodule update --init --recursive --jobs=8 .
+
+${TOOLCHAIN_DIR}/riscv-isa-sim: ${TOOLCHAIN_DIR}/riscv-isa-sim.version
+	mkdir -p ${TOOLCHAIN_DIR}
+	cd ${TOOLCHAIN_DIR} && git clone https://github.com/riscv-software-src/riscv-isa-sim.git
+	cd ${TOOLCHAIN_DIR}/riscv-isa-sim &&                 \
+		git checkout `cat ../riscv-isa-sim.version` && \
 		git submodule update --init --recursive --jobs=8 .
 
 ${TOOLCHAIN_DIR}/dtc:
@@ -144,10 +155,10 @@ tc-llvm: ${TOOLCHAIN_DIR}/llvm-project
 	make install
 
 tc-riscv-isa-sim: ${TOOLCHAIN_DIR}/riscv-isa-sim ${TOOLCHAIN_DIR}/dtc
-	mkdir -p $(SPIKE_INSTALL_DIR)
-	cd ${TOOLCHAIN_DIR}/dtc/dtc-1.7.0 && make install PREFIX=$(SPIKE_INSTALL_DIR)
-	cd ${TOOLCHAIN_DIR}/riscv-isa-sim && rm -rf build && mkdir -p build && cd build && \
-	PATH=$(SPIKE_INSTALL_DIR)/bin:$(PATH) ../configure --prefix=$(SPIKE_INSTALL_DIR) && \
+	mkdir -p $(ISA_SIM_INSTALL_DIR)
+	cd ${TOOLCHAIN_DIR}/dtc/dtc-1.7.0 && make install PREFIX=$(ISA_SIM_INSTALL_DIR)
+	cd ${ISA_SIM_INSTALL_DIR} && rm -rf build && mkdir -p build && cd build && \
+	PATH=$(ISA_SIM_INSTALL_DIR)/bin:$(PATH) ../configure --prefix=$(ISA_SIM_INSTALL_DIR) && \
 	$(MAKE) MAKEINFO=true -j4 install
 
 
@@ -179,7 +190,7 @@ init:
 	git submodule update --init --recursive --jobs=8
 
 quick-tool:
-	ln -sf /usr/scratch2/calanda/diyou/flamingo/spatz-mx/spatz/install $(CACHEPOOL_DIR)/install
+	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz
 .PHONY: generate

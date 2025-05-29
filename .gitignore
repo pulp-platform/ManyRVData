@@ -27,3 +27,5 @@ install
 .projectBender.lock
 Bender.lock
 logs
+bin
+hardware/deps/*
