@@ -86,12 +86,15 @@ $(BENDER_INSTALL_DIR)/bender:
 	mkdir -p $(BENDER_INSTALL_DIR) && cd $(BENDER_INSTALL_DIR) && \
 	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- $(BENDER_VERSION)
 
+checkout: bender
+	${BENDER} checkout
+
 
 ###############
 #  Toolchain  #
 ###############
 
-toolchain: download tc-llvm tc-riscv-gcc
+toolchain: checkout download tc-llvm tc-riscv-gcc
 
 .PHONY: download
 download: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain ${TOOLCHAIN_DIR}/llvm-project ${TOOLCHAIN_DIR}/riscv-opcodes ${TOOLCHAIN_DIR}/riscv-isa-sim ${TOOLCHAIN_DIR}/dtc
@@ -133,7 +136,7 @@ ${TOOLCHAIN_DIR}/dtc:
 tc-riscv-gcc: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain
 	mkdir -p $(GCC_INSTALL_DIR)
 	cd ${TOOLCHAIN_DIR}/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
-	../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv32imafd --with-abi=ilp32d --with-cmodel=medlow --enable-multilib && \
+	../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv32imaf --with-abi=ilp32f --with-cmodel=medlow --enable-multilib && \
 	$(MAKE) MAKEINFO=true -j4
 
 tc-llvm: ${TOOLCHAIN_DIR}/llvm-project
@@ -195,7 +198,7 @@ quick-tool:
 # Build bootrom and spatz
 .PHONY: generate
 generate: update_opcodes
-	make -C $(SPZ_CLS_DIR) generate bootrom;
+	make -C $(SPZ_CLS_DIR) generate bootrom SPATZ_CLUSTER_CFG=${CFG_DIR}/${CFG}
 
 .PHONY: cache-init
 cache-init:

@@ -1,3 +1,7 @@
 [submodule "hardware/deps/spatz"]
 	path = hardware/deps/spatz
 	url = https://github.com/pulp-platform/spatz.git
+[submodule "hardware/deps/spatz_cache_wrapper"]
+	path = hardware/deps/spatz_cache_wrapper
+	url = git@iis-git.ee.ethz.ch:flamingo/spatz_cache_wrapper.git
+	branch = cachepool

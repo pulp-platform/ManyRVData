@@ -157,6 +157,8 @@ package cachepool_pkg;
   // Cache total size in KB
   localparam int unsigned L1Size              = NumBank * TCDMDepth * BeWidth / 1024;
 
+  localparam int unsigned L1TagDataWidth      = 64;
+
   // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
   localparam int unsigned NumL1CacheCtrl      = NumCores;
   // Number of data banks assigned to each cache controller

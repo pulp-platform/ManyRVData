@@ -22,18 +22,7 @@
 #include <l1cache.h>
 #include "printf.h"
 
-static double result __attribute__((section(".data")));
-
-static inline int fp_check(const double a, const double b) {
-  const double threshold = 0.00001;
-
-  // Absolute value
-  double comp = a - b;
-  if (comp < 0)
-    comp = -comp;
-
-  return comp > threshold;
-}
+static float result __attribute__((section(".data")));
 
 typedef volatile int spinlock_t __attribute__((aligned(8)));
 spinlock_t lock;

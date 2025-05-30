@@ -42,3 +42,6 @@ The QuestaSim simulation can be run with:
 ```bash
 ./sim/bin/spatz_cluster.vsim.gui ./software/build/TESTNAME
 ```
+
+## Snitch-Spatz Core Complex
+Current CachePool system uses a 32b Spatz RVV accelerator and Snitch RISCV core. The double-precision is off by default in consideration of scalability.

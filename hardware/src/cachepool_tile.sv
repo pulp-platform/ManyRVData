@@ -247,23 +247,23 @@ module cachepool_tile
   // --------
   // Typedefs
   // --------
-  typedef logic [AxiAddrWidth-1:0] addr_t;
-  typedef logic [NarrowDataWidth-1:0] data_t;
-  typedef logic [63:0] tag_data_t;
+  typedef logic [AxiAddrWidth-1:0]      addr_t;
+  typedef logic [NarrowDataWidth-1:0]   data_t;
   typedef logic [NarrowDataWidth/8-1:0] strb_t;
-  typedef logic [AxiDataWidth-1:0] data_dma_t;
-  typedef logic [AxiDataWidth/8-1:0] strb_dma_t;
-  typedef logic [NarrowIdWidthIn-1:0] id_mst_t;
-  typedef logic [NarrowIdWidthOut-1:0] id_slv_t;
-  typedef logic [WideIdWidthIn-1:0] id_dma_mst_t;
-  typedef logic [WideIdWidthOut-1:0] id_dma_slv_t;
+  typedef logic [L1TagDataWidth-1:0]    tag_data_t;
+  typedef logic [AxiDataWidth-1:0]      data_dma_t;
+  typedef logic [AxiDataWidth/8-1:0]    strb_dma_t;
+  typedef logic [NarrowIdWidthIn-1:0]   id_mst_t;
+  typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
+  typedef logic [WideIdWidthIn-1:0]     id_dma_mst_t;
+  typedef logic [WideIdWidthOut-1:0]    id_dma_slv_t;
   typedef logic [WideIdWidthIn-$clog2(NumL1CacheCtrl)-1:0] id_dcache_mst_t;
-  typedef logic [NarrowUserWidth-1:0] user_t;
-  typedef logic [AxiUserWidth-1:0] user_dma_t;
+  typedef logic [NarrowUserWidth-1:0]   user_t;
+  typedef logic [AxiUserWidth-1:0]      user_dma_t;
 
-  typedef logic [TCDMMemAddrWidth-1:0] tcdm_mem_addr_t;
-  typedef logic [TCDMAddrWidth-1:0] tcdm_addr_t;
-  typedef logic [SPMAddrWidth-1:0] spm_addr_t;
+  typedef logic [TCDMMemAddrWidth-1:0]  tcdm_mem_addr_t;
+  typedef logic [TCDMAddrWidth-1:0]     tcdm_addr_t;
+  typedef logic [SPMAddrWidth-1:0]      spm_addr_t;
 
   typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 
@@ -888,19 +888,20 @@ module cachepool_tile
     flamingo_spatz_cache_ctrl #(
       // Core
       .NumPorts         (NrTCDMPortsPerCore ),
-      .CoalExtFactor    (L1CoalFactor      ),
-      .AddrWidth        (L1AddrWidth       ),
-      .WordWidth        (DataWidth         ),
+      .CoalExtFactor    (L1CoalFactor       ),
+      .AddrWidth        (L1AddrWidth        ),
+      .WordWidth        (DataWidth          ),
+      .TagWidth         (L1TagDataWidth     ),
       // Cache
-      .NumCacheEntry    (L1NumEntryPerCtrl ),
-      .CacheLineWidth   (L1LineWidth       ),
-      .SetAssociativity (L1AssoPerCtrl     ),
-      .BankFactor       (L1BankFactor      ),
+      .NumCacheEntry    (L1NumEntryPerCtrl  ),
+      .CacheLineWidth   (L1LineWidth        ),
+      .SetAssociativity (L1AssoPerCtrl      ),
+      .BankFactor       (L1BankFactor       ),
       // Type
-      .core_meta_t      (tcdm_user_t       ),
-      .impl_in_t        (impl_in_t         ),
-      .axi_req_t        (axi_out_req_t  ),
-      .axi_resp_t       (axi_out_resp_t )
+      .core_meta_t      (tcdm_user_t        ),
+      .impl_in_t        (impl_in_t          ),
+      .axi_req_t        (axi_out_req_t      ),
+      .axi_resp_t       (axi_out_resp_t     )
     ) i_l1_controller (
       .clk_i                 (clk_i                    ),
       .rst_ni                (rst_ni                   ),
