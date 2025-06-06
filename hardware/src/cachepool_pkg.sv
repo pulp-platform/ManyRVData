@@ -36,12 +36,12 @@ package cachepool_pkg;
   localparam int unsigned SpatzAxiUserWidth       = 10;
 
 
-  typedef logic [SpatzAxiDataWidth-1:0] axi_data_t;
-  typedef logic [SpatzAxiStrbWidth-1:0] axi_strb_t;
-  typedef logic [SpatzAxiAddrWidth-1:0] axi_addr_t;
-  typedef logic [SpatzAxiIdInWidth-1:0] axi_id_in_t;
+  typedef logic [SpatzAxiDataWidth-1:0]  axi_data_t;
+  typedef logic [SpatzAxiStrbWidth-1:0]  axi_strb_t;
+  typedef logic [SpatzAxiAddrWidth-1:0]  axi_addr_t;
+  typedef logic [SpatzAxiIdInWidth-1:0]  axi_id_in_t;
   typedef logic [SpatzAxiIdOutWidth-1:0] axi_id_out_t;
-  typedef logic [SpatzAxiUserWidth-1:0] axi_user_t;
+  typedef logic [SpatzAxiUserWidth-1:0]  axi_user_t;
 
 
   `AXI_TYPEDEF_ALL(spatz_axi_in, axi_addr_t, axi_id_in_t, logic [SpatzAxiNarrowDataWidth-1:0], logic [(SpatzAxiNarrowDataWidth/8)-1:0], axi_user_t)
@@ -75,24 +75,25 @@ package cachepool_pkg;
 
   localparam int unsigned BootAddr        = 32'h1000;
 
+  // DRAM Configuration
+  localparam int unsigned DramAddr        = 32'h8000_0000;
+  localparam int unsigned DramSize        = 32'h0200_0000;
   // L2 Configuration
-  localparam int unsigned L2Addr          = 48'h5180_0000;
-  localparam int unsigned L2Size          = 48'h0080_0000;
+  localparam int unsigned L2Addr          = 48'h8200_0000;
+  localparam int unsigned L2Size          = 48'h0100_0000;
 
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
     cached_regions = '{default: '0};
-    cached_regions[0] = '{base: 32'h80000000, mask: 32'h80000000};
-    cached_regions[1] = '{base: 32'h51800000, mask: 32'hff800000};
+    cached_regions[0] = '{base: 32'h80000000, mask: 32'hf8000000};
     return cached_regions;
   endfunction
 
   localparam snitch_pma_pkg::snitch_pma_t SnitchPMACfg = '{
-      NrCachedRegionRules: 2,
+      NrCachedRegionRules: 1,
       CachedRegion: get_cached_regions(),
       default: 0
   };
-
   /////////////////
   //  Spatz Core //
   /////////////////
@@ -179,16 +180,50 @@ package cachepool_pkg;
 
   localparam int unsigned NumTileNarrowAxi    = 1;
   typedef enum integer {
-    TilePeriph           = 0
+    TilePeriph        = 0
   } tile_narrow_e;
 
-  // TODO: multi-tile support
-  localparam int unsigned NumClusterAxiMst    = 1 + NumL1CacheCtrl;
-  localparam int unsigned NumClusterAxiSlv    = 2;
-
   typedef enum integer {
-    ClusterL2       = 0,
-    ClusterL3       = 1
+    ClusterL2         = 1,
+    ClusterL3         = 0
   } cluster_slv_e;
+
+  // L2 Memory
+  localparam int unsigned NumL2Channel        = 2;
+  localparam int unsigned L2BankWidth         = 512;
+  localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
+  parameter               DramType            = "DDR4";
+  parameter  int unsigned DramBase            = 32'h8000_0000;
+
+`ifdef TARGET_DRAMSYS
+  // DRAM Interleaving Functions
+  typedef struct packed {
+    int                           dram_ctrl_id;
+    logic [SpatzAxiAddrWidth-1:0] dram_ctrl_addr;
+  } dram_ctrl_interleave_t;
+
+  // Currently set to 16 for now
+  localparam int unsigned Interleave  = 16;
+
+  function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
+    automatic dram_ctrl_interleave_t res;
+    localparam int unsigned ConstantBits  = $clog2(L2BankBeWidth * Interleave);
+    localparam int unsigned ScrambleBits  = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
+    localparam int unsigned ReminderBits  = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
+    automatic axi_addr_t    reminder_addr = addr[SpatzAxiAddrWidth-1: SpatzAxiAddrWidth-ReminderBits];
+
+    // res.dram_ctrl_id    = addr[ScrambleBits + ConstantBits - 1: ConstantBits ];
+    res.dram_ctrl_id    = addr[30:30];
+    // res.dram_ctrl_addr  = {reminder_addr, addr[ConstantBits-1:0]};
+    res.dram_ctrl_addr  = addr;
+    return res;
+  endfunction
+`endif
+
+  // TODO: multi-tile support
+  // One more from the Snitch core
+  localparam int unsigned NumClusterAxiMst    = 1 + NumL1CacheCtrl;
+  // One more for UART?
+  localparam int unsigned NumClusterAxiSlv    = NumL2Channel;
 
 endpackage : cachepool_pkg

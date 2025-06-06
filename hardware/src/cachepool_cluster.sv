@@ -109,46 +109,43 @@ module cachepool_cluster
     parameter int                     unsigned               NrSramCfg                          = 1
   ) (
     /// System clock.
-    input  logic                             clk_i,
+    input  logic                                  clk_i,
     /// Asynchronous active high reset. This signal is assumed to be _async_.
-    input  logic                             rst_ni,
+    input  logic                                  rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]      debug_req_i,
+    input  logic          [NrCores-1:0]           debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]      meip_i,
+    input  logic          [NrCores-1:0]           meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]      mtip_i,
+    input  logic          [NrCores-1:0]           mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]      msip_i,
+    input  logic          [NrCores-1:0]           msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic          [9:0]              hart_base_id_i,
+    input  logic          [9:0]                   hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  logic          [AxiAddrWidth-1:0] cluster_base_addr_i,
+    input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
     /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
     /// to the overall system that the cluster is executing something.
-    output logic          [NumTiles-1:0]     cluster_probe_o,
+    output logic          [NumTiles-1:0]          cluster_probe_o,
     /// AXI Core cluster in-port.
-    input  axi_in_req_t   [NumTiles-1:0]     axi_in_req_i,
-    output axi_in_resp_t  [NumTiles-1:0]     axi_in_resp_o,
+    input  axi_in_req_t   [NumTiles-1:0]          axi_in_req_i,
+    output axi_in_resp_t  [NumTiles-1:0]          axi_in_resp_o,
     /// AXI Core cluster out-port to core.
-    output axi_out_req_t                     axi_out_req_o,
-    input  axi_out_resp_t                    axi_out_resp_i,
-    /// AXI Core cluster out-port to L2 Mem.
-    output axi_out_req_t                     axi_out_l2_req_o,
-    input  axi_out_resp_t                    axi_out_l2_resp_i,
+    output axi_out_req_t  [NumClusterAxiSlv-1:0]  axi_out_req_o,
+    input  axi_out_resp_t [NumClusterAxiSlv-1:0]  axi_out_resp_i,
     /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
-    input  impl_in_t      [NrSramCfg-1:0]    impl_i,
+    input  impl_in_t      [NrSramCfg-1:0]         impl_i,
     /// Indicate the program execution is error
-    output logic                             error_o
+    output logic                                  error_o
   );
   // ---------
   // Imports
@@ -224,10 +221,10 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  axi_mst_cache_req_t  [NumTiles*NumL1CacheCtrl-1 :0]   axi_cache_req;
-  axi_mst_cache_resp_t [NumTiles*NumL1CacheCtrl-1 :0]   axi_cache_rsp;
-  axi_mst_cache_req_t  [NumTiles*NumTileWideAxi-1 :0]   axi_tile_req;
-  axi_mst_cache_resp_t [NumTiles*NumTileWideAxi-1 :0]   axi_tile_rsp;
+  axi_mst_cache_req_t  [NumTiles*NumL1CacheCtrl  -1 :0] axi_cache_req;
+  axi_mst_cache_resp_t [NumTiles*NumL1CacheCtrl  -1 :0] axi_cache_rsp;
+  axi_mst_cache_req_t  [NumTiles*NumTileWideAxi  -1 :0] axi_tile_req;
+  axi_mst_cache_resp_t [NumTiles*NumTileWideAxi  -1 :0] axi_tile_rsp;
   axi_slv_cache_req_t  [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_req;
   axi_slv_cache_resp_t [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_rsp;
 
@@ -238,6 +235,9 @@ module cachepool_cluster
   // ---------------
   // CachePool Tile
   // ---------------
+
+  logic [NumTiles-1:0] error;
+  assign error_o = |error;
 
   for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
     cachepool_tile #(
@@ -282,7 +282,7 @@ module cachepool_cluster
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
       .impl_i                   ( impl_i                   ),
-      .error_o                  (                          ),
+      .error_o                  ( error[t]                 ),
       .debug_req_i              ( debug_req_i              ),
       .meip_i                   ( meip_i                   ),
       .mtip_i                   ( mtip_i                   ),
@@ -302,12 +302,12 @@ module cachepool_cluster
   logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
   xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
 
-  assign cache_xbar_default_port = '{default: ClusterL2};
+  assign cache_xbar_default_port = '{default: ClusterL3};
   assign cache_xbar_rule         = '{
     '{
-      idx       : ClusterL2,
-      start_addr: cluster_l2_start_address,
-      end_addr  : cluster_l2_end_address
+      idx       : ClusterL3,
+      start_addr: 32'h8000_0000,
+      end_addr  : 32'h8800_0000
     }
   };
 
@@ -362,8 +362,8 @@ module cachepool_cluster
     .rst_ni     (rst_ni                     ),
     .slv_req_i  (wide_axi_slv_req[ClusterL3]),
     .slv_resp_o (wide_axi_slv_rsp[ClusterL3]),
-    .mst_req_o  (axi_out_req_o              ),
-    .mst_resp_i (axi_out_resp_i             )
+    .mst_req_o  (axi_out_req_o   [ClusterL3]),
+    .mst_resp_i (axi_out_resp_i  [ClusterL3])
   );
 
   axi_cut #(
@@ -380,8 +380,8 @@ module cachepool_cluster
     .rst_ni     (rst_ni                     ),
     .slv_req_i  (wide_axi_slv_req[ClusterL2]),
     .slv_resp_o (wide_axi_slv_rsp[ClusterL2]),
-    .mst_req_o  (axi_out_l2_req_o           ),
-    .mst_resp_i (axi_out_l2_resp_i          )
+    .mst_req_o  (axi_out_req_o   [ClusterL2]),
+    .mst_resp_i (axi_out_resp_i  [ClusterL2])
   );
 
   // ---------

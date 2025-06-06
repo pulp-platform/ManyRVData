@@ -8,7 +8,6 @@ ENTRY(_start)
 MEMORY
 {
     DRAM (rwxa)  : ORIGIN = @MEM_DRAM_ORIGIN@, LENGTH = @MEM_DRAM_SIZE@
-    L2 (rwxa)  : ORIGIN = @L2_ORIGIN@, LENGTH = @L2_SIZE@
     UNCACHED_REGION (rwxa) : ORIGIN = @UNCACHED_REGION_ORIGIN@,    LENGTH = @UNCACHED_REGION_SIZE@
 }
 
@@ -25,7 +24,7 @@ SECTIONS
     *(.text)
     . = ALIGN(4);
     _etext = .;
-  } >L2
+  } >DRAM
 
   .rodata :
   {
@@ -68,14 +67,14 @@ SECTIONS
     *(.sdata .sdata.* .gnu.linkonce.s.*)
   } >DRAM
 
-  /* Initialized data sections goes into L2 */
+  /* Initialized data sections goes into uncached region */
   .data :
   {
     . = ALIGN(1024);
     __DATA_BEGIN__ = .;
     *(.data .data.* .gnu.linkonce.d.*)
     SORT(CONSTRUCTORS)
-  } >L2
+  } >DRAM
   .data_uncached_region :
   {
     . = ALIGN(1024);
@@ -93,7 +92,7 @@ SECTIONS
     *(.dynsbss)
     *(.sbss .sbss.* .gnu.linkonce.sb.*)
     *(.scommon)
-  } >L2
+  } >DRAM
 
   /* Uninitialized data section */
   .bss            :
@@ -105,7 +104,7 @@ SECTIONS
       _end.  Align after .bss to ensure correct alignment even if the
       .bss section disappears because there are no input sections. */
    . = ALIGN(. != 0 ? 32 / 8 : 1);
-  } >L2
+  } >DRAM
   . = ALIGN(32 / 8);
   . = SEGMENT_START("ldata-segment", .);
   . = ALIGN(32 / 8);
@@ -125,5 +124,5 @@ SECTIONS
       . = . + 0x2000; /* Reserve 8KB for the stack */
       __stack_end = .;
       PROVIDE(stack = __stack_end);
-  } >L2
+  } >DRAM
 }

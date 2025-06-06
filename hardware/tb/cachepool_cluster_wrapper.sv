@@ -23,78 +23,52 @@ module cachepool_cluster_wrapper
   parameter type axi_out_resp_t = spatz_axi_out_resp_t,
   parameter type axi_out_req_t  = spatz_axi_out_req_t
 )(
-  input  logic                clk_i,
-  input  logic                rst_ni,
-  input  logic [NumCores-1:0] debug_req_i,
+  input  logic                                 clk_i,
+  input  logic                                 rst_ni,
+  input  logic          [NumCores-1:0]         debug_req_i,
 
-  input  logic [NumCores-1:0] meip_i,
-  input  logic [NumCores-1:0] mtip_i,
-  input  logic [NumCores-1:0] msip_i,
-  output logic                          cluster_probe_o,
-  input  axi_in_req_t   axi_in_req_i,
-  output axi_in_resp_t  axi_in_resp_o,
-  output axi_out_req_t  axi_out_req_o,
-  input  axi_out_resp_t axi_out_resp_i,
-  output axi_out_req_t  axi_out_l2_req_o,
-  input  axi_out_resp_t axi_out_l2_resp_i
+  input  logic          [NumCores-1:0]         meip_i,
+  input  logic          [NumCores-1:0]         mtip_i,
+  input  logic          [NumCores-1:0]         msip_i,
+  output logic                                 cluster_probe_o,
+  input  axi_in_req_t                          axi_in_req_i,
+  output axi_in_resp_t                         axi_in_resp_o,
+  output axi_out_req_t  [NumClusterAxiSlv-1:0] axi_out_req_o,
+  input  axi_out_resp_t [NumClusterAxiSlv-1:0] axi_out_resp_i
 );
 
   localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 4};
   localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 4};
   localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 16};
 
-  spatz_axi_iwc_out_req_t axi_from_cluster_iwc_req;
-  spatz_axi_iwc_out_resp_t axi_from_cluster_iwc_resp;
-  spatz_axi_iwc_out_req_t axi_from_cluster_l2_req;
-  spatz_axi_iwc_out_resp_t axi_from_cluster_l2_resp;
+  spatz_axi_iwc_out_req_t  [NumClusterAxiSlv-1:0] axi_from_cluster_iwc_req;
+  spatz_axi_iwc_out_resp_t [NumClusterAxiSlv-1:0] axi_from_cluster_iwc_resp;
 
-  axi_iw_converter #(
-    .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
-    .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
-    .AxiSlvPortMaxUniqIds   ( 2                 ),
-    .AxiSlvPortMaxTxnsPerId ( 2                 ),
-    .AxiSlvPortMaxTxns      ( 4                 ),
-    .AxiMstPortMaxUniqIds   ( 2                 ),
-    .AxiMstPortMaxTxnsPerId ( 4                 ),
-    .AxiAddrWidth           ( AxiAddrWidth      ),
-    .AxiDataWidth           ( AxiDataWidth      ),
-    .AxiUserWidth           ( AxiUserWidth      ),
-    .slv_req_t              ( spatz_axi_iwc_out_req_t ),
-    .slv_resp_t             ( spatz_axi_iwc_out_resp_t),
-    .mst_req_t              ( axi_out_req_t     ),
-    .mst_resp_t             ( axi_out_resp_t    )
-  ) iw_converter(
-    .clk_i                  ( clk_i                     ),
-    .rst_ni                 ( rst_ni                    ),
-    .slv_req_i              ( axi_from_cluster_iwc_req  ),
-    .slv_resp_o             ( axi_from_cluster_iwc_resp ),
-    .mst_req_o              ( axi_out_req_o             ),
-    .mst_resp_i             ( axi_out_resp_i            )
-  );
-
-  axi_iw_converter #(
-    .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
-    .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
-    .AxiSlvPortMaxUniqIds   ( 2                 ),
-    .AxiSlvPortMaxTxnsPerId ( 2                 ),
-    .AxiSlvPortMaxTxns      ( 4                 ),
-    .AxiMstPortMaxUniqIds   ( 2                 ),
-    .AxiMstPortMaxTxnsPerId ( 4                 ),
-    .AxiAddrWidth           ( AxiAddrWidth      ),
-    .AxiDataWidth           ( AxiDataWidth      ),
-    .AxiUserWidth           ( AxiUserWidth      ),
-    .slv_req_t              ( spatz_axi_iwc_out_req_t ),
-    .slv_resp_t             ( spatz_axi_iwc_out_resp_t),
-    .mst_req_t              ( axi_out_req_t     ),
-    .mst_resp_t             ( axi_out_resp_t    )
-  ) iw_converter_l2(
-    .clk_i                  ( clk_i                    ),
-    .rst_ni                 ( rst_ni                   ),
-    .slv_req_i              ( axi_from_cluster_l2_req  ),
-    .slv_resp_o             ( axi_from_cluster_l2_resp ),
-    .mst_req_o              ( axi_out_l2_req_o         ),
-    .mst_resp_i             ( axi_out_l2_resp_i        )
-   );
+  for (genvar port = 0; port < NumL2Channel; port ++) begin : gen_iw_conv
+    axi_iw_converter #(
+      .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
+      .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
+      .AxiSlvPortMaxUniqIds   ( 2                 ),
+      .AxiSlvPortMaxTxnsPerId ( 2                 ),
+      .AxiSlvPortMaxTxns      ( 4                 ),
+      .AxiMstPortMaxUniqIds   ( 2                 ),
+      .AxiMstPortMaxTxnsPerId ( 4                 ),
+      .AxiAddrWidth           ( AxiAddrWidth      ),
+      .AxiDataWidth           ( AxiDataWidth      ),
+      .AxiUserWidth           ( AxiUserWidth      ),
+      .slv_req_t              ( spatz_axi_iwc_out_req_t ),
+      .slv_resp_t             ( spatz_axi_iwc_out_resp_t),
+      .mst_req_t              ( axi_out_req_t     ),
+      .mst_resp_t             ( axi_out_resp_t    )
+    ) iw_converter(
+      .clk_i                  ( clk_i                           ),
+      .rst_ni                 ( rst_ni                          ),
+      .slv_req_i              ( axi_from_cluster_iwc_req [port] ),
+      .slv_resp_o             ( axi_from_cluster_iwc_resp[port] ),
+      .mst_req_o              ( axi_out_req_o            [port] ),
+      .mst_resp_i             ( axi_out_resp_i           [port] )
+    );
+  end
 
   // Spatz cluster under test.
   cachepool_cluster #(
@@ -136,24 +110,22 @@ module cachepool_cluster_wrapper
     .MaxMstTrans              (4                        ),
     .MaxSlvTrans              (4                        )
   ) i_cluster (
-    .clk_i,
-    .rst_ni,
-    .impl_i( '0 ),
-    .error_o(),
-    .debug_req_i,
-    .meip_i,
-    .mtip_i,
-    .msip_i,
-    .hart_base_id_i (10'h10),
-    .cluster_base_addr_i (TCDMStartAddr),
-    .cluster_probe_o,
-    .axi_in_req_i,
-    .axi_in_resp_o,
+    .clk_i                    ,
+    .rst_ni                   ,
+    .impl_i                   ( '0 ),
+    .error_o                  (),
+    .debug_req_i              ,
+    .meip_i                   ,
+    .mtip_i                   ,
+    .msip_i                   ,
+    .hart_base_id_i           (10'h10),
+    .cluster_base_addr_i      (TCDMStartAddr),
+    .cluster_probe_o          ,
+    .axi_in_req_i             ,
+    .axi_in_resp_o            ,
     // AXI Master Port
-    .axi_out_req_o      ( axi_from_cluster_iwc_req  ),
-    .axi_out_resp_i     ( axi_from_cluster_iwc_resp ),
-    .axi_out_l2_req_o   ( axi_from_cluster_l2_req   ),
-    .axi_out_l2_resp_i  ( axi_from_cluster_l2_resp  )
+    .axi_out_req_o            ( axi_from_cluster_iwc_req  ),
+    .axi_out_resp_i           ( axi_from_cluster_iwc_resp )
   );
 
   // Assertions

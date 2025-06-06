@@ -9,13 +9,19 @@ SHELL = /usr/bin/env bash
 ROOT_DIR := $(patsubst %/,%, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CACHEPOOL_DIR)
 
-
 # Directoriy Path
 PYTHON                ?= python3.6
 
-## Spatz related
-SPATZ_DIR             ?= $(CACHEPOOL_DIR)/hardware/deps/spatz
+## Hardware related
+HARDWARE_DIR          ?= ${CACHEPOOL_DIR}/hardware
+DEP_DIR               ?= ${HARDWARE_DIR}/deps
+### Spatz related
+SPATZ_DIR             ?= ${DEP_DIR}/spatz
 SPZ_CLS_DIR           ?= ${SPATZ_DIR}/hw/system/spatz_cluster
+### DramSys
+DRAMSYS_DIR           ?= ${DEP_DIR}/dram_rtl_sim
+DRAMSYS_LIB_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/build/lib
+DRAMSYS_RES_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/configs
 
 ## Toolchain related
 TOOLCHAIN_DIR         ?= ${SOFTWARE_DIR}/toolchain
@@ -40,10 +46,13 @@ SIMLIB_DIR            ?= ${SIM_DIR}/simlib
 ### Snitch testbench c lib for simulation
 SNLIB_DIR             ?= ${SPATZ_DIR}/hw/ip/snitch_test/src
 ### Spatz bootrom c lib for simulation
-BOOTLIB_DIR           ?= ${SPZ_CLS_DIR}/test
+BOOTLIB_DIR           := ${SPZ_CLS_DIR}/test
 ### QuestaSim work directory
-WORK_DIR              ?= ${SIM_DIR}/work
-SIMBIN_DIR            ?= ${SIM_DIR}/bin
+WORK_DIR              := ${SIM_DIR}/work
+SIMBIN_DIR            := ${SIM_DIR}/bin
+DPI_PATH              := ${HARDWARE_DIR}/tb/dpi
+DPI_LIB               ?= work-dpi
+
 ## Bender
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
 CACHE_PATH            := $(shell $(BENDER) path insitu-cache)
@@ -53,17 +62,15 @@ CFG_DIR               ?= ${CACHEPOOL_DIR}/cfg
 CFG                   ?= cachepool.hjson
 
 # Tools
-COMPILER ?= llvm
+COMPILER              ?= llvm
 
-CMAKE ?= cmake
-# CC and CXX are Makefile default variables that are always defined in a Makefile. Hence, overwrite
-# the variable if it is only defined by the Makefile (its origin in the Makefile's default).
-ifeq ($(origin CC),default)
-	CC  ?= gcc
-endif
-ifeq ($(origin CXX),default)
-	CXX ?= g++
-endif
+# Version needs to be larger than 3.28
+CMAKE                 ?= cmake
+
+# Default value for ETH users only
+CXX_PATH              ?= $(shell realpath -P $(CXX))
+CC_PATH               ?= $(shell realpath -P $(CC))
+GCC_LIB               ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
 
 ############
 #  Bender  #
@@ -144,8 +151,8 @@ tc-llvm: ${TOOLCHAIN_DIR}/llvm-project
 	cd ${TOOLCHAIN_DIR}/llvm-project && mkdir -p build && cd build; \
 	$(CMAKE) \
 		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
-		-DCMAKE_CXX_COMPILER=g++-8.2.0 \
-		-DCMAKE_C_COMPILER=gcc-8.2.0 \
+		-DCMAKE_CXX_COMPILER=g++-11.2.0 \
+		-DCMAKE_C_COMPILER=gcc-11.2.0 \
 		-DLLVM_OPTIMIZED_TABLEGEN=True \
 		-DLLVM_ENABLE_PROJECTS="clang;lld" \
 		-DLLVM_TARGETS_TO_BUILD="RISCV" \
@@ -204,6 +211,120 @@ generate: update_opcodes
 cache-init:
 	cd ${CACHE_PATH} && source sourceme.sh
 
+
+###########
+# DramSys #
+###########
+
+# Options
+USE_DRAMSYS ?= 1
+
+ifeq ($(USE_DRAMSYS),1)
+	VSIM_BENDER += -t DRAMSYS
+	VSIM_FLAGS += +DRAMSYS_RES=$(DRAMSYS_RES_PATH)
+	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libsystemc
+	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
+endif
+
+# VSIM_BENDER += -t DRAMSYS
+# VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libsystemc
+# VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
+# VSIM_FLAGS += +DRAMSYS_RES=$(DRAMSYS_RES_PATH)
+
+## Build DramSys
+dram-build:
+	make -C ${DRAMSYS_DIR} -j8 dramsys
+
+
+############
+# Modelsim #
+############
+# QuestaSim
+QUESTA_VER ?= questa-2023.4-zr
+VSIM        = ${QUESTA_VER} vsim
+VLOG        = ${QUESTA_VER} vlog
+VSIM_HOME   = /usr/pack/${QUESTA_VER}/questasim
+
+# fesvr is being installed here
+FESVR          ?= ${SIM_DIR}/work
+FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
+
+VSIM_FLAGS += -sv_lib $(SIM_DIR)/${DPI_LIB}/cachepool_dpi
+VSIM_FLAGS += -t 1ps
+VSIM_FLAGS += -voptargs=+acc
+VSIM_FLAGS += -suppress vsim-3999
+VSIM_FLAGS += -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a"
+
+VLOG_FLAGS += -svinputport=compat
+VLOG_FLAGS += -override_timescale 1ns/1ps
+VLOG_FLAGS += -suppress 2583
+VLOG_FLAGS += -suppress 13314
+VLOG_FLAGS += -64
+
+ENABLE_CACHEPOOL_TESTS ?= 1
+
+VSIM_BENDER   += -t test -t rtl -t simulation -t spatz -t spatz_test -t snitch_test -t cachepool
+
+define QUESTASIM
+	${VSIM} -c -do "source $<; quit" | tee $(dir $<)vsim.log
+	@! grep -P "Errors: [1-9]*," $(dir $<)vsim.log
+	@mkdir -p bin
+	@echo "#!/bin/bash" > $@
+	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
+	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR} -c \
+				-ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
+				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@
+	@chmod +x $@
+	@echo "#!/bin/bash" > $@.gui
+	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
+	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR}  \
+				-ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
+				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@.gui
+	@chmod +x $@.gui
+endef
+
+## DPI Build
+dpi_target := $(patsubst ${DPI_PATH}/%.cpp,${SIM_DIR}/${DPI_LIB}/%.o,$(wildcard ${DPI_PATH}/*.cpp))
+
+.PHONY: dpi
+dpi: ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so
+
+${SIM_DIR}/${DPI_LIB}/%.o: ${DPI_PATH}/%.cpp
+	mkdir -p ${SIM_DIR}/${DPI_LIB}
+	$(CXX) -shared -fPIC -std=c++11 -Bsymbolic -c $< -I$(VSIM_HOME)/include -o $@
+
+${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so: ${dpi_target}
+	mkdir -p ${SIM_DIR}/${DPI_LIB}
+	$(CXX) -shared -m64 -o ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so $^
+
+
+## Questa Build
+${WORK_DIR}/${FESVR_VERSION}_unzip:
+	mkdir -p $(dir $@)
+	wget -O $(dir $@)/${FESVR_VERSION} https://github.com/riscv/riscv-isa-sim/tarball/${FESVR_VERSION}
+	tar xfm $(dir $@)${FESVR_VERSION} --strip-components=1 -C $(dir $@)
+	touch $@
+
+${WORK_DIR}/lib/libfesvr_vsim.a: ${WORK_DIR}/${FESVR_VERSION}_unzip
+	cd $(dir $<)/ && PATH=${ISA_SIM_INSTALL_DIR}/bin:${PATH} CC=${CC_PATH} CXX=${CXX_PATH} ./configure --prefix `pwd`
+	make -C $(dir $<) install-config-hdrs install-hdrs libfesvr.a
+	mkdir -p $(dir $@)
+	cp $(dir $<)libfesvr.a $@
+
+${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc ${BOOTLIB_DIR}/bootrom.bin
+	vlib $(dir $@)
+	${BENDER} script vsim ${VSIM_BENDER} ${DEFS} --vlog-arg="${VLOG_FLAGS} -work $(dir $@) " > $@
+	echo '${VLOG} -work $(dir $@) ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc -ccflags "-std=c++17 -I${BOOTLIB_DIR} -I${WORK_DIR}/include -I${SNLIB_DIR}"' >> $@
+	echo '${VLOG} -work $(dir $@) ${BOOTLIB_DIR}/uartdpi/uartdpi.c -ccflags "-I${BOOTLIB_DIR}/uartdpi" -cpppath "${CXX_PATH}"' >> $@
+	echo 'return 0' >> $@
+
+${SIMBIN_DIR}/cachepool_cluster.vsim: ${WORK_DIR}/compile.vsim.tcl ${WORK_DIR}/lib/libfesvr_vsim.a
+	mkdir -p ${SIMBIN_DIR}/logs
+	$(call QUESTASIM,tb_bin)
+
+clean.vsim:
+	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs
+
 ######
 # SW #
 ######
@@ -218,92 +339,53 @@ sw: clean.sw
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	-DUSE_CACHE=${USE_CACHE} -DMEAS_1ITER=${USE_1ITER} -DPRINT_CHECK=${USE_PRINT} \
 	-DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
 	-DRUNTIME_DIR=${SOFTWARE_DIR} -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
 	-DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DPYTHON=${PYTHON} -DBUILD_TESTS=ON .. && make
 
-############
-# Modelsim #
-############
-# QuestaSim
-VSIM      = questa-2021.3-kgf vsim
-VLOG      = questa-2021.3-kgf vlog
-VSIM_HOME = /usr/pack/questa-2021.3-kgf/questasim
-
-# fesvr is being installed here
-FESVR          ?= ${SIM_DIR}/work
-FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
-
-VSIM_FLAGS += -t 1ps
-VSIM_FLAGS += -voptargs=+acc
-VSIM_FLAGS += -suppress vsim-3999
-VSIM_FLAGS += -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a"
-
-VLOG_FLAGS += -svinputport=compat
-VLOG_FLAGS += -override_timescale 1ns/1ps
-VLOG_FLAGS += -suppress 2583
-VLOG_FLAGS += -suppress 13314
-VLOG_FLAGS += -64
-
-USE_CACHE  ?= 1
-USE_PRINT  ?= 1
-USE_1ITER  ?= 0
-ENABLE_CACHEPOOL_TESTS ?= 1
-
-VSIM_BENDER   += -t test -t rtl -t simulation -t spatz -t spatz_test -t snitch_test -t cachepool
-
-define QUESTASIM
-	${VSIM} -c -do "source $<; quit" | tee $(dir $<)vsim.log
-	@! grep -P "Errors: [1-9]*," $(dir $<)vsim.log
-	@mkdir -p bin
-	@echo "#!/bin/bash" > $@
-	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR} -c \
-				-ldflags "-Wl,-rpath,${FESVR}/lib -L${FESVR}/lib -lfesvr_vsim -lutil" \
-				$1 +permissive-off ++$$1' >> $@
-	@chmod +x $@
-	@echo "#!/bin/bash" > $@.gui
-	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR}  \
-				-ldflags "-Wl,-rpath,${FESVR}/lib -L${FESVR}/lib -lfesvr_vsim -lutil" \
-				$1 +permissive-off ++$$1' >> $@.gui
-	@chmod +x $@.gui
-endef
-
-${WORK_DIR}/${FESVR_VERSION}_unzip:
-	mkdir -p $(dir $@)
-	wget -O $(dir $@)/${FESVR_VERSION} https://github.com/riscv/riscv-isa-sim/tarball/${FESVR_VERSION}
-	tar xfm $(dir $@)${FESVR_VERSION} --strip-components=1 -C $(dir $@)
-	touch $@
-
-${WORK_DIR}/lib/libfesvr_vsim.a: ${WORK_DIR}/${FESVR_VERSION}_unzip
-	cd $(dir $<)/ && PATH=${ISA_SIM_INSTALL_DIR}/bin:${PATH} CC=${VSIM_HOME}/gcc-7.4.0-linux_x86_64/bin/gcc CXX=${VSIM_HOME}/gcc-7.4.0-linux_x86_64/bin/g++ ./configure --prefix `pwd`
-	make -C $(dir $<) install-config-hdrs install-hdrs libfesvr.a
-	mkdir -p $(dir $@)
-	cp $(dir $<)libfesvr.a $@
-
-${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc ${BOOTLIB_DIR}/bootrom.bin
-	vlib $(dir $@)
-	${BENDER} script vsim ${VSIM_BENDER} ${DEFS} --vlog-arg="${VLOG_FLAGS} -work $(dir $@) " > $@
-	echo '${VLOG} -work $(dir $@) ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc -ccflags "-std=c++17 -I${BOOTLIB_DIR} -I${WORK_DIR}/include -I${SNLIB_DIR}"' >> $@
-	echo '${VLOG} -work $(dir $@) ${BOOTLIB_DIR}/uartdpi/uartdpi.c -ccflags "-I${BOOTLIB_DIR}/uartdpi"' >> $@
-	echo 'return 0' >> $@
-
-${SIMBIN_DIR}/cachepool_cluster.vsim: ${WORK_DIR}/compile.vsim.tcl ${WORK_DIR}/lib/libfesvr_vsim.a
-	mkdir -p ${SIMBIN_DIR}/logs
-	$(call QUESTASIM,tb_bin)
-
-clean.vsim:
-	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/spatz_cluster.vsim ${SIMBIN_DIR}/spatz_cluster.vsim.gui ${SIM_DIR}/work-vsim ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript
 
 .PHONY: vsim
-vsim: clean.sw ${SIMBIN_DIR}/cachepool_cluster.vsim
+vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	-DUSE_CACHE=${USE_CACHE} -DMEAS_1ITER=${USE_1ITER} -DPRINT_CHECK=${USE_PRINT} \
 	-DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
 	-DRUNTIME_DIR=${SOFTWARE_DIR} -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
 	-DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DPYTHON=${PYTHON} \
 	-DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim -DBUILD_TESTS=ON .. && make
+
+.PHONY: clean
+clean: clean.sw clean.vsim
+
+########
+# Help #
+########
+.PHONY: help
+help:
+	@echo ""
+	@echo "--------------------------------------------------------------------------------------------------------"
+	@echo "CachePool Main Makefile"
+	@echo "--------------------------------------------------------------------------------------------------------"
+	@echo "Initialization:"
+	@echo ""
+	@echo "*init*:       clone the git submodules"
+	@echo "*toolchain*:  build the necessary toochains, including LLVM and GCC"
+	@echo "*quick-tool*: *ETH Member Only* soft link to prebuilt toolchains"
+	@echo "*generate*:   generate the Spatz package, bootrom and opcodes"
+	@echo ""
+	@echo "SW Build:"
+	@echo ""
+	@echo "*clean.sw*:   remove the current software build"
+	@echo "*sw*:         generate the latest kernel build (will overwrite the previous build)"
+	@echo ""
+	@echo "Simulation:"
+	@echo ""
+	@echo "*clean.vsim*: remove the current hardware build"
+	@echo "*sw.vsim*:    build both the software and hardware (will not overwrite the previous build by default"
+	@echo "              *USE_DRAMSYS*: set to 1 to use the DRAMSYS system (*1* by default)"
+	@echo ""
+	@echo "--------------------------------------------------------------------------------------------------------"
+	@echo "Settings"
+	@echo "*CMAKE*:      CMake version needs to be greater or equal to 3.28 for DRAMSyS"
+	@echo ""
+

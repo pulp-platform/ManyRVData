@@ -16,7 +16,7 @@ dependencies:
   tech_cells_generic: { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11         }
   insitu-cache:       { path: "hardware/deps/spatz_cache_wrapper"                                               }
   spatz:              { path: "hardware/deps/spatz"                                                             }
-  # dram_rtl_sim:         { path: "hardware/deps/dram_rtl_sim"  }
+  dram_rtl_sim:       { path: "hardware/deps/dram_rtl_sim"                                                      }
 
 workspace:
   checkout_dir: "./hardware/deps"

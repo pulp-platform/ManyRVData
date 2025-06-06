@@ -5,3 +5,6 @@
 	path = hardware/deps/spatz_cache_wrapper
 	url = git@iis-git.ee.ethz.ch:flamingo/spatz_cache_wrapper.git
 	branch = cachepool
+[submodule "hardware/deps/dram_rtl_sim"]
+	path = hardware/deps/dram_rtl_sim
+	url = git@github.com:pulp-platform/dram_rtl_sim.git
