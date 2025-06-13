@@ -5,8 +5,12 @@
 
 #include <l1cache.h>
 
-void l1d_xbar_config(uint32_t size, uint32_t core) {
-  uint32_t offset = 31 - __builtin_clz(size/core);
+void l1d_xbar_config(uint32_t offset) {
+  // The input will give the starting bit to select the cache bank
+  // e.g., offset = 5 with 4 cache bank will use bit [6:5] to
+  // choose the cache bank
+  // These selected bits will be removed from the address in
+  // cache controller and added back when leaving the controller
 
   // 5 is the cacheline width (log2(256b/8))
   // granularity cannot be less than cacheline width
@@ -80,7 +84,7 @@ void l1d_spm_config (uint32_t size) {
   // Make sure dummy region will not be optimized away
   volatile double *dummy;
   // Should be (L1_size - size) * 128
-  int cache_region = (128 - size) * 128;
+  int cache_region = (256 - size) * 256;
   dummy = (volatile double *)snrt_l1alloc(cache_region * sizeof(double));
   // change size and commit the change
   *cfg_size = size;

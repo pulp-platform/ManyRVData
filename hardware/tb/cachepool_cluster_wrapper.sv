@@ -39,8 +39,8 @@ module cachepool_cluster_wrapper
   input  axi_out_resp_t axi_out_l2_resp_i
 );
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 4};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 4};
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 16};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 16};
   localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 16};
 
   spatz_axi_iwc_out_req_t axi_from_cluster_iwc_req;

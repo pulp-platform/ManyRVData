@@ -146,6 +146,8 @@ module tcdm_cache_interco #(
   end
 
 
+
+
   // --------
   // Registers
   // --------
@@ -184,12 +186,30 @@ module tcdm_cache_interco #(
   // --------
   // IO Assignment
   // --------
+
+  // We will also take away the offset bits we used from the full address for scrambling
+
+  logic [AddrWidth-1:0] bitmask_up, bitmask_lo;
+  // These are the address we will keep from original
+  assign bitmask_lo = (1 << dynamic_offset_i) - 1;
+  // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and remove the NumMemSelBits bits
+  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - NumMemSelBits)) - 1) << dynamic_offset_i;
+
+
   for (genvar port = 0; port < NumCache; port++) begin : gen_cache_io
-    assign mem_req_o[port] = '{
-      q:        mem_req[port],
-      q_valid:  mem_req_valid[port],
-      default:  '0
-    };
+    always_comb begin
+      mem_req_o[port] = '{
+        q:        mem_req[port],
+        q_valid:  mem_req_valid[port],
+        default:  '0
+      };
+
+      // remove the middle two bits
+      mem_req_o[port].q.addr = (mem_req[port].addr & bitmask_lo) |
+                              ((mem_req[port].addr >> NumMemSelBits) & bitmask_up);
+
+    end
+
     assign mem_rsp[port]          = mem_rsp_i[port].p;
     assign mem_rsp_valid[port]    = mem_rsp_i[port].p_valid;
     assign mem_req_ready[port]    = mem_rsp_i[port].q_ready;

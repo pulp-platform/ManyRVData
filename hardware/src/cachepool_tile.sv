@@ -421,6 +421,8 @@ module cachepool_tile
   axi_slv_dma_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
   axi_slv_dma_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
 
+  axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_prescrambled;
+
   // 2. Memory Subsystem (Banks)
   mem_req_t [NrSuperBanks-1:0][BanksPerSuperBank-1:0] ic_req;
   mem_rsp_t [NrSuperBanks-1:0][BanksPerSuperBank-1:0] ic_rsp;
@@ -817,14 +819,14 @@ module cachepool_tile
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
-  logic [$clog2(32)-1:0] dynamic_offset;
+  logic [$clog2(SpatzAxiAddrWidth)-1:0] dynamic_offset;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
     tcdm_cache_interco #(
       .NumCore               (NrCores             ),
       .NumCache              (NumL1CacheCtrl      ),
-      .AddrWidth             (32'd32              ),
+      .AddrWidth             (SpatzAxiAddrWidth   ),
       .tcdm_req_t            (tcdm_req_t          ),
       .tcdm_rsp_t            (tcdm_rsp_t          ),
       .tcdm_req_chan_t       (tcdm_req_chan_t     ),
@@ -884,6 +886,14 @@ module cachepool_tile
   tcdm_bank_addr_t num_spm_lines;
   assign num_spm_lines = cfg_spm_size * (DepthPerBank / L1Size);
 
+  // For address scrambling
+  localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
+  assign bitmask_lo = (1 << dynamic_offset) - 1;
+  // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
+  assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
+
+
   for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin: gen_l1_cache_ctrl
     flamingo_spatz_cache_ctrl #(
       // Core
@@ -928,7 +938,7 @@ module cachepool_tile
       .core_resp_data_o      (cache_rsp_data[cb]       ),
       .core_resp_meta_o      (cache_rsp_meta[cb]       ),
       // AXI refill
-      .axi_req_o             (axi_cache_req_o[cb]      ),
+      .axi_req_o             (axi_cache_req_prescrambled[cb]      ),
       .axi_resp_i            (axi_cache_rsp_i[cb]      ),
       // Tag Banks
       .tcdm_tag_bank_req_o   (l1_tag_bank_req[cb]      ),
@@ -946,6 +956,16 @@ module cachepool_tile
       .tcdm_data_bank_rdata_i(l1_data_bank_rdata[cb]   ),
       .tcdm_data_bank_gnt_i  (l1_data_bank_gnt[cb]     )
     );
+
+    always_comb begin : bank_addr_scramble
+      axi_cache_req_o[cb] = axi_cache_req_prescrambled[cb];
+      // Pass the lower bits first
+      axi_cache_req_o[cb].ar.addr  =   axi_cache_req_prescrambled[cb].ar.addr & bitmask_lo;
+      // Shift the upper part to its location
+      axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
+      // Add back the removed cache bank ID
+      axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
+    end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
       tc_sram_impl #(
@@ -970,11 +990,11 @@ module cachepool_tile
       );
     end
 
-    for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
+    for (genvar j = 0; j < NumDataBankPerCtrl; j = j+4) begin : gen_l1_data_banks
       tc_sram_impl #(
         .NumWords   (L1CacheWayEntry/L1BankFactor),
-        .DataWidth  (DataWidth),
-        .ByteWidth  (DataWidth),
+        .DataWidth  (DataWidth*4),
+        .ByteWidth  (DataWidth*4),
         .NumPorts   (1),
         .Latency    (1),
         .SimInit    ("zeros")
@@ -983,16 +1003,43 @@ module cachepool_tile
         .rst_ni (rst_ni                   ),
         .impl_i ('0                       ),
         .impl_o (/* unsed */              ),
-        .req_i  (l1_data_bank_req  [cb][j]),
-        .we_i   (l1_data_bank_we   [cb][j]),
-        .addr_i (l1_data_bank_addr [cb][j]),
-        .wdata_i(l1_data_bank_wdata[cb][j]),
-        .be_i   (l1_data_bank_be   [cb][j]),
-        .rdata_o(l1_data_bank_rdata[cb][j])
+        .req_i  ( l1_data_bank_req  [cb][j]),
+        .we_i   ( l1_data_bank_we   [cb][j]),
+        .addr_i ( l1_data_bank_addr [cb][j]),
+        .wdata_i({l1_data_bank_wdata[cb][j+3], l1_data_bank_wdata[cb][j+2], l1_data_bank_wdata[cb][j+1], l1_data_bank_wdata[cb][j]}),
+        .be_i   ( l1_data_bank_be   [cb][j] ),
+        .rdata_o({l1_data_bank_rdata[cb][j+3], l1_data_bank_rdata[cb][j+2], l1_data_bank_rdata[cb][j+1], l1_data_bank_rdata[cb][j]})
       );
 
       assign l1_data_bank_gnt[cb][j] = 1'b1;
+      assign l1_data_bank_gnt[cb][j+1] = 1'b1;
+      assign l1_data_bank_gnt[cb][j+2] = 1'b1;
+      assign l1_data_bank_gnt[cb][j+3] = 1'b1;
     end
+
+    // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
+    //   tc_sram_impl #(
+    //     .NumWords   (L1CacheWayEntry/L1BankFactor),
+    //     .DataWidth  (DataWidth),
+    //     .ByteWidth  (DataWidth),
+    //     .NumPorts   (1),
+    //     .Latency    (1),
+    //     .SimInit    ("zeros")
+    //   ) i_data_bank (
+    //     .clk_i  (clk_i                    ),
+    //     .rst_ni (rst_ni                   ),
+    //     .impl_i ('0                       ),
+    //     .impl_o (/* unsed */              ),
+    //     .req_i  (l1_data_bank_req  [cb][j]),
+    //     .we_i   (l1_data_bank_we   [cb][j]),
+    //     .addr_i (l1_data_bank_addr [cb][j]),
+    //     .wdata_i(l1_data_bank_wdata[cb][j]),
+    //     .be_i   (l1_data_bank_be   [cb][j]),
+    //     .rdata_o(l1_data_bank_rdata[cb][j])
+    //   );
+
+    //   assign l1_data_bank_gnt[cb][j] = 1'b1;
+    // end
   end
 
   spatz_tcdm_interconnect #(

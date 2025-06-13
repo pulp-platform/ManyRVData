@@ -58,7 +58,8 @@ package cachepool_pkg;
   localparam int unsigned NumCores        = 4;
   // TODO: read from CFG
   localparam int unsigned NumBank         = 16;
-  localparam int unsigned TCDMDepth       = 1024;
+  localparam int unsigned TCDMDepth       = 2048;
+  // localparam int unsigned TCDMDepth       = 4096;
 
   localparam int unsigned SpatzDataWidth  = 64;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
@@ -69,7 +70,7 @@ package cachepool_pkg;
   localparam int unsigned ICacheSets      = 2;
 
   localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
-  localparam int unsigned TCDMSize        = 32'h2_0000;
+  localparam int unsigned TCDMSize        = 32'h4_0000;
 
   localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
 

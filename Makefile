@@ -195,7 +195,8 @@ quick-tool:
 # Build bootrom and spatz
 .PHONY: generate
 generate: update_opcodes
-	make -C $(SPZ_CLS_DIR) generate bootrom;
+	echo $(CFG_DIR)/$(CFG)
+	make -BC $(SPZ_CLS_DIR) generate bootrom SPATZ_CLUSTER_CFG=$(CFG_DIR)/$(CFG) BENDER=$(BENDER)
 
 .PHONY: cache-init
 cache-init:
