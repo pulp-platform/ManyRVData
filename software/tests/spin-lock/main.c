@@ -55,7 +55,8 @@ int main() {
   snrt_cluster_hw_barrier();
 
   if (cid == 0) {
-    printf("result: %f\n", result);
+    uint32_t res_hex = (uint32_t) result;
+    printf("result: %x\n", res_hex);
   }
 
   // Wait for core 0 to finish displaying results

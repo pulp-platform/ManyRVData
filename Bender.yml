@@ -26,9 +26,11 @@ export_include_dirs:
 sources:
   - hardware/src/tcdm_cache_interco.sv
   - hardware/src/cachepool_pkg.sv
+  - hardware/src/cachepool_cc.sv
   - hardware/src/cachepool_tile.sv
   - hardware/src/cachepool_cluster.sv
   # testbench
   - hardware/tb/cachepool_cluster_wrapper.sv
+  - hardware/tb/axi_uart.sv
   - hardware/tb/tb_cachepool.sv
   #- hardware/tb/testharness.sv

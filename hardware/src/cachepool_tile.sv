@@ -37,9 +37,8 @@ module cachepool_tile
     parameter int                     unsigned               AxiUserWidth                       = 1,
     /// Address from which to fetch the first instructions.
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
-    /// Address to indicate start of L2
-    parameter logic                   [AxiAddrWidth-1:0]     L2Addr                             = 48'h0,
-    parameter logic                   [AxiAddrWidth-1:0]     L2Size                             = 48'h0,
+    /// Address to indicate start of UART
+    parameter logic                            [31:0]        UartAddr                           = 32'h0,
     /// The total amount of cores.
     parameter int                     unsigned               NrCores                            = 8,
     /// Data/TCDM memory depth per cut (in words).
@@ -94,6 +93,8 @@ module cachepool_tile
     /// AXI Ports
     parameter type                                           axi_in_req_t                       = logic,
     parameter type                                           axi_in_resp_t                      = logic,
+    parameter type                                           axi_narrow_req_t                   = logic,
+    parameter type                                           axi_narrow_resp_t                  = logic,
     parameter type                                           axi_out_req_t                      = logic,
     parameter type                                           axi_out_resp_t                     = logic,
     /// SRAM configuration
@@ -141,6 +142,9 @@ module cachepool_tile
     /// AXI Core cluster in-port.
     input  axi_in_req_t                        axi_in_req_i,
     output axi_in_resp_t                       axi_in_resp_o,
+    /// AXI Narrow out-port (UART)
+    output axi_narrow_req_t                    axi_out_req_o,
+    input  axi_narrow_resp_t                   axi_out_resp_i,
     /// AXI Cache Refill ports
     output axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_o,
     input  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_i,
@@ -199,8 +203,8 @@ module cachepool_tile
   localparam int unsigned NarrowDataWidth  = ELEN;
   localparam int unsigned NarrowUserWidth  = AxiUserWidth;
 
-  // TCDM, Peripherals, SoC Request
-  localparam int unsigned NrNarrowSlaves = 3;
+  // TCDM, Peripherals, SoC Request, UART
+  localparam int unsigned NrNarrowSlaves = 4;
   localparam int unsigned NrNarrowRules  = NrNarrowSlaves - 1;
 
   // Core Request, DMA, Instruction cache
@@ -401,12 +405,6 @@ module cachepool_tile
   addr_t cluster_periph_start_address, cluster_periph_end_address;
   assign cluster_periph_start_address = tcdm_end_address;
   assign cluster_periph_end_address   = tcdm_end_address + ClusterPeriphSize * 1024;
-
-  localparam int unsigned ClusterReserve = 4096; // 4 MiB
-  localparam int unsigned ClusterL2Size  = 8192; // 8 MiB
-  addr_t cluster_l2_start_address, cluster_l2_end_address;
-  assign cluster_l2_start_address = L2Addr;
-  assign cluster_l2_end_address   = L2Addr + L2Size;
 
   // ----------------
   // Wire Definitions
@@ -1065,10 +1063,9 @@ module cachepool_tile
     logic [31:0] hart_id;
     assign hart_id = hart_base_id_i + i;
 
-    spatz_cc #(
+    cachepool_cc #(
       .BootAddr                (BootAddr                   ),
-      .L2Addr                  (L2Addr                     ),
-      .L2Size                  (L2Size                     ),
+      .UartAddr                (UartAddr                   ),
       .RVE                     (1'b0                       ),
       .RVF                     (RVF                        ),
       .RVD                     (RVD                        ),
@@ -1287,6 +1284,11 @@ module cachepool_tile
       idx       : ClusterPeripherals,
       start_addr: cluster_periph_start_address,
       end_addr  : cluster_periph_end_address
+    },
+    '{
+      idx       : UART,
+      start_addr: UartAddr,
+      end_addr  : UartAddr + 32'h1000
     }
   };
 
@@ -1411,6 +1413,10 @@ module cachepool_tile
   // 3. BootROM
   assign axi_wide_req_o[TileBootROM] = wide_axi_slv_req[BootROM];
   assign wide_axi_slv_rsp[BootROM] = axi_wide_rsp_i[TileBootROM];
+
+  // 4. UART
+  assign axi_out_req_o = narrow_axi_slv_req[UART];
+  assign narrow_axi_slv_rsp[UART] = axi_out_resp_i;
 
   // Upsize the narrow SoC connection
   `AXI_TYPEDEF_ALL(axi_mst_dma_narrow, addr_t, id_dma_mst_t, data_t, strb_t, user_t)

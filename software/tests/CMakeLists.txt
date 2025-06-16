@@ -31,6 +31,20 @@ macro(add_spatz_test_oneParam name file param1)
     target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}.h")
 endmacro()
 
+macro(add_spatz_test_twoParam name file param1 param2)
+    set(target_name ${name}_M${param1}_N${param2})
+    add_snitch_test(${target_name} ${file})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark ${SNITCH_RUNTIME})
+    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}_${param2}.h")
+endmacro()
+
+macro(add_spatz_test_threeParam name file param1 param2 param3)
+    set(target_name ${name}_M${param1}_N${param2}_K${param3})
+    add_snitch_test(${target_name} ${file})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark ${SNITCH_RUNTIME})
+    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}_${param2}_${param3}.h")
+  endmacro()
+
 
 # Benchmark library
 add_library(benchmark benchmark/benchmark.c)
@@ -63,5 +77,7 @@ add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer
 
 add_spatz_test_oneParam(sp-fdotp sp-fdotp/main.c 1024)
 add_spatz_test_oneParam(sp-fdotp sp-fdotp/main.c 8192)
+add_spatz_test_threeParam(gemv-col gemv-col/main.c 128 128 32)
+add_spatz_test_threeParam(gemv-col gemv-col/main.c 256 128 32)
 
 

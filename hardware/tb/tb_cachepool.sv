@@ -74,6 +74,9 @@ module tb_cachepool;
   spatz_axi_in_req_t   axi_to_cluster_req;
   spatz_axi_in_resp_t  axi_to_cluster_resp;
 
+  spatz_axi_narrow_req_t   axi_uart_req;
+  spatz_axi_narrow_resp_t  axi_uart_rsp;
+
   // DRAM Scrambled request
   spatz_axi_out_req_t  [NumL2Channel-1:0] axi_dram_req;
 
@@ -86,18 +89,20 @@ module tb_cachepool;
   logic [NumCores-1:0] debug_req;
 
   cachepool_cluster_wrapper i_cluster_wrapper (
-    .clk_i           (clk                  ),
-    .rst_ni          (rst_n                ),
-    .eoc_o           (eoc                  ),
-    .meip_i          ('0                   ),
-    .msip_i          ('0                   ),
-    .mtip_i          ('0                   ),
-    .debug_req_i     ( debug_req           ),
-    .axi_out_req_o   (axi_from_cluster_req ),
-    .axi_out_resp_i  (axi_from_cluster_resp),
-    .axi_in_req_i    (axi_to_cluster_req   ),
-    .axi_in_resp_o   (axi_to_cluster_resp  ),
-    .cluster_probe_o (cluster_probe        )
+    .clk_i             (clk                   ),
+    .rst_ni            (rst_n                 ),
+    .eoc_o             (eoc                   ),
+    .meip_i            ('0                    ),
+    .msip_i            ('0                    ),
+    .mtip_i            ('0                    ),
+    .debug_req_i       (debug_req             ),
+    .axi_out_req_o     (axi_from_cluster_req  ),
+    .axi_out_resp_i    (axi_from_cluster_resp ),
+    .axi_narrow_req_o  (axi_uart_req          ),
+    .axi_narrow_resp_i (axi_uart_rsp          ),
+    .axi_in_req_i      (axi_to_cluster_req    ),
+    .axi_in_resp_o     (axi_to_cluster_resp   ),
+    .cluster_probe_o   (cluster_probe         )
   );
 /**************
  *  VCD Dump  *
@@ -219,17 +224,17 @@ module tb_cachepool;
   *  UART  *
   **********/
 
-  // axi_uart #(
-  //   .axi_req_t (axi_tb_req_t ),
-  //   .axi_resp_t(axi_tb_resp_t)
-  // ) i_axi_uart (
-  //   .clk_i     (clk               ),
-  //   .rst_ni    (rst_n             ),
-  //   .testmode_i(1'b0              ),
-  //   // TODO: connect correctly
-  //   .axi_req_i (axi_mem_req[UART] ),
-  //   .axi_resp_o(axi_mem_resp[UART])
-  // );
+  axi_uart #(
+    .axi_req_t (spatz_axi_narrow_req_t ),
+    .axi_resp_t(spatz_axi_narrow_resp_t)
+  ) i_axi_uart (
+    .clk_i     (clk               ),
+    .rst_ni    (rst_n             ),
+    .testmode_i(1'b0              ),
+    // TODO: connect correctly
+    .axi_req_i (axi_uart_req      ),
+    .axi_resp_o(axi_uart_rsp      )
+  );
 
   /********
    *  L2  *
@@ -247,7 +252,7 @@ module tb_cachepool;
     .rst_ni     (rst_n )
   );
 
-
+  localparam int unsigned debug = 0;
 
   // DRAMSys Initialization
   for (genvar mem = 0; mem < NumL2Channel; mem++) begin : gen_drams_init
@@ -266,6 +271,7 @@ module tb_cachepool;
         $display("Loading %s", binary);
         while (get_section(address, length)) begin
           // Read sections
+          // Align data to BankBeWidth
           automatic int nwords = (length + L2BankBeWidth - 1)/L2BankBeWidth;
           $display("Loading section %x of length %x", address, length);
           buffer = new[nwords * L2BankBeWidth];
@@ -276,8 +282,8 @@ module tb_cachepool;
               dram_ctrl_info = getDramCTRLInfo(address + i - DramBase);
               if (dram_ctrl_info.dram_ctrl_id == mem) begin
                 gen_dram[mem].i_axi_dram_sim.i_sim_dram.load_a_byte_to_dram(dram_ctrl_info.dram_ctrl_addr, buffer[i]);
-                if (mem == 1) begin
-                  $display("Warning: putting data into mem1");
+                if (debug == 1) begin
+                  $display("putting data at %x into mem%x", dram_ctrl_info.dram_ctrl_addr, dram_ctrl_info.dram_ctrl_id);
                 end
               end
             end
@@ -289,7 +295,14 @@ module tb_cachepool;
     end : l2_init
   end : gen_drams_init
 
-  // // DRAMSys address scrambling
+  // DRAMSys address scrambling
+  // for (genvar ch = 0; ch < NumClusterAxiSlv; ch ++) begin : gen_dram_scrambler
+  //   always_comb begin
+  //     axi_dram_req[ch]         = axi_from_cluster_req[ch];
+  //     axi_dram_req[ch].aw.addr = scrambleAddr(axi_from_cluster_req[ch].aw.addr);
+  //     axi_dram_req[ch].ar.addr = scrambleAddr(axi_from_cluster_req[ch].ar.addr);
+  //   end
+  // end
   // for (genvar mem = 0; unsigned'(mem) < NumL2Channel; mem++) begin: gen_dram_scrambler_reset
   //   // req.aw scrambling
   //   logic [ConstantBits-1:0] aw_const;

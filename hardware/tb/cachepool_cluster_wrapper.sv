@@ -21,7 +21,10 @@ module cachepool_cluster_wrapper
   parameter type axi_in_req_t  = spatz_axi_in_req_t,
 
   parameter type axi_out_resp_t = spatz_axi_out_resp_t,
-  parameter type axi_out_req_t  = spatz_axi_out_req_t
+  parameter type axi_out_req_t  = spatz_axi_out_req_t,
+
+  parameter type axi_narrow_req_t  = spatz_axi_narrow_req_t,
+  parameter type axi_narrow_resp_t = spatz_axi_narrow_resp_t
 )(
   input  logic                                 clk_i,
   input  logic                                 rst_ni,
@@ -34,12 +37,15 @@ module cachepool_cluster_wrapper
   output logic                                 cluster_probe_o,
   input  axi_in_req_t                          axi_in_req_i,
   output axi_in_resp_t                         axi_in_resp_o,
+  /// AXI Narrow out-port (UART)
+  output axi_narrow_req_t                      axi_narrow_req_o,
+  input  axi_narrow_resp_t                     axi_narrow_resp_i,
   output axi_out_req_t  [NumClusterAxiSlv-1:0] axi_out_req_o,
   input  axi_out_resp_t [NumClusterAxiSlv-1:0] axi_out_resp_i
 );
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 4};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 4};
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 16};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 16};
   localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 16};
 
   spatz_axi_iwc_out_req_t  [NumClusterAxiSlv-1:0] axi_from_cluster_iwc_req;
@@ -79,8 +85,7 @@ module cachepool_cluster_wrapper
     .AxiIdWidthOut            (IwcAxiIdOutWidth         ),
     .AxiUserWidth             (AxiUserWidth             ),
     .BootAddr                 (BootAddr                 ),
-    .L2Addr                   (L2Addr                   ),
-    .L2Size                   (L2Size                   ),
+    .UartAddr                 (32'hC000_0000            ),
     .ClusterPeriphSize        (64                       ),
     .NrCores                  (NumCores                 ),
     .TCDMDepth                (TCDMDepth                ),
@@ -97,6 +102,8 @@ module cachepool_cluster_wrapper
     .NumSpatzOutstandingLoads (NumSpatzOutstandingLoads ),
     .axi_in_req_t             (axi_in_req_t             ),
     .axi_in_resp_t            (axi_in_resp_t            ),
+    .axi_narrow_req_t         (axi_narrow_req_t         ),
+    .axi_narrow_resp_t        (axi_narrow_resp_t        ),
     .axi_out_req_t            (spatz_axi_iwc_out_req_t  ),
     .axi_out_resp_t           (spatz_axi_iwc_out_resp_t ),
     .Xdma                     (4'h1                     ),
@@ -125,6 +132,8 @@ module cachepool_cluster_wrapper
     .cluster_probe_o          ,
     .axi_in_req_i             ,
     .axi_in_resp_o            ,
+    .axi_narrow_req_o         ,
+    .axi_narrow_resp_i        ,
     // AXI Master Port
     .axi_out_req_o            ( axi_from_cluster_iwc_req  ),
     .axi_out_resp_i           ( axi_from_cluster_iwc_resp )

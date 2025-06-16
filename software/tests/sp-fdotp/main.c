@@ -115,10 +115,10 @@ int main() {
     unsigned int utilization = performance / (2 * num_cores * 4);
     write_cyc(timer);
 
-    // printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
-    // printf("The execution took %u cycles.\n", timer);
-    // printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
-    //        performance, utilization);
+    printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
+    printf("The execution took %u cycles.\n", timer);
+    printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
+           performance, utilization);
   }
 
   if (cid == 0) {

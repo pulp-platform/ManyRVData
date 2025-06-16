@@ -37,9 +37,8 @@ module cachepool_cluster
     parameter int                     unsigned               AxiUserWidth                       = 1,
     /// Address from which to fetch the first instructions.
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
-    /// Address to indicate start of L2
-    parameter logic                   [AxiAddrWidth-1:0]     L2Addr                             = 48'h0,
-    parameter logic                   [AxiAddrWidth-1:0]     L2Size                             = 48'h0,
+    /// Address to indicate start of UART
+    parameter logic                            [31:0]        UartAddr                           = 32'h0,
     /// The total amount of cores.
     parameter int                     unsigned               NrCores                            = 8,
     /// Data/TCDM memory depth per cut (in words).
@@ -94,6 +93,8 @@ module cachepool_cluster
     /// AXI Ports
     parameter type                                           axi_in_req_t                       = logic,
     parameter type                                           axi_in_resp_t                      = logic,
+    parameter type                                           axi_narrow_req_t                   = logic,
+    parameter type                                           axi_narrow_resp_t                  = logic,
     parameter type                                           axi_out_req_t                      = logic,
     parameter type                                           axi_out_resp_t                     = logic,
     /// SRAM configuration
@@ -141,6 +142,9 @@ module cachepool_cluster
     /// AXI Core cluster in-port.
     input  axi_in_req_t   [NumTiles-1:0]          axi_in_req_i,
     output axi_in_resp_t  [NumTiles-1:0]          axi_in_resp_o,
+    /// AXI Narrow out-port (UART)
+    output axi_narrow_req_t                       axi_narrow_req_o,
+    input  axi_narrow_resp_t                      axi_narrow_resp_i,
     /// AXI Core cluster out-port to core.
     output axi_out_req_t  [NumClusterAxiSlv-1:0]  axi_out_req_o,
     input  axi_out_resp_t [NumClusterAxiSlv-1:0]  axi_out_resp_i,
@@ -210,15 +214,6 @@ module cachepool_cluster
 
   `SNITCH_VM_TYPEDEF(AxiAddrWidth)
 
-  // -----------
-  // Assignments
-  // -----------
-  // Calculate start and end address of TCDM based on the `cluster_base_addr_i`.
-
-  addr_t cluster_l2_start_address, cluster_l2_end_address;
-  assign cluster_l2_start_address = L2Addr;
-  assign cluster_l2_end_address   = L2Addr + L2Size;
-
   // ----------------
   // Wire Definitions
   // ----------------
@@ -229,6 +224,8 @@ module cachepool_cluster
   axi_mst_cache_resp_t [NumTiles*NumTileWideAxi  -1 :0] axi_tile_rsp;
   axi_slv_cache_req_t  [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_req;
   axi_slv_cache_resp_t [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_rsp;
+  axi_narrow_req_t     [NumTiles-1 :0]                  axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1 :0]                  axi_out_resp;
 
   // 2. BootROM
   reg_cache_req_t bootrom_reg_req;
@@ -250,8 +247,7 @@ module cachepool_cluster
       .AxiIdWidthOut            ( WideIdWidthIn            ),
       .AxiUserWidth             ( AxiUserWidth             ),
       .BootAddr                 ( BootAddr                 ),
-      .L2Addr                   ( L2Addr                   ),
-      .L2Size                   ( L2Size                   ),
+      .UartAddr                 ( UartAddr                 ),
       .ClusterPeriphSize        ( ClusterPeriphSize        ),
       .NrCores                  ( NrCores                  ),
       .TCDMDepth                ( TCDMDepth                ),
@@ -268,6 +264,8 @@ module cachepool_cluster
       .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
       .axi_in_req_t             ( axi_in_req_t             ),
       .axi_in_resp_t            ( axi_in_resp_t            ),
+      .axi_narrow_req_t         ( axi_narrow_req_t         ),
+      .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
       .axi_out_req_t            ( axi_mst_cache_req_t      ),
       .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
       .Xdma                     ( Xdma                     ),
@@ -296,6 +294,8 @@ module cachepool_cluster
       .tile_probe_o             ( cluster_probe_o[t]       ),
       .axi_in_req_i             ( axi_in_req_i [t]         ),
       .axi_in_resp_o            ( axi_in_resp_o[t]         ),
+      .axi_out_req_o            ( axi_out_req[t]           ),
+      .axi_out_resp_i           ( axi_out_resp[t]          ),
       // AXI Master Port
       .axi_cache_req_o          ( axi_cache_req[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
       .axi_cache_rsp_i          ( axi_cache_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
@@ -306,14 +306,23 @@ module cachepool_cluster
   logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
   xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
 
-  assign cache_xbar_default_port = '{default: ClusterL3};
-  assign cache_xbar_rule         = '{
-    '{
-      idx       : ClusterL3,
-      start_addr: 32'h8000_0000,
-      end_addr  : 32'h8800_0000
-    }
-  };
+  assign cache_xbar_default_port = '{default: L2Channel0};
+
+  for (genvar ch = 0; ch < CacheXbarCfg.NoAddrRules; ch ++) begin : gen_cache_refill_xbar_rule
+    assign cache_xbar_rule[ch] = '{
+      idx       : ch,
+      start_addr: DramAddr + DramPerChSize * ch,
+      end_addr  : DramAddr + DramPerChSize * (ch+1)
+    };
+  end
+
+  // Address scrambling for Dram Channels
+  axi_mst_cache_req_t [NumClusterAxiMst-1:0] wide_axi_mst_req_prescramble, wide_axi_mst_req_postscramble;
+
+  // TODO: Add AXI MUX and assign ID correctly here
+  assign axi_narrow_req_o = axi_out_req[0];
+  assign axi_out_resp[0] = axi_narrow_resp_i;
+
 
   localparam bit [CacheXbarCfg.NoSlvPorts-1:0] CacheEnDefaultMstPort = '1;
 
@@ -338,7 +347,7 @@ module cachepool_cluster
     .clk_i                 (clk_i                                  ),
     .rst_ni                (rst_ni                                 ),
     .test_i                (1'b0                                   ),
-    .slv_ports_req_i       ({axi_cache_req, axi_tile_req[TileMem]} ),
+    .slv_ports_req_i       (wide_axi_mst_req_postscramble          ),
     .slv_ports_resp_o      ({axi_cache_rsp, axi_tile_rsp[TileMem]} ),
     .mst_ports_req_o       (wide_axi_slv_req                       ),
     .mst_ports_resp_i      (wide_axi_slv_rsp                       ),
@@ -347,46 +356,39 @@ module cachepool_cluster
     .default_mst_port_i    (cache_xbar_default_port                )
   );
 
+  assign wide_axi_mst_req_prescramble = {axi_cache_req, axi_tile_req[TileMem]};
+
+  for (genvar port = 0; port < NumClusterAxiMst; port ++) begin
+    always_comb begin
+      wide_axi_mst_req_postscramble[port]         = wide_axi_mst_req_prescramble[port];
+      wide_axi_mst_req_postscramble[port].aw.addr = scrambleAddr(wide_axi_mst_req_prescramble[port].aw.addr);
+      wide_axi_mst_req_postscramble[port].ar.addr = scrambleAddr(wide_axi_mst_req_prescramble[port].ar.addr);
+    end
+  end
 
   // -------------
   // DMA Subsystem
   // -------------
   // Optionally decouple the external wide AXI master port.
-  axi_cut #(
-    .Bypass     (!RegisterExt               ),
-    .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
-    .w_chan_t   (axi_slv_cache_w_chan_t     ),
-    .b_chan_t   (axi_slv_cache_b_chan_t     ),
-    .ar_chan_t  (axi_slv_cache_ar_chan_t    ),
-    .r_chan_t   (axi_slv_cache_r_chan_t     ),
-    .axi_req_t  (axi_slv_cache_req_t        ),
-    .axi_resp_t (axi_slv_cache_resp_t       )
-  ) i_cut_ext_wide_out (
-    .clk_i      (clk_i                      ),
-    .rst_ni     (rst_ni                     ),
-    .slv_req_i  (wide_axi_slv_req[ClusterL3]),
-    .slv_resp_o (wide_axi_slv_rsp[ClusterL3]),
-    .mst_req_o  (axi_out_req_o   [ClusterL3]),
-    .mst_resp_i (axi_out_resp_i  [ClusterL3])
-  );
-
-  axi_cut #(
-    .Bypass     (!RegisterExt               ),
-    .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
-    .w_chan_t   (axi_slv_cache_w_chan_t     ),
-    .b_chan_t   (axi_slv_cache_b_chan_t     ),
-    .ar_chan_t  (axi_slv_cache_ar_chan_t    ),
-    .r_chan_t   (axi_slv_cache_r_chan_t     ),
-    .axi_req_t  (axi_slv_cache_req_t        ),
-    .axi_resp_t (axi_slv_cache_resp_t       )
-  ) i_cut_ext_l2_wide_out (
-    .clk_i      (clk_i                      ),
-    .rst_ni     (rst_ni                     ),
-    .slv_req_i  (wide_axi_slv_req[ClusterL2]),
-    .slv_resp_o (wide_axi_slv_rsp[ClusterL2]),
-    .mst_req_o  (axi_out_req_o   [ClusterL2]),
-    .mst_resp_i (axi_out_resp_i  [ClusterL2])
-  );
+  for (genvar port = 0; port < NumClusterAxiSlv; port ++) begin : gen_axi_out_cut
+    axi_cut #(
+      .Bypass     (!RegisterExt               ),
+      .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
+      .w_chan_t   (axi_slv_cache_w_chan_t     ),
+      .b_chan_t   (axi_slv_cache_b_chan_t     ),
+      .ar_chan_t  (axi_slv_cache_ar_chan_t    ),
+      .r_chan_t   (axi_slv_cache_r_chan_t     ),
+      .axi_req_t  (axi_slv_cache_req_t        ),
+      .axi_resp_t (axi_slv_cache_resp_t       )
+    ) i_cut_ext_wide_out (
+      .clk_i      (clk_i                      ),
+      .rst_ni     (rst_ni                     ),
+      .slv_req_i  (wide_axi_slv_req[port]     ),
+      .slv_resp_o (wide_axi_slv_rsp[port]     ),
+      .mst_req_o  (axi_out_req_o   [port]     ),
+      .mst_resp_i (axi_out_resp_i  [port]     )
+    );
+  end
 
   // ---------
   // Slaves
