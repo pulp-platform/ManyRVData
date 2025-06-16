@@ -16,11 +16,9 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
+#include <benchmark.h>
 #include <snrt.h>
 #include <stdio.h>
-#include <stddef.h>
-#include <l1cache.h>
-#include "printf.h"
 
 static float result __attribute__((section(".data")));
 
@@ -35,41 +33,12 @@ static inline void spin_unlock(spinlock_t *lock) {
   __sync_lock_release(lock);
 }
 
-void start_kernel() {
-  uint32_t *bench =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);
-  *bench = 1;
-  // snrt_start_perf_counter(SNRT_PERF_CNT0, SNRT_PERF_CNT_CYCLES, 0);
-}
-
-void stop_kernel() {
-  // snrt_stop_perf_counter(SNRT_PERF_CNT0);
-  uint32_t *bench =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);
-  *bench = 0;
-}
-
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
   const unsigned int cid = snrt_cluster_core_idx();
   
-  uint32_t spm_size = 0;
-
-  if (cid == 0) {
-    // Set xbar policy to default interleave (cacheline width)
-    l1d_xbar_config(256, num_cores);
-    // Init the cache
-    l1d_init(spm_size);
-  }
-
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
-
-  if (cid == 0)
-    start_kernel();
-
 
   // Fetch lock
   spin_lock (&lock);
@@ -86,7 +55,6 @@ int main() {
   snrt_cluster_hw_barrier();
 
   if (cid == 0) {
-    stop_kernel();
     printf("result: %f\n", result);
   }
 

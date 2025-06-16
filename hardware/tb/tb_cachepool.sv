@@ -5,24 +5,60 @@
 import "DPI-C" function void read_elf (input string filename);
 import "DPI-C" function byte get_section (output longint address, output longint len);
 import "DPI-C" context function byte read_section(input longint address, inout byte buffer[]);
+import "DPI-C" function int fesvr_tick();
+import "DPI-C" function int get_entry_point();
 
-`define wait_for(signal)   do @(negedge clk_i); while (!signal);
+`define wait_for(signal) \
+  do \
+    @(negedge clk); \
+  while (!signal);
 
 `include "axi/assign.svh"
 `include "axi/typedef.svh"
 `include "reqrsp_interface/typedef.svh"
 
-module testharness (
-    input logic clk_i,
-    input logic rst_ni
-  );
+module tb_cachepool;
+
+  /*****************
+   *  Definitions  *
+   *****************/
+
+  // timeunit      1ns;
+  // timeprecision 1ps;
 
   import cachepool_pkg::*;
   import spatz_cluster_peripheral_reg_pkg::*;
   import axi_pkg::xbar_cfg_t;
   import axi_pkg::xbar_rule_32_t;
 
-  import "DPI-C" function int get_entry_point();
+  localparam ClockPeriod = 2ns;
+  localparam TA          = 0.1ns;
+  localparam TT          = 0.4ns;
+
+  localparam PollEoc     = 0;
+
+  /********************************
+   *  Clock and Reset Generation  *
+   ********************************/
+
+  logic clk;
+  logic rst_n;
+  logic eoc;
+
+  // Toggling the clock
+  always #(ClockPeriod/2) clk = !clk;
+
+  // Controlling the reset
+  initial begin
+    clk   = 1'b1;
+    rst_n = 1'b0;
+
+    repeat (5)
+      #(ClockPeriod);
+
+    rst_n = 1'b1;
+  end
+
 
   /*********
    *  AXI  *
@@ -50,8 +86,9 @@ module testharness (
   logic [NumCores-1:0] debug_req;
 
   cachepool_cluster_wrapper i_cluster_wrapper (
-    .clk_i           (clk_i                ),
-    .rst_ni          (rst_ni               ),
+    .clk_i           (clk                  ),
+    .rst_ni          (rst_n                ),
+    .eoc_o           (eoc                  ),
     .meip_i          ('0                   ),
     .msip_i          ('0                   ),
     .mtip_i          ('0                   ),
@@ -69,11 +106,11 @@ module testharness (
 `ifdef VCD_DUMP
   initial begin: vcd_dump
     // Wait for the reset
-    wait (rst_ni);
+    wait (rst_n);
 
     // Wait until the probe is high
     while (!cluster_probe)
-      @(posedge clk_i);
+      @(posedge clk);
 
     // Dump signals of group 0
     $dumpfile(`VCD_DUMP_FILE);
@@ -82,7 +119,7 @@ module testharness (
 
     // Wait until the probe is low
     while (cluster_probe)
-      @(posedge clk_i);
+      @(posedge clk);
 
     $dumpoff;
 
@@ -106,9 +143,9 @@ module testharness (
     .axi_rsp_t   (spatz_axi_in_resp_t    ),
     .reqrsp_req_t(reqrsp_cluster_in_req_t),
     .reqrsp_rsp_t(reqrsp_cluster_in_rsp_t)
-  ) i_axi_to_reqrsp (
-    .clk_i       (clk_i              ),
-    .rst_ni      (rst_ni             ),
+  ) i_reqrsp_to_axi (
+    .clk_i       (clk                ),
+    .rst_ni      (rst_n              ),
     .user_i      ('0                 ),
     .axi_req_o   (axi_to_cluster_req ),
     .axi_rsp_i   (axi_to_cluster_resp),
@@ -117,22 +154,27 @@ module testharness (
   );
 
   logic [31:0] entry_point;
+
+  // Simulation Sequence
   initial begin
+    automatic int exit_code;
+    exit_code = fesvr_tick();
     // Idle
     to_cluster_req = '0;
     debug_req      = '0;
 
     // Wait for a while
     repeat (10)
-      @(negedge clk_i);
+      @(negedge clk);
 
     // Load the entry point
     entry_point = get_entry_point();
+    // entry_point = 32'h80003000;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while
     repeat (1000)
-      @(negedge clk_i);
+      @(negedge clk);
 
     // Store the entry point in the Spatz cluster
     to_cluster_req = '{
@@ -158,15 +200,36 @@ module testharness (
       },
       default: '0
     };
-    @(negedge clk_i);
+    @(negedge clk);
     to_cluster_req = '0;
 
 
     // Wake up cores
     debug_req = '1;
-    @(negedge clk_i);
+    @(negedge clk);
     debug_req = '0;
+
+    // Wait for end of computing signal
+    wait (eoc);
+    $display("[EOC] Simulation ended at %t (retval = WIP).", $time);
+    $finish(0);
   end
+
+  /**********
+  *  UART  *
+  **********/
+
+  // axi_uart #(
+  //   .axi_req_t (axi_tb_req_t ),
+  //   .axi_resp_t(axi_tb_resp_t)
+  // ) i_axi_uart (
+  //   .clk_i     (clk               ),
+  //   .rst_ni    (rst_n             ),
+  //   .testmode_i(1'b0              ),
+  //   // TODO: connect correctly
+  //   .axi_req_i (axi_mem_req[UART] ),
+  //   .axi_resp_o(axi_mem_resp[UART])
+  // );
 
   /********
    *  L2  *
@@ -178,17 +241,13 @@ module testharness (
   localparam int unsigned ReminderBits = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
 
   dram_sim_engine #(
-    .ClkPeriod  (1ns    )
+    .ClkPeriod  (ClockPeriod )
   ) i_dram_engine (
-    .clk_i      (clk_i  ),
-    .rst_ni     (rst_ni )
+    .clk_i      (clk  ),
+    .rst_ni     (rst_n )
   );
 
-  // axi_uart #(
 
-  // ) i_axi_uart (
-
-  // );
 
   // DRAMSys Initialization
   for (genvar mem = 0; mem < NumL2Channel; mem++) begin : gen_drams_init
@@ -288,8 +347,8 @@ module testharness (
       .axi_w_t      ( spatz_axi_out_w_chan_t    ),
       .axi_b_t      ( spatz_axi_out_b_chan_t    )
     ) i_axi_dram_sim (
-      .clk_i        ( clk_i                     ),
-      .rst_ni       ( rst_ni                    ),
+      .clk_i        ( clk                       ),
+      .rst_ni       ( rst_n                     ),
       .axi_req_i    ( axi_from_cluster_req [mem]),
       .axi_resp_o   ( axi_from_cluster_resp[mem])
     );
@@ -307,12 +366,12 @@ module testharness (
       .req_t        ( spatz_axi_out_req_t  ),
       .rsp_t        ( spatz_axi_out_resp_t )
     ) i_mem (
-      .clk_i (clk_i                     ),
-      .rst_ni(rst_ni                    ),
+      .clk_i (clk                       ),
+      .rst_ni(rst_n                     ),
       .req_i (axi_from_cluster_req [mem]),
       .rsp_o (axi_from_cluster_resp[mem])
     );
   end
 `endif
 
-endmodule : testharness
+endmodule : tb_cachepool

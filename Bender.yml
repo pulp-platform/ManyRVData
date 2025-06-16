@@ -30,4 +30,5 @@ sources:
   - hardware/src/cachepool_cluster.sv
   # testbench
   - hardware/tb/cachepool_cluster_wrapper.sv
-  - hardware/tb/testharness.sv
+  - hardware/tb/tb_cachepool.sv
+  #- hardware/tb/testharness.sv

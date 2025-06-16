@@ -6,10 +6,10 @@ onerror {resume}
 quietly WaveActivateNextPane {} 0
 
 # Add the cluster probe
-add wave /tb_bin/i_dut/cluster_probe
+add wave /tb_cachepool/cluster_probe
 
 # Add cluster waves
-add wave -noupdate -group Cluster /tb_bin/i_dut/i_cluster_wrapper/i_cluster/*
+add wave -noupdate -group Cluster /tb_cachepool/i_cluster_wrapper/i_cluster/*
 
 do sim/scripts/vsim_tile.tcl 0
 

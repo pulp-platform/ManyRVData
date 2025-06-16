@@ -77,9 +77,9 @@ package cachepool_pkg;
 
   // DRAM Configuration
   localparam int unsigned DramAddr        = 32'h8000_0000;
-  localparam int unsigned DramSize        = 32'h0200_0000;
+  localparam int unsigned DramSize        = 32'h0800_0000;
   // L2 Configuration
-  localparam int unsigned L2Addr          = 48'h8200_0000;
+  localparam int unsigned L2Addr          = 48'h8800_0000;
   localparam int unsigned L2Size          = 48'h0100_0000;
 
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();

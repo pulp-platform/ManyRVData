@@ -41,11 +41,14 @@ int main() {
 
   uint32_t spm_size = 0;
 
+  const unsigned int dim = dotp_l.M / num_cores;
+
+  uint32_t offset = 31 - __builtin_clz(dim * sizeof(float));
+
+  // Allocate the matrices
   if (cid == 0) {
     // Set xbar policy
-    l1d_xbar_config(dotp_l.M * sizeof(float), num_cores);
-    // Init the cache
-    l1d_init(spm_size);
+    l1d_xbar_config(offset);
   }
   
   // Wait for all cores to finish
@@ -55,7 +58,6 @@ int main() {
   unsigned int timer = (unsigned int)-1;
   unsigned int timer_tmp, timer_iter1;
 
-  const unsigned int dim = dotp_l.M / num_cores;
 
   float *a_int = dotp_A_dram + dim * cid;
   float *b_int = dotp_B_dram + dim * cid;
@@ -111,16 +113,17 @@ int main() {
     // The timer did not count the reduction time
     unsigned int performance = 1000 * 2 * dotp_l.M / timer;
     unsigned int utilization = performance / (2 * num_cores * 4);
+    write_cyc(timer);
 
-    printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
-    printf("The execution took %u cycles.\n", timer);
-    printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
-           performance, utilization);
+    // printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
+    // printf("The execution took %u cycles.\n", timer);
+    // printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
+    //        performance, utilization);
   }
 
   if (cid == 0) {
     if (fp_check(result[0], dotp_result*measure_iter)) {
-      printf("Error: Result = %f, Golden = %f\n", result[0], dotp_result*measure_iter);
+      // printf("Error: Result = %f, Golden = %f\n", result[0], dotp_result*measure_iter);
       return -1;
     }
   }

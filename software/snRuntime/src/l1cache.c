@@ -5,8 +5,12 @@
 
 #include <l1cache.h>
 
-void l1d_xbar_config(uint32_t size, uint32_t core) {
-  uint32_t offset = 31 - __builtin_clz(size/core);
+void l1d_xbar_config(uint32_t offset) {
+  // The input will give the starting bit to select the cache bank
+  // e.g., offset = 5 with 4 cache bank will use bit [6:5] to
+  // choose the cache bank
+  // These selected bits will be removed from the address in
+  // cache controller and added back when leaving the controller
 
   // 5 is the cacheline width (log2(256b/8))
   // granularity cannot be less than cacheline width

@@ -320,10 +320,10 @@ ${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc
 
 ${SIMBIN_DIR}/cachepool_cluster.vsim: ${WORK_DIR}/compile.vsim.tcl ${WORK_DIR}/lib/libfesvr_vsim.a
 	mkdir -p ${SIMBIN_DIR}/logs
-	$(call QUESTASIM,tb_bin)
+	$(call QUESTASIM,tb_cachepool)
 
 clean.vsim:
-	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs
+	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim ${SIM_DIR}/work-dpi ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs
 
 ######
 # SW #

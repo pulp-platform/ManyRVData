@@ -29,3 +29,4 @@ Bender.lock
 logs
 bin
 hardware/deps/*
+*.tdb

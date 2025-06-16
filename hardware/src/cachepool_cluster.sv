@@ -115,6 +115,8 @@ module cachepool_cluster
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           debug_req_i,
+    /// End of Computing indicator to notify the host/tb
+    output logic                                  eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           meip_i,
@@ -236,8 +238,9 @@ module cachepool_cluster
   // CachePool Tile
   // ---------------
 
-  logic [NumTiles-1:0] error;
+  logic [NumTiles-1:0] error, eoc;
   assign error_o = |error;
+  assign eoc_o   = |eoc;
 
   for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
     cachepool_tile #(
@@ -281,6 +284,7 @@ module cachepool_cluster
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
+      .eoc_o                    ( eoc[t]                   ),
       .impl_i                   ( impl_i                   ),
       .error_o                  ( error[t]                 ),
       .debug_req_i              ( debug_req_i              ),

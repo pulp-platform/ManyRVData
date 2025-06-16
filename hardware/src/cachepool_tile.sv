@@ -115,6 +115,8 @@ module cachepool_tile
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]      debug_req_i,
+    /// End of Computing indicator to notify the host/tb
+    output logic                             eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]      meip_i,
@@ -420,6 +422,9 @@ module cachepool_tile
   axi_mst_dma_resp_t [NrWideMasters-1:0] wide_axi_mst_rsp;
   axi_slv_dma_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
   axi_slv_dma_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
+
+  // axi refill ports from cache before scrambling (adding back cachebank ID)
+  axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_prescrambled;
 
   // 2. Memory Subsystem (Banks)
   mem_req_t [NrSuperBanks-1:0][BanksPerSuperBank-1:0] ic_req;
@@ -884,6 +889,13 @@ module cachepool_tile
   tcdm_bank_addr_t num_spm_lines;
   assign num_spm_lines = cfg_spm_size * (DepthPerBank / L1Size);
 
+  // For address scrambling
+  localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
+  assign bitmask_lo = (1 << dynamic_offset) - 1;
+  // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
+  assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
+
   for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin: gen_l1_cache_ctrl
     flamingo_spatz_cache_ctrl #(
       // Core
@@ -903,50 +915,60 @@ module cachepool_tile
       .axi_req_t        (axi_out_req_t      ),
       .axi_resp_t       (axi_out_resp_t     )
     ) i_l1_controller (
-      .clk_i                 (clk_i                    ),
-      .rst_ni                (rst_ni                   ),
-      .impl_i                ('0                       ),
+      .clk_i                 (clk_i                          ),
+      .rst_ni                (rst_ni                         ),
+      .impl_i                ('0                             ),
       // Sync Control
-      .cache_sync_valid_i    (l1d_insn_valid           ),
-      .cache_sync_ready_o    (l1d_insn_ready[cb]       ),
-      .cache_sync_insn_i     (l1d_insn                 ),
+      .cache_sync_valid_i    (l1d_insn_valid                 ),
+      .cache_sync_ready_o    (l1d_insn_ready[cb]             ),
+      .cache_sync_insn_i     (l1d_insn                       ),
       // SPM Size
       // The calculation of spm region in cache is different
       // than other modules (needs to times 2)
       // Currently assume full cache
-      .bank_depth_for_SPM_i  ('0                       ),
+      .bank_depth_for_SPM_i  ('0                             ),
       // Request
-      .core_req_valid_i      (cache_req_valid[cb]      ),
-      .core_req_ready_o      (cache_req_ready[cb]      ),
-      .core_req_addr_i       (cache_req_addr[cb]       ),
-      .core_req_meta_i       (cache_req_meta[cb]       ),
-      .core_req_write_i      (cache_req_write[cb]      ),
-      .core_req_wdata_i      (cache_req_data[cb]       ),
+      .core_req_valid_i      (cache_req_valid[cb]            ),
+      .core_req_ready_o      (cache_req_ready[cb]            ),
+      .core_req_addr_i       (cache_req_addr[cb]             ),
+      .core_req_meta_i       (cache_req_meta[cb]             ),
+      .core_req_write_i      (cache_req_write[cb]            ),
+      .core_req_wdata_i      (cache_req_data[cb]             ),
       // Response
-      .core_resp_valid_o     (cache_rsp_valid[cb]      ),
-      .core_resp_ready_i     (cache_rsp_ready[cb]      ),
-      .core_resp_write_o     (cache_rsp_write[cb]      ),
-      .core_resp_data_o      (cache_rsp_data[cb]       ),
-      .core_resp_meta_o      (cache_rsp_meta[cb]       ),
+      .core_resp_valid_o     (cache_rsp_valid[cb]            ),
+      .core_resp_ready_i     (cache_rsp_ready[cb]            ),
+      .core_resp_write_o     (cache_rsp_write[cb]            ),
+      .core_resp_data_o      (cache_rsp_data[cb]             ),
+      .core_resp_meta_o      (cache_rsp_meta[cb]             ),
       // AXI refill
-      .axi_req_o             (axi_cache_req_o[cb]      ),
-      .axi_resp_i            (axi_cache_rsp_i[cb]      ),
+      .axi_req_o             (axi_cache_req_prescrambled[cb] ),
+      .axi_resp_i            (axi_cache_rsp_i[cb]            ),
       // Tag Banks
-      .tcdm_tag_bank_req_o   (l1_tag_bank_req[cb]      ),
-      .tcdm_tag_bank_we_o    (l1_tag_bank_we[cb]       ),
-      .tcdm_tag_bank_addr_o  (l1_tag_bank_addr[cb]     ),
-      .tcdm_tag_bank_wdata_o (l1_tag_bank_wdata[cb]    ),
-      .tcdm_tag_bank_be_o    (l1_tag_bank_be[cb]       ),
-      .tcdm_tag_bank_rdata_i (l1_tag_bank_rdata[cb]    ),
+      .tcdm_tag_bank_req_o   (l1_tag_bank_req[cb]            ),
+      .tcdm_tag_bank_we_o    (l1_tag_bank_we[cb]             ),
+      .tcdm_tag_bank_addr_o  (l1_tag_bank_addr[cb]           ),
+      .tcdm_tag_bank_wdata_o (l1_tag_bank_wdata[cb]          ),
+      .tcdm_tag_bank_be_o    (l1_tag_bank_be[cb]             ),
+      .tcdm_tag_bank_rdata_i (l1_tag_bank_rdata[cb]          ),
       // Data Banks
-      .tcdm_data_bank_req_o  (l1_data_bank_req[cb]     ),
-      .tcdm_data_bank_we_o   (l1_data_bank_we[cb]      ),
-      .tcdm_data_bank_addr_o (l1_data_bank_addr[cb]    ),
-      .tcdm_data_bank_wdata_o(l1_data_bank_wdata[cb]   ),
-      .tcdm_data_bank_be_o   (l1_data_bank_be[cb]      ),
-      .tcdm_data_bank_rdata_i(l1_data_bank_rdata[cb]   ),
-      .tcdm_data_bank_gnt_i  (l1_data_bank_gnt[cb]     )
+      .tcdm_data_bank_req_o  (l1_data_bank_req[cb]           ),
+      .tcdm_data_bank_we_o   (l1_data_bank_we[cb]            ),
+      .tcdm_data_bank_addr_o (l1_data_bank_addr[cb]          ),
+      .tcdm_data_bank_wdata_o(l1_data_bank_wdata[cb]         ),
+      .tcdm_data_bank_be_o   (l1_data_bank_be[cb]            ),
+      .tcdm_data_bank_rdata_i(l1_data_bank_rdata[cb]         ),
+      .tcdm_data_bank_gnt_i  (l1_data_bank_gnt[cb]           )
     );
+
+    always_comb begin : bank_addr_scramble
+      axi_cache_req_o[cb] = axi_cache_req_prescrambled[cb];
+      // Pass the lower bits first
+      axi_cache_req_o[cb].ar.addr  =   axi_cache_req_prescrambled[cb].ar.addr & bitmask_lo;
+      // Shift the upper part to its location
+      axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
+      // Add back the removed cache bank ID
+      axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
+    end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
       tc_sram_impl #(
@@ -1363,6 +1385,7 @@ module cachepool_tile
   ) i_snitch_cluster_peripheral (
     .clk_i                    (clk_i                 ),
     .rst_ni                   (rst_ni                ),
+    .eoc_o                    (eoc_o                 ),
     .reg_req_i                (reg_req               ),
     .reg_rsp_o                (reg_rsp               ),
     /// The TCDM always starts at the cluster base.
