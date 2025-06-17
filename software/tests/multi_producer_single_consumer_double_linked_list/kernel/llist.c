@@ -50,8 +50,10 @@ void list_push_back(volatile Node *node) {
         rlc_ctx.list.head = node;
     }
     rlc_ctx.list.tail = node;
+    printf_lock_acquire(&printf_lock);
     printf("[core %u][list_push_back] rlc_ctx.list.head=0x%x, rlc_ctx.list.tail=0x%x\n", 
         snrt_cluster_core_idx(), rlc_ctx.list.head, rlc_ctx.list.tail);
+    printf_lock_release(&printf_lock);
     rlc_ctx.list.sduNum++;
     rlc_ctx.list.sduBytes += node->data_size;
     timer_body_1 = benchmark_get_cycle();
