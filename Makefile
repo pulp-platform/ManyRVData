@@ -8,6 +8,8 @@
 SHELL = /usr/bin/env bash
 ROOT_DIR := $(patsubst %/,%, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CACHEPOOL_DIR)
+CXX   := /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
+CC    := /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
 
 # Directoriy Path
 PYTHON                ?= python3.6
@@ -200,7 +202,7 @@ init:
 	git submodule update --init --recursive --jobs=8
 
 quick-tool:
-	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool/install $(CACHEPOOL_DIR)/install
+	ln -sf /usr/scratch/larain4/diyou/cachepool/ManyRVData/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz
 .PHONY: generate
@@ -233,7 +235,7 @@ endif
 
 ## Build DramSys
 dram-build:
-	make -C ${DRAMSYS_DIR} -j8 dramsys
+	make -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
 
 
 ############
