@@ -10,7 +10,7 @@
 #include <stddef.h>
 #include <l1cache.h>
 #include "printf.h"
-#include "debug.h"
+#include "printf_lock.h"
 
 /* 
    Each allocation is a fixed-size page (PAGE_SIZE bytes).
@@ -27,10 +27,14 @@ static void delay(volatile int iterations) {
 /* Consumer behavior (runs on core 0) */
 static void consumer(const unsigned int core_id) {
     while (1) {
-        Node *node = list_pop_front(&rlc_ctx.list);
+        Node *node = list_pop_front();
         if (node != 0) {
-            debug_printf_locked("Consumer (core %u): processing node %p with data size %zu\n",
+
+            printf_lock_acquire(&printf_lock);
+            printf("Consumer (core %u): processing node %p with data size %zu\n",
                    core_id, (void *)node, node->data_size);
+            printf_lock_release(&printf_lock);
+
             delay(100);  /* Simulate processing delay */
             mm_free(node);
         } else {
@@ -42,9 +46,13 @@ static void consumer(const unsigned int core_id) {
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
     while (1) {
-        Node *node = (Node *)mm_alloc(rlc_ctx.mm_ctx);
+        Node *node = (Node *)mm_alloc();
         if (!node) {
-            debug_printf_locked("Producer (core %u): Out of memory\n", core_id);
+
+            printf_lock_acquire(&printf_lock);
+            printf("Producer (core %u): Out of memory\n", core_id);
+            printf_lock_release(&printf_lock);
+
             delay(200);  /* Delay before retrying */
             continue;
         }
@@ -58,8 +66,12 @@ static void producer(const unsigned int core_id) {
         /* Zero-initialize the payload using our custom mm_memset */
         mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
-        list_push_back(&rlc_ctx.list, node);
-        debug_printf_locked("Producer (core %u): added node %p\n", core_id, (void *)node);
+        list_push_back(node);
+
+        printf_lock_acquire(&printf_lock);
+        printf("Producer (core %u): added node %p\n", core_id, (void *)node);
+        printf_lock_release(&printf_lock);
+
         delay(200);  /* Delay between node productions */
     }
 }
@@ -68,8 +80,10 @@ static void producer(const unsigned int core_id) {
 void cluster_entry(const unsigned int core_id) {
     if (core_id == 0) {
         consumer(core_id);
-    } else {
+    } else if (core_id == 1) {
         producer(core_id);
+    } else {
+        while (1) {}
     }
 }
 

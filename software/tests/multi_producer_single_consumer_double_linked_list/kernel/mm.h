@@ -6,7 +6,9 @@
 #include "llist.h"
 
 #define PAGE_SIZE (1024)             /* Fixed size of each memory page in bytes */
-#define BUFFER_SIZE (1024 * 1024)      /* 1MB memory pool size */
+#define BUFFER_SIZE (PAGE_SIZE * 32)      /* memory pool size in byte */
+
+static uint32_t bulk_buffer[BUFFER_SIZE / 4] __attribute__((section(".data"))) __attribute__((aligned(32)));
 
 spinlock_t mm_lock;
 

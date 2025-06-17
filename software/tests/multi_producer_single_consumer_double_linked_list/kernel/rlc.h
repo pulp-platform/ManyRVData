@@ -13,7 +13,7 @@ typedef struct {
     mm_context_t *mm_ctx;
 } rlc_context_t;
 
-rlc_context_t rlc_ctx;
+volatile rlc_context_t rlc_ctx;
 
 /* 
    rlc_start() initializes shared RLC resources and starts the RLC kernel 
