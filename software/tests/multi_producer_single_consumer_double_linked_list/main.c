@@ -1,4 +1,4 @@
-#include "kernel/debug.c"
+#include "kernel/printf_lock.c"
 #include "kernel/mm.c"
 #include "kernel/rlc.c"
 #include <snrt.h>
@@ -6,6 +6,9 @@
 #include <stddef.h>
 #include <l1cache.h>
 #include "printf.h"
+#include "kernel/printf_lock.h"
+
+#define L1LineWidth (256/8) // 256 bits = 32 bytes
 
 int main(void) {
     /* Retrieve the core index only once in main */
@@ -13,22 +16,36 @@ int main(void) {
 
     
     if (core_id == 0) {
-        /* Initalize the thread saft printf */
+        // Set xbar policy
+        uint32_t offset = 31 - __builtin_clz(L1LineWidth);
+        l1d_xbar_config(offset); // cacheline interleaving
+        
+        // Initalize the thread saft printf
         debug_print_lock_init();
-        /* Initialize memory management context */
-        mm_init(&mm_ctx);
-        /* Set up the RLC context to use the memory management context */
-        rlc_ctx.mm_ctx = &mm_ctx;
+        
+        // Initialize memory management context
+        mm_init();
 
-        /* Initialize the linked list */
-        list_init(&rlc_ctx.list);
-
+        // Initialize the linked list for receiving queue
+        list_init();
+        
+        // Initialize locks
         mm_lock = 0;
         llist_lock = 0;
-    } 
+    }
+
+    // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
+
+    // debug_printf_locked("[core %u] post snrt_cluster_hw_barrier()\n", core_id);
+    // printf("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
+
+
+    printf_lock_acquire(&printf_lock);
+    printf("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
+    printf_lock_release(&printf_lock);
 
     rlc_start(core_id);
     

@@ -37,29 +37,31 @@ typedef struct Node {
    All operations require a pointer to an instance of LinkedList.
 */
 typedef struct {
-    Node *head;
-    Node *tail;
-    spinlock_t lock;    /* Global lock protecting the list structure */
+    Node *head __attribute__((aligned(8)));
+    Node *tail __attribute__((aligned(8)));
+    int sduNum __attribute__((aligned(8)));   /* Number of SDUs to be sent */
+    int sduBytes __attribute__((aligned(8)));/* Number of SUDs bytes to be sent */
+    spinlock_t lock __attribute__((aligned(8)));  /* Global lock protecting the list structure */
 } LinkedList;
 
 /* 
    list_init() initializes the given LinkedList instance.
    It sets the head and tail pointers to NULL and the lock to 0.
 */
-void list_init(LinkedList *list);
+void list_init();
 
 /* 
    list_push_back() appends a given Node to the end of the list.
    It is safe for concurrent use by multiple producers.
 */
-void list_push_back(LinkedList *list, Node *node);
+void list_push_back(volatile Node *node);
 
 /* 
    list_pop_front() removes and returns the node from the front of the list.
    This function should be used by a single consumer.
    If the list is empty, it returns NULL.
 */
-Node *list_pop_front(LinkedList *list);
+Node *list_pop_front();
 
 /* 
    list_remove() removes a specific Node from anywhere in the list.
