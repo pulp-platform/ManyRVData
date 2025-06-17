@@ -58,6 +58,7 @@ void __attribute__((noinline)) gemv_v64b_m4_unroll_M(double *a, double* b, doubl
     avl -= vl;
     c_ += vl;
     b_ = b;
+    a_ = a + avl;
   } while (avl > 0);
   
 }
@@ -100,6 +101,7 @@ void __attribute__((noinline)) gemv_v64b_m4(double *a, double* b, double* c, int
     avl -= vl;
     c_ += vl;
     b_ = b;
+    a_ = a + avl;
   } while (avl > 0);
   
 }
@@ -143,6 +145,7 @@ void __attribute__((noinline)) gemv_v32b_m4(float *a, float* b, float* c, int M,
     avl -= vl;
     c_ += vl;
     b_ = b;
+    a_ = a + avl;
   } while (avl > 0);
   
 }
@@ -190,6 +193,7 @@ void __attribute__((noinline)) gemv_v16b_m4(__fp16 *a, __fp16* b, __fp16* c, int
     avl -= vl;
     c_ += vl;
     b_ = b;
+    a_ = a + avl;
   } while (avl > 0);
   
 }
