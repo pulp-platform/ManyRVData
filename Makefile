@@ -69,7 +69,10 @@ COMPILER              ?= llvm
 # Version needs to be larger than 3.28
 CMAKE                 ?= cmake
 
-# Default value for ETH users only
+CXX 									?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
+CC  									?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
+
+# Default value for ETH users only, GCC and CXX needs to be higher than 11.2.0
 CXX_PATH              ?= $(shell realpath -P $(CXX))
 CC_PATH               ?= $(shell realpath -P $(CC))
 GCC_LIB               ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
@@ -202,7 +205,7 @@ init:
 	git submodule update --init --recursive --jobs=8
 
 quick-tool:
-	ln -sf /usr/scratch/larain4/diyou/cachepool/ManyRVData/install $(CACHEPOOL_DIR)/install
+	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz
 .PHONY: generate
@@ -227,11 +230,6 @@ ifeq ($(USE_DRAMSYS),1)
 	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libsystemc
 	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
 endif
-
-# VSIM_BENDER += -t DRAMSYS
-# VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libsystemc
-# VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
-# VSIM_FLAGS += +DRAMSYS_RES=$(DRAMSYS_RES_PATH)
 
 ## Build DramSys
 dram-build:
@@ -375,6 +373,7 @@ help:
 	@echo "*toolchain*:  build the necessary toochains, including LLVM and GCC"
 	@echo "*quick-tool*: *ETH Member Only* soft link to prebuilt toolchains"
 	@echo "*generate*:   generate the Spatz package, bootrom and opcodes"
+	@echo "*dram-build*: build DramSys for simulation"
 	@echo ""
 	@echo "SW Build:"
 	@echo ""

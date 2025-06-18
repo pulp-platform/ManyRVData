@@ -67,7 +67,7 @@ package cachepool_pkg;
   localparam int unsigned NumCores        = 4;
   // TODO: read from CFG
   localparam int unsigned NumBank         = 16;
-  localparam int unsigned TCDMDepth       = 2048;
+  localparam int unsigned TCDMDepth       = 4096;
 
   localparam int unsigned SpatzDataWidth  = 32;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
@@ -78,7 +78,7 @@ package cachepool_pkg;
   localparam int unsigned ICacheSets      = 2;
 
   localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
-  localparam int unsigned TCDMSize        = 32'h2_0000;
+  localparam int unsigned TCDMSize        = 32'h4_0000;
 
   localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
 
@@ -89,12 +89,12 @@ package cachepool_pkg;
   // localparam int unsigned L2Size          = 48'h0100_0000;
 
   // UART Configuration
-  localparam int unsigned L2Addr          = 32'hC000_0000;
+  localparam int unsigned UartAddr        = 32'hC000_0000;
 
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
     cached_regions = '{default: '0};
-    cached_regions[0] = '{base: 32'h80000000, mask: 32'hf8000000};
+    cached_regions[0] = '{base: 32'h80000000, mask: 32'hfc000000};
     return cached_regions;
   endfunction
 
@@ -110,6 +110,9 @@ package cachepool_pkg;
   localparam int unsigned NFpu          = 4;
   localparam int unsigned NIpu          = 4;
 
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 16};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 16};
+  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 16};
 
   localparam fpu_implementation_t FPUImplementation_Core = '{
     // FMA Block
@@ -192,11 +195,6 @@ package cachepool_pkg;
     TilePeriph        = 0
   } tile_narrow_e;
 
-  // typedef enum integer {
-  //   ClusterL2         = 1,
-  //   ClusterL3         = 0
-  // } cluster_slv_e;
-
   typedef enum integer {
     L2Channel0         = 0,
     L2Channel1         = 1,
@@ -213,7 +211,7 @@ package cachepool_pkg;
 
     // DRAM Configuration
   localparam int unsigned DramAddr        = 32'h8000_0000;
-  localparam int unsigned DramSize        = 32'h0800_0000;
+  localparam int unsigned DramSize        = 32'h0400_0000;
   localparam int unsigned DramPerChSize   = DramSize / NumL2Channel;
 
 `ifdef TARGET_DRAMSYS
@@ -224,18 +222,18 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  localparam int unsigned Interleave  = 8;
+  localparam int unsigned Interleave  = 128;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;
     localparam int unsigned ConstantBits  = $clog2(L2BankBeWidth * Interleave);
-    localparam int unsigned ScrambleBits  = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
+    localparam int unsigned ScrambleBits  = $clog2(NumL2Channel);
     localparam int unsigned ReminderBits  = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
 
-    // res.dram_ctrl_id    = addr[ScrambleBits + ConstantBits - 1: ConstantBits ];
-    res.dram_ctrl_id    = addr[30:29];
-    // res.dram_ctrl_addr  = {addr[SpatzAxiAddrWidth-1: SpatzAxiAddrWidth-ReminderBits], addr[ConstantBits-1:0]};
-    res.dram_ctrl_addr  = addr;
+    res.dram_ctrl_id    = addr[ConstantBits + ScrambleBits - 1 : ConstantBits];
+    res.dram_ctrl_addr  = {addr[SpatzAxiAddrWidth-1 : SpatzAxiAddrWidth - ReminderBits],
+                           {ScrambleBits{1'b0}},
+                           addr[ConstantBits-1:0]};
     return res;
   endfunction
 
@@ -244,22 +242,59 @@ package cachepool_pkg;
     automatic axi_addr_t res;
     if ((L2BankBeWidth * Interleave) < DramPerChSize) begin
       // input address needs to move the dram_id bits to correct location for interleaving
-      // [Reminder][Scramble][InterChange][Constant] => [Reminder][InterChange][Scramble][Constant]
+      // [Reminder][InterChange][Scramble][Constant] => [Reminder][Scramble][InterChange][Constant]
+      // log2(32'h0100_0000) = 24
+      // 32'h0100_0000 has 24b trailing zeros => in total 24b offset
+      localparam int unsigned SizeOffsetBits  = $clog2(DramPerChSize);
+      // log2(512/8*8) = 9, can be modified to find best pattern
       localparam int unsigned ConstantBits    = $clog2(L2BankBeWidth * Interleave);
-      localparam int unsigned InterChangeBits = $clog2(DramPerChSize) - $clog2(L2BankBeWidth * Interleave);
-      localparam int unsigned ScrambleBits    = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
-      localparam int unsigned ReminderBits    = SpatzAxiAddrWidth - ScrambleBits - ConstantBits - InterChangeBits;
+      // log2(32'h0100_0000) - 9 = 24 - 9 = 15
+      localparam int unsigned InterChangeBits = SizeOffsetBits - ConstantBits;
+      // log2(4) = 2
+      localparam int unsigned ScrambleBits    = $clog2(NumL2Channel);
+      // 32 - 24 - 2 = 6
+      localparam int unsigned ReminderBits    = SpatzAxiAddrWidth - ScrambleBits - SizeOffsetBits;
 
-      res  = {addr[SpatzAxiAddrWidth-1             : SpatzAxiAddrWidth-ReminderBits],
-              addr[ConstantBits                   +: InterChangeBits],
-              addr[(ConstantBits+InterChangeBits) +: ScrambleBits],
-              addr[ConstantBits-1                  : 0]};
-      // return res;
-      return addr;
+      res  = {addr[SpatzAxiAddrWidth              - 1 : SpatzAxiAddrWidth - ReminderBits],
+              addr[ConstantBits + ScrambleBits    - 1 : ConstantBits                    ],
+              addr[SizeOffsetBits + ScrambleBits  - 1 : ConstantBits + ScrambleBits     ],
+              addr[ConstantBits                   - 1 : 0                               ]};
+
+      return res;
     end else begin
       return addr;
     end
   endfunction
+
+  function automatic axi_addr_t revertAddr(axi_addr_t addr);
+    // IMPORTANT: This function will not work if size is smaller than `L2BankBeWidth * Interleave`
+    // Revert the scrambled address back
+    automatic axi_addr_t res;
+    if ((L2BankBeWidth * Interleave) < DramPerChSize) begin
+      // input address needs to move the dram_id bits to correct location for interleaving
+      // [Reminder][Scramble][InterChange][Constant] => [Reminder][InterChange][Scramble][Constant]
+      // log2(32'h0100_0000) = 24
+      localparam int unsigned SizeOffsetBits  = $clog2(DramPerChSize);
+      // log2(512/8*8) = 9
+      localparam int unsigned ConstantBits    = $clog2(L2BankBeWidth * Interleave);
+      // log2(32'h0100_0000) - 9 = 24 - 9 = 15
+      localparam int unsigned InterChangeBits = SizeOffsetBits - ConstantBits;
+      // log2(4) = 2
+      localparam int unsigned ScrambleBits    = $clog2(NumL2Channel);
+      // 32 - 24 - 2 = 6
+      localparam int unsigned ReminderBits    = SpatzAxiAddrWidth - ScrambleBits - SizeOffsetBits;
+
+      res  = {addr[SpatzAxiAddrWidth              - 1 : SpatzAxiAddrWidth - ReminderBits],
+              addr[ConstantBits + InterChangeBits - 1 : ConstantBits                    ],
+              addr[SizeOffsetBits + ScrambleBits  - 1 : SizeOffsetBits                  ],
+              addr[ConstantBits                   - 1 : 0                               ]};
+
+      return res;
+    end else begin
+      return addr;
+    end
+  endfunction
+
 `endif
 
   // TODO: multi-tile support

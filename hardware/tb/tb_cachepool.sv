@@ -295,54 +295,24 @@ module tb_cachepool;
     end : l2_init
   end : gen_drams_init
 
+  axi_addr_t [NumL2Channel-1:0] temp_addr_aw, temp_addr_ar;
+  dram_ctrl_interleave_t [NumL2Channel-1:0] temp_dram_info_aw, temp_dram_info_ar;
+
   // DRAMSys address scrambling
-  // for (genvar ch = 0; ch < NumClusterAxiSlv; ch ++) begin : gen_dram_scrambler
-  //   always_comb begin
-  //     axi_dram_req[ch]         = axi_from_cluster_req[ch];
-  //     axi_dram_req[ch].aw.addr = scrambleAddr(axi_from_cluster_req[ch].aw.addr);
-  //     axi_dram_req[ch].ar.addr = scrambleAddr(axi_from_cluster_req[ch].ar.addr);
-  //   end
-  // end
-  // for (genvar mem = 0; unsigned'(mem) < NumL2Channel; mem++) begin: gen_dram_scrambler_reset
-  //   // req.aw scrambling
-  //   logic [ConstantBits-1:0] aw_const;
-  //   logic [ScrambleBits-1:0] aw_scramble;
-  //   logic [ReminderBits-1:0] aw_reminder;
-  //   logic [SpatzAxiAddrWidth-1:0] aw_scramble_addr_reset;
-  //   assign aw_scramble = axi_from_cluster_req[mem].aw.addr[SpatzAxiAddrWidth-1 : SpatzAxiAddrWidth-ScrambleBits];
-  //   assign aw_reminder = axi_from_cluster_req[mem].aw.addr[SpatzAxiAddrWidth-ScrambleBits-1 : ConstantBits] -
-  //                        DramBase[SpatzAxiAddrWidth-1: SpatzAxiAddrWidth-ReminderBits];
-  //   assign aw_const    = axi_from_cluster_req[mem].aw.addr[ConstantBits-1 : 0];
-
-  //   if (NumL2Channel == 1) begin
-  //     assign aw_scramble_addr_reset = {aw_reminder, aw_scramble, aw_const};
-  //   end else begin
-  //     assign aw_scramble_addr_reset = {{ScrambleBits{1'b0}}, aw_reminder, aw_const};
-  //   end
-
-  //   // req.ar scrambling
-  //   logic [ConstantBits-1:0] ar_const;
-  //   logic [ScrambleBits-1:0] ar_scramble;
-  //   logic [ReminderBits-1:0] ar_reminder;
-  //   logic [SpatzAxiAddrWidth-1:0] ar_scramble_addr_reset;
-  //   assign ar_scramble = axi_from_cluster_req[mem].ar.addr[SpatzAxiAddrWidth-1 : SpatzAxiAddrWidth-ScrambleBits];
-  //   assign ar_reminder = axi_from_cluster_req[mem].ar.addr[SpatzAxiAddrWidth-ScrambleBits-1 : ConstantBits] -
-  //                        DramBase[SpatzAxiAddrWidth-1: SpatzAxiAddrWidth-ReminderBits];
-  //   assign ar_const    = axi_from_cluster_req[mem].ar.addr[ConstantBits-1 : 0];
-
-  //   if (NumL2Channel == 1) begin
-  //     assign ar_scramble_addr_reset = {ar_reminder, ar_scramble, ar_const};
-  //   end else begin
-  //     assign ar_scramble_addr_reset = {{ScrambleBits{1'b0}}, ar_reminder, ar_const};
-  //   end
-
-  //   // Scrambled AXI req assignment
-  //   always_comb begin
-  //     axi_dram_req[mem]         = axi_from_cluster_req[mem];
-  //     axi_dram_req[mem].aw.addr = aw_scramble_addr_reset;
-  //     axi_dram_req[mem].ar.addr = ar_scramble_addr_reset;
-  //   end
-  // end: gen_dram_scrambler_reset
+  for (genvar ch = 0; ch < NumClusterAxiSlv; ch ++) begin : gen_dram_scrambler
+    always_comb begin
+      // automatic logic [31:0] temp_addr_aw, temp_addr_ar;
+      axi_dram_req[ch]         = axi_from_cluster_req[ch];
+      temp_addr_aw[ch]         = revertAddr(axi_from_cluster_req[ch].aw.addr);
+      temp_addr_ar[ch]         = revertAddr(axi_from_cluster_req[ch].ar.addr);
+      temp_dram_info_aw[ch]    = getDramCTRLInfo(temp_addr_aw[ch]);
+      temp_dram_info_ar[ch]    = getDramCTRLInfo(temp_addr_ar[ch]);
+      axi_dram_req[ch].aw.addr = temp_dram_info_aw[ch].dram_ctrl_addr;
+      axi_dram_req[ch].ar.addr = temp_dram_info_ar[ch].dram_ctrl_addr;
+      // axi_dram_req[ch].aw.addr = removeOffset(temp_addr_aw[ch]);
+      // axi_dram_req[ch].ar.addr = removeOffset(temp_addr_ar[ch]);
+    end
+  end
 
   for (genvar mem = 0; mem < NumL2Channel; mem++) begin: gen_dram
     axi_dram_sim #(
@@ -362,7 +332,7 @@ module tb_cachepool;
     ) i_axi_dram_sim (
       .clk_i        ( clk                       ),
       .rst_ni       ( rst_n                     ),
-      .axi_req_i    ( axi_from_cluster_req [mem]),
+      .axi_req_i    ( axi_dram_req [mem]        ),
       .axi_resp_o   ( axi_from_cluster_resp[mem])
     );
   end

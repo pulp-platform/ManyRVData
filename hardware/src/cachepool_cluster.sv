@@ -306,7 +306,7 @@ module cachepool_cluster
   logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
   xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
 
-  assign cache_xbar_default_port = '{default: L2Channel0};
+  assign cache_xbar_default_port = '{default: L2Channel3};
 
   for (genvar ch = 0; ch < CacheXbarCfg.NoAddrRules; ch ++) begin : gen_cache_refill_xbar_rule
     assign cache_xbar_rule[ch] = '{
