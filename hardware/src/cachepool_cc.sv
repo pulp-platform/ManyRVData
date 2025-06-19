@@ -61,7 +61,7 @@ module cachepool_cc
     parameter bit                                          RVE                      = 0,
     /// Enable F and D Extension
     parameter bit                                          RVF                      = 1,
-    parameter bit                                          RVD                      = 1,
+    parameter bit                                          RVD                      = 0,
     parameter bit                                          XDivSqrt                 = 0,
     parameter bit                                          XF8                      = 0,
     parameter bit                                          XF16                     = 0,
@@ -453,10 +453,10 @@ module cachepool_cc
   always_comb begin
     // default bypass cache
     bypass_cache = 1'b1;
-    if ((snitch_dreq_q.q.addr >= tcdm_addr_base_i) && (snitch_dreq_q.q.addr < 32'h51020000)) begin
+    if ((snitch_dreq_q.q.addr >= tcdm_addr_base_i) && (snitch_dreq_q.q.addr < (cachepool_pkg::TCDMSize + tcdm_addr_base_i))) begin
       // SPM
       bypass_cache = 1'b0;
-    end else if ((snitch_dreq_q.q.addr >= 32'h8000_0000) && (snitch_dreq_q.q.addr < 32'h8100_0000)) begin
+    end else if ((snitch_dreq_q.q.addr >= cachepool_pkg::DramAddr) && (snitch_dreq_q.q.addr < (cachepool_pkg::DramAddr+cachepool_pkg::DramSize))) begin
       // DRAM
       bypass_cache = 1'b0;
     end

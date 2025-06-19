@@ -67,7 +67,8 @@ package cachepool_pkg;
   localparam int unsigned NumCores        = 4;
   // TODO: read from CFG
   localparam int unsigned NumBank         = 16;
-  localparam int unsigned TCDMDepth       = 4096;
+  localparam int unsigned TCDMDepth       = 256;
+  localparam int unsigned L1Depth         = 4096;
 
   localparam int unsigned SpatzDataWidth  = 32;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
@@ -78,7 +79,7 @@ package cachepool_pkg;
   localparam int unsigned ICacheSets      = 2;
 
   localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
-  localparam int unsigned TCDMSize        = 32'h4_0000;
+  localparam int unsigned TCDMSize        = 32'h4000;
 
   localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
 
@@ -158,7 +159,7 @@ package cachepool_pkg;
   localparam int unsigned L1Associativity     = L1NumDataBank / (L1LineWidth / SpatzDataWidth) / L1BankFactor;
   // 8 * 1024 * 64 / 512 = 1024)
   // Number of entrys of L1 Cache (total number across multiple cache controllers)
-  localparam int unsigned L1NumEntry          = NumBank * TCDMDepth * SpatzDataWidth / L1LineWidth;
+  localparam int unsigned L1NumEntry          = NumBank * L1Depth * SpatzDataWidth / L1LineWidth;
   // Number of cache entries each cache way has
   localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1Associativity;
   // Number of cache sets each cache way has
@@ -166,9 +167,9 @@ package cachepool_pkg;
   // Number of Tag banks
   localparam int unsigned L1NumTagBank        = L1BankFactor * L1Associativity;
   // Number of lines per bank unit
-  localparam int unsigned DepthPerBank        = TCDMDepth / L1BankPerWP;
+  localparam int unsigned DepthPerBank        = L1Depth / L1BankPerWP;
   // Cache total size in KB
-  localparam int unsigned L1Size              = NumBank * TCDMDepth * BeWidth / 1024;
+  localparam int unsigned L1Size              = NumBank * L1Depth * BeWidth / 1024;
 
   localparam int unsigned L1TagDataWidth      = 64;
 
