@@ -67,11 +67,14 @@ Currently each core-complex has a local stack SPM. The size of SPM bank is confi
 ## Address Map (WIP)
 Here is a summary of current address map of the system:
 
-`0000_0000` to `0000_1000`: not used
-`0000_1000` to `0000_1FFF`: BootRom
-`0000_2000` to `50FF_FFFF`: not used
-`5100_0000` to `5100_3FFF`: Stack (WIP)
-`5100_4000` to `5101_3FFF`: Peripheral (Offset = 40 for hw barrier)
-`5101_4000` to `7FFF_FFFF`: not used
-`8000_0000` to `BFFF_FFFF`: DRAM (16GB)
-`C000_0000` to `C000_0FFF`: UART
+
+| Start Address   | Size         | Region        | Notes                                  |
+|-----------------|--------------|---------------|----------------------------------------|
+| `0x0000_0000`   | 0x1000       | Unused        | —                                      |
+| `0x0000_1000`   | 0x1000       | Boot ROM      | —                                      |
+| `0x0000_2000`   | 0x50FF_E000  | Unused        | Approximate, until start of stack      |
+| `0x5100_0000`   | 0x4000       | Stack (WIP)   | —                                      |
+| `0x5100_4000`   | 0x10000      | Peripheral    | Offset = 0x40 for hardware barrier     |
+| `0x5101_4000`   | 0x2EFE_C000  | Unused        | Approximate, until DRAM start          |
+| `0x8000_0000`   | 0x4000_0000  | DRAM          | 16 GB                                  |
+| `0xC000_0000`   | 0x1000       | UART          | —                                      |
