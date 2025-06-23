@@ -63,6 +63,7 @@ add_library(debug_print multi_producer_single_consumer_double_linked_list/kernel
 add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
 add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
 add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
+add_library(data_move_vec multi_producer_single_consumer_double_linked_list/kernel/data_move_vec.c)
 
 # Tests
 enable_testing()
@@ -71,7 +72,8 @@ set(SNITCH_TEST_PREFIX cachepool-)
 ## RLC
 add_snitch_test(spin-lock  spin-lock/main.c)
 
-add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
+# add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
 
 ## Vector
 

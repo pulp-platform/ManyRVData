@@ -29,6 +29,7 @@ typedef struct Node {
     struct Node *prev;
     struct Node *next;
     void *data;         /* Pointer to the payload data */
+    void *tgt;          /* Pointer to the address to move the payload data to */
     size_t data_size;   /* Size of the payload in bytes */
     spinlock_t lock;    /* Per‑node lock (0: unlocked, 1: locked) */
 } Node;

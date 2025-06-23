@@ -59,26 +59,26 @@ void *mm_alloc() {
     timer_mm_alloc_0 = benchmark_get_cycle();
 
 
-    // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][mm_alloc] mm_ctx.alloc_offset=%d, PAGE_SIZE=%d, BUFFER_SIZE=%d\n", 
-    //     snrt_cluster_core_idx(), mm_ctx.alloc_offset, PAGE_SIZE, BUFFER_SIZE);
-    // printf_lock_release(&printf_lock);
+    printf_lock_acquire(&printf_lock);
+    printf("[core %u][mm_alloc] mm_ctx.alloc_offset=%d, PAGE_SIZE=%d, BUFFER_SIZE=%d\n", 
+        snrt_cluster_core_idx(), mm_ctx.alloc_offset, PAGE_SIZE, BUFFER_SIZE);
+    printf_lock_release(&printf_lock);
 
     if (mm_ctx.alloc_offset + PAGE_SIZE <= BUFFER_SIZE) {
-        page = bulk_buffer + mm_ctx.alloc_offset;
+        page = bulk_buffer + (mm_ctx.alloc_offset / sizeof(uint32_t));
         mm_ctx.alloc_offset += PAGE_SIZE;
 
-        // printf_lock_acquire(&printf_lock);
-        // printf("[core %u][mm_alloc] stage 1, bulk_buffer=0x%x, mm_ctx.alloc_offset=0x%x\n", 
-        //     snrt_cluster_core_idx(), bulk_buffer, mm_ctx.alloc_offset);
-        // printf_lock_release(&printf_lock);
+        printf_lock_acquire(&printf_lock);
+        printf("[core %u][mm_alloc] stage 1, bulk_buffer=0x%x, mm_ctx.alloc_offset=0x%x, page=0x%x\n", 
+            snrt_cluster_core_idx(), bulk_buffer, mm_ctx.alloc_offset, page);
+        printf_lock_release(&printf_lock);
     } else {
         if (mm_ctx.free_list != NULL) {
             page = (void *)mm_ctx.free_list;
             mm_ctx.free_list = mm_ctx.free_list->next;
 
             printf_lock_acquire(&printf_lock);
-            printf("[core %u][mm_alloc] stage 2\n", snrt_cluster_core_idx());
+            printf("[core %u][mm_alloc] stage 2, page=0x%x\n", snrt_cluster_core_idx(), page);
             printf_lock_release(&printf_lock);
         } else {
             page = NULL;  /* Out of memory */

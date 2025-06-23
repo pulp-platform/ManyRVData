@@ -7,6 +7,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "kernel/printf_lock.h"
+#include DATAHEADER
 
 #define L1LineWidth (256/8) // 256 bits = 32 bytes
 
