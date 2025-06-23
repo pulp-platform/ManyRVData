@@ -45,7 +45,7 @@ package cachepool_pkg;
 
 
 
-    // --------
+  // --------
   // Typedefs
   // --------
 
@@ -85,9 +85,6 @@ package cachepool_pkg;
 
   localparam int unsigned BootAddr        = 32'h1000;
 
-  // // L2 Configuration
-  // localparam int unsigned L2Addr          = 48'h8800_0000;
-  // localparam int unsigned L2Size          = 48'h0100_0000;
 
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC000_0000;
@@ -140,6 +137,9 @@ package cachepool_pkg;
   ////////////////////
   //  CachePool L1  //
   ////////////////////
+
+  // Stack
+  localparam int unsigned StackDepth          = 512;
 
   // Address width of cache
   localparam int unsigned L1AddrWidth         = 32;

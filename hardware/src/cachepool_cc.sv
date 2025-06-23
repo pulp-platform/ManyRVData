@@ -27,12 +27,15 @@ module cachepool_cc
     parameter int                          unsigned        DMAIdWidth               = 0,
     parameter int                          unsigned        DMAAxiReqFifoDepth       = 0,
     parameter int                          unsigned        DMAReqFifoDepth          = 0,
+
+    parameter int                          unsigned        StackDepth               = 512,
     /// Data port request type.
     parameter type                                         dreq_t                   = logic,
     /// Data port response type.
     parameter type                                         drsp_t                   = logic,
     // TCDM port types
     parameter type                                         tcdm_req_t               = logic,
+    parameter type                                         tcdm_user_t              = logic,
     parameter type                                         tcdm_req_chan_t          = logic,
     parameter type                                         tcdm_rsp_t               = logic,
     parameter type                                         tcdm_rsp_chan_t          = logic,
@@ -152,8 +155,8 @@ module cachepool_cc
   core_events_t snitch_events;
 
   // Snitch Integer Core
-  dreq_t snitch_dreq_d, snitch_dreq_q, merged_dreq;
-  drsp_t snitch_drsp_d, snitch_drsp_q, merged_drsp;
+  dreq_t snitch_dreq_d, snitch_dreq_q, merged_cache_dreq, merged_spm_dreq;
+  drsp_t snitch_drsp_d, snitch_drsp_q, merged_cache_drsp, merged_spm_drsp;
 
   // Spatz Memory consistency signals
   logic [1:0] spatz_mem_finished;
@@ -190,7 +193,7 @@ module cachepool_cc
     .XF8ALT                 (XF8ALT                ),
     .FLEN                   (FLEN                  )
   ) i_snitch (
-    .clk_i                 (clk_i                 ), // if necessary operate on half the frequency
+    .clk_i                 (clk_i                    ),
     .rst_i                 (!rst_ni                  ),
     .hart_id_i             (hart_id_i                ),
     .irq_i                 (irq_i                    ),
@@ -371,14 +374,14 @@ module cachepool_cc
       // if input response is valid, put it into fifo for HS check by default
       spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid;
       spatz_mem_rsp_pop[p]   = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
-      
+
       // Bypass FIFO if is a write response
       if (spatz_mem_fifo_bypass[p]) begin
         // make sure not write this response into fifo
         spatz_mem_rsp_push[p]  = 1'b0;
         spatz_mem_rsp_pop[p]   = 1'b0;
         spatz_mem_rsp_valid[p] = 1'b1;
-        spatz_mem_rsp[p]       = tcdm_rsp_i[p].p;        
+        spatz_mem_rsp[p]       = tcdm_rsp_i[p].p;
       end
     end
   end
@@ -435,9 +438,9 @@ module cachepool_cc
     assign axi_dma_perf_o = '0;
   end
 
-  // Decide whether to go to SoC or TCDM
-  dreq_t                  data_tcdm_req;
-  drsp_t                  data_tcdm_rsp;
+  // Decide whether to go to Cache or Stack
+  dreq_t                  data_cache_req, data_spm_req;
+  drsp_t                  data_cache_rsp, data_spm_rsp;
   dreq_t                  data_soc_req;
   drsp_t                  data_soc_rsp;
   logic [3:0]             data_soc_req_id, data_soc_rsp_id;
@@ -446,40 +449,121 @@ module cachepool_cc
 
   localparam int unsigned SelectWidth   = cf_math_pkg::idx_width(3);
   typedef logic [SelectWidth-1:0] select_t;
-  select_t slave_select;
+  select_t snitch_select;
+  logic    fpu_select;
 
-  logic bypass_cache;
+  typedef struct packed {
+    int unsigned idx;
+    logic [AddrWidth-1:0] base;
+    logic [AddrWidth-1:0] mask;
+  } reqrsp_rule_t;
 
-  always_comb begin
-    // default bypass cache
-    bypass_cache = 1'b1;
-    if ((snitch_dreq_q.q.addr >= tcdm_addr_base_i) && (snitch_dreq_q.q.addr < (cachepool_pkg::TCDMSize + tcdm_addr_base_i))) begin
-      // SPM
-      bypass_cache = 1'b0;
-    end else if ((snitch_dreq_q.q.addr >= cachepool_pkg::DramAddr) && (snitch_dreq_q.q.addr < (cachepool_pkg::DramAddr+cachepool_pkg::DramSize))) begin
-      // DRAM
-      bypass_cache = 1'b0;
-    end
-  end
+  reqrsp_rule_t [1:0] addr_map;
 
-  // Since we are now using cache, the fpu_sequencer should never
-  // bypass the L1D cache.
+  // We divide the regions into the following for scalar core's visit:
+  // 0. Stack region => SPM (stack)
+  // 1. DRAM region  => Cache
+  // 2. Others       => Peripheral (bypass cache)
+
+  // SPM Region (Stack)
+  assign addr_map[0] = '{
+    idx : 0,
+    base: tcdm_addr_base_i,
+    mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
+  };
+  // Main Memory Region
+  assign addr_map[1] = '{
+    idx : 1,
+    base: cachepool_pkg::DramAddr,
+    mask: ({AddrWidth{1'b1}} << $clog2(cachepool_pkg::DramSize))
+  };
+
+  // TODO: Pack the following interconnection into a separate file
+
+  // Snitch needs to decide: Stack, Data or Peripheral
+  addr_decode_napot #(
+    .NoIndices (3                    ),
+    .NoRules   (2                    ),
+    .addr_t    (logic [AddrWidth-1:0]),
+    .rule_t    (reqrsp_rule_t        )
+  ) i_snitch_decode_napot (
+    .addr_i           (snitch_dreq_q.q.addr),
+    .addr_map_i       (addr_map          ),
+    .idx_o            (snitch_select     ),
+    .dec_valid_o      (/* Unused */      ),
+    .dec_error_o      (/* Unused */      ),
+    .en_default_idx_i (1'b1              ),
+    .default_idx_i    (2'd2              )
+  );
+
+  reqrsp_demux #(
+    .NrPorts   (3     ),
+    .req_t     (dreq_t),
+    .rsp_t     (drsp_t),
+    .RespDepth (4     )
+  ) i_snitch_reqrsp_demux (
+    .clk_i        (clk_i                      ),
+    .rst_ni       (rst_ni                     ),
+    .slv_select_i (snitch_select              ),
+    .slv_req_i    (snitch_dreq_q              ),
+    .slv_rsp_o    (snitch_drsp_q              ),
+    .mst_req_o    ({data_soc_req, data_cache_req, data_spm_req}),
+    .mst_rsp_i    ({data_soc_rsp, data_cache_rsp, data_spm_rsp})
+  );
+
+  // Spatz FPU needs to decide: Stack or Data
+  dreq_t fpu_cache_req, fpu_spm_req;
+  drsp_t fpu_cache_rsp, fpu_spm_rsp;
+
+  addr_decode_napot #(
+    .NoIndices (2                    ),
+    .NoRules   (1                    ),
+    .addr_t    (logic [AddrWidth-1:0]),
+    .rule_t    (reqrsp_rule_t        )
+  ) i_fpu_decode_napot (
+    .addr_i           (fp_lsu_mem_req.q.addr),
+    .addr_map_i       (addr_map[0]          ),
+    .idx_o            (fpu_select           ),
+    .dec_valid_o      (/* Unused */         ),
+    .dec_error_o      (/* Unused */         ),
+    .en_default_idx_i (1'b1                 ),
+    .default_idx_i    (1'd1                 )
+  );
 
   reqrsp_demux #(
     .NrPorts   (2     ),
     .req_t     (dreq_t),
     .rsp_t     (drsp_t),
     .RespDepth (4     )
-  ) i_reqrsp_demux (
+  ) i_fpu_reqrsp_demux (
     .clk_i        (clk_i                      ),
     .rst_ni       (rst_ni                     ),
-    .slv_select_i (bypass_cache               ),
-    .slv_req_i    (snitch_dreq_q              ),
-    .slv_rsp_o    (snitch_drsp_q              ),
-    .mst_req_o    ({data_soc_req, data_tcdm_req}),
-    .mst_rsp_i    ({data_soc_rsp, data_tcdm_rsp})
+    .slv_select_i (fpu_select                 ),
+    .slv_req_i    (fp_lsu_mem_req             ),
+    .slv_rsp_o    (fp_lsu_mem_rsp             ),
+    .mst_req_o    ({fpu_cache_req, fpu_spm_req}),
+    .mst_rsp_i    ({fpu_cache_rsp, fpu_spm_rsp})
   );
 
+  // Use ID Remapper for Out-of-Order transactions from Cache
+  tcdm_id_remapper #(
+    .NumIn       (2                     ),
+    .AddrWidth   (AddrWidth             ),
+    .DataWidth   (DataWidth             ),
+    .IdWidth     (4                     ),
+    .RobDepth    (NumIntOutstandingLoads),
+    .dreq_t      (dreq_t                ),
+    .drsp_t      (drsp_t                )
+  ) i_cache_id_mux (
+    .clk_i     (clk_i                          ),
+    .rst_ni    (rst_ni                         ),
+    .slv_req_i ({fpu_cache_req, data_cache_req}),
+    .slv_rsp_o ({fpu_cache_rsp, data_cache_rsp}),
+    .mst_req_o (merged_cache_dreq              ),
+    .mst_rsp_i (merged_cache_drsp              )
+  );
+
+  // SPM access do not need to consider OoO
   reqrsp_mux #(
     .NrPorts     (2           ),
     .AddrWidth   (AddrWidth   ),
@@ -489,18 +573,17 @@ module cachepool_cc
     // TODO(zarubaf): Wire-up to top-level.
     .RespDepth   (4           ),
     .RegisterReq ({1'b1, 1'b0})
-  ) i_reqrsp_mux (
-    .clk_i     (clk_i                          ),
-    .rst_ni    (rst_ni                         ),
-    .slv_req_i ({fp_lsu_mem_req, data_tcdm_req}),
-    .slv_rsp_o ({fp_lsu_mem_rsp, data_tcdm_rsp}),
-    .mst_req_o (merged_dreq                    ),
-    .mst_rsp_i (merged_drsp                    ),
-    .idx_o     (/*not connected*/              )
+  ) i_spm_reqrsp_mux (
+    .clk_i     (clk_i                      ),
+    .rst_ni    (rst_ni                     ),
+    .slv_req_i ({fpu_spm_req, data_spm_req}),
+    .slv_rsp_o ({fpu_spm_rsp, data_spm_rsp}),
+    .mst_req_o (merged_spm_dreq            ),
+    .mst_rsp_i (merged_spm_drsp            ),
+    .idx_o     (/*not connected*/          )
   );
 
-  // Add a fifo here to store id information for non-tcdm request (in-order)
-
+  // Add a fifo here to store id information for non-tcdm request (in-order AXI)
   fifo_v3 #(
     .DATA_WIDTH(4               ),
     .DEPTH     (NumIntOutstandingMem)
@@ -517,6 +600,100 @@ module cachepool_cc
     .empty_o   (data_soc_empty  ),
     .usage_o   (/* Unused */    )
   );
+
+  // Stack SPM
+  localparam int unsigned StackLatency    = 1;
+  localparam int unsigned StackAddrWidth  = $clog2(StackDepth);
+
+  typedef logic [$clog2(NumSpatzOutstandingLoads)-1:0] reqid_t;
+  typedef logic [StackAddrWidth-1:0]  tcdm_mem_addr_t;
+
+  typedef struct packed {
+    tcdm_user_t user;
+    logic       valid;
+    logic       write;
+  } mem_meta_t;
+
+  // Memory bank signals
+  logic           mem_req, mem_we;
+  tcdm_mem_addr_t mem_add;
+  strb_t          mem_be;
+  data_t          mem_rdata, mem_wdata;
+
+  // Meta infomation signals
+  mem_meta_t mem_req_meta, mem_rsp_meta;
+
+  // Converter/reg signals
+  tcdm_req_t stack_req;
+  tcdm_rsp_t stack_rsp;
+
+  // Converter for buffering the response if xbar congested
+  reqrsp_to_tcdm #(
+    .AddrWidth    (AddrWidth       ),
+    .DataWidth    (DataWidth       ),
+    .BufDepth     (4               ),
+    .reqrsp_req_t (dreq_t          ),
+    .reqrsp_rsp_t (drsp_t          ),
+    .tcdm_req_t   (tcdm_req_t      ),
+    .tcdm_rsp_t   (tcdm_rsp_t      )
+  ) i_core_to_stack (
+    .clk_i        (clk_i           ),
+    .rst_ni       (rst_ni          ),
+    .reqrsp_req_i (merged_spm_dreq ),
+    .reqrsp_rsp_o (merged_spm_drsp ),
+    .tcdm_req_o   (stack_req       ),
+    .tcdm_rsp_i   (stack_rsp       )
+  );
+
+  // Match the type for the memory bank
+  assign mem_req   = stack_req.q_valid;
+  assign mem_we    = stack_req.q.write;
+  assign mem_add   = stack_req.q.addr[StackAddrWidth-1:0];
+  assign mem_wdata = stack_req.q.data;
+  assign mem_be    = stack_req.q.strb;
+
+  assign mem_req_meta = '{
+    user:  stack_req.q.user,
+    valid: stack_req.q_valid,
+    write: stack_req.q.write
+  };
+
+  assign stack_rsp.p.data  = mem_rdata;
+  assign stack_rsp.p.user  = mem_rsp_meta.user;
+  assign stack_rsp.p.write = mem_rsp_meta.write;
+  assign stack_rsp.p_valid = mem_rsp_meta.valid;
+  assign stack_rsp.q_ready = 1'b1;
+
+  tc_sram_impl #(
+    .NumWords  (StackDepth  ),
+    .DataWidth (DataWidth   ),
+    .ByteWidth (8           ),
+    .NumPorts  (1           ),
+    .Latency   (StackLatency),
+    .SimInit   ("zeros"     )
+  ) i_spm_mem  (
+    .clk_i     (clk_i       ),
+    .rst_ni    (rst_ni      ),
+    .impl_i    ('0          ),
+    .impl_o    (/* Unused */),
+    .req_i     (mem_req     ),
+    .we_i      (mem_we      ),
+    .addr_i    (mem_add     ),
+    .wdata_i   (mem_wdata   ),
+    .be_i      (mem_be      ),
+    .rdata_o   (mem_rdata   )
+  );
+
+  shift_reg #(
+    .dtype (mem_meta_t       ),
+    .Depth (StackLatency     )
+  ) i_req_meta_pipe (
+    .clk_i (clk_i            ),
+    .rst_ni(rst_ni           ),
+    .d_i   (mem_req_meta     ),
+    .d_o   (mem_rsp_meta     )
+  );
+
 
   always_comb begin : id_fifo_comb
     // pass input response
@@ -541,43 +718,6 @@ module cachepool_cc
     data_soc_rsp.q_ready &= (!data_soc_full);
   end
 
-  typedef struct packed {
-    int unsigned idx;
-    logic [AddrWidth-1:0] base;
-    logic [AddrWidth-1:0] mask;
-  } reqrsp_rule_t;
-
-  reqrsp_rule_t [1:0] addr_map;
-
-  // SPM Region
-  // assign addr_map[0] = '{
-  //   idx : 0,
-  //   base: tcdm_addr_base_i,
-  //   mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
-  // };
-  // // Main Memory Region
-  // assign addr_map[1] = '{
-  //   idx : 1,
-  //   base: 32'h8000_0000,
-  //   mask: l2_addr_mask
-  // };
-
-
-  // addr_decode_napot #(
-  //   .NoIndices (3                    ),
-  //   .NoRules   (2                    ),
-  //   .addr_t    (logic [AddrWidth-1:0]),
-  //   .rule_t    (reqrsp_rule_t        )
-  // ) i_addr_decode_napot (
-  //   .addr_i           (snitch_dreq_q.q.addr),
-  //   .addr_map_i       (addr_map          ),
-  //   .idx_o            (slave_select      ),
-  //   .dec_valid_o      (/* Unused */      ),
-  //   .dec_error_o      (/* Unused */      ),
-  //   .en_default_idx_i (1'b1              ),
-  //   .default_idx_i    (2'b10             )
-  // );
-
   reqrsp_to_tcdm #(
     .AddrWidth    (AddrWidth ),
     .DataWidth    (DataWidth ),
@@ -589,8 +729,8 @@ module cachepool_cc
   ) i_reqrsp_to_tcdm (
     .clk_i        (clk_i                          ),
     .rst_ni       (rst_ni                         ),
-    .reqrsp_req_i (merged_dreq                    ),
-    .reqrsp_rsp_o (merged_drsp                    ),
+    .reqrsp_req_i (merged_cache_dreq              ),
+    .reqrsp_rsp_o (merged_cache_drsp              ),
     .tcdm_req_o   (tcdm_req_o[NumMemPortsPerSpatz]),
     .tcdm_rsp_i   (tcdm_rsp_i[NumMemPortsPerSpatz])
   );

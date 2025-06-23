@@ -60,3 +60,18 @@ The xbars to the cache banks can be configured during runtime to select the scra
 
 ## Snitch-Spatz Core Complex
 Current CachePool system uses a 32b Spatz RVV accelerator and Snitch RISCV core. The double-precision is off by default in consideration of scalability.
+
+## Stack
+Currently each core-complex has a local stack SPM. The size of SPM bank is configured from `StackDepth` in the `cachepool_pkg.sv`. This system is still under development and may encountered problem if the `StackDepth` is configured below `512` (size is enough, but program generation needs to be adapted for support).
+
+## Address Map (WIP)
+Here is a summary of current address map of the system:
+
+`0000_0000` to `0000_1000`: not used
+`0000_1000` to `0000_1FFF`: BootRom
+`0000_2000` to `50FF_FFFF`: not used
+`5100_0000` to `5100_3FFF`: Stack (WIP)
+`5100_4000` to `5101_3FFF`: Peripheral (Offset = 40 for hw barrier)
+`5101_4000` to `7FFF_FFFF`: not used
+`8000_0000` to `BFFF_FFFF`: DRAM (16GB)
+`C000_0000` to `C000_0FFF`: UART
