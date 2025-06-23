@@ -26,7 +26,11 @@ typedef volatile int spinlock_t __attribute__((aligned(8)));
 spinlock_t lock;
 
 static inline void spin_lock (spinlock_t *lock) {
-  while (__sync_lock_test_and_set(lock, 1)) { }
+  while (__sync_lock_test_and_set(lock, 1)) {
+    volatile int i = 20;
+    while (i > 0)
+      i --;
+  }
 }
 
 static inline void spin_unlock(spinlock_t *lock) {

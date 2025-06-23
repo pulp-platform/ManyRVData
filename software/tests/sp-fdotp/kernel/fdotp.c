@@ -39,7 +39,7 @@ float fdotp_v32b(const float *a, const float *b, unsigned int avl) {
   // Stripmine and accumulate a partial reduced vector
   do {
     // Set the vl
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+    asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
 
     // Load chunk a and b
     asm volatile("vle32.v v8,  (%0)" ::"r"(a));

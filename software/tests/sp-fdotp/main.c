@@ -32,7 +32,7 @@ uint32_t timer = (uint32_t)-1;
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
   const unsigned int cid = snrt_cluster_core_idx();
-  
+
   #if MEAS_1ITER == 1
   const int measure_iter = 1;
   #else
@@ -49,8 +49,10 @@ int main() {
   if (cid == 0) {
     // Set xbar policy
     l1d_xbar_config(offset);
+    // Initialize the cache
+    l1d_init(0);
   }
-  
+
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
