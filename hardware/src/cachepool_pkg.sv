@@ -212,7 +212,7 @@ package cachepool_pkg;
 
     // DRAM Configuration
   localparam int unsigned DramAddr        = 32'h8000_0000;
-  localparam int unsigned DramSize        = 32'h0400_0000;
+  localparam int unsigned DramSize        = 32'h4000_0000;
   localparam int unsigned DramPerChSize   = DramSize / NumL2Channel;
 
 `ifdef TARGET_DRAMSYS
