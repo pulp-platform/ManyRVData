@@ -550,7 +550,7 @@ module cachepool_cc
     .NumIn       (2                     ),
     .AddrWidth   (AddrWidth             ),
     .DataWidth   (DataWidth             ),
-    .IdWidth     (4                     ),
+    .IdWidth     ($clog2(NumIntOutstandingLoads) ),
     .RobDepth    (NumIntOutstandingLoads),
     .dreq_t      (dreq_t                ),
     .drsp_t      (drsp_t                )
@@ -752,6 +752,9 @@ module cachepool_cc
   string        fn;
   logic  [63:0] cycle;
 
+  int spatz_f;
+  string spatz_f_name;
+
   initial begin
     // We need to schedule the assignment into a safe region, otherwise
     // `hart_id_i` won't have a value assigned at the beginning of the first
@@ -759,10 +762,13 @@ module cachepool_cc
     /* verilator lint_off STMTDLY */
     @(posedge clk_i);
     /* verilator lint_on STMTDLY */
-    $system("mkdir logs -p");
-    $sformat(fn, "logs/trace_hart_%05x.dasm", hart_id_i);
+    $system("mkdir sim/bin/logs -p");
+    $sformat(fn, "sim/bin/logs/trace_hart_%05x.dasm", hart_id_i);
     f = $fopen(fn, "w");
     $display("[Tracer] Logging Hart %d to %s", hart_id_i, fn);
+
+    $sformat(spatz_f_name, "sim/bin/logs/monitor_spatz_%05x.txt", hart_id_i);
+    spatz_f = $fopen(spatz_f_name, "w");
   end
 
   // verilog_lint: waive-start always-ff-non-blocking
@@ -844,8 +850,171 @@ module cachepool_cc
   end
 
   final begin
+
+    /***** Controller Report *****/
+    automatic real ctrl_vlsu_insn       = i_spatz.i_controller.ctrl_vlsu_insn_q;
+    automatic real ctrl_vlsu_stall      = i_spatz.i_controller.ctrl_vlsu_stall_q;
+    automatic real ctrl_vlsu_active     = i_spatz.i_controller.ctrl_vlsu_active_q;
+    automatic real ctrl_vlsu_wvalid     = i_spatz.i_controller.ctrl_wvalid_cnt_q[1];
+    automatic real ctrl_vlsu_wtrans     = i_spatz.i_controller.ctrl_wtrans_cnt_q[1];
+    automatic real ctrl_vlsu_wstall     = ctrl_vlsu_wvalid - ctrl_vlsu_wtrans;
+
+    automatic real ctrl_vfu_insn        = i_spatz.i_controller.ctrl_vfu_insn_q;
+    automatic real ctrl_vfu_stall       = i_spatz.i_controller.ctrl_vfu_stall_q;
+    automatic real ctrl_vfu_active      = i_spatz.i_controller.ctrl_vfu_active_q;
+    automatic real ctrl_vfu_wvalid      = i_spatz.i_controller.ctrl_wvalid_cnt_q[0];
+    automatic real ctrl_vfu_wtrans      = i_spatz.i_controller.ctrl_wtrans_cnt_q[0];
+    automatic real ctrl_vfu_wstall      = ctrl_vfu_wvalid - ctrl_vfu_wtrans;
+
+    automatic real ctrl_vsldu_insn      = i_spatz.i_controller.ctrl_vsldu_insn_q;
+    automatic real ctrl_vsldu_stall     = i_spatz.i_controller.ctrl_vsldu_stall_q;
+    automatic real ctrl_vsldu_active    = i_spatz.i_controller.ctrl_vsldu_active_q;
+    automatic real ctrl_vsldu_wvalid    = i_spatz.i_controller.ctrl_wvalid_cnt_q[2];
+    automatic real ctrl_vsldu_wtrans    = i_spatz.i_controller.ctrl_wtrans_cnt_q[2];
+    automatic real ctrl_vsldu_wstall    = ctrl_vsldu_wvalid - ctrl_vsldu_wtrans;
+
+
+    /***** VLSU Report *****/
+    automatic real vlsu_wvalid          = i_spatz.i_vlsu.vrf_wvalid_cnt_q;
+    automatic real vlsu_wtrans          = i_spatz.i_vlsu.vrf_wtrans_cnt_q;
+    automatic real vlsu_vrf_w_util      = i_spatz.i_vlsu.vrf_wvalid_cnt_q == 0 ?
+                                          0 : 100 * i_spatz.i_vlsu.vrf_wtrans_cnt_q / i_spatz.i_vlsu.vrf_wvalid_cnt_q;
+    automatic real vlsu_vrf_w_avg_cyc   = i_spatz.i_vlsu.vrf_wtrans_cnt_q == 0 ?
+                                          0 : i_spatz.i_vlsu.vrf_wvalid_cnt_q / i_spatz.i_vlsu.vrf_wtrans_cnt_q;
+
+    automatic real vlsu_mem_cnt_tot     = i_spatz.i_vlsu.mem_valid_cnt_q;
+    automatic real vlsu_mem_tran_tot    = i_spatz.i_vlsu.mem_trans_cnt_q;
+    automatic real vlsu_mem_util        = vlsu_mem_cnt_tot == 0 ?
+                                          0 : 100 * vlsu_mem_tran_tot / vlsu_mem_cnt_tot;
+    automatic real vlsu_mem_avg_cyc     = vlsu_mem_tran_tot == 0 ?
+                                          0 : vlsu_mem_cnt_tot / vlsu_mem_tran_tot;
+
+    // ROB in use for x cycle, total usage Y: Utilization = Y/(X*depth)
+    automatic real vlsu_rob_usage_avg   = i_spatz.i_vlsu.rob_use_cyc_q == 0 ?
+                                          0 : 100 * i_spatz.i_vlsu.rob_usage_q / i_spatz.i_vlsu.rob_use_cyc_q / NumSpatzOutstandingLoads;
+    automatic real vlsu_rob_peak_util   = 100 * i_spatz.i_vlsu.rob_peak_q / NumSpatzOutstandingLoads;
+
+    // Average instruction cycle can be used to caclulate the latency from VLSU to memory
+    // AVG_insn_cyc / VLEN = AVG_LD_cyc_per_elem
+    automatic real vlsu_insn_cnt        = i_spatz.i_vlsu.vlsu_insn_cnt_q;
+    automatic real vlsu_avg_insn_cyc    = i_spatz.i_vlsu.vlsu_insn_valid_cyc_q / i_spatz.i_vlsu.vlsu_insn_cnt_q;
+
+    /***** VFU Report *****/
+    automatic real vfu_wvalid           = i_spatz.i_vfu.vrf_wvalid_cnt_q;
+    automatic real vfu_wtrans           = i_spatz.i_vfu.vrf_wtrans_cnt_q;
+    automatic real vfu_vrf_w_util       = i_spatz.i_vfu.vrf_wvalid_cnt_q == 0 ?
+                                          0 : (100 * i_spatz.i_vfu.vrf_wtrans_cnt_q / i_spatz.i_vfu.vrf_wvalid_cnt_q);
+    automatic real vfu_vrf_w_avg_cyc    = i_spatz.i_vfu.vrf_wtrans_cnt_q == 0 ?
+                                          0 : (i_spatz.i_vfu.vrf_wvalid_cnt_q / i_spatz.i_vfu.vrf_wtrans_cnt_q);
+
+    automatic real vfu_rvalid0          = i_spatz.i_vfu.vrf_rvalid_cnt_q[0];
+    automatic real vfu_rtrans0          = i_spatz.i_vfu.vrf_rtrans_cnt_q[0];
+    automatic real vfu_vrf_r_util0      = i_spatz.i_vfu.vrf_rvalid_cnt_q[0] == 0 ?
+                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[0] / i_spatz.i_vfu.vrf_rvalid_cnt_q[0]);
+    automatic real vfu_vrf_r_avg_cyc0   = i_spatz.i_vfu.vrf_rtrans_cnt_q[0] == 0 ?
+                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[0] / i_spatz.i_vfu.vrf_rtrans_cnt_q[0]);
+
+    automatic real vfu_rvalid1          = i_spatz.i_vfu.vrf_rvalid_cnt_q[1];
+    automatic real vfu_rtrans1          = i_spatz.i_vfu.vrf_rtrans_cnt_q[1];
+    automatic real vfu_vrf_r_util1      = i_spatz.i_vfu.vrf_rvalid_cnt_q[1] == 0 ?
+                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[1] / i_spatz.i_vfu.vrf_rvalid_cnt_q[1]);
+    automatic real vfu_vrf_r_avg_cyc1   = i_spatz.i_vfu.vrf_rvalid_cnt_q[1] == 0 ?
+                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[1] / i_spatz.i_vfu.vrf_rtrans_cnt_q[1]);
+
+    automatic real vfu_rvalid2          = i_spatz.i_vfu.vrf_rvalid_cnt_q[2];
+    automatic real vfu_rtrans2          = i_spatz.i_vfu.vrf_rtrans_cnt_q[2];
+    automatic real vfu_vrf_r_util2      = i_spatz.i_vfu.vrf_rvalid_cnt_q[2] == 0 ?
+                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[2] / i_spatz.i_vfu.vrf_rvalid_cnt_q[2]);
+    automatic real vfu_vrf_r_avg_cyc2   = i_spatz.i_vfu.vrf_rvalid_cnt_q[2] == 0 ?
+                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[2] / i_spatz.i_vfu.vrf_rtrans_cnt_q[2]);
+
+    automatic real vfu_insn_cnt         = i_spatz.i_vfu.vfu_insn_cnt_q;
+    automatic real vfu_avg_insn_cyc     = i_spatz.i_vfu.vfu_insn_cnt_q == 0 ?
+                                          0 : (i_spatz.i_vfu.vfu_insn_valid_cyc_q / i_spatz.i_vfu.vfu_insn_cnt_q);
+
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "***            Spatz Controller Utilization Report                ***\n");
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "   VLSU:\n"                                                             );
+    $fwrite(spatz_f, "   VLSU Active (not accurate):       %32d\n", ctrl_vlsu_active          );
+    $fwrite(spatz_f, "   VLSU Num Instructions:            %32d\n", ctrl_vlsu_insn            );
+    $fwrite(spatz_f, "   VLSU Stall Cycles:                %32d\n", ctrl_vlsu_stall           );
+    $fwrite(spatz_f, "   VLSU WR Stalls:                   %32d\n", ctrl_vlsu_wstall          );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VFU:\n"                                                              );
+    $fwrite(spatz_f, "   VFU Active (not accurate):        %32d\n", ctrl_vfu_active           );
+    $fwrite(spatz_f, "   VFU Num Instructions:             %32d\n", ctrl_vfu_insn             );
+    $fwrite(spatz_f, "   VFU Stall Cycles:                 %32d\n", ctrl_vfu_stall            );
+    $fwrite(spatz_f, "   VFU WR Stalls:                    %32d\n", ctrl_vfu_wstall           );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VSLDU:\n"                                                            );
+    $fwrite(spatz_f, "   VSLDU Active (not accurate):      %32d\n", ctrl_vsldu_active         );
+    $fwrite(spatz_f, "   VSLDU Num Instructions:           %32d\n", ctrl_vsldu_insn           );
+    $fwrite(spatz_f, "   VSLDU Stall Cycles:               %32d\n", ctrl_vsldu_stall          );
+    $fwrite(spatz_f, "   VSLDU WR Stalls:                  %32d\n", ctrl_vsldu_wstall         );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "***            Spatz VLSU Utilization Report                      ***\n");
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vlsu_wvalid               );
+    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vlsu_wtrans               );
+    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vlsu_vrf_w_util         );
+    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vlsu_vrf_w_avg_cyc      );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   Number of Mem Valid Cycles:       %32d\n", vlsu_mem_cnt_tot          );
+    $fwrite(spatz_f, "   Number of Mem Transaction Counts: %32d\n", vlsu_mem_tran_tot         );
+    $fwrite(spatz_f, "   Mem Utilization:                  %32.2f\n",vlsu_mem_util            );
+    $fwrite(spatz_f, "   Mem AVG Req Accept Cycles:        %32.2f\n",vlsu_mem_avg_cyc         );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   ROB AVG Utilization:              %32.2f\n", vlsu_rob_usage_avg      );
+    $fwrite(spatz_f, "   ROB Peak Utilization:             %32.2f\n", vlsu_rob_peak_util      );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   Total Insn Count:                 %32.2f\n", vlsu_insn_cnt           );
+    $fwrite(spatz_f, "   AVG Insn Cycles:                  %32.2f\n", vlsu_avg_insn_cyc       );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "***            Spatz VFU Utilization Report                       ***\n");
+    $fwrite(spatz_f, "*********************************************************************\n");
+    $fwrite(spatz_f, "   VRF Write Port:\n"                                                   );
+    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_wvalid                );
+    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_wtrans                );
+    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_w_util          );
+    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_w_avg_cyc       );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VRF Read Port 0:\n"                                                  );
+    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid0               );
+    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans0               );
+    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util0         );
+    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc0      );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VRF Read Port 1:\n"                                                  );
+    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid1               );
+    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans1               );
+    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util1         );
+    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc1      );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VRF Read Port 2:\n"                                                  );
+    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid2               );
+    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans2               );
+    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util2         );
+    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc2      );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   Total Insn Count:                 %32.2f\n", vfu_insn_cnt            );
+    $fwrite(spatz_f, "   AVG Insn Cycles:                  %32.2f\n", vfu_avg_insn_cyc        );
+    $fwrite(spatz_f, "*********************************************************************\n");
+
+
     $fclose(f);
+    $fclose(spatz_f);
+
   end
+
+
+
+  // final begin
+  //   $fclose(f);
+  // end
   // verilog_lint: waive-stop always-ff-non-blocking
   // pragma translate_on
 

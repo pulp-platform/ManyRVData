@@ -137,6 +137,84 @@ module cachepool_cluster_wrapper
     .axi_out_resp_i           ( axi_from_cluster_iwc_resp )
   );
 
+  // AXI utilization monitor
+`ifndef TARGET_SYNTHESIS
+  typedef logic [31:0] cnt_t;
+  // AR channel utilization
+  cnt_t [NumClusterAxiSlv-1:0] axi_ar_valid_cnt_d, axi_ar_valid_cnt_q;
+  cnt_t [NumClusterAxiSlv-1:0] axi_ar_trans_cnt_d, axi_ar_trans_cnt_q;
+  `FF (axi_ar_valid_cnt_q, axi_ar_valid_cnt_d, '0)
+  `FF (axi_ar_trans_cnt_q, axi_ar_trans_cnt_d, '0)
+
+  // AW channel utilization
+  cnt_t [NumClusterAxiSlv-1:0] axi_aw_valid_cnt_d, axi_aw_valid_cnt_q;
+  cnt_t [NumClusterAxiSlv-1:0] axi_aw_trans_cnt_d, axi_aw_trans_cnt_q;
+  `FF (axi_aw_valid_cnt_q, axi_aw_valid_cnt_d, '0)
+  `FF (axi_aw_trans_cnt_q, axi_aw_trans_cnt_d, '0)
+
+  always_comb begin : gen_axi_perf_cnt_comb
+    axi_ar_valid_cnt_d = axi_ar_valid_cnt_q;
+    axi_ar_trans_cnt_d = axi_ar_trans_cnt_q;
+    axi_aw_valid_cnt_d = axi_aw_valid_cnt_q;
+    axi_aw_trans_cnt_d = axi_aw_trans_cnt_q;
+
+    for (int i = 0; i < NumClusterAxiSlv; i++) begin
+      if (axi_out_req_o[i].ar_valid) begin
+        // AR valid
+        axi_ar_valid_cnt_d[i] ++;
+        if (axi_out_resp_i[i].ar_ready) begin
+          // AR valid HS
+          axi_ar_trans_cnt_d[i] ++;
+        end
+      end
+
+      if (axi_out_req_o[i].aw_valid) begin
+        // AW valid
+        axi_aw_valid_cnt_d[i] ++;
+        if (axi_out_resp_i[i].aw_ready) begin
+          // AW valid HS
+          axi_aw_trans_cnt_d[i] ++;
+        end
+      end
+    end
+  end
+
+  final begin
+    automatic real ar_cnt_tot  = axi_ar_valid_cnt_q[0] + axi_ar_valid_cnt_q[1] + axi_ar_valid_cnt_q[2] + axi_ar_valid_cnt_q[3];
+    automatic real ar_tran_tot = axi_ar_trans_cnt_q[0] + axi_ar_trans_cnt_q[1] + axi_ar_trans_cnt_q[2] + axi_ar_trans_cnt_q[3];
+    automatic real ar_util     = ar_cnt_tot == 0 ?
+                                 0 : 100 * ar_tran_tot / ar_cnt_tot;
+    automatic real ar_avg_cyc  = ar_tran_tot == 0 ?
+                                 0 : ar_cnt_tot / ar_tran_tot;
+
+
+    automatic real aw_cnt_tot  = axi_aw_valid_cnt_q[0] + axi_aw_valid_cnt_q[1] + axi_aw_valid_cnt_q[2] + axi_aw_valid_cnt_q[3];
+    automatic real aw_tran_tot = axi_aw_trans_cnt_q[0] + axi_aw_trans_cnt_q[1] + axi_aw_trans_cnt_q[2] + axi_aw_trans_cnt_q[3];
+    automatic real aw_util     = aw_cnt_tot == 0 ?
+                                 0 : 100 * aw_tran_tot / aw_cnt_tot;
+    automatic real aw_avg_cyc  = aw_tran_tot == 0 ?
+                                 0 : aw_cnt_tot / aw_tran_tot;
+
+    $display(" ");
+    $display(" ");
+    $display("*********************************************************************");
+    $display("***            CachePool Off-Chip AXI Utilization Report          ***");
+    $display("   ---------------------------------------------------------------   ");
+    $display("   Number of AR Valid Cycles:        %16d", ar_cnt_tot  );
+    $display("   Number of AR Transaction Counts:  %16d", ar_tran_tot );
+    $display("   AR Utilization:                   %16.2f",ar_util    );
+    $display("   AR AVG Cycles:                    %16.2f",ar_avg_cyc );
+    $display("                                                       ");
+    $display("   Number of AW Valid Cycles:        %16d", aw_cnt_tot  );
+    $display("   Number of AW Transaction Counts:  %16d", aw_tran_tot );
+    $display("   AW Utilization:                   %16.2f",aw_util    );
+    $display("   AW AVG Cycles:                    %16.2f",aw_avg_cyc );
+    $display("*********************************************************************");
+
+  end
+
+`endif
+
   // Assertions
 
   if (AxiAddrWidth != SpatzAxiAddrWidth)
