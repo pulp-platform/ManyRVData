@@ -13,3 +13,4 @@ void start_kernel();
 void stop_kernel();
 size_t get_perf();
 void write_cyc(uint32_t cyc);
+void cachepool_wait (volatile uint32_t loop);

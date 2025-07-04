@@ -46,3 +46,7 @@ void write_cyc(uint32_t cyc) {
   // substract the constant delay
   *perf = cyc;
 }
+
+void cachepool_wait (volatile uint32_t loop) {
+  while (loop > 0) loop --;
+}

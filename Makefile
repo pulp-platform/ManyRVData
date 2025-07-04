@@ -383,7 +383,7 @@ help:
 	@echo "Simulation:"
 	@echo ""
 	@echo "*clean.vsim*: remove the current hardware build"
-	@echo "*sw.vsim*:    build both the software and hardware (will not overwrite the previous build by default"
+	@echo "*vsim*:       build both the software and hardware (will not overwrite the previous build by default"
 	@echo "              *USE_DRAMSYS*: set to 1 to use the DRAMSYS system (*1* by default)"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"

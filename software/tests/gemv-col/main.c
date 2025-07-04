@@ -67,7 +67,7 @@ int main() {
   }
   
   // Reset timer
-  unsigned int timer = (unsigned int) - 1;
+  unsigned int timer_start, timer_end, timer, timer_iter1;
 
   // Unroll in M direction?
   int unroll_m = 0;
@@ -89,11 +89,8 @@ int main() {
     // Start dump
     if (cid == 0) {
       start_kernel();
-    }
-
-    // Start timer
-    if (cid == 0) {
-      timer = benchmark_get_cycle();
+      // Start timer
+      timer_start = benchmark_get_cycle();
     }
 
     // Calculate gemv
@@ -108,37 +105,54 @@ int main() {
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 
-    // End dump
+
     if (cid == 0) {
+      // End timer and check if new best runtime
+      timer_end = benchmark_get_cycle();
+      unsigned int timer_temp = timer_end - timer_start;
+
+      if (timer_temp < timer) {
+        timer = timer_temp;
+      }
+
       stop_kernel();
-      // printf("Core%d: 4\n", cid);
+
+      if (i == 0) {
+        timer = timer_temp;
+        timer_iter1 = timer;
+
+        for (uint32_t j = 0; j < gemv_l.M; j++) {
+          if (fp_check(&result[j], &gemv_result[j])) {
+            printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[i], gemv_result[i]);
+          }
+        }
+      }
+    } else {
+      cachepool_wait(10);
     }
 
-    // End timer and check if new best runtime
-    if (cid == 0)
-      timer = benchmark_get_cycle() - timer;
+    snrt_cluster_hw_barrier();
 
   }
 
   // Check and display results
   if (cid == 0) {
-    long unsigned int performance = 1000 * 2 * gemv_l.M * gemv_l.N / timer;
-    long unsigned int utilization =
-        performance / (2 * num_cores * SNRT_NFPU_PER_CORE * (4 / sizeof(T)));
+    long unsigned int performance =
+        1000 * 2 * gemv_l.M * gemv_l.N / timer;
+    long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));
 
+    long unsigned int performance_iter1 =
+        1000 * 2 * gemv_l.M * gemv_l.N / timer_iter1;
+    long unsigned int utilization_iter1 = performance_iter1 / (2 * num_cores * 4 * (4 / sizeof(T)));
+
+    write_cyc(timer);
     printf("\n----- (%d x %d) x (%d x 1) gemv -----\n", gemv_l.M, gemv_l.N, gemv_l.N);
+    printf("First iteration execution took %u cycles.\n", timer_iter1);
+    printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+           performance_iter1, utilization_iter1);
     printf("The execution took %u cycles.\n", timer);
     printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
            performance, utilization);
-  }
-
-  if (cid == 0) {
-    for (int i = 0; i < gemv_l.M; i++) {
-      if (fp_check(&result[i], &gemv_result[i])) {
-        printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[i], gemv_result[i]);
-        return -1;
-      }
-    }
   }
 
   // Wait for core 0 to finish displaying results

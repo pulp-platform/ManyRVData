@@ -33,11 +33,7 @@ int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
   const unsigned int cid = snrt_cluster_core_idx();
 
-  #if MEAS_1ITER == 1
-  const int measure_iter = 1;
-  #else
   const int measure_iter = 3;
-  #endif
 
   uint32_t spm_size = 0;
 
@@ -114,10 +110,15 @@ int main() {
   if (cid == 0) {
     // The timer did not count the reduction time
     unsigned int performance = 1000 * 2 * dotp_l.M / timer;
+    unsigned int perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
     unsigned int utilization = performance / (2 * num_cores * 4);
+    unsigned int util_iter1  = perf_iter1  / (2 * num_cores * 4);
     write_cyc(timer);
 
     printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
+    printf("The 1st execution took %u cycles.\n", timer_iter1);
+    printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
+           perf_iter1 , util_iter1);
     printf("The execution took %u cycles.\n", timer);
     printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
            performance, utilization);
