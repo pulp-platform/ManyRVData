@@ -209,7 +209,7 @@ package cachepool_pkg;
   localparam int unsigned NumL2Channel        = 4;
   localparam int unsigned L2BankWidth         = 512;
   localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
-  parameter               DramType            = "HBM2"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
+  parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase            = 32'h8000_0000;
 
     // DRAM Configuration
