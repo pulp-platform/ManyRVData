@@ -3,6 +3,7 @@
 
 #include "mm.h"
 #include "llist.h"
+#include "data_move_vec.h"
 
 /* rlc_context_t holds the RLC kernel state:
    - 'list': the linked list used to store packet nodes.
@@ -27,5 +28,11 @@ void rlc_start(const unsigned int core_id);
    or producer() otherwise.
 */
 void cluster_entry(const unsigned int core_id);
+
+/*
+   pdcp_pkd_ptr is a pointer to the new PDCP packet data structure.
+*/
+spinlock_t pdcp_pkd_ptr;
+spinlock_t pdcp_pkd_ptr_lock;
 
 #endif

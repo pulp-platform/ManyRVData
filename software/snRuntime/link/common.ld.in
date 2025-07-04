@@ -122,4 +122,18 @@ SECTIONS
     *(.dram)
     _edram = .;
   } >DRAM
+
+  /* PDCP‐PDU source info array */
+  .pdcp_info 0x99000000 :
+  {
+    KEEP(*(.pdcp_info))
+    _epdcp_info = .;    /* optional: mark end of pdcp_info */
+  } > DRAM
+
+  /* PDCP‐PDU source data, linked at src_addr */
+  .pdcp_src 0xA0000000 :  /* replace with your src_addr */
+  {
+    KEEP(*(.pdcp_src))
+    _epdcp_src = .;    /* optional: mark end of pdcp_src */
+  } > UNCACHED_REGION
 }
