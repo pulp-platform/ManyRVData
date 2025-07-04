@@ -85,8 +85,8 @@ module tb_cachepool;
    *  DUT  *
    *********/
 
-  logic                cluster_probe;
-  logic [NumCores-1:0] debug_req;
+  logic cluster_probe;
+  logic debug_req;
 
   cachepool_cluster_wrapper i_cluster_wrapper (
     .clk_i             (clk                   ),

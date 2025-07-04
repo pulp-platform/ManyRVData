@@ -5,6 +5,7 @@
 
 
 `include "axi/typedef.svh"
+`include "common_cells/registers.svh"
 
 module cachepool_cluster_wrapper
  import cachepool_pkg::*;
@@ -29,11 +30,11 @@ module cachepool_cluster_wrapper
   input  logic                                 clk_i,
   input  logic                                 rst_ni,
   output logic                                 eoc_o,
-  input  logic          [NumCores-1:0]         debug_req_i,
+  input  logic                                 debug_req_i,
 
-  input  logic          [NumCores-1:0]         meip_i,
-  input  logic          [NumCores-1:0]         mtip_i,
-  input  logic          [NumCores-1:0]         msip_i,
+  input  logic                                 meip_i,
+  input  logic                                 mtip_i,
+  input  logic                                 msip_i,
   output logic                                 cluster_probe_o,
   input  axi_in_req_t                          axi_in_req_i,
   output axi_in_resp_t                         axi_in_resp_o,
@@ -112,18 +113,18 @@ module cachepool_cluster_wrapper
     .RegisterTCDMCuts         (1                        ),
     .RegisterExt              (0                        ),
     .XbarLatency              (axi_pkg::CUT_ALL_PORTS   ),
-    .MaxMstTrans              (4                        ),
-    .MaxSlvTrans              (4                        )
+    .MaxMstTrans              (NumAxiMaxTrans           ),
+    .MaxSlvTrans              (NumAxiMaxTrans           )
   ) i_cluster (
     .clk_i                    ,
     .rst_ni                   ,
     .eoc_o                    (eoc_o                    ),
     .impl_i                   ( '0 ),
     .error_o                  (),
-    .debug_req_i              ,
-    .meip_i                   ,
-    .mtip_i                   ,
-    .msip_i                   ,
+    .debug_req_i              ({NumCores{debug_req_i}}),
+    .meip_i                   ({NumCores{meip_i}}),
+    .mtip_i                   ({NumCores{mtip_i}}),
+    .msip_i                   ({NumCores{msip_i}}),
     .hart_base_id_i           (10'h10),
     .cluster_base_addr_i      (TCDMStartAddr),
     .cluster_probe_o          ,

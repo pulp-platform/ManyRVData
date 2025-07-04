@@ -108,9 +108,11 @@ package cachepool_pkg;
   localparam int unsigned NFpu          = 4;
   localparam int unsigned NIpu          = 4;
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 16};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 16};
-  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 16};
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 64};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 64};
+  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 64};
+
+  localparam int unsigned NumAxiMaxTrans                      = 32;
 
   localparam fpu_implementation_t FPUImplementation_Core = '{
     // FMA Block
@@ -223,7 +225,7 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  localparam int unsigned Interleave  = 128;
+  localparam int unsigned Interleave  = 16;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;

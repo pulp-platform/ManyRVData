@@ -277,7 +277,6 @@ module cachepool_tile
 
   typedef struct packed {
     logic [CoreIDWidth-1:0] core_id;
-    logic is_core;
     logic is_amo;
     reqid_t req_id;
   } tcdm_user_t;
@@ -423,6 +422,7 @@ module cachepool_tile
 
   // axi refill ports from cache before scrambling (adding back cachebank ID)
   axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_prescrambled;
+  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_prescrambled;
 
   // 3. Memory Subsystem (Interconnect)
   tcdm_dma_req_t ext_dma_req;
@@ -827,6 +827,12 @@ module cachepool_tile
       axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
       // Add back the removed cache bank ID
       axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
+
+      axi_cache_req_o[cb].ar.id = cb;
+      axi_cache_req_o[cb].aw.id = cb;
+
+      axi_cache_rsp_prescrambled[cb]      = axi_cache_rsp_i[cb];
+      axi_cache_rsp_prescrambled[cb].r.id = '0;
     end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
@@ -857,24 +863,33 @@ module cachepool_tile
       tc_sram_impl #(
         .NumWords   (L1CacheWayEntry/L1BankFactor),
         .DataWidth  (DataWidth*4),
-        .ByteWidth  (DataWidth*4),
+        .ByteWidth  (DataWidth  ),
         .NumPorts   (1),
         .Latency    (1),
         .SimInit    ("zeros")
       ) i_data_bank (
-        .clk_i  (clk_i                    ),
-        .rst_ni (rst_ni                   ),
-        .impl_i ('0                       ),
-        .impl_o (/* unsed */              ),
-        .req_i  ( l1_data_bank_req  [cb][j]),
-        .we_i   ( l1_data_bank_we   [cb][j]),
-        .addr_i ( l1_data_bank_addr [cb][j]),
-        .wdata_i({l1_data_bank_wdata[cb][j+3], l1_data_bank_wdata[cb][j+2], l1_data_bank_wdata[cb][j+1], l1_data_bank_wdata[cb][j]}),
-        .be_i   ( l1_data_bank_be   [cb][j] ),
-        .rdata_o({l1_data_bank_rdata[cb][j+3], l1_data_bank_rdata[cb][j+2], l1_data_bank_rdata[cb][j+1], l1_data_bank_rdata[cb][j]})
+        .clk_i  (clk_i                       ),
+        .rst_ni (rst_ni                      ),
+        .impl_i ('0                          ),
+        .impl_o (/* unsed */                 ),
+        .req_i  ( l1_data_bank_req  [cb][j]  ),
+        .we_i   ( l1_data_bank_we   [cb][j]  ),
+        .addr_i ( l1_data_bank_addr [cb][j]  ),
+        .wdata_i({l1_data_bank_wdata[cb][j+3],
+                  l1_data_bank_wdata[cb][j+2],
+                  l1_data_bank_wdata[cb][j+1],
+                  l1_data_bank_wdata[cb][j]} ),
+        .be_i   ({l1_data_bank_be   [cb][j+3],
+                  l1_data_bank_be   [cb][j+2],
+                  l1_data_bank_be   [cb][j+1],
+                  l1_data_bank_be   [cb][j]} ),
+        .rdata_o({l1_data_bank_rdata[cb][j+3],
+                  l1_data_bank_rdata[cb][j+2],
+                  l1_data_bank_rdata[cb][j+1],
+                  l1_data_bank_rdata[cb][j]} )
       );
 
-      assign l1_data_bank_gnt[cb][j] = 1'b1;
+      assign l1_data_bank_gnt[cb][j]   = 1'b1;
       assign l1_data_bank_gnt[cb][j+1] = 1'b1;
       assign l1_data_bank_gnt[cb][j+2] = 1'b1;
       assign l1_data_bank_gnt[cb][j+3] = 1'b1;
@@ -1007,7 +1022,6 @@ module cachepool_tile
       always_comb begin
         tcdm_req[TcdmPortsOffs+j].q              = tcdm_req_wo_user[j].q;
         tcdm_req[TcdmPortsOffs+j].q.user.core_id = i[CoreIDWidth-1:0];
-        tcdm_req[TcdmPortsOffs+j].q.user.is_core = 1;
         tcdm_req[TcdmPortsOffs+j].q_valid        = tcdm_req_wo_user[j].q_valid;
       end
     end
