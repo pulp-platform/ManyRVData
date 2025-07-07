@@ -11,16 +11,16 @@
 #include "printf.h"
 #include "printf_lock.h"
 
-void list_init() {
-    rlc_ctx.list.head = NULL;
-    rlc_ctx.list.tail = NULL;
-    rlc_ctx.list.sduNum = 0;
-    rlc_ctx.list.sduBytes = 0;
+void list_init(LinkedList *list) {
+    list->head = NULL;
+    list->tail = NULL;
+    list->sduNum = 0;
+    list->sduBytes = 0;
     /* Set the list lock to 0 (unlocked) */
-    rlc_ctx.list.lock = 0;
+    list->lock = 0;
 }
 
-void list_push_back(volatile Node *node) {
+void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_body_0, timer_body_1;
@@ -28,7 +28,7 @@ void list_push_back(volatile Node *node) {
     /* Acquire the list lock to ensure exclusive access while modifying the list */
     // spin_lock(&list->lock);
     timer_ac_lock_0 = benchmark_get_cycle();
-    spin_lock(&llist_lock);
+    spin_lock(llist_lock);
     timer_ac_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -60,7 +60,7 @@ void list_push_back(volatile Node *node) {
     
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
-    spin_unlock(&llist_lock);
+    spin_unlock(llist_lock);
     timer_rl_lock_1 = benchmark_get_cycle();
     
     printf_lock_acquire(&printf_lock);
@@ -77,7 +77,7 @@ void list_push_back(volatile Node *node) {
     printf_lock_release(&printf_lock);
 }
 
-Node *list_pop_front() {
+Node *list_pop_front(spinlock_t *llist_lock) {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_body_0, timer_body_1;
@@ -85,7 +85,7 @@ Node *list_pop_front() {
     Node *node = NULL;
     // spin_lock(&list->lock);
     timer_ac_lock_0 = benchmark_get_cycle();
-    spin_lock(&llist_lock);
+    spin_lock(llist_lock);
     timer_ac_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -127,7 +127,7 @@ Node *list_pop_front() {
     
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
-    spin_unlock(&llist_lock);
+    spin_unlock(llist_lock);
     timer_rl_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -143,9 +143,9 @@ Node *list_pop_front() {
     return node;
 }
 
-void list_remove(LinkedList *list, Node *node) {
+void list_remove(spinlock_t *llist_lock, LinkedList *list, Node *node) {
     // spin_lock(&list->lock);
-    spin_lock(&llist_lock);
+    spin_lock(llist_lock);
 
     printf_lock_acquire(&printf_lock);
     printf("[core %u][list_remove] spin_lock\n", snrt_cluster_core_idx());
@@ -171,7 +171,7 @@ void list_remove(LinkedList *list, Node *node) {
     printf_lock_release(&printf_lock);
 
     // spin_unlock(&list->lock);
-    spin_unlock(&llist_lock);
+    spin_unlock(llist_lock);
 }
 
 

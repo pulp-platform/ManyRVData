@@ -49,25 +49,25 @@ typedef struct {
    list_init() initializes the given LinkedList instance.
    It sets the head and tail pointers to NULL and the lock to 0.
 */
-void list_init();
+void list_init(LinkedList *list);
 
 /* 
    list_push_back() appends a given Node to the end of the list.
    It is safe for concurrent use by multiple producers.
 */
-void list_push_back(volatile Node *node);
+void list_push_back(spinlock_t *llist_lock, volatile Node *node);
 
 /* 
    list_pop_front() removes and returns the node from the front of the list.
    This function should be used by a single consumer.
    If the list is empty, it returns NULL.
 */
-Node *list_pop_front();
+Node *list_pop_front(spinlock_t *llist_lock);
 
 /* 
    list_remove() removes a specific Node from anywhere in the list.
    This function adjusts the pointers of neighboring nodes appropriately.
 */
-void list_remove(LinkedList *list, Node *node);
+void list_remove(spinlock_t *llist_lock, LinkedList *list, Node *node);
 
 #endif /* LLIST_H */

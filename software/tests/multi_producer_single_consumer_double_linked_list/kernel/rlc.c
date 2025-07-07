@@ -74,7 +74,7 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
 /* Consumer behavior (runs on core 0) */
 static void consumer(const unsigned int core_id) {
     while (1) {
-        Node *node = list_pop_front();
+        Node *node = list_pop_front(&llist_lock);
         if (node != 0) {
 
             printf_lock_acquire(&printf_lock);
@@ -160,7 +160,7 @@ static void producer(const unsigned int core_id) {
         // /* Zero-initialize the payload using our custom mm_memset */
         // mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
-        list_push_back(node);
+        list_push_back(&llist_lock, node);
 
         printf_lock_acquire(&printf_lock);
         printf("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 

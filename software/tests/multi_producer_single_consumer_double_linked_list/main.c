@@ -28,7 +28,7 @@ int main(void) {
         mm_init();
 
         // Initialize the linked list for receiving queue
-        list_init();
+        list_init(&rlc_ctx.list);
         
         // Initialize locks
         mm_lock = 0;
