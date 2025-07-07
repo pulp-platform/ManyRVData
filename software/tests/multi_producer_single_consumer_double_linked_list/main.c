@@ -9,7 +9,7 @@
 #include "kernel/printf_lock.h"
 #include DATAHEADER
 
-#define L1LineWidth (256/8) // 256 bits = 32 bytes
+#define L1LineWidth (128/8) // 128 bits = 16 bytes
 
 int main(void) {
     /* Retrieve the core index only once in main */

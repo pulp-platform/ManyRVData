@@ -12,9 +12,9 @@ void l1d_xbar_config(uint32_t offset) {
   // These selected bits will be removed from the address in
   // cache controller and added back when leaving the controller
 
-  // 5 is the cacheline width (log2(256b/8))
+  // 4 is the cacheline width (log2(256b/8))
   // granularity cannot be less than cacheline width
-  offset = (offset > 5) ? offset : 5;
+  offset = (offset > 4) ? offset : 4;
 
   uint32_t *cfg =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
