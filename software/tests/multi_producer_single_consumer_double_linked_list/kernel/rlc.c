@@ -12,7 +12,8 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_1000.h"
+// #include "../data/data_1_1350_1000.h"
+#include "../data/data_1_2044_100.h"
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
@@ -27,7 +28,15 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
 }
 
 int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
+    uint32_t timer_ac_lock_0, timer_ac_lock_1;
+    uint32_t timer_rl_lock_0, timer_rl_lock_1;
+    uint32_t timer_body_0, timer_body_1;
+
+    timer_ac_lock_0 = benchmark_get_cycle();
     pdcp_pkg_lock_acquire(lock); // Acquire the lock to ensure exclusive access
+    timer_ac_lock_1 = benchmark_get_cycle();
+
+    timer_body_0 = benchmark_get_cycle();
     int pkg_ptr = -1; // Initialize package pointer to -1 (indicating no package)
     if (pdcp_pkd_ptr < NUM_PKGS) {
         // If the pointer is within bounds, return the package pointer
@@ -38,7 +47,20 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
         printf("Producer (core %u): out of PDCP pkg, pdcp_pkd_ptr = %d\n", core_id, pdcp_pkd_ptr);
         printf_lock_release(&printf_lock);
     }
+    timer_body_1 = benchmark_get_cycle();
+
+    timer_rl_lock_0 = benchmark_get_cycle();
     pdcp_pkg_lock_release(lock); // Release the lock
+    timer_rl_lock_1 = benchmark_get_cycle();
+
+    printf_lock_acquire(&printf_lock);
+    printf("[core %u][pdcp_receive_pkg] spin_unlock, ac=%d, bd=%d, rl=%d\n",
+        snrt_cluster_core_idx(),
+        (timer_ac_lock_1 - timer_ac_lock_0),
+        (timer_body_1 - timer_body_0),
+        (timer_rl_lock_1 - timer_rl_lock_0)
+    );
+    printf_lock_release(&printf_lock);
     return pkg_ptr; // Return the package pointer
 }
 
@@ -48,11 +70,6 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
    space is used for payload. Thus, available payload size is:
 */
 #define PACKET_SIZE (PAGE_SIZE - sizeof(Node))
-
-/* A simple busy-loop delay function. Adjust iterations as needed. */
-static void delay(volatile int iterations) {
-    for (; iterations > 0; iterations--);
-}
 
 /* Consumer behavior (runs on core 0) */
 static void consumer(const unsigned int core_id) {
@@ -69,7 +86,10 @@ static void consumer(const unsigned int core_id) {
 
             uint32_t timer_mv_0, timer_mv_1;
             timer_mv_0 = benchmark_get_cycle();
-            vector_memcpy32_safe(node->tgt, node->data, node->data_size);
+            // vector_memcpy32_m4_opt(node->tgt, node->data, node->data_size);
+            vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
+            // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
+            // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
             timer_mv_1 = benchmark_get_cycle();
 
             printf_lock_acquire(&printf_lock);
@@ -111,6 +131,10 @@ static void producer(const unsigned int core_id) {
             delay(200);  /* Delay before retrying */
             continue;
         }
+    
+        uint32_t timer_body_0, timer_body_1;
+
+        timer_body_0 = benchmark_get_cycle();
         /* Initialize the node header */
         node->lock = 0;
         node->prev = 0;
@@ -119,8 +143,22 @@ static void producer(const unsigned int core_id) {
         node->data = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].src_addr));
         node->tgt = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr));
         node->data_size = pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length;
-        /* Zero-initialize the payload using our custom mm_memset */
-        mm_memset(node->data, 0, PACKET_SIZE);
+        timer_body_1 = benchmark_get_cycle();
+
+        printf_lock_acquire(&printf_lock);
+        printf("[core %u][bd fill_node] mm_alloc: node = %p, data = 0x%x, tgt = 0x%x, data_size = %zu, bd=%d\n",
+            core_id,
+            (void *)node,
+            node->data,
+            node->tgt,
+            node->data_size,
+            (timer_body_1 - timer_body_0)
+        );
+        printf_lock_release(&printf_lock);
+
+
+        // /* Zero-initialize the payload using our custom mm_memset */
+        // mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
         list_push_back(node);
 
