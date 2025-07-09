@@ -117,6 +117,14 @@ SECTIONS
     _edram = .;
   } >DRAM
 
+  .data_uncached_region :
+  {
+    . = ALIGN(1024);
+    __DATA_BEGIN__ = .;
+    *(.data .data.* .gnu.linkonce.d.*)
+    SORT(CONSTRUCTORS)
+  } >UNCACHED_REGION
+
   /* PDCP‐PDU source info array */
   .pdcp_info 0x99000000 :
   {
@@ -130,12 +138,4 @@ SECTIONS
     KEEP(*(.pdcp_src))
     _epdcp_src = .;    /* optional: mark end of pdcp_src */
   } > UNCACHED_REGION
-
-  .data_uncached_region :
-  {
-    . = ALIGN(1024);
-    __DATA_BEGIN__ = .;
-    *(.data .data.* .gnu.linkonce.d.*)
-    SORT(CONSTRUCTORS)
-  } >UNCACHED_REGION
 }
