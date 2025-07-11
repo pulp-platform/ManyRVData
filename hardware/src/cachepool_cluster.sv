@@ -146,8 +146,8 @@ module cachepool_cluster
     output axi_narrow_req_t                       axi_narrow_req_o,
     input  axi_narrow_resp_t                      axi_narrow_resp_i,
     /// AXI Core cluster out-port to core.
-    output axi_out_req_t  [NumClusterAxiSlv-1:0]  axi_out_req_o,
-    input  axi_out_resp_t [NumClusterAxiSlv-1:0]  axi_out_resp_i,
+    output axi_out_req_t  [NumClusterSlv-1:0]  axi_out_req_o,
+    input  axi_out_resp_t [NumClusterSlv-1:0]  axi_out_resp_i,
     /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
     input  impl_in_t      [NrSramCfg-1:0]         impl_i,
     /// Indicate the program execution is error
@@ -172,12 +172,12 @@ module cachepool_cluster
   localparam int unsigned NrNarrowMasters = 2;
 
   localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterAxiMst);
+  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst);
 
   // Cache XBar configuration struct
   localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
-    NoSlvPorts        : NumClusterAxiMst*NumTiles,
-    NoMstPorts        : NumClusterAxiSlv,
+    NoSlvPorts        : NumClusterMst*NumTiles,
+    NoMstPorts        : NumClusterSlv,
     MaxMstTrans       : MaxMstTrans,
     MaxSlvTrans       : MaxSlvTrans,
     FallThrough       : 1'b0,
@@ -187,7 +187,7 @@ module cachepool_cluster
     UniqueIds         : 1'b0,
     AxiAddrWidth      : AxiAddrWidth,
     AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : NumClusterAxiSlv - 1,
+    NoAddrRules       : NumClusterSlv - 1,
     default           : '0
   };
 
@@ -222,8 +222,8 @@ module cachepool_cluster
   axi_mst_cache_resp_t [NumTiles*NumL1CacheCtrl  -1 :0] axi_cache_rsp;
   axi_mst_cache_req_t  [NumTiles*NumTileWideAxi  -1 :0] axi_tile_req;
   axi_mst_cache_resp_t [NumTiles*NumTileWideAxi  -1 :0] axi_tile_rsp;
-  axi_slv_cache_req_t  [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_req;
-  axi_slv_cache_resp_t [NumTiles*NumClusterAxiSlv-1 :0] wide_axi_slv_rsp;
+  axi_slv_cache_req_t  [NumTiles*NumClusterSlv-1 :0] wide_axi_slv_req;
+  axi_slv_cache_resp_t [NumTiles*NumClusterSlv-1 :0] wide_axi_slv_rsp;
   axi_narrow_req_t     [NumTiles-1 :0]                  axi_out_req;
   axi_narrow_resp_t    [NumTiles-1 :0]                  axi_out_resp;
 
@@ -238,6 +238,36 @@ module cachepool_cluster
   logic [NumTiles-1:0] error, eoc;
   assign error_o = |error;
   assign eoc_o   = |eoc;
+
+  cache_trans_req_t [NumTiles*NumL1CacheCtrl-1:0] cache_refill_req;
+  cache_trans_rsp_t [NumTiles*NumL1CacheCtrl-1:0] cache_refill_rsp;
+
+  cache_trans_req_t [NumTiles-1               :0] cache_core_req;
+  cache_trans_rsp_t [NumTiles-1               :0] cache_core_rsp;
+
+  cache_trans_req_t [NumTiles*NumClusterMst-1 :0] tile_req;
+  cache_trans_rsp_t [NumTiles*NumClusterMst-1 :0] tile_rsp;
+
+  cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
+  cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
+  logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
+
+  l2_req_t               [NumClusterSlv-1 :0] l2_req;
+  l2_rsp_t               [NumClusterSlv-1 :0] l2_rsp;
+
+  cache_trans_req_chan_t [NumClusterSlv-1 :0] l2_req_chan;
+  cache_trans_rsp_chan_t [NumClusterSlv-1 :0] l2_rsp_chan;
+  logic                  [NumClusterSlv-1 :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready  ;
+
+  typedef logic [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
+  typedef logic [$clog2(NumClusterSlv)-1         :0] tile_sel_t;
+
+  // Which l2 we want to select for each req
+  tile_sel_t [NumTiles*NumClusterMst-1 :0]           tile_sel;
+  // Which tile we selected for each req
+  l2_sel_t   [NumClusterSlv-1:0]                     tile_selected;
+  // which tile we want to select for each rsp
+  l2_sel_t   [NumClusterSlv-1:0]                     l2_sel;
 
   for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
     cachepool_tile #(
@@ -297,11 +327,36 @@ module cachepool_cluster
       .axi_out_req_o            ( axi_out_req[t]           ),
       .axi_out_resp_i           ( axi_out_resp[t]          ),
       // AXI Master Port
-      .axi_cache_req_o          ( axi_cache_req[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
-      .axi_cache_rsp_i          ( axi_cache_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      // .axi_cache_req_o          ( axi_cache_req[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      // .axi_cache_rsp_i          ( axi_cache_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      .cache_refill_req_o       ( cache_refill_req[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
+      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
       .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi] ),
       .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi] )
     );
+
+    for (genvar port= 0; port < NumL1CacheCtrl; port ++) begin: gen_reqrsp2axi_cache
+      reqrsp_to_axi #(
+        .MaxTrans           (32),
+        .ID                 (port),
+        .UserWidth       ($bits(refill_user_t)),
+        .ReqUserFallThrough (1'b0),
+        .DataWidth          (AxiDataWidth),
+        .AxiUserWidth       (AxiUserWidth),
+        .reqrsp_req_t       (cache_trans_req_t),
+        .reqrsp_rsp_t       (cache_trans_rsp_t),
+        .axi_req_t          (axi_mst_cache_req_t),
+        .axi_rsp_t          (axi_mst_cache_resp_t)
+      ) i_reqrsp2axi  (
+        .clk_i        (clk_i),
+        .rst_ni       (rst_ni),
+        .user_i       ('0),
+        .reqrsp_req_i (cache_refill_req[t*NumL1CacheCtrl+port]),
+        .reqrsp_rsp_o (cache_refill_rsp[t*NumL1CacheCtrl+port]),
+        .axi_req_o    (axi_cache_req[t*NumL1CacheCtrl+port]),
+        .axi_rsp_i    (axi_cache_rsp[t*NumL1CacheCtrl+port])
+      );
+    end
   end
   logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
   xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
@@ -317,7 +372,7 @@ module cachepool_cluster
   end
 
   // Address scrambling for Dram Channels
-  axi_mst_cache_req_t [NumClusterAxiMst-1:0] wide_axi_mst_req_prescramble, wide_axi_mst_req_postscramble;
+  axi_mst_cache_req_t [NumClusterMst-1:0] wide_axi_mst_req_prescramble, wide_axi_mst_req_postscramble;
 
   // TODO: Add AXI MUX and assign ID correctly here
   assign axi_narrow_req_o = axi_out_req[0];
@@ -356,9 +411,22 @@ module cachepool_cluster
     .default_mst_port_i    (cache_xbar_default_port                )
   );
 
+  axi_dumper #(
+    .LogAW      (1'b0),
+    .LogAR      (1'b1),
+    .LogR       (1'b1),
+    .axi_req_t  (axi_slv_cache_req_t),
+    .axi_resp_t (axi_slv_cache_resp_t)
+  ) i_debug_dumper (
+    .clk_i,
+    .rst_ni,
+    .axi_req_i(wide_axi_slv_req[3]),
+    .axi_resp_i(wide_axi_slv_rsp[3])
+  );
+
   assign wide_axi_mst_req_prescramble = {axi_cache_req, axi_tile_req[TileMem]};
 
-  for (genvar port = 0; port < NumClusterAxiMst; port ++) begin
+  for (genvar port = 0; port < NumClusterMst; port ++) begin
     always_comb begin
       wide_axi_mst_req_postscramble[port]         = wide_axi_mst_req_prescramble[port];
       wide_axi_mst_req_postscramble[port].aw.addr = scrambleAddr(wide_axi_mst_req_prescramble[port].aw.addr);
@@ -370,7 +438,7 @@ module cachepool_cluster
   // DMA Subsystem
   // -------------
   // Optionally decouple the external wide AXI master port.
-  for (genvar port = 0; port < NumClusterAxiSlv; port ++) begin : gen_axi_out_cut
+  for (genvar port = 0; port < NumClusterSlv; port ++) begin : gen_axi_out_cut
     axi_cut #(
       .Bypass     (!RegisterExt               ),
       .aw_chan_t  (axi_slv_cache_aw_chan_t    ),

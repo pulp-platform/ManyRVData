@@ -146,8 +146,10 @@ module cachepool_tile
     output axi_narrow_req_t                    axi_out_req_o,
     input  axi_narrow_resp_t                   axi_out_resp_i,
     /// AXI Cache Refill ports
-    output axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_o,
-    input  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_i,
+    // output axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_o,
+    // input  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_i,
+    output cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req_o,
+    input  cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
     output axi_out_req_t  [NumTileWideAxi-1:0] axi_wide_req_o,
     input  axi_out_resp_t [NumTileWideAxi-1:0] axi_wide_rsp_i,
@@ -169,7 +171,7 @@ module cachepool_tile
   // Constants
   // ---------
   /// Minimum width to hold the core number.
-  localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
+  // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
   localparam int unsigned TCDMSize          = NrBanks * TCDMDepth * BeWidth;
   // The short address for SPM
@@ -271,15 +273,15 @@ module cachepool_tile
   typedef logic [TCDMAddrWidth-1:0]     tcdm_addr_t;
   typedef logic [SPMAddrWidth-1:0]      spm_addr_t;
 
-  typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
+  // typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 
   typedef logic [$clog2(L1NumSet)-1:0] tcdm_bank_addr_t;
 
-  typedef struct packed {
-    logic [CoreIDWidth-1:0] core_id;
-    logic is_amo;
-    reqid_t req_id;
-  } tcdm_user_t;
+  // typedef struct packed {
+  //   logic [CoreIDWidth-1:0] core_id;
+  //   logic is_amo;
+  //   reqid_t req_id;
+  // } tcdm_user_t;
 
   // The metadata type used to restore the information from req to rsp
   typedef struct packed {
@@ -295,7 +297,7 @@ module cachepool_tile
   `AXI_TYPEDEF_ALL(axi_slv_dma, addr_t, id_dma_slv_t, data_dma_t, strb_dma_t, user_dma_t)
   `AXI_TYPEDEF_ALL(axi_dcache, addr_t, id_dcache_mst_t, data_dma_t, strb_dma_t, user_dma_t)
 
-  `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t)
+  `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
   `MEM_TYPEDEF_ALL(mem, tcdm_mem_addr_t, data_t, strb_t, tcdm_user_t)
   `MEM_TYPEDEF_ALL(mem_dma, tcdm_mem_addr_t, data_dma_t, strb_dma_t, logic)
@@ -755,6 +757,11 @@ module cachepool_tile
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
   assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
 
+  cache_refill_req_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_req;
+  logic                   [NumL1CacheCtrl-1 : 0] cache_refill_req_valid, cache_refill_req_ready;
+  cache_refill_rsp_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_rsp;
+  logic                   [NumL1CacheCtrl-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
+
   for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin: gen_l1_cache_ctrl
     flamingo_spatz_cache_ctrl #(
       // Core
@@ -772,7 +779,9 @@ module cachepool_tile
       .core_meta_t      (tcdm_user_t        ),
       .impl_in_t        (impl_in_t          ),
       .axi_req_t        (axi_out_req_t      ),
-      .axi_resp_t       (axi_out_resp_t     )
+      .axi_resp_t       (axi_out_resp_t     ),
+      .refill_req_t     (cache_refill_req_chan_t),
+      .refill_rsp_t     (cache_refill_rsp_chan_t)
     ) i_l1_controller (
       .clk_i                 (clk_i                          ),
       .rst_ni                (rst_ni                         ),
@@ -799,9 +808,15 @@ module cachepool_tile
       .core_resp_write_o     (cache_rsp_write[cb]            ),
       .core_resp_data_o      (cache_rsp_data[cb]             ),
       .core_resp_meta_o      (cache_rsp_meta[cb]             ),
-      // AXI refill
-      .axi_req_o             (axi_cache_req_prescrambled[cb] ),
-      .axi_resp_i            (axi_cache_rsp_i[cb]            ),
+      // // AXI refill
+      // .axi_req_o             (axi_cache_req_prescrambled[cb] ),
+      // .axi_resp_i            (axi_cache_rsp_i[cb]            ),
+      .refill_req_o          (cache_refill_req[cb]   ),
+      .refill_req_valid_o    (cache_refill_req_valid[cb] ),
+      .refill_req_ready_i    (cache_refill_req_ready[cb] ),
+      .refill_rsp_i          (cache_refill_rsp[cb]   ),
+      .refill_rsp_valid_i    (cache_refill_rsp_valid[cb] ),
+      .refill_rsp_ready_o    (cache_refill_rsp_ready[cb] ),
       // Tag Banks
       .tcdm_tag_bank_req_o   (l1_tag_bank_req[cb]            ),
       .tcdm_tag_bank_we_o    (l1_tag_bank_we[cb]             ),
@@ -820,19 +835,59 @@ module cachepool_tile
     );
 
     always_comb begin : bank_addr_scramble
-      axi_cache_req_o[cb] = axi_cache_req_prescrambled[cb];
+      // axi_cache_req_o[cb] = axi_cache_req_prescrambled[cb];
+      // // Pass the lower bits first
+      // axi_cache_req_o[cb].ar.addr  =   axi_cache_req_prescrambled[cb].ar.addr & bitmask_lo;
+      // // Shift the upper part to its location
+      // axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
+      // // Add back the removed cache bank ID
+      // axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
+
+      // axi_cache_req_o[cb].ar.id = cb;
+      // axi_cache_req_o[cb].aw.id = cb;
+
+      // axi_cache_rsp_prescrambled[cb]      = axi_cache_rsp_i[cb];
+      // axi_cache_rsp_prescrambled[cb].r.id = '0;
+
+      // TODO: use info and cb to calculate ID correctly
+      cache_refill_req_o[cb].q = '{
+        addr : cache_refill_req[cb].addr,
+        write: cache_refill_req[cb].write,
+        data : cache_refill_req[cb].wdata,
+        strb : cache_refill_req[cb].wstrb,
+        // We always want full size from cache
+        size : $clog2(L1LineWidth/8),
+        amo  : reqrsp_pkg::AMONone,
+        default : '0
+      };
+
+      cache_refill_req_o[cb].q.user = '{
+        bank_id : cb,
+        info    : cache_refill_req[cb].info,
+        default : '0
+      };
+      cache_refill_req_o[cb].q_valid = cache_refill_req_valid[cb];
+      cache_refill_req_o[cb].p_ready = cache_refill_rsp_ready[cb];
+      // cache_refill_req_o[cb].p_ready = 1'b1;
+
+
+      cache_refill_rsp[cb] = '{
+        data  : cache_refill_rsp_i[cb].p.data,
+        write : cache_refill_rsp_i[cb].p.write,
+        info  : cache_refill_rsp_i[cb].p.user.info,
+        default   :'0
+      };
+      cache_refill_rsp_valid[cb] = cache_refill_rsp_i[cb].p_valid;
+      cache_refill_req_ready[cb] = cache_refill_rsp_i[cb].q_ready;
+
+
       // Pass the lower bits first
-      axi_cache_req_o[cb].ar.addr  =   axi_cache_req_prescrambled[cb].ar.addr & bitmask_lo;
+      cache_refill_req_o[cb].q.addr  =   cache_refill_req[cb].addr & bitmask_lo;
       // Shift the upper part to its location
-      axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
+      cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << NumSelBits);
       // Add back the removed cache bank ID
-      axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
+      cache_refill_req_o[cb].q.addr |= (cb << dynamic_offset);
 
-      axi_cache_req_o[cb].ar.id = cb;
-      axi_cache_req_o[cb].aw.id = cb;
-
-      axi_cache_rsp_prescrambled[cb]      = axi_cache_rsp_i[cb];
-      axi_cache_rsp_prescrambled[cb].r.id = '0;
     end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
@@ -1124,12 +1179,13 @@ module cachepool_tile
   assign cluster_user = (hart_base_id_i / NrCores) + (hart_base_id_i % NrCores) + 1'b1;
 
   reqrsp_mux #(
-    .NrPorts   (NrCores         ),
-    .AddrWidth (AxiAddrWidth    ),
-    .DataWidth (NarrowDataWidth ),
-    .req_t     (reqrsp_req_t    ),
-    .rsp_t     (reqrsp_rsp_t    ),
-    .RespDepth (2               )
+    .NrPorts   (NrCores           ),
+    .AddrWidth (AxiAddrWidth      ),
+    .DataWidth (NarrowDataWidth   ),
+    .UserWidth ($bits(tcdm_user_t)),
+    .req_t     (reqrsp_req_t      ),
+    .rsp_t     (reqrsp_rsp_t      ),
+    .RespDepth (2                 )
   ) i_reqrsp_mux_core (
     .clk_i     (clk_i            ),
     .rst_ni    (rst_ni           ),
@@ -1141,12 +1197,13 @@ module cachepool_tile
   );
 
   reqrsp_to_axi #(
-    .DataWidth    (NarrowDataWidth),
-    .UserWidth    (NarrowUserWidth),
-    .reqrsp_req_t (reqrsp_req_t   ),
-    .reqrsp_rsp_t (reqrsp_rsp_t   ),
-    .axi_req_t    (axi_mst_req_t  ),
-    .axi_rsp_t    (axi_mst_resp_t )
+    .DataWidth    (NarrowDataWidth    ),
+    .AxiUserWidth (NarrowUserWidth    ),
+    .UserWidth    ($bits(tcdm_user_t) ),
+    .reqrsp_req_t (reqrsp_req_t       ),
+    .reqrsp_rsp_t (reqrsp_rsp_t       ),
+    .axi_req_t    (axi_mst_req_t      ),
+    .axi_rsp_t    (axi_mst_resp_t     )
   ) i_reqrsp_to_axi_core (
     .clk_i        (clk_i                      ),
     .rst_ni       (rst_ni                     ),
@@ -1209,23 +1266,26 @@ module cachepool_tile
     .default_mst_port_i    (ClusterXbarDefaultPort     )
   );
 
-  axi_to_tcdm #(
-    .axi_req_t  (axi_slv_req_t         ),
-    .axi_rsp_t  (axi_slv_resp_t        ),
-    .tcdm_req_t (spm_req_t             ),
-    .tcdm_rsp_t (spm_rsp_t             ),
-    .AddrWidth  (AxiAddrWidth          ),
-    .DataWidth  (NarrowDataWidth       ),
-    .IdWidth    (NarrowIdWidthOut      ),
-    .BufDepth   (MemoryMacroLatency + 1)
-  ) i_axi_to_tcdm (
-    .clk_i      (clk_i                   ),
-    .rst_ni     (rst_ni                  ),
-    .axi_req_i  (narrow_axi_slv_req[TCDM]),
-    .axi_rsp_o  (narrow_axi_slv_rsp[TCDM]),
-    .tcdm_req_o (             ),
-    .tcdm_rsp_i ('0             )
-  );
+  // axi_to_tcdm #(
+  //   .axi_req_t  (axi_slv_req_t         ),
+  //   .axi_rsp_t  (axi_slv_resp_t        ),
+  //   .tcdm_req_t (spm_req_t             ),
+  //   .tcdm_rsp_t (spm_rsp_t             ),
+  //   .AddrWidth  (AxiAddrWidth          ),
+  //   .DataWidth  (NarrowDataWidth       ),
+  //   .UserWidth  ('0),
+  //   .IdWidth    (NarrowIdWidthOut      ),
+  //   .BufDepth   (MemoryMacroLatency + 1)
+  // ) i_axi_to_tcdm (
+  //   .clk_i      (clk_i                   ),
+  //   .rst_ni     (rst_ni                  ),
+  //   .axi_req_i  (narrow_axi_slv_req[TCDM]),
+  //   .axi_rsp_o  (narrow_axi_slv_rsp[TCDM]),
+  //   .tcdm_req_o (             ),
+  //   .tcdm_rsp_i ('0             )
+  // );
+
+  assign narrow_axi_slv_rsp[TCDM] = '0;
 
   // // 2. Peripherals
   // // Peripherals at cluster level.

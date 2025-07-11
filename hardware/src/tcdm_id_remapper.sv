@@ -22,6 +22,7 @@ module tcdm_id_remapper
     parameter int unsigned               DataWidth    = 0,
 
     parameter type         dreq_t  = logic,
+    parameter type         user_t  = logic,
     parameter type         drsp_t  = logic
   ) (
     input  logic                         clk_i,
@@ -38,8 +39,8 @@ module tcdm_id_remapper
   typedef logic [DataWidth-1:0] data_t;
   typedef logic [DataWidth/8-1:0] strb_t;
 
-  `REQRSP_TYPEDEF_REQ_CHAN_T(dreq_chan_t, addr_t, data_t, strb_t)
-  `REQRSP_TYPEDEF_RSP_CHAN_T(drsp_chan_t, data_t)
+  `REQRSP_TYPEDEF_REQ_CHAN_T(dreq_chan_t, addr_t, data_t, strb_t, user_t)
+  `REQRSP_TYPEDEF_RSP_CHAN_T(drsp_chan_t, data_t, user_t)
 
   dreq_chan_t [NumIn-1:0] req_qpayload;
   drsp_chan_t [NumIn-1:0] rsp_ppayload;
@@ -120,12 +121,12 @@ module tcdm_id_remapper
       if (mst_req_o.q_valid && mst_rsp_i.q_ready) begin
         if (id_lock_q) begin
           // the outstanding ID is already stored in req
-          remapped_id_d[req.id]        = req.id;
-          remapped_id_valid_d[req.id]  = 1'b1;
-          id_d[req.id]                 = id;
+          remapped_id_d[req.user.req_id]        = req.user.req_id;
+          remapped_id_valid_d[req.user.req_id]  = 1'b1;
+          id_d[req.user.req_id]                 = id;
           id_lock_d                    = 1'b0;
         end else begin
-          remapped_id_d[next_id]       = req.id;
+          remapped_id_d[next_id]       = req.user.req_id;
           remapped_id_valid_d[next_id] = 1'b1;
           id_d[next_id]                = id;
         end
@@ -133,7 +134,7 @@ module tcdm_id_remapper
 
       // Did we sent a new response?
       if (mst_rsp_i.p_valid && mst_req_o.p_ready)
-        remapped_id_valid_d[mst_rsp_i.p.id] = 1'b0;
+        remapped_id_valid_d[mst_rsp_i.p.user.req_id] = 1'b0;
     end
 
     ///////////////
@@ -167,7 +168,7 @@ module tcdm_id_remapper
       // Forward the request payload
       mst_req_o.q    = req;
       if (!id_lock_q)
-        mst_req_o.q.id = next_id;
+        mst_req_o.q.user.req_id = next_id;
     end
 
     ////////////////
@@ -179,7 +180,7 @@ module tcdm_id_remapper
     ) i_response_demux (
       .inp_valid_i(mst_rsp_i.p_valid    ),
       .inp_ready_o(mst_req_o.p_ready    ),
-      .oup_sel_i  (id_q[mst_rsp_i.p.id] ),
+      .oup_sel_i  (id_q[mst_rsp_i.p.user.req_id] ),
       .oup_ready_i(rsp_pready           ),
       .oup_valid_o(rsp_pvalid           )
     );
@@ -188,7 +189,7 @@ module tcdm_id_remapper
       for (int port = 0; port < NumIn; port++) begin
         // Pass the payload
         rsp_ppayload[port]    = mst_rsp_i.p;
-        rsp_ppayload[port].id = remapped_id_q[mst_rsp_i.p.id];
+        rsp_ppayload[port].user.req_id = remapped_id_q[mst_rsp_i.p.user.req_id];
       end
     end
   end: gen_remapper

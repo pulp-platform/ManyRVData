@@ -41,46 +41,46 @@ module cachepool_cluster_wrapper
   /// AXI Narrow out-port (UART)
   output axi_narrow_req_t                      axi_narrow_req_o,
   input  axi_narrow_resp_t                     axi_narrow_resp_i,
-  output axi_out_req_t  [NumClusterAxiSlv-1:0] axi_out_req_o,
-  input  axi_out_resp_t [NumClusterAxiSlv-1:0] axi_out_resp_i
+  output axi_out_req_t  [NumClusterSlv-1:0]    axi_out_req_o,
+  input  axi_out_resp_t [NumClusterSlv-1:0]    axi_out_resp_i
 );
 
 
-  spatz_axi_iwc_out_req_t  [NumClusterAxiSlv-1:0] axi_from_cluster_iwc_req;
-  spatz_axi_iwc_out_resp_t [NumClusterAxiSlv-1:0] axi_from_cluster_iwc_resp;
+  spatz_axi_iwc_out_req_t  [NumClusterSlv-1:0] axi_from_cluster_iwc_req;
+  spatz_axi_iwc_out_resp_t [NumClusterSlv-1:0] axi_from_cluster_iwc_resp;
 
-  for (genvar port = 0; port < NumL2Channel; port ++) begin : gen_iw_conv
-    axi_iw_converter #(
-      .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
-      .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
-      .AxiSlvPortMaxUniqIds   ( 2                 ),
-      .AxiSlvPortMaxTxnsPerId ( 2                 ),
-      .AxiSlvPortMaxTxns      ( 4                 ),
-      .AxiMstPortMaxUniqIds   ( 2                 ),
-      .AxiMstPortMaxTxnsPerId ( 4                 ),
-      .AxiAddrWidth           ( AxiAddrWidth      ),
-      .AxiDataWidth           ( AxiDataWidth      ),
-      .AxiUserWidth           ( AxiUserWidth      ),
-      .slv_req_t              ( spatz_axi_iwc_out_req_t ),
-      .slv_resp_t             ( spatz_axi_iwc_out_resp_t),
-      .mst_req_t              ( axi_out_req_t     ),
-      .mst_resp_t             ( axi_out_resp_t    )
-    ) iw_converter(
-      .clk_i                  ( clk_i                           ),
-      .rst_ni                 ( rst_ni                          ),
-      .slv_req_i              ( axi_from_cluster_iwc_req [port] ),
-      .slv_resp_o             ( axi_from_cluster_iwc_resp[port] ),
-      .mst_req_o              ( axi_out_req_o            [port] ),
-      .mst_resp_i             ( axi_out_resp_i           [port] )
-    );
-  end
+  // for (genvar port = 0; port < NumL2Channel; port ++) begin : gen_iw_conv
+  //   axi_iw_converter #(
+  //     .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
+  //     .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
+  //     .AxiSlvPortMaxUniqIds   ( 2                 ),
+  //     .AxiSlvPortMaxTxnsPerId ( 2                 ),
+  //     .AxiSlvPortMaxTxns      ( 4                 ),
+  //     .AxiMstPortMaxUniqIds   ( 2                 ),
+  //     .AxiMstPortMaxTxnsPerId ( 4                 ),
+  //     .AxiAddrWidth           ( AxiAddrWidth      ),
+  //     .AxiDataWidth           ( AxiDataWidth      ),
+  //     .AxiUserWidth           ( AxiUserWidth      ),
+  //     .slv_req_t              ( axi_out_req_t ),
+  //     .slv_resp_t             ( axi_out_resp_t),
+  //     .mst_req_t              ( axi_out_req_t     ),
+  //     .mst_resp_t             ( axi_out_resp_t    )
+  //   ) iw_converter(
+  //     .clk_i                  ( clk_i                           ),
+  //     .rst_ni                 ( rst_ni                          ),
+  //     .slv_req_i              ( axi_from_cluster_iwc_req [port] ),
+  //     .slv_resp_o             ( axi_from_cluster_iwc_resp[port] ),
+  //     .mst_req_o              ( axi_out_req_o            [port] ),
+  //     .mst_resp_i             ( axi_out_resp_i           [port] )
+  //   );
+  // end
 
   // Spatz cluster under test.
   cachepool_cluster #(
     .AxiAddrWidth             (AxiAddrWidth             ),
     .AxiDataWidth             (AxiDataWidth             ),
     .AxiIdWidthIn             (AxiInIdWidth             ),
-    .AxiIdWidthOut            (IwcAxiIdOutWidth         ),
+    .AxiIdWidthOut            (AxiOutIdWidth         ),
     .AxiUserWidth             (AxiUserWidth             ),
     .BootAddr                 (BootAddr                 ),
     .UartAddr                 (32'hC000_0000            ),
@@ -102,8 +102,8 @@ module cachepool_cluster_wrapper
     .axi_in_resp_t            (axi_in_resp_t            ),
     .axi_narrow_req_t         (axi_narrow_req_t         ),
     .axi_narrow_resp_t        (axi_narrow_resp_t        ),
-    .axi_out_req_t            (spatz_axi_iwc_out_req_t  ),
-    .axi_out_resp_t           (spatz_axi_iwc_out_resp_t ),
+    .axi_out_req_t            (axi_out_req_t  ),
+    .axi_out_resp_t           (axi_out_resp_t ),
     .Xdma                     (4'h1                     ),
     .DMAAxiReqFifoDepth       (3                        ),
     .DMAReqFifoDepth          (3                        ),
@@ -133,22 +133,22 @@ module cachepool_cluster_wrapper
     .axi_narrow_req_o         ,
     .axi_narrow_resp_i        ,
     // AXI Master Port
-    .axi_out_req_o            ( axi_from_cluster_iwc_req  ),
-    .axi_out_resp_i           ( axi_from_cluster_iwc_resp )
+    .axi_out_req_o            ( axi_out_req_o  ),
+    .axi_out_resp_i           ( axi_out_resp_i )
   );
 
   // AXI utilization monitor
 `ifndef TARGET_SYNTHESIS
   typedef logic [31:0] cnt_t;
   // AR channel utilization
-  cnt_t [NumClusterAxiSlv-1:0] axi_ar_valid_cnt_d, axi_ar_valid_cnt_q;
-  cnt_t [NumClusterAxiSlv-1:0] axi_ar_trans_cnt_d, axi_ar_trans_cnt_q;
+  cnt_t [NumClusterSlv-1:0] axi_ar_valid_cnt_d, axi_ar_valid_cnt_q;
+  cnt_t [NumClusterSlv-1:0] axi_ar_trans_cnt_d, axi_ar_trans_cnt_q;
   `FF (axi_ar_valid_cnt_q, axi_ar_valid_cnt_d, '0)
   `FF (axi_ar_trans_cnt_q, axi_ar_trans_cnt_d, '0)
 
   // AW channel utilization
-  cnt_t [NumClusterAxiSlv-1:0] axi_aw_valid_cnt_d, axi_aw_valid_cnt_q;
-  cnt_t [NumClusterAxiSlv-1:0] axi_aw_trans_cnt_d, axi_aw_trans_cnt_q;
+  cnt_t [NumClusterSlv-1:0] axi_aw_valid_cnt_d, axi_aw_valid_cnt_q;
+  cnt_t [NumClusterSlv-1:0] axi_aw_trans_cnt_d, axi_aw_trans_cnt_q;
   `FF (axi_aw_valid_cnt_q, axi_aw_valid_cnt_d, '0)
   `FF (axi_aw_trans_cnt_q, axi_aw_trans_cnt_d, '0)
 
@@ -158,7 +158,7 @@ module cachepool_cluster_wrapper
     axi_aw_valid_cnt_d = axi_aw_valid_cnt_q;
     axi_aw_trans_cnt_d = axi_aw_trans_cnt_q;
 
-    for (int i = 0; i < NumClusterAxiSlv; i++) begin
+    for (int i = 0; i < NumClusterSlv; i++) begin
       if (axi_out_req_o[i].ar_valid) begin
         // AR valid
         axi_ar_valid_cnt_d[i] ++;

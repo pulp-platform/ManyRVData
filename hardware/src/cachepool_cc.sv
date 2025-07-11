@@ -230,7 +230,7 @@ module cachepool_cc
   typedef logic [DataWidth-1:0]   data_t;
   typedef logic [DataWidth/8-1:0] strb_t;
 
-  `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t)
+  `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
   spill_register #(
     .T      ( reqrsp_req_chan_t      ),
@@ -553,7 +553,8 @@ module cachepool_cc
     .IdWidth     ($clog2(NumIntOutstandingLoads) ),
     .RobDepth    (NumIntOutstandingLoads),
     .dreq_t      (dreq_t                ),
-    .drsp_t      (drsp_t                )
+    .drsp_t      (drsp_t                ),
+    .user_t      (tcdm_user_t           )
   ) i_cache_id_mux (
     .clk_i     (clk_i                          ),
     .rst_ni    (rst_ni                         ),
@@ -568,6 +569,7 @@ module cachepool_cc
     .NrPorts     (2           ),
     .AddrWidth   (AddrWidth   ),
     .DataWidth   (DataWidth   ),
+    .UserWidth   ($bits(tcdm_user_t) ),
     .req_t       (dreq_t      ),
     .rsp_t       (drsp_t      ),
     // TODO(zarubaf): Wire-up to top-level.
@@ -632,6 +634,7 @@ module cachepool_cc
     .AddrWidth    (AddrWidth       ),
     .DataWidth    (DataWidth       ),
     .BufDepth     (4               ),
+    .UserWidth    ($bits(tcdm_user_t) ),
     .reqrsp_req_t (dreq_t          ),
     .reqrsp_rsp_t (drsp_t          ),
     .tcdm_req_t   (tcdm_req_t      ),
@@ -704,13 +707,13 @@ module cachepool_cc
     // 1. req is read
     // 2. req HS
     data_soc_push     = data_soc_req.q_valid & data_soc_rsp.q_ready;
-    data_soc_req_id   = {data_soc_req.q.id, data_soc_req.q.write};
+    data_soc_req_id   = {data_soc_req.q.user.req_id, data_soc_req.q.write};
 
     // pop out id when
     // 1. rsp from read
     // 2. rsp HS
     data_soc_pop      = data_soc_req.p_ready & data_soc_rsp.p_valid;
-    {data_soc_rsp.p.id, data_soc_rsp.p.write} = data_soc_rsp_id;
+    {data_soc_rsp.p.user.req_id, data_soc_rsp.p.write} = data_soc_rsp_id;
 
     // if FIFO is empty, stop taking in response
     data_req_o.p_ready &= (!data_soc_empty);
@@ -724,6 +727,7 @@ module cachepool_cc
     .BufDepth     (4         ),
     .reqrsp_req_t (dreq_t    ),
     .reqrsp_rsp_t (drsp_t    ),
+    .UserWidth    ($bits(tcdm_user_t) ),
     .tcdm_req_t   (tcdm_req_t),
     .tcdm_rsp_t   (tcdm_rsp_t)
   ) i_reqrsp_to_tcdm (

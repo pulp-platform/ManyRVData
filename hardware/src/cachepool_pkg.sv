@@ -11,6 +11,8 @@ package cachepool_pkg;
 
   `include "axi/assign.svh"
   `include "axi/typedef.svh"
+  `include "reqrsp_interface/assign.svh"
+  `include "reqrsp_interface/typedef.svh"
 
   localparam int unsigned NumTiles = 1;
 
@@ -26,7 +28,7 @@ package cachepool_pkg;
   localparam int unsigned SpatzAxiAddrWidth       = 32;
   // AXI ID Width
   localparam int unsigned SpatzAxiIdInWidth       = 6;
-  localparam int unsigned SpatzAxiIdOutWidth      = 2;
+  localparam int unsigned SpatzAxiIdOutWidth      = 8;
 
   // FIXED AxiIdOutWidth
   // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
@@ -186,6 +188,31 @@ package cachepool_pkg;
   // Number of entries per cache controller
   localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
 
+  localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NumCores);
+  localparam int unsigned BankIDWidth       = cf_math_pkg::idx_width(NumL1CacheCtrl);
+
+  typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
+
+  typedef logic [$clog2(L1CacheWayEntry)-1:0] cache_ways_entry_ptr_t;
+  typedef logic [$clog2(L1Associativity)-1:0] way_ptr_t;
+
+  typedef struct packed {
+      logic                  for_write_pend;
+      cache_ways_entry_ptr_t depth;
+      way_ptr_t              way;
+  } cache_info_t;
+
+  typedef struct packed {
+    logic [CoreIDWidth-1:0] core_id;
+    logic is_amo;
+    reqid_t req_id;
+  } tcdm_user_t;
+
+  typedef struct packed {
+    logic [BankIDWidth-1:0] bank_id;
+    cache_info_t            info;
+  } refill_user_t;
+
   // Do we need to keep DMA here?
   localparam int unsigned NumTileWideAxi      = 2;
   typedef enum integer {
@@ -205,6 +232,24 @@ package cachepool_pkg;
     L2Channel3         = 3
   } cluster_slv_e;
 
+  // Cache refill bus
+  // This bus is at the interface of each cache controller
+  typedef struct packed {
+    axi_addr_t   addr;
+    cache_info_t info;
+    logic        write;
+    axi_data_t   wdata;
+    axi_strb_t   wstrb;
+  } cache_refill_req_chan_t;
+
+  typedef struct packed {
+    logic        write;
+    axi_data_t   data;
+    cache_info_t info;
+  } cache_refill_rsp_chan_t;
+
+  `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
+
   // L2 Memory
   localparam int unsigned NumL2Channel        = 4;
   localparam int unsigned L2BankWidth         = 512;
@@ -212,7 +257,22 @@ package cachepool_pkg;
   parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase            = 32'h8000_0000;
 
-    // DRAM Configuration
+  // TODO: multi-tile support
+  // One more from the Snitch core
+  localparam int unsigned NumClusterMst    = 1 + NumL1CacheCtrl;
+  // One more for UART?
+  localparam int unsigned NumClusterSlv    = NumL2Channel;
+
+  // Additional id for route back
+  typedef struct packed {
+    logic [BankIDWidth-1:0]                    bank_id;
+    cache_info_t                               info;
+    logic [$clog2(NumTiles*NumClusterMst)-1:0] xbar_id;
+  } l2_user_t;
+
+  `REQRSP_TYPEDEF_ALL (l2,          axi_addr_t, axi_data_t, axi_strb_t, l2_user_t)
+
+  // DRAM Configuration
   localparam int unsigned DramAddr        = 32'h8000_0000;
   localparam int unsigned DramSize        = 32'h4000_0000; // 1GB
   localparam int unsigned DramPerChSize   = DramSize / NumL2Channel;
@@ -225,7 +285,7 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  localparam int unsigned Interleave  = 16;
+  parameter int unsigned Interleave  = 16;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;
@@ -300,10 +360,5 @@ package cachepool_pkg;
 
 `endif
 
-  // TODO: multi-tile support
-  // One more from the Snitch core
-  localparam int unsigned NumClusterAxiMst    = 1 + NumL1CacheCtrl;
-  // One more for UART?
-  localparam int unsigned NumClusterAxiSlv    = NumL2Channel;
 
 endpackage : cachepool_pkg

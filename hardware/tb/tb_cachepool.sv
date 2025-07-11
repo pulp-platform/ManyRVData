@@ -137,13 +137,14 @@ module tb_cachepool;
    *  Simulation control  *
    ************************/
 
-  `REQRSP_TYPEDEF_ALL(reqrsp_cluster_in, axi_addr_t, logic [31:0], logic [3:0])
+  `REQRSP_TYPEDEF_ALL(reqrsp_cluster_in, axi_addr_t, logic [31:0], logic [3:0], tcdm_user_t)
   reqrsp_cluster_in_req_t to_cluster_req;
   reqrsp_cluster_in_rsp_t to_cluster_rsp;
 
   reqrsp_to_axi #(
     .DataWidth   (SpatzDataWidth         ),
-    .UserWidth   (SpatzAxiUserWidth      ),
+    .AxiUserWidth(SpatzAxiUserWidth      ),
+    .UserWidth   ($bits(tcdm_user_t)     ),
     .axi_req_t   (spatz_axi_in_req_t     ),
     .axi_rsp_t   (spatz_axi_in_resp_t    ),
     .reqrsp_req_t(reqrsp_cluster_in_req_t),
@@ -299,7 +300,7 @@ module tb_cachepool;
   dram_ctrl_interleave_t [NumL2Channel-1:0] temp_dram_info_aw, temp_dram_info_ar;
 
   // DRAMSys address scrambling
-  for (genvar ch = 0; ch < NumClusterAxiSlv; ch ++) begin : gen_dram_scrambler
+  for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_dram_scrambler
     always_comb begin
       // automatic logic [31:0] temp_addr_aw, temp_addr_ar;
       axi_dram_req[ch]         = axi_from_cluster_req[ch];
@@ -322,6 +323,7 @@ module tb_cachepool;
       .AxiDataWidth ( SpatzAxiDataWidth         ),
       .AxiIdWidth   ( SpatzAxiIdOutWidth        ),
       .AxiUserWidth ( SpatzAxiUserWidth         ),
+      .DEBUG        ( (mem == 2) ),
       .axi_req_t    ( spatz_axi_out_req_t       ),
       .axi_resp_t   ( spatz_axi_out_resp_t      ),
       .axi_ar_t     ( spatz_axi_out_ar_chan_t   ),
