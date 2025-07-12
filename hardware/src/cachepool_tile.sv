@@ -146,8 +146,6 @@ module cachepool_tile
     output axi_narrow_req_t                    axi_out_req_o,
     input  axi_narrow_resp_t                   axi_out_resp_i,
     /// AXI Cache Refill ports
-    // output axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_o,
-    // input  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_i,
     output cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req_o,
     input  cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
@@ -421,10 +419,6 @@ module cachepool_tile
   axi_mst_dma_resp_t [NrWideMasters-1:0] wide_axi_mst_rsp;
   axi_slv_dma_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
   axi_slv_dma_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
-
-  // axi refill ports from cache before scrambling (adding back cachebank ID)
-  axi_out_req_t  [NumL1CacheCtrl-1:0] axi_cache_req_prescrambled;
-  axi_out_resp_t [NumL1CacheCtrl-1:0] axi_cache_rsp_prescrambled;
 
   // 3. Memory Subsystem (Interconnect)
   tcdm_dma_req_t ext_dma_req;
@@ -763,7 +757,7 @@ module cachepool_tile
   logic                   [NumL1CacheCtrl-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
 
   for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin: gen_l1_cache_ctrl
-    flamingo_spatz_cache_ctrl #(
+    cachepool_cache_ctrl #(
       // Core
       .NumPorts         (NrTCDMPortsPerCore ),
       .CoalExtFactor    (L1CoalFactor       ),
@@ -861,8 +855,9 @@ module cachepool_tile
         default : '0
       };
 
+      // ID 0 reserved for bypass cache
       cache_refill_req_o[cb].q.user = '{
-        bank_id : cb,
+        bank_id : cb + 1,
         info    : cache_refill_req[cb].info,
         default : '0
       };

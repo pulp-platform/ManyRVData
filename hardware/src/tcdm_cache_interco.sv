@@ -54,75 +54,53 @@ module tcdm_cache_interco #(
   localparam int unsigned NumMemSelBits  = $clog2(NumCache);
   localparam int unsigned NumCoreSelBits = $clog2(NumCore);
 
-  typedef logic [NumMemSelBits-1 :0] mem_sel_t;
-  typedef logic [NumCoreSelBits-1:0] core_sel_t;
+  typedef logic [NumCoreSelBits-1:0] mem_sel_t;
+  typedef logic [NumMemSelBits-1 :0] core_sel_t;
 
   // core select which cache bank to go
-  core_sel_t [NumCore-1:0]   core_req_sel;
-  mem_sel_t  [NumCache -1:0] mem_rsp_sel;
+  core_sel_t [NumCore-1 :0] core_req_sel;
+  mem_sel_t  [NumCache-1:0] mem_rsp_sel;
 
   // Number of bits used to identify the cache bank
   localparam int unsigned CacheBankBits  = $clog2(NumCore);
 
-  tcdm_req_chan_t [NumCore-1:0]   core_req;
-  logic           [NumCore-1:0]   core_req_valid, core_req_ready;
+  tcdm_req_chan_t [NumCore-1:0]  core_req;
+  logic           [NumCore-1:0]  core_req_valid, core_req_ready;
 
-  tcdm_req_chan_t [NumCache -1:0] mem_req;
-  logic           [NumCache -1:0] mem_req_valid, mem_req_ready;
+  tcdm_req_chan_t [NumCache-1:0] mem_req;
+  logic           [NumCache-1:0] mem_req_valid, mem_req_ready;
 
-  tcdm_rsp_chan_t [NumCore-1:0]   core_rsp;
-  logic           [NumCore-1:0]   core_rsp_valid, core_rsp_ready;
+  tcdm_rsp_chan_t [NumCore-1:0]  core_rsp;
+  logic           [NumCore-1:0]  core_rsp_valid, core_rsp_ready;
 
-  tcdm_rsp_chan_t [NumCache -1:0] mem_rsp;
-  logic           [NumCache -1:0] mem_rsp_valid, mem_rsp_ready;
+  tcdm_rsp_chan_t [NumCache-1:0] mem_rsp;
+  logic           [NumCache-1:0] mem_rsp_valid, mem_rsp_ready;
 
 
-  // --------
-  // Xbar
-  // --------
-
-  stream_xbar #(
-    .NumInp      (NumCore         ),
-    .NumOut      (NumCache        ),
-    .payload_t   (tcdm_req_chan_t )
-  ) i_req_xbar (
-    .clk_i  (clk_i            ),
-    .rst_ni (rst_ni           ),
-    .flush_i(1'b0             ),
-    // External priority flag
-    .rr_i   ('0               ),
-    // Master
-    .data_i (core_req         ),
-    .valid_i(core_req_valid   ),
-    .ready_o(core_req_ready   ),
-    .sel_i  (core_req_sel     ),
-    // Slave
-    .data_o (mem_req          ),
-    .valid_o(mem_req_valid    ),
-    .ready_i(mem_req_ready    ),
-    .idx_o  (/* Unused */     )
-  );
-
-  stream_xbar #(
-    .NumInp       (NumCache        ),
-    .NumOut       (NumCore         ),
-    .payload_t    (tcdm_rsp_chan_t )
-  ) i_rsp_xbar (
-    .clk_i  (clk_i            ),
-    .rst_ni (rst_ni           ),
-    .flush_i(1'b0             ),
-    // External priority flag
-    .rr_i   ('0               ),
-    // Master
-    .data_i (mem_rsp          ),
-    .valid_i(mem_rsp_valid    ),
-    .ready_o(mem_rsp_ready    ),
-    .sel_i  (mem_rsp_sel      ),
-    // Slave
-    .data_o (core_rsp         ),
-    .valid_o(core_rsp_valid   ),
-    .ready_i(core_rsp_ready   ),
-    .idx_o  (/* Unused */     )
+  reqrsp_xbar #(
+    .NumInp           (NumCore          ),
+    .NumOut           (NumCache         ),
+    .PipeReg          (1'b0             ),
+    .tcdm_req_chan_t  (tcdm_req_chan_t  ),
+    .tcdm_rsp_chan_t  (tcdm_rsp_chan_t  )
+  ) i_cache_xbar (
+    .clk_i            (clk_i            ),
+    .rst_ni           (rst_ni           ),
+    .slv_req_i        (core_req         ),
+    .slv_req_valid_i  (core_req_valid   ),
+    .slv_req_ready_o  (core_req_ready   ),
+    .slv_rsp_o        (core_rsp         ),
+    .slv_rsp_valid_o  (core_rsp_valid   ),
+    .slv_rsp_ready_i  (core_rsp_ready   ),
+    .slv_sel_i        (core_req_sel     ),
+    .slv_selected_o   ( /* unused */    ),
+    .mst_req_o        (mem_req          ),
+    .mst_req_valid_o  (mem_req_valid    ),
+    .mst_req_ready_i  (mem_req_ready    ),
+    .mst_rsp_i        (mem_rsp          ),
+    .mst_rsp_valid_i  (mem_rsp_valid    ),
+    .mst_rsp_ready_o  (mem_rsp_ready    ),
+    .mst_sel_i        (mem_rsp_sel      )
   );
 
   // --------

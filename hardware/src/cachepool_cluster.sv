@@ -218,8 +218,6 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  axi_mst_cache_req_t  [NumTiles*NumL1CacheCtrl  -1 :0] axi_cache_req;
-  axi_mst_cache_resp_t [NumTiles*NumL1CacheCtrl  -1 :0] axi_cache_rsp;
   axi_mst_cache_req_t  [NumTiles*NumTileWideAxi  -1 :0] axi_tile_req;
   axi_mst_cache_resp_t [NumTiles*NumTileWideAxi  -1 :0] axi_tile_rsp;
   axi_slv_cache_req_t  [NumTiles*NumClusterSlv-1 :0] wide_axi_slv_req;
@@ -244,9 +242,6 @@ module cachepool_cluster
 
   cache_trans_req_t [NumTiles-1               :0] cache_core_req;
   cache_trans_rsp_t [NumTiles-1               :0] cache_core_rsp;
-
-  cache_trans_req_t [NumTiles*NumClusterMst-1 :0] tile_req;
-  cache_trans_rsp_t [NumTiles*NumClusterMst-1 :0] tile_rsp;
 
   cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
   cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
@@ -326,113 +321,189 @@ module cachepool_cluster
       .axi_in_resp_o            ( axi_in_resp_o[t]         ),
       .axi_out_req_o            ( axi_out_req[t]           ),
       .axi_out_resp_i           ( axi_out_resp[t]          ),
-      // AXI Master Port
-      // .axi_cache_req_o          ( axi_cache_req[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
-      // .axi_cache_rsp_i          ( axi_cache_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl] ),
+      // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
       .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
       .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi] ),
       .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi] )
     );
 
-    for (genvar port= 0; port < NumL1CacheCtrl; port ++) begin: gen_reqrsp2axi_cache
-      reqrsp_to_axi #(
-        .MaxTrans           (32),
-        .ID                 (port),
-        .UserWidth       ($bits(refill_user_t)),
-        .ReqUserFallThrough (1'b0),
-        .DataWidth          (AxiDataWidth),
-        .AxiUserWidth       (AxiUserWidth),
-        .reqrsp_req_t       (cache_trans_req_t),
-        .reqrsp_rsp_t       (cache_trans_rsp_t),
-        .axi_req_t          (axi_mst_cache_req_t),
-        .axi_rsp_t          (axi_mst_cache_resp_t)
-      ) i_reqrsp2axi  (
-        .clk_i        (clk_i),
-        .rst_ni       (rst_ni),
-        .user_i       ('0),
-        .reqrsp_req_i (cache_refill_req[t*NumL1CacheCtrl+port]),
-        .reqrsp_rsp_o (cache_refill_rsp[t*NumL1CacheCtrl+port]),
-        .axi_req_o    (axi_cache_req[t*NumL1CacheCtrl+port]),
-        .axi_rsp_i    (axi_cache_rsp[t*NumL1CacheCtrl+port])
-      );
+    axi_to_reqrsp #(
+      .axi_req_t    (axi_mst_cache_req_t        ),
+      .axi_rsp_t    (axi_mst_cache_resp_t       ),
+      .AddrWidth    (AxiAddrWidth               ),
+      .DataWidth    (AxiDataWidth               ),
+      .UserWidth    ($bits(refill_user_t)       ),
+      .IdWidth      (AxiIdWidthIn               ),
+      .BufDepth     (NumSpatzOutstandingLoads[0]),
+      .reqrsp_req_t (cache_trans_req_t          ),
+      .reqrsp_rsp_t (cache_trans_rsp_t          )
+    ) i_axi2reqrsp  (
+      .clk_i        (clk_i                                  ),
+      .rst_ni       (rst_ni                                 ),
+      .busy_o       (                                       ),
+      .axi_req_i    (axi_tile_req [t*NumTileWideAxi+TileMem]),
+      .axi_rsp_o    (axi_tile_rsp [t*NumTileWideAxi+TileMem]),
+      .reqrsp_req_o (cache_core_req[t]                      ),
+      .reqrsp_rsp_i (cache_core_rsp[t]                      )
+    );
+  end
+
+  for (genvar t = 0; t < NumTiles; t++) begin
+    // Cache Bypass requests
+    always_comb begin
+      tile_req_chan [t*NumTiles]      = cache_core_req[t].q;
+      // Scrmable address
+      tile_req_chan [t*NumTiles].addr = scrambleAddr(cache_core_req[t].q.addr);
+      tile_req_valid[t*NumTiles]      = cache_core_req[t].q_valid;
+      cache_core_rsp[t].q_ready       = tile_req_ready[t*NumTiles];
+
+      cache_core_rsp[t].p             = tile_rsp_chan [t*NumTiles];
+      cache_core_rsp[t].p_valid       = tile_rsp_valid[t*NumTiles];
+      tile_rsp_ready[t*NumTiles]      = cache_core_req[t].p_ready;
+
+      // Normal Cache requests
+      for (int p = 0; p < NumL1CacheCtrl; p++) begin
+        tile_req_chan [t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].q;
+        // Scramble address
+        tile_req_chan [t*NumTiles+p+1].addr    = scrambleAddr(cache_refill_req[t*NumTiles+p].q.addr);
+        tile_req_valid[t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].q_valid;
+        cache_refill_rsp[t*NumTiles+p].q_ready = tile_req_ready[t*NumTiles+p+1];
+
+        cache_refill_rsp[t*NumTiles+p].p       = tile_rsp_chan [t*NumTiles+p+1];
+        cache_refill_rsp[t*NumTiles+p].p_valid = tile_rsp_valid[t*NumTiles+p+1];
+        tile_rsp_ready[t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].p_ready;
+      end
     end
   end
-  logic       [CacheXbarCfg.NoSlvPorts-1:0][$clog2(CacheXbarCfg.NoMstPorts)-1:0] cache_xbar_default_port;
-  xbar_rule_t [CacheXbarCfg.NoAddrRules-1:0]                                     cache_xbar_rule;
 
-  assign cache_xbar_default_port = '{default: L2Channel3};
+  typedef struct packed {
+    int unsigned idx;
+    logic [AxiAddrWidth-1:0] base;
+    logic [AxiAddrWidth-1:0] mask;
+  } reqrsp_rule_t;
 
-  for (genvar ch = 0; ch < CacheXbarCfg.NoAddrRules; ch ++) begin : gen_cache_refill_xbar_rule
-    assign cache_xbar_rule[ch] = '{
-      idx       : ch,
-      start_addr: DramAddr + DramPerChSize * ch,
-      end_addr  : DramAddr + DramPerChSize * (ch+1)
+  reqrsp_rule_t [NumClusterSlv-2:0] xbar_rule;
+
+  for (genvar i = 0; i < NumClusterSlv-1; i ++) begin
+    assign xbar_rule[i] = '{
+      idx  : i,
+      base : DramAddr + DramPerChSize * i,
+      mask : ({AxiAddrWidth{1'b1}} << $clog2(DramPerChSize))
     };
   end
 
-  // Address scrambling for Dram Channels
-  axi_mst_cache_req_t [NumClusterMst-1:0] wide_axi_mst_req_prescramble, wide_axi_mst_req_postscramble;
+  logic [$clog2(NumClusterSlv)-1:0] default_idx;
+  assign default_idx = (NumClusterSlv-1);
+
+  for (genvar inp = 0; inp < NumClusterMst*NumTiles; inp ++) begin : gen_xbar_sel
+    addr_decode_napot #(
+      .NoIndices (NumClusterSlv   ),
+      .NoRules   (NumClusterSlv-1      ),
+      .addr_t    (axi_addr_t    ),
+      .rule_t    (reqrsp_rule_t )
+    ) i_snitch_decode_napot (
+      .addr_i           (tile_req_chan[inp].addr),
+      .addr_map_i       (xbar_rule              ),
+      .idx_o            (tile_sel[inp]          ),
+      .dec_valid_o      (/* Unused */           ),
+      .dec_error_o      (/* Unused */           ),
+      .en_default_idx_i (1'b1                   ),
+      .default_idx_i    (default_idx            )
+    );
+  end
+
+  reqrsp_xbar #(
+    .NumInp           (NumClusterMst*NumTiles ),
+    .NumOut           (NumClusterSlv          ),
+    .PipeReg          (1'b1             ),
+    .tcdm_req_chan_t  (cache_trans_req_chan_t  ),
+    .tcdm_rsp_chan_t  (cache_trans_rsp_chan_t  )
+  ) i_cluster_xbar (
+    .clk_i            (clk_i            ),
+    .rst_ni           (rst_ni           ),
+    .slv_req_i        (tile_req_chan    ),
+    .slv_req_valid_i  (tile_req_valid   ),
+    .slv_req_ready_o  (tile_req_ready   ),
+    .slv_rsp_o        (tile_rsp_chan    ),
+    .slv_rsp_valid_o  (tile_rsp_valid   ),
+    .slv_rsp_ready_i  (tile_rsp_ready   ),
+    .slv_sel_i        (tile_sel         ),
+    .slv_selected_o   (tile_selected    ),
+    .mst_req_o        (l2_req_chan      ),
+    .mst_req_valid_o  (l2_req_valid     ),
+    .mst_req_ready_i  (l2_req_ready     ),
+    .mst_rsp_i        (l2_rsp_chan      ),
+    .mst_rsp_valid_i  (l2_rsp_valid     ),
+    .mst_rsp_ready_o  (l2_rsp_ready     ),
+    .mst_sel_i        (l2_sel           )
+  );
+
+  for (genvar ch = 0; ch < NumClusterSlv; ch++) begin
+    // To L2 Channels
+    always_comb begin
+      l2_req[ch].q       = '{
+        addr : l2_req_chan[ch].addr,
+        write: l2_req_chan[ch].write,
+        amo  : l2_req_chan[ch].amo,
+        data : l2_req_chan[ch].data,
+        strb : l2_req_chan[ch].strb,
+        size : l2_req_chan[ch].size,
+        default: '0
+      };
+      l2_req[ch].q.user  = '{
+        bank_id: l2_req_chan[ch].user.bank_id,
+        info:    l2_req_chan[ch].user.info,
+        // xbar_id: tile_selected[ch],
+        default: '0
+      };
+      l2_req[ch].q_valid = l2_req_valid[ch] ;
+      l2_req_ready[ch]   = l2_rsp[ch].q_ready;
+
+      l2_rsp_chan [ch]   = '{
+        data : l2_rsp[ch].p.data,
+        error: l2_rsp[ch].p.error,
+        write: l2_rsp[ch].p.write,
+        default: '0
+      };
+      l2_rsp_chan [ch].user = '{
+        bank_id: l2_rsp[ch].p.user.bank_id,
+        info   : l2_rsp[ch].p.user.info,
+        default: '0
+      };
+      l2_rsp_valid[ch]   = l2_rsp[ch].p_valid;
+      l2_req[ch].p_ready = l2_rsp_ready[ch];
+      l2_sel[ch]         = l2_rsp[ch].p.user.bank_id;
+    end
+  end
+
+  for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_output_axi
+    reqrsp_to_axi #(
+      .MaxTrans           (NumSpatzOutstandingLoads[0]),
+      .ID                 (ch                         ),
+      .ShuffleId          (0                          ),
+      .UserWidth          ($bits(l2_user_t)           ),
+      .ReqUserFallThrough (1'b0                       ),
+      .DataWidth          (AxiDataWidth               ),
+      .AxiUserWidth       (AxiUserWidth               ),
+      .reqrsp_req_t       (l2_req_t                   ),
+      .reqrsp_rsp_t       (l2_rsp_t                   ),
+      .axi_req_t          (axi_slv_cache_req_t        ),
+      .axi_rsp_t          (axi_slv_cache_resp_t       )
+    ) i_reqrsp2axi  (
+      .clk_i        (clk_i                ),
+      .rst_ni       (rst_ni               ),
+      .user_i       ('0                   ),
+      .reqrsp_req_i (l2_req[ch]           ),
+      .reqrsp_rsp_o (l2_rsp[ch]           ),
+      .axi_req_o    (wide_axi_slv_req[ch] ),
+      .axi_rsp_i    (wide_axi_slv_rsp[ch] )
+    );
+  end
 
   // TODO: Add AXI MUX and assign ID correctly here
   assign axi_narrow_req_o = axi_out_req[0];
   assign axi_out_resp[0] = axi_narrow_resp_i;
-
-
-  localparam bit [CacheXbarCfg.NoSlvPorts-1:0] CacheEnDefaultMstPort = '1;
-
-  axi_xbar #(
-    .Cfg           (CacheXbarCfg           ),
-    .ATOPs         (0                      ),
-    .slv_aw_chan_t (axi_mst_cache_aw_chan_t),
-    .mst_aw_chan_t (axi_slv_cache_aw_chan_t),
-    .w_chan_t      (axi_mst_cache_w_chan_t ),
-    .slv_b_chan_t  (axi_mst_cache_b_chan_t ),
-    .mst_b_chan_t  (axi_slv_cache_b_chan_t ),
-    .slv_ar_chan_t (axi_mst_cache_ar_chan_t),
-    .mst_ar_chan_t (axi_slv_cache_ar_chan_t),
-    .slv_r_chan_t  (axi_mst_cache_r_chan_t ),
-    .mst_r_chan_t  (axi_slv_cache_r_chan_t ),
-    .slv_req_t     (axi_mst_cache_req_t    ),
-    .slv_resp_t    (axi_mst_cache_resp_t   ),
-    .mst_req_t     (axi_slv_cache_req_t    ),
-    .mst_resp_t    (axi_slv_cache_resp_t   ),
-    .rule_t        (xbar_rule_t            )
-  ) i_cluster_xbar (
-    .clk_i                 (clk_i                                  ),
-    .rst_ni                (rst_ni                                 ),
-    .test_i                (1'b0                                   ),
-    .slv_ports_req_i       (wide_axi_mst_req_postscramble          ),
-    .slv_ports_resp_o      ({axi_cache_rsp, axi_tile_rsp[TileMem]} ),
-    .mst_ports_req_o       (wide_axi_slv_req                       ),
-    .mst_ports_resp_i      (wide_axi_slv_rsp                       ),
-    .addr_map_i            (cache_xbar_rule                        ),
-    .en_default_mst_port_i (CacheEnDefaultMstPort                  ),
-    .default_mst_port_i    (cache_xbar_default_port                )
-  );
-
-  axi_dumper #(
-    .LogAW      (1'b0),
-    .LogAR      (1'b1),
-    .LogR       (1'b1),
-    .axi_req_t  (axi_slv_cache_req_t),
-    .axi_resp_t (axi_slv_cache_resp_t)
-  ) i_debug_dumper (
-    .clk_i,
-    .rst_ni,
-    .axi_req_i(wide_axi_slv_req[3]),
-    .axi_resp_i(wide_axi_slv_rsp[3])
-  );
-
-  assign wide_axi_mst_req_prescramble = {axi_cache_req, axi_tile_req[TileMem]};
-
-  for (genvar port = 0; port < NumClusterMst; port ++) begin
-    always_comb begin
-      wide_axi_mst_req_postscramble[port]         = wide_axi_mst_req_prescramble[port];
-      wide_axi_mst_req_postscramble[port].aw.addr = scrambleAddr(wide_axi_mst_req_prescramble[port].aw.addr);
-      wide_axi_mst_req_postscramble[port].ar.addr = scrambleAddr(wide_axi_mst_req_prescramble[port].ar.addr);
-    end
-  end
 
   // -------------
   // DMA Subsystem

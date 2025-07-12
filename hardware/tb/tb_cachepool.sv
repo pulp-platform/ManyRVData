@@ -31,7 +31,7 @@ module tb_cachepool;
   import axi_pkg::xbar_cfg_t;
   import axi_pkg::xbar_rule_32_t;
 
-  localparam ClockPeriod = 2ns;
+  localparam ClockPeriod = 2.0ns;
   localparam TA          = 0.1ns;
   localparam TT          = 0.4ns;
 
@@ -323,7 +323,6 @@ module tb_cachepool;
       .AxiDataWidth ( SpatzAxiDataWidth         ),
       .AxiIdWidth   ( SpatzAxiIdOutWidth        ),
       .AxiUserWidth ( SpatzAxiUserWidth         ),
-      .DEBUG        ( (mem == 2) ),
       .axi_req_t    ( spatz_axi_out_req_t       ),
       .axi_resp_t   ( spatz_axi_out_resp_t      ),
       .axi_ar_t     ( spatz_axi_out_ar_chan_t   ),

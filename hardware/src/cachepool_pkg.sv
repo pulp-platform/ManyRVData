@@ -194,7 +194,7 @@ package cachepool_pkg;
   typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 
   typedef logic [$clog2(L1CacheWayEntry)-1:0] cache_ways_entry_ptr_t;
-  typedef logic [$clog2(L1Associativity)-1:0] way_ptr_t;
+  typedef logic [$clog2(L1AssoPerCtrl)-1:0]   way_ptr_t;
 
   typedef struct packed {
       logic                  for_write_pend;
@@ -209,7 +209,7 @@ package cachepool_pkg;
   } tcdm_user_t;
 
   typedef struct packed {
-    logic [BankIDWidth-1:0] bank_id;
+    logic [BankIDWidth:0]   bank_id;
     cache_info_t            info;
   } refill_user_t;
 
@@ -252,7 +252,7 @@ package cachepool_pkg;
 
   // L2 Memory
   localparam int unsigned NumL2Channel        = 4;
-  localparam int unsigned L2BankWidth         = 512;
+  localparam int unsigned L2BankWidth         = 256;
   localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
   parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase            = 32'h8000_0000;
@@ -265,9 +265,8 @@ package cachepool_pkg;
 
   // Additional id for route back
   typedef struct packed {
-    logic [BankIDWidth-1:0]                    bank_id;
+    logic [BankIDWidth:0]                      bank_id;
     cache_info_t                               info;
-    logic [$clog2(NumTiles*NumClusterMst)-1:0] xbar_id;
   } l2_user_t;
 
   `REQRSP_TYPEDEF_ALL (l2,          axi_addr_t, axi_data_t, axi_strb_t, l2_user_t)
@@ -285,7 +284,7 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  parameter int unsigned Interleave  = 16;
+  parameter int unsigned Interleave  = 512;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;

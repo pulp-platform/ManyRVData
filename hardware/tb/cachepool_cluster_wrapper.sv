@@ -127,7 +127,7 @@ module cachepool_cluster_wrapper
     .msip_i                   ({NumCores{msip_i}}),
     .hart_base_id_i           (10'h10),
     .cluster_base_addr_i      (TCDMStartAddr),
-    .cluster_probe_o          ,
+    .cluster_probe_o          (cluster_probe_o),
     .axi_in_req_i             ,
     .axi_in_resp_o            ,
     .axi_narrow_req_o         ,
@@ -152,11 +152,25 @@ module cachepool_cluster_wrapper
   `FF (axi_aw_valid_cnt_q, axi_aw_valid_cnt_d, '0)
   `FF (axi_aw_trans_cnt_q, axi_aw_trans_cnt_d, '0)
 
+  // number of cycles inside kernel
+  cnt_t act_cyc_d, act_cyc_q;
+  cnt_t [NumClusterSlv-1:0] act_ar_trans_cnt_d, act_ar_trans_cnt_q;
+  `FF (act_cyc_q, act_cyc_d, '0)
+  `FF (act_ar_trans_cnt_q, act_ar_trans_cnt_d, '0)
+
+
   always_comb begin : gen_axi_perf_cnt_comb
     axi_ar_valid_cnt_d = axi_ar_valid_cnt_q;
     axi_ar_trans_cnt_d = axi_ar_trans_cnt_q;
     axi_aw_valid_cnt_d = axi_aw_valid_cnt_q;
     axi_aw_trans_cnt_d = axi_aw_trans_cnt_q;
+
+    act_cyc_d = act_cyc_q;
+    act_ar_trans_cnt_d = act_ar_trans_cnt_q;
+
+    if (cluster_probe_o) begin
+      act_cyc_d ++;
+    end
 
     for (int i = 0; i < NumClusterSlv; i++) begin
       if (axi_out_req_o[i].ar_valid) begin
@@ -165,6 +179,9 @@ module cachepool_cluster_wrapper
         if (axi_out_resp_i[i].ar_ready) begin
           // AR valid HS
           axi_ar_trans_cnt_d[i] ++;
+          if (cluster_probe_o) begin
+            act_ar_trans_cnt_d[i] ++;
+          end
         end
       end
 
@@ -176,6 +193,7 @@ module cachepool_cluster_wrapper
           axi_aw_trans_cnt_d[i] ++;
         end
       end
+
     end
   end
 
@@ -195,11 +213,38 @@ module cachepool_cluster_wrapper
     automatic real aw_avg_cyc  = aw_tran_tot == 0 ?
                                  0 : aw_cnt_tot / aw_tran_tot;
 
+
+    automatic real active_cyc  = act_cyc_q;
+    automatic real ar_act_tran = axi_ar_trans_cnt_q[0] + axi_ar_trans_cnt_q[1] + axi_ar_trans_cnt_q[2]+ axi_ar_trans_cnt_q[3];
+    automatic real ar_act_util = active_cyc == 0 ?
+                                0 : 100 * ar_act_tran / active_cyc / 4;
+
+    automatic real ar_act_util0 = active_cyc == 0 ?
+                                  0 : 100 * axi_ar_trans_cnt_q[0]/active_cyc;
+    automatic real ar_act_util1 = active_cyc == 0 ?
+                                  0 : 100 * axi_ar_trans_cnt_q[1]/active_cyc;
+    automatic real ar_act_util2 = active_cyc == 0 ?
+                                  0 : 100 * axi_ar_trans_cnt_q[2]/active_cyc;
+    automatic real ar_act_util3 = active_cyc == 0 ?
+                                  0 : 100 * axi_ar_trans_cnt_q[3]/active_cyc;
+
     $display(" ");
     $display(" ");
     $display("*********************************************************************");
     $display("***            CachePool Off-Chip AXI Utilization Report          ***");
     $display("   ---------------------------------------------------------------   ");
+    $display("   Total Kernel Cycles:              %16d", active_cyc  );
+    $display("   Total AR Trans in Kernel:         %16d", ar_act_tran );
+    $display("   Active AR Utilization:            %16.2f", ar_act_util );
+    $display("   CH0 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[0] );
+    $display("   Active AR Utilization:            %16.2f", ar_act_util0 );
+    $display("   CH1 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[1] );
+    $display("   Active AR Utilization:            %16.2f", ar_act_util1 );
+    $display("   CH2 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[2] );
+    $display("   Active AR Utilization:            %16.2f", ar_act_util2 );
+    $display("   CH3 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[3] );
+    $display("   Active AR Utilization:            %16.2f", ar_act_util3 );
+    $display("                                                       ");
     $display("   Number of AR Valid Cycles:        %16d", ar_cnt_tot  );
     $display("   Number of AR Transaction Counts:  %16d", ar_tran_tot );
     $display("   AR Utilization:                   %16.2f",ar_util    );
