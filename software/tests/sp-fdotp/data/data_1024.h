@@ -21,3 +21,6 @@ static float dotp_B_dram [1024] __attribute__((section(".data"))) = {-1.22478759
 static float dotp_result __attribute__((section(".data"))) = {-17.611276626586914};
 
 
+float result [4] __attribute__((section(".data"))) = {0};
+
+

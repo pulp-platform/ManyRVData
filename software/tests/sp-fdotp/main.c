@@ -25,9 +25,7 @@
 
 float *a;
 float *b;
-float *result;
 
-uint32_t timer = (uint32_t)-1;
 
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
