@@ -77,8 +77,8 @@ package cachepool_pkg;
   localparam int unsigned ByteOffset      = $clog2(BeWidth);
 
   localparam int unsigned ICacheLineWidth = 128;
-  localparam int unsigned ICacheLineCount = 128;
-  localparam int unsigned ICacheSets      = 2;
+  localparam int unsigned ICacheLineCount = 256;
+  localparam int unsigned ICacheSets      = 4;
 
   localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
   localparam int unsigned TCDMSize        = 32'h4000;
