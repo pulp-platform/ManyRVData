@@ -1,0 +1,30 @@
+pc,inst,type,start cycle,end cycle
+80000784,"slli t2, t0, 2",scalar,0,1
+80000788,"add t2, a7, t2",scalar,1,2
+8000078c,"vle32.v v16, (t1)",vector,2,32
+80000790,"vfmacc.vf v0, ft3, v20",vector,3,14
+80000794,"flw ft3, 0(t2)",fp,4,18
+80000798,"vfmacc.vf v4, ft2, v20",vector,8,21
+8000079c,"flw ft2, 128(t2)",fp,9,19
+800007a0,"vfmacc.vf v8, ft1, v20",vector,10,30
+800007a4,"flw ft1, 256(t2)",fp,14,35
+800007a8,"vfmacc.vf v12, ft0, v20",vector,15,37
+800007ac,"flw ft0, 384(t2)",fp,18,49
+800007b0,"addi t1, t1, 256",scalar,19,20
+800007b4,"bgeu t0, s9, 0x80000700",scalar,20,21
+800007b8,"addi t2, t1, -128",scalar,21,22
+800007bc,"vle32.v v20, (t2)",vector,22,48
+800007c0,"slli t2, t0, 2",scalar,23,25
+800007c4,"ori t2, t2, 4",scalar,25,26
+800007c8,"add t2, a7, t2",scalar,26,27
+800007cc,"beqz t0, 0x80000760",scalar,27,28
+800007d0,"vfmacc.vf v0, ft3, v16",vector,28,45
+800007d4,"flw ft3, 0(t2)",fp,29,57
+800007d8,"vfmacc.vf v4, ft2, v16",vector,30,53
+800007dc,"flw ft2, 128(t2)",fp,32,67
+800007e0,"vfmacc.vf v8, ft1, v16",vector,45,61
+800007e4,"flw ft1, 256(t2)",fp,46,77
+800007e8,"vfmacc.vf v12, ft0, v16",vector,50,69
+800007ec,"flw ft0, 384(t2)",fp,51,85
+800007f0,"addi t0, t0, 2",scalar,62,63
+800007f4,"bne t0, s9, 0x80000784",scalar,63,64
