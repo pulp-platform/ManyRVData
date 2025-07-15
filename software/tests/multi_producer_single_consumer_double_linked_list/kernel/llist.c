@@ -40,7 +40,7 @@ void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
     node->prev = rlc_ctx.list.tail;
 
     // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][list_push_back] rlc_ctx.list.tail=0x%x\n", 
+    // printf("[core %u][list_push_back] rlc_ctx.list.tail=0x%x\n",
     //     snrt_cluster_core_idx(), rlc_ctx.list.tail);
     // printf_lock_release(&printf_lock);
     if (rlc_ctx.list.tail != NULL) {
@@ -57,12 +57,12 @@ void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
     rlc_ctx.list.sduNum++;
     rlc_ctx.list.sduBytes += node->data_size;
     timer_body_1 = benchmark_get_cycle();
-    
+
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
     spin_unlock(llist_lock);
     timer_rl_lock_1 = benchmark_get_cycle();
-    
+
     printf_lock_acquire(&printf_lock);
     printf("[core %u][list_push_back] spin_unlock, node=%p, \
         rlc_ctx.list.head=0x%x, rlc_ctx.list.tail=0x%x, ac=%d, bd=%d, rl=%d\n",
@@ -124,7 +124,7 @@ Node *list_pop_front(spinlock_t *llist_lock) {
     }
     timer_body_1 = benchmark_get_cycle();
 
-    
+
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
     spin_unlock(llist_lock);

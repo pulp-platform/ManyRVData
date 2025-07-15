@@ -15,24 +15,28 @@ int main(void) {
     /* Retrieve the core index only once in main */
     const unsigned int core_id = snrt_cluster_core_idx();
 
-    
+
     if (core_id == 0) {
         // Set xbar policy
         uint32_t offset = 31 - __builtin_clz(L1LineWidth);
         l1d_xbar_config(offset); // cacheline interleaving
-        
+
         // Initalize the thread saft printf
         debug_print_lock_init();
-        
+
         // Initialize memory management context
         mm_init();
 
-        // Initialize the linked list for receiving queue
-        list_init(&rlc_ctx.list);
-        
+        // Initialize the RLC context
+        rlc_init(0, 0, &mm_ctx);
+
+        // // Initialize the linked list for receiving queue
+        // list_init(&rlc_ctx.list);
+
         // Initialize locks
         mm_lock = 0;
-        llist_lock = 0;
+        tosend_llist_lock = 0;
+        sent_llist_lock = 0;
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);
@@ -49,6 +53,6 @@ int main(void) {
     printf_lock_release(&printf_lock);
 
     rlc_start(core_id);
-    
+
     return 0;
 }

@@ -16,7 +16,7 @@
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { }
+    while (__sync_lock_test_and_set(lock, 1)) { delay(100); }
 }
 
 static inline void pdcp_pkg_lock_release(volatile int *lock) {
@@ -24,6 +24,33 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
+}
+
+void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t *mm_ctx) {
+    rlc_ctx.rlcId = rlcId;
+    rlc_ctx.cellId = cellId;
+    rlc_ctx.pollPdu = 32;
+    rlc_ctx.pollByte = 25000;
+    rlc_ctx.pduWithoutPoll = 0;
+    rlc_ctx.byteWithoutPoll = 0;
+    rlc_ctx.vtNextAck = 0;
+    rlc_ctx.vtNext = 0;
+
+    // Initialize the linked lists
+    list_init(&rlc_ctx.list);
+    list_init(&rlc_ctx.sent_list);
+
+    // Set the memory management context
+    rlc_ctx.mm_ctx = mm_ctx;
+
+    // Initialize PDCP package pointer and lock
+    pdcp_pkd_ptr = 0;
+    pdcp_pkd_ptr_lock = 0;
+
+    // printf_lock_acquire(&printf_lock);
+    // printf("[core %u][rlc_init] RLC context initialized for RLC ID %u, Cell ID %u\n",
+    //        snrt_cluster_core_idx(), rlcId, cellId);
+    // printf_lock_release(&printf_lock);
 }
 
 int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
@@ -63,7 +90,7 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
     return pkg_ptr; // Return the package pointer
 }
 
-/* 
+/*
    Each allocation is a fixed-size page (PAGE_SIZE bytes).
    The Node structure is placed at the beginning of the page and the remaining
    space is used for payload. Thus, available payload size is:
@@ -73,7 +100,7 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
 /* Consumer behavior (runs on core 0) */
 static void consumer(const unsigned int core_id) {
     while (1) {
-        Node *node = list_pop_front(&llist_lock);
+        Node *node = list_pop_front(&tosend_llist_lock);
         if (node != 0) {
 
             printf_lock_acquire(&printf_lock);
@@ -90,8 +117,11 @@ static void consumer(const unsigned int core_id) {
             // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
             // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
             // vector_memcpy32_1360B_opt(node->tgt, node->data);
-            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, 0);
+            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, rlc_ctx.vtNext);
             timer_mv_1 = benchmark_get_cycle();
+
+            // Increment the next available RLC sequence number
+            rlc_ctx.vtNext++;
 
             printf_lock_acquire(&printf_lock);
             printf("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
@@ -132,7 +162,7 @@ static void producer(const unsigned int core_id) {
             delay(200);  /* Delay before retrying */
             continue;
         }
-    
+
         uint32_t timer_body_0, timer_body_1;
 
         timer_body_0 = benchmark_get_cycle();
@@ -161,7 +191,7 @@ static void producer(const unsigned int core_id) {
         // /* Zero-initialize the payload using our custom mm_memset */
         // mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
-        list_push_back(&llist_lock, node);
+        list_push_back(&tosend_llist_lock, node);
 
         printf_lock_acquire(&printf_lock);
         printf("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
@@ -171,7 +201,7 @@ static void producer(const unsigned int core_id) {
             node->data,
             node->tgt);
         printf_lock_release(&printf_lock);
-        
+
         // Get the pointer to the next PDCP package
         new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
         // delay(200);  /* Delay between node productions */
