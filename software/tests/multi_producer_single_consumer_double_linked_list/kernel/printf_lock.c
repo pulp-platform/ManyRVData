@@ -8,7 +8,7 @@
 
 /* Spinlock acquire/release helpers */
 static inline void printf_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { delay((snrt_cluster_core_idx()+1)*10); }
+    while (__sync_lock_test_and_set(lock, 1)) { delay((snrt_cluster_core_idx()+1)*20); }
 }
 
 static inline void printf_lock_release(volatile int *lock) {
