@@ -585,3 +585,116 @@ vector_memcpy32_m8_m4_general_opt(void*       dst,
       }
     }
 }
+
+
+
+void __attribute__((noinline)) vector_memcpy32_1360B_opt(void* dst,
+                                                     const void* src) {
+  uint32_t* d32 = (uint32_t*)dst;
+  const uint32_t* s32 = (const uint32_t*)src;
+
+  const size_t word_size       = sizeof(uint32_t);
+  const size_t VLEN_BITS       = 512;
+  const size_t M               = 8;
+  const size_t elems_per_vreg  = (VLEN_BITS * M) / (8 * word_size); // 4096/32 = 128
+  const size_t big_regs        = 2;                                 // v0,8,16,24, only use v0,8
+  const size_t big_chunk_words = elems_per_vreg * big_regs;         // 128*4 = 512 words
+  const size_t body_len_bytes  = 1350; // 1350 bytes payload
+  const size_t header_len_bytes = 10;  // 10 bytes header
+  const size_t len_bytes = body_len_bytes + header_len_bytes; // 1360 bytes total
+  size_t vl, avl;
+
+  size_t word_count = len_bytes / word_size;
+
+  // Load
+  // 1. Big unrolled chunks, multiple of 1024 bytes
+  avl = 128; // load 128 words, 512 bytes per vle, 1024 bytes in total
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+  // printf_lock_acquire(&printf_lock);
+  // printf("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
+  //     snrt_cluster_core_idx(),
+  //     vl, avl, copied, word_count, copied * word_size, len_bytes);
+  // printf_lock_release(&printf_lock);
+
+  asm volatile("vle32.v v0,  (%0)" :: "r"(s32 + 0*elems_per_vreg));
+  asm volatile("vle32.v v8,  (%0)" :: "r"(s32 + 1*elems_per_vreg));
+
+  // 2. Medium smaller vector chunks, rest 1350 + 10 - 1024 = 336 bytes
+  avl = 84; // load 84 words, 336 bytes
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  asm volatile("vle32.v v16, (%0)" :: "r"(s32 + 2*elems_per_vreg));
+
+  // Store
+  avl = 84; // store 84 words, 336 bytes
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  asm volatile("vse32.v v16, (%0)" :: "r"(d32 + 2*elems_per_vreg));
+
+  avl = 128; // store 128 words, 512 bytes per vle, 1024 bytes in total
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  asm volatile("vse32.v v0,  (%0)" :: "r"(d32 + 0*elems_per_vreg));
+  asm volatile("vse32.v v8,  (%0)" :: "r"(d32 + 1*elems_per_vreg));
+}
+
+
+void __attribute__((noinline)) vector_memcpy32_1360B_opt_with_header(void* dst,
+                                                     const void* src,
+                                                     uint32_t SN) {
+  uint32_t* d32 = (uint32_t*)dst;
+  const uint32_t* s32 = (const uint32_t*)src;
+
+  const size_t word_size       = sizeof(uint32_t);
+  const size_t VLEN_BITS       = 512;
+  const size_t M               = 8;
+  const size_t elems_per_vreg  = (VLEN_BITS * M) / (8 * word_size); // 4096/32 = 128
+  const size_t big_regs        = 2;                                 // v0,8,16,24, only use v0,8
+  const size_t big_chunk_words = elems_per_vreg * big_regs;         // 128*4 = 512 words
+  const size_t body_len_bytes  = 1350; // 1350 bytes payload
+  const size_t header_len_bytes = 10;  // 10 bytes header
+  const size_t len_bytes = body_len_bytes + header_len_bytes; // 1360 bytes total
+  size_t vl, avl;
+
+  size_t word_count = len_bytes / word_size;
+
+  // printf_lock_acquire(&printf_lock);
+  // printf("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n",
+  //     snrt_cluster_core_idx(),
+  //     vl, avl, copied, word_count, copied * word_size, len_bytes);
+  // printf_lock_release(&printf_lock);
+
+  // Load
+  // 1. Medium smaller vector chunks, leading 336 bytes
+  avl = 84; // load 84 words, 336 bytes
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  asm volatile("vle32.v v16, (%0)" :: "r"(s32));
+
+  // 2. Big unrolled chunks, rest 1024 bytes
+  avl = 128; // load 128 words, 512 bytes per vle, 1024 bytes in total
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+  // the 84 is the first 84 bytes, the 4 byte is to overlap that part with the first load,
+  // so that we can right shift the first load with 1 word (4 bytes) to add RLC header
+  asm volatile("vle32.v v0,  (%0)" :: "r"(s32 + 84 -1 + 0*elems_per_vreg));
+  asm volatile("vle32.v v8,  (%0)" :: "r"(s32 + 84 -1 + 1*elems_per_vreg));
+
+  // Add header
+  // 3. Right shift the first load by 1 word (4 bytes) to add RLC header
+  asm volatile("vslideup.vi v24, v16, 1"); // right shift by 1 word (4 bytes)
+
+  // 4. Load a scalar value (SN) into a vector register
+  asm volatile("vmv.s.x v24, %0" :: "r"(SN)); // move scalar SN into v24
+  // asm volatile("vor.vv v16, v16, v24"); // bitwise OR, put the SN as the header
+
+  // Store
+  // 5. Medium smaller vector chunks, leading 336 bytes
+  avl = 84; // store 84 words, 336 bytes
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  asm volatile("vse32.v v24, (%0)" :: "r"(d32));
+
+  // 6. Big unrolled chunks, rest 1024 bytes
+  avl = 128; // store 128 words, 512 bytes per vle, 1024 bytes in total
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+  // no need to left shift 1 word here, as we already right shifted the first load
+  asm volatile("vse32.v v0,  (%0)" :: "r"(d32 + 84 + 0*elems_per_vreg));
+  asm volatile("vse32.v v8,  (%0)" :: "r"(d32 + 84 + 1*elems_per_vreg));
+}

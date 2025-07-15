@@ -86,9 +86,11 @@ static void consumer(const unsigned int core_id) {
             uint32_t timer_mv_0, timer_mv_1;
             timer_mv_0 = benchmark_get_cycle();
             // vector_memcpy32_m4_opt(node->tgt, node->data, node->data_size);
-            vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
+            // vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
             // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
             // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
+            // vector_memcpy32_1360B_opt(node->tgt, node->data);
+            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, 0);
             timer_mv_1 = benchmark_get_cycle();
 
             printf_lock_acquire(&printf_lock);
