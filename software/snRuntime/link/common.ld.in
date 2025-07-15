@@ -138,4 +138,11 @@ SECTIONS
     KEEP(*(.pdcp_src))
     _epdcp_src = .;    /* optional: mark end of pdcp_src */
   } > UNCACHED_REGION
+
+  /* PDCP‐PDU source data end, linked at src_addr */
+  .pdcp_src_end 0xA1000000 :  /* replace with your src_addr */
+  {
+    KEEP(*(.pdcp_src_end))
+    _epdcp_src_end = .;    /* optional: mark end of pdcp_src_end */
+  } > UNCACHED_REGION
 }

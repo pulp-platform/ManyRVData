@@ -12,8 +12,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-// #include "../data/data_1_1350_1000.h"
-#include "../data/data_1_2044_100.h"
+#include "../data/data_1_1350_100.h"
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
