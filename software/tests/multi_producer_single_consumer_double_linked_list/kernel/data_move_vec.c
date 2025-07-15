@@ -192,18 +192,18 @@ void __attribute__((noinline)) vector_memcpy32_m8_opt(void* dst,
   size_t word_count = len_bytes / word_size;
   size_t copied     = 0;
 
-  // 1. Big unrolled chunks
+  // 1. Big unrolled chunks, multiple of 2048 bytes (512 words)
   while (word_count - copied >= big_chunk_words) {
     avl = big_chunk_words;
     asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
     asm volatile("vle32.v v0,  (%0)" :: "r"(s32 + copied + 0*elems_per_vreg));
     asm volatile("vle32.v v8,  (%0)" :: "r"(s32 + copied + 1*elems_per_vreg));
-    asm volatile("vle32.v v16, (%0)" :: "r"(s32 + copied + 2*elems_per_vreg));
-    asm volatile("vle32.v v24, (%0)" :: "r"(s32 + copied + 3*elems_per_vreg));
-
     asm volatile("vse32.v v0,  (%0)" :: "r"(d32 + copied + 0*elems_per_vreg));
     asm volatile("vse32.v v8,  (%0)" :: "r"(d32 + copied + 1*elems_per_vreg));
+
+    asm volatile("vle32.v v16, (%0)" :: "r"(s32 + copied + 2*elems_per_vreg));
+    asm volatile("vle32.v v24, (%0)" :: "r"(s32 + copied + 3*elems_per_vreg));
     asm volatile("vse32.v v16, (%0)" :: "r"(d32 + copied + 2*elems_per_vreg));
     asm volatile("vse32.v v24, (%0)" :: "r"(d32 + copied + 3*elems_per_vreg));
 
