@@ -54,5 +54,8 @@ int main(void) {
 
     rlc_start(core_id);
 
+    // Wait for all cores to finish
+    snrt_cluster_hw_barrier();
+
     return 0;
 }
