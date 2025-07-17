@@ -59,6 +59,10 @@ DPI_LIB               ?= work-dpi
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
 CACHE_PATH            := $(shell $(BENDER) path insitu-cache)
 
+## SpyGlass
+LINT_PATH 						?= ${CACHEPOOL_DIR}/util/lint
+SNPS_SG 							?= spyglass-2022.06
+
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/cfg
 CFG                   ?= cachepool.hjson
@@ -357,6 +361,21 @@ vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
 .PHONY: clean
 clean: clean.sw clean.vsim
+
+
+############
+# SPYGLASS #
+############
+
+SNPS_SG ?= spyglass-2024.09
+
+.PHONY: lint ${LINT_PATH}/tmp/files
+lint: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/lint.tcl
+	cd ${LINT_PATH} && $(SNPS_SG) sg_shell -tcl ${LINT_PATH}/script/lint.tcl
+
+${LINT_PATH}/tmp/files: ${BENDER}
+	mkdir -p ${LINT_PATH}/tmp
+	${BENDER} script verilator -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
 
 ########
 # Help #

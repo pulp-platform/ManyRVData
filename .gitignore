@@ -30,3 +30,5 @@ logs
 bin
 hardware/deps/*
 *.tdb
+util/lint/sg_projects
+util/lint/tmp
