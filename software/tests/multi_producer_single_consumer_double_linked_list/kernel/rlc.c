@@ -12,7 +12,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_100.h"
+#include "../data/data_1_1350_10.h"
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
@@ -139,10 +139,19 @@ static void consumer(const unsigned int core_id) {
 
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
+    printf_lock_acquire(&printf_lock);
+    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[6][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
+        core_id,
+        pdcp_src_data[0][0],
+        pdcp_src_data[6][500],
+        NUM_SRC_SLOTS,
+        PDU_SIZE,
+        pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1]);
+    printf_lock_release(&printf_lock);
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
     while (new_pdcp_pkg_ptr >= 0) {
         printf_lock_acquire(&printf_lock);
-        printf("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
+        printf("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
             core_id,
             new_pdcp_pkg_ptr,
             pdcp_pkgs[new_pdcp_pkg_ptr].user_id,

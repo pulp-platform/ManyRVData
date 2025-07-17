@@ -73,6 +73,10 @@ def parse_args():
                         help='JSON config file (default: pdcp_pkg.json)')
     parser.add_argument('-o', '--output',
                         help='Output header file (default: ../data/data_<users>_<len>_<pkgs>.h)')
+    parser.add_argument('-f', '--fill-zero',
+                        help='Fill unused slots with zeroes (default: True)', action='store_true', default=True)
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Optional seed for random generator for reproducibility')
     return parser.parse_args()
 
 
@@ -90,6 +94,9 @@ def main():
     except Exception as e:
         print(f"Error loading config: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Seed randomness
+    random.seed(args.seed)
 
     # parse parameters
     active_users = int(cfg['active_user_number'])
@@ -129,7 +136,9 @@ def main():
 
     # write header
     with open(out_path, 'w') as h:
+        # license
         h.write(LICENSE_HEADER + '\n')
+        # include guard
         h.write('#ifndef PDCP_PKG_H\n')
         h.write('#define PDCP_PKG_H\n\n')
 
@@ -146,7 +155,7 @@ def main():
         h.write(f'#define PDU_SIZE      {pdu_size}\n')
         h.write(f'#define NUM_PKGS      {num_pkgs}\n\n')
 
-        # metadata in .pdcp_src
+        # metadata in .pdcp_info
         h.write('static const pdcp_pkg_t __attribute__((section(".pdcp_info"))) pdcp_pkgs[NUM_PKGS] = {\n')
         for uid, s, t, plen in entries:
             h.write(f'    {{ {uid}, 0x{s:08X}, 0x{t:08X}, {plen} }},\n')
@@ -156,11 +165,19 @@ def main():
         h.write('static const uint8_t __attribute__((section(".pdcp_src"))) '
                'pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE] = {\n')
         for slot in range(num_src_slots):
-            if any(pdu_buf[slot]):
+            if args.fill_zero:
                 row = ', '.join(f'0x{b:02X}' for b in pdu_buf[slot])
-                h.write(f'    [{slot}] = {{ {row} }},\n')
+                if any(pdu_buf[slot]):
+                    h.write(f'    {{ {row} }}, // [{slot}]\n')
+                else:
+                    h.write(f'    {{ {row} }},\n')
+            else:
+                if any(pdu_buf[slot]):
+                    row = ', '.join(f'0x{b:02X}' for b in pdu_buf[slot])
+                    h.write(f'    [{slot}] = {{ {row} }},\n')
         h.write('};\n\n')
 
+        # end guard
         h.write('#endif // PDCP_PKG_H\n')
 
     print(f"Generated {out_path} ({num_pkgs} pkgs, {num_src_slots} slots)")
