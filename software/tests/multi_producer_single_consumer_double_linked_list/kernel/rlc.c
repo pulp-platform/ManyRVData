@@ -140,10 +140,10 @@ static void consumer(const unsigned int core_id) {
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
     printf_lock_acquire(&printf_lock);
-    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[6][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
+    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
         core_id,
         pdcp_src_data[0][0],
-        pdcp_src_data[6][500],
+        pdcp_src_data[3657][500],
         NUM_SRC_SLOTS,
         PDU_SIZE,
         pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1]);
