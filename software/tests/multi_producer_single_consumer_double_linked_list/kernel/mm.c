@@ -47,7 +47,7 @@ void *mm_alloc() {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_mm_alloc_0, timer_mm_alloc_1;
-    
+
     timer_ac_lock_0 = benchmark_get_cycle();
     mm_lock_acquire(&mm_lock);
     timer_ac_lock_1 = benchmark_get_cycle();
