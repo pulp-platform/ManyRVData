@@ -24,6 +24,7 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
+    delay(10);
 }
 
 void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t *mm_ctx) {

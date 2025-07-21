@@ -8,7 +8,7 @@
 
 /* Spinlock acquire/release helpers */
 static inline void printf_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { delay((snrt_cluster_core_idx()+1)*20); }
+    while (__sync_lock_test_and_set(lock, 1)) { delay(10); }
 }
 
 static inline void printf_lock_release(volatile int *lock) {
@@ -16,6 +16,7 @@ static inline void printf_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
+    delay(10);
  }
 
 

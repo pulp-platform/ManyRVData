@@ -13,7 +13,7 @@ MEMORY
 
 SECTIONS
 {
-  fake_uart              = 0xC0000000;
+  fake_uart              = 0xC0010000;
 }
 
 SECTIONS

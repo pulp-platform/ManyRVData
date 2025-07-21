@@ -19,6 +19,7 @@ static inline void mm_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
+    delay(100);
 }
 
 
