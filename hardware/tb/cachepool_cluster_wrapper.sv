@@ -49,41 +49,15 @@ module cachepool_cluster_wrapper
   spatz_axi_iwc_out_req_t  [NumClusterSlv-1:0] axi_from_cluster_iwc_req;
   spatz_axi_iwc_out_resp_t [NumClusterSlv-1:0] axi_from_cluster_iwc_resp;
 
-  // for (genvar port = 0; port < NumL2Channel; port ++) begin : gen_iw_conv
-  //   axi_iw_converter #(
-  //     .AxiSlvPortIdWidth      ( IwcAxiIdOutWidth  ),
-  //     .AxiMstPortIdWidth      ( AxiOutIdWidth     ),
-  //     .AxiSlvPortMaxUniqIds   ( 2                 ),
-  //     .AxiSlvPortMaxTxnsPerId ( 2                 ),
-  //     .AxiSlvPortMaxTxns      ( 4                 ),
-  //     .AxiMstPortMaxUniqIds   ( 2                 ),
-  //     .AxiMstPortMaxTxnsPerId ( 4                 ),
-  //     .AxiAddrWidth           ( AxiAddrWidth      ),
-  //     .AxiDataWidth           ( AxiDataWidth      ),
-  //     .AxiUserWidth           ( AxiUserWidth      ),
-  //     .slv_req_t              ( axi_out_req_t ),
-  //     .slv_resp_t             ( axi_out_resp_t),
-  //     .mst_req_t              ( axi_out_req_t     ),
-  //     .mst_resp_t             ( axi_out_resp_t    )
-  //   ) iw_converter(
-  //     .clk_i                  ( clk_i                           ),
-  //     .rst_ni                 ( rst_ni                          ),
-  //     .slv_req_i              ( axi_from_cluster_iwc_req [port] ),
-  //     .slv_resp_o             ( axi_from_cluster_iwc_resp[port] ),
-  //     .mst_req_o              ( axi_out_req_o            [port] ),
-  //     .mst_resp_i             ( axi_out_resp_i           [port] )
-  //   );
-  // end
-
   // Spatz cluster under test.
   cachepool_cluster #(
     .AxiAddrWidth             (AxiAddrWidth             ),
     .AxiDataWidth             (AxiDataWidth             ),
     .AxiIdWidthIn             (AxiInIdWidth             ),
-    .AxiIdWidthOut            (AxiOutIdWidth         ),
+    .AxiIdWidthOut            (AxiOutIdWidth            ),
     .AxiUserWidth             (AxiUserWidth             ),
     .BootAddr                 (BootAddr                 ),
-    .UartAddr                 (32'hC000_0000            ),
+    .UartAddr                 (UartAddr                 ),
     .ClusterPeriphSize        (64                       ),
     .NrCores                  (NumCores                 ),
     .TCDMDepth                (TCDMDepth                ),
@@ -104,14 +78,14 @@ module cachepool_cluster_wrapper
     .axi_narrow_resp_t        (axi_narrow_resp_t        ),
     .axi_out_req_t            (axi_out_req_t  ),
     .axi_out_resp_t           (axi_out_resp_t ),
-    .Xdma                     (4'h1                     ),
+    .Xdma                     (4'h0                     ),
     .DMAAxiReqFifoDepth       (3                        ),
     .DMAReqFifoDepth          (3                        ),
     .RegisterOffloadRsp       (1                        ),
     .RegisterCoreReq          (1                        ),
     .RegisterCoreRsp          (1                        ),
     .RegisterTCDMCuts         (1                        ),
-    .RegisterExt              (0                        ),
+    .RegisterExt              (1                        ),
     .XbarLatency              (axi_pkg::CUT_ALL_PORTS   ),
     .MaxMstTrans              (NumAxiMaxTrans           ),
     .MaxSlvTrans              (NumAxiMaxTrans           )
@@ -125,7 +99,7 @@ module cachepool_cluster_wrapper
     .meip_i                   ({NumCores{meip_i}}),
     .mtip_i                   ({NumCores{mtip_i}}),
     .msip_i                   ({NumCores{msip_i}}),
-    .hart_base_id_i           (10'h10),
+    .hart_base_id_i           (10'h0),
     .cluster_base_addr_i      (TCDMStartAddr),
     .cluster_probe_o          (cluster_probe_o),
     .axi_in_req_i             ,

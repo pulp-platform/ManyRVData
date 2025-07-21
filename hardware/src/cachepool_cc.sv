@@ -28,11 +28,13 @@ module cachepool_cc
     parameter int                          unsigned        DMAAxiReqFifoDepth       = 0,
     parameter int                          unsigned        DMAReqFifoDepth          = 0,
 
-    parameter int                          unsigned        StackDepth               = 512,
+    parameter int                          unsigned        SpmStackDepth            = 512,
     /// Data port request type.
     parameter type                                         dreq_t                   = logic,
     /// Data port response type.
     parameter type                                         drsp_t                   = logic,
+    parameter type                                         dreq_chan_t              = logic,
+    parameter type                                         drsp_chan_t              = logic,
     // TCDM port types
     parameter type                                         tcdm_req_t               = logic,
     parameter type                                         tcdm_user_t              = logic,
@@ -111,13 +113,6 @@ module cachepool_cc
     // TCDM Streamer Ports
     output tcdm_req_t    [TCDMPorts-1:0] tcdm_req_o,
     input  tcdm_rsp_t    [TCDMPorts-1:0] tcdm_rsp_i,
-    // Accelerator Offload port
-    // DMA ports
-    output axi_req_t                     axi_dma_req_o,
-    input  axi_rsp_t                     axi_dma_res_i,
-    output logic                         axi_dma_busy_o,
-    output dma_perf_t                    axi_dma_perf_o,
-    output dma_events_t                  axi_dma_events_o,
     // Core event strobes
     output core_events_t                 core_events_o,
     input  addr_t                        tcdm_addr_base_i
@@ -138,14 +133,11 @@ module cachepool_cc
 
   acc_rsp_t acc_demux_snitch;
   acc_rsp_t acc_resp;
-  acc_rsp_t dma_resp;
 
   logic acc_snitch_demux_qvalid, acc_snitch_demux_qready;
   logic acc_qvalid, acc_qready;
-  logic dma_qvalid, dma_qready;
 
   logic acc_pvalid, acc_pready;
-  logic dma_pvalid, dma_pready;
   logic acc_demux_snitch_valid, acc_demux_snitch_ready;
 
   fpnew_pkg::roundmode_e fpu_rnd_mode;
@@ -155,8 +147,8 @@ module cachepool_cc
   core_events_t snitch_events;
 
   // Snitch Integer Core
-  dreq_t snitch_dreq_d, snitch_dreq_q, merged_cache_dreq, merged_spm_dreq;
-  drsp_t snitch_drsp_d, snitch_drsp_q, merged_cache_drsp, merged_spm_drsp;
+  dreq_t snitch_dreq_d, snitch_dreq_q, merged_cache_dreq;
+  drsp_t snitch_drsp_d, snitch_drsp_q, merged_cache_drsp;
 
   // Spatz Memory consistency signals
   logic [1:0] spatz_mem_finished;
@@ -260,16 +252,8 @@ module cachepool_cc
     .data_o  ( snitch_drsp_d.p       )
   );
 
-  // Accelerator Demux Port
-  stream_demux #(
-    .N_OUP ( 2 )
-  ) i_stream_demux_offload (
-    .inp_valid_i (acc_snitch_demux_qvalid             ),
-    .inp_ready_o (acc_snitch_demux_qready             ),
-    .oup_sel_i   (acc_snitch_demux.addr[$clog2(2)-1:0]),
-    .oup_valid_o ({dma_qvalid, acc_qvalid}            ),
-    .oup_ready_i ({dma_qready, acc_qready}            )
-  );
+  assign acc_qvalid = acc_snitch_demux_qvalid;
+  assign acc_snitch_demux_qready = acc_qready;
 
   // There is no shared muldiv in this configuration
   assign hive_req_o.acc_qvalid = 1'b0;
@@ -277,19 +261,9 @@ module cachepool_cc
   assign hive_req_o.acc_req    = '0;
   assign acc_snitch_req        = acc_snitch_demux;
 
-  stream_arbiter #(
-    .DATA_T ( acc_rsp_t ),
-    .N_INP  ( 2         )
-  ) i_stream_arbiter_offload (
-    .clk_i       ( clk_i                     ),
-    .rst_ni      ( rst_ni                    ),
-    .inp_data_i  ( {dma_resp, acc_resp }     ),
-    .inp_valid_i ( {dma_pvalid, acc_pvalid } ),
-    .inp_ready_o ( {dma_pready, acc_pready } ),
-    .oup_data_o  ( acc_demux_snitch          ),
-    .oup_valid_o ( acc_demux_snitch_valid    ),
-    .oup_ready_i ( acc_demux_snitch_ready    )
-  );
+  assign acc_demux_snitch = acc_resp;
+  assign acc_demux_snitch_valid = acc_pvalid;
+  assign acc_pready = acc_demux_snitch_ready;
 
   dreq_t fp_lsu_mem_req;
   drsp_t fp_lsu_mem_rsp;
@@ -386,244 +360,209 @@ module cachepool_cc
     end
   end
 
-  if (Xdma) begin : gen_dma
-    axi_dma_tc_snitch_fe #(
-      .AddrWidth          (AddrWidth         ),
-      .DataWidth          (DataWidth         ),
-      .DMADataWidth       (DMADataWidth      ),
-      .IdWidth            (DMAIdWidth        ),
-      .UserWidth          (UserWidth         ),
-      .DMAAxiReqFifoDepth (DMAAxiReqFifoDepth),
-      .DMAReqFifoDepth    (DMAReqFifoDepth   ),
-      .axi_req_t          (axi_req_t         ),
-      .axi_ar_chan_t      (axi_ar_chan_t     ),
-      .axi_aw_chan_t      (axi_aw_chan_t     ),
-      .axi_res_t          (axi_rsp_t         ),
-      .acc_resp_t         (acc_rsp_t         ),
-      .dma_events_t       (dma_events_t      )
-    ) i_axi_dma_tc_snitch_fe (
-      .clk_i            ( clk_i                    ),
-      .rst_ni           ( rst_ni                   ),
-      .axi_dma_req_o    ( axi_dma_req_o            ),
-      .axi_dma_res_i    ( axi_dma_res_i            ),
-      .dma_busy_o       ( axi_dma_busy_o           ),
-      .acc_qaddr_i      ( acc_snitch_req.addr      ),
-      .acc_qid_i        ( acc_snitch_req.id        ),
-      .acc_qdata_op_i   ( acc_snitch_req.data_op   ),
-      .acc_qdata_arga_i ( acc_snitch_req.data_arga ),
-      .acc_qdata_argb_i ( acc_snitch_req.data_argb ),
-      .acc_qdata_argc_i ( acc_snitch_req.data_argc ),
-      .acc_qvalid_i     ( dma_qvalid               ),
-      .acc_qready_o     ( dma_qready               ),
-      .acc_pdata_o      ( dma_resp.data            ),
-      .acc_pid_o        ( dma_resp.id              ),
-      .acc_perror_o     ( dma_resp.error           ),
-      .acc_pvalid_o     ( dma_pvalid               ),
-      .acc_pready_i     ( dma_pready               ),
-      .hart_id_i        ( hart_id_i                ),
-      .dma_perf_o       ( axi_dma_perf_o           ),
-      .dma_events_o     ( axi_dma_events_o         )
-    );
+  typedef enum integer {
+    SnitchMem       = 0,
+    FPUMem          = 1
+  } scalar_mem_mst_e;
 
-  // no DMA instanciated
-  end else begin : gen_no_dma
-    // tie-off unused signals
-    assign axi_dma_req_o  = '0;
-    assign axi_dma_busy_o = 1'b0;
+  typedef enum integer {
+    MainMem         = 0,
+    TotStack        = 1,
+    SpmStack        = 2,
+    Periph          = 3
+  } scalar_mem_slv_e;
 
-    assign dma_qready = '0;
-    assign dma_pvalid = '0;
+  localparam int unsigned NrScalarXbarMst = 2;
+  localparam int unsigned NrScalarXbarSlv = 4;
 
-    assign dma_resp       = '0;
-    assign axi_dma_perf_o = '0;
-  end
+  // Snitch and Spatz FPU Sequencer
+  dreq_chan_t [NrScalarXbarMst-1:0] core_req_chan;
+  drsp_chan_t [NrScalarXbarMst-1:0] core_rsp_chan;
+  logic [NrScalarXbarMst-1:0] core_req_valid, core_req_ready;
+  logic [NrScalarXbarMst-1:0] core_rsp_valid, core_rsp_ready;
 
-  // Decide whether to go to Cache or Stack
-  dreq_t                  data_cache_req, data_spm_req;
-  drsp_t                  data_cache_rsp, data_spm_rsp;
-  dreq_t                  data_soc_req;
-  drsp_t                  data_soc_rsp;
-  logic [3:0]             data_soc_req_id, data_soc_rsp_id;
-  logic                   data_soc_push, data_soc_pop;
-  logic                   data_soc_full, data_soc_empty;
+  // SPM Stack, L1 Stack, L1, Periph&BootROM
+  dreq_chan_t [NrScalarXbarSlv-1:0] mem_req_chan;
+  drsp_chan_t [NrScalarXbarSlv-1:0] mem_rsp_chan;
+  logic [NrScalarXbarSlv-1:0] mem_req_valid, mem_req_ready;
+  logic [NrScalarXbarSlv-1:0] mem_rsp_valid, mem_rsp_ready;
 
-  localparam int unsigned SelectWidth   = cf_math_pkg::idx_width(3);
-  typedef logic [SelectWidth-1:0] select_t;
-  select_t snitch_select;
-  logic    fpu_select;
+  dreq_t [NrScalarXbarSlv-1:0] mem_req;
+  drsp_t [NrScalarXbarSlv-1:0] mem_rsp;
+
+  localparam int unsigned SelectMstWidth   = cf_math_pkg::idx_width(NrScalarXbarSlv);
+  localparam int unsigned SelectSlvWidth   = cf_math_pkg::idx_width(NrScalarXbarMst);
+  typedef logic [SelectMstWidth-1:0] select_mst_t;
+  typedef logic [SelectSlvWidth-1:0] select_slv_t;
+  // select_t snitch_select;
+  // select_t fpu_select;
+  select_mst_t [NrScalarXbarMst-1:0] core_req_sel;
+  select_slv_t [NrScalarXbarSlv-1:0] core_selected, mem_rsp_sel;
+
+
+  assign core_req_chan  [SnitchMem] = snitch_dreq_q.q;
+  assign core_req_valid [SnitchMem] = snitch_dreq_q.q_valid;
+  assign core_rsp_ready [SnitchMem] = snitch_dreq_q.p_ready;
+
+  assign snitch_drsp_q = '{
+    p      : core_rsp_chan  [SnitchMem],
+    p_valid: core_rsp_valid [SnitchMem],
+    q_ready: core_req_ready [SnitchMem]
+  };
+
+  assign core_req_chan  [FPUMem]    = fp_lsu_mem_req.q;
+  assign core_req_valid [FPUMem]    = fp_lsu_mem_req.q_valid;
+  assign core_rsp_ready [FPUMem]    = fp_lsu_mem_req.p_ready;
+
+  assign fp_lsu_mem_rsp = '{
+    p      : core_rsp_chan  [FPUMem],
+    p_valid: core_rsp_valid [FPUMem],
+    q_ready: core_req_ready [FPUMem]
+  };
 
   typedef struct packed {
     int unsigned idx;
     logic [AddrWidth-1:0] base;
-    logic [AddrWidth-1:0] mask;
+    logic [AddrWidth-1:0] size;
   } reqrsp_rule_t;
 
-  reqrsp_rule_t [1:0] addr_map;
+  reqrsp_rule_t [NrScalarXbarSlv-2:0] addr_map;
 
   // We divide the regions into the following for scalar core's visit:
-  // 0. Stack region => SPM (stack)
-  // 1. DRAM region  => Cache
+  // 0. DRAM region  => Cache
+  // 1. Stack region => SPM (stack)
   // 2. Others       => Peripheral (bypass cache)
 
-  // SPM Region (Stack)
-  assign addr_map[0] = '{
-    idx : 0,
+  // SPM Region (Stack SPM)
+  // Give stack higher priority for winning the conflict
+  assign addr_map[SpmStack] = '{
+    idx : SpmStack,
+    base: tcdm_addr_base_i + cachepool_pkg::TCDMSize - cachepool_pkg::SpmStackSize,
+    size: cachepool_pkg::SpmStackSize
+  };
+  assign addr_map[TotStack] = '{
+    idx : TotStack,
     base: tcdm_addr_base_i,
-    mask: ({AddrWidth{1'b1}} << TCDMAddrWidth)
+    size: cachepool_pkg::TotStackSize
   };
   // Main Memory Region
-  assign addr_map[1] = '{
-    idx : 1,
+  assign addr_map[MainMem] = '{
+    idx : MainMem,
     base: cachepool_pkg::DramAddr,
-    mask: ({AddrWidth{1'b1}} << $clog2(cachepool_pkg::DramSize))
+    size: cachepool_pkg::DramSize
   };
 
-  // TODO: Pack the following interconnection into a separate file
-
   // Snitch needs to decide: Stack, Data or Peripheral
-  addr_decode_napot #(
-    .NoIndices (3                    ),
-    .NoRules   (2                    ),
-    .addr_t    (logic [AddrWidth-1:0]),
-    .rule_t    (reqrsp_rule_t        )
-  ) i_snitch_decode_napot (
-    .addr_i           (snitch_dreq_q.q.addr),
-    .addr_map_i       (addr_map          ),
-    .idx_o            (snitch_select     ),
-    .dec_valid_o      (/* Unused */      ),
-    .dec_error_o      (/* Unused */      ),
-    .en_default_idx_i (1'b1              ),
-    .default_idx_i    (2'd2              )
+  for (genvar i = 0; i < NrScalarXbarMst; i ++) begin : addr_decode
+    always_comb begin
+      // Default to peripheral
+      core_req_sel[i] = Periph;
+      for (int j = 0; j < NrScalarXbarSlv-1; j ++) begin
+        if ((addr_map[j].base <= core_req_chan[i].addr) & (core_req_chan[i].addr < (addr_map[j].size+addr_map[j].base))) begin
+          core_req_sel[i] = j;
+        end
+      end
+    end
+  end
+
+  reqrsp_xbar #(
+    .NumInp           (NrScalarXbarMst  ),
+    .NumOut           (NrScalarXbarSlv  ),
+    .PipeReg          (1'b1             ),
+    .tcdm_req_chan_t  (dreq_chan_t      ),
+    .tcdm_rsp_chan_t  (drsp_chan_t      )
+  ) i_scalar_xbar (
+    .clk_i            (clk_i            ),
+    .rst_ni           (rst_ni           ),
+    .slv_req_i        (core_req_chan    ),
+    .slv_req_valid_i  (core_req_valid   ),
+    .slv_req_ready_o  (core_req_ready   ),
+    .slv_rsp_o        (core_rsp_chan    ),
+    .slv_rsp_valid_o  (core_rsp_valid   ),
+    .slv_rsp_ready_i  (core_rsp_ready   ),
+    .slv_sel_i        (core_req_sel     ),
+    .slv_selected_o   (core_selected    ),
+    .mst_req_o        (mem_req_chan     ),
+    .mst_req_valid_o  (mem_req_valid    ),
+    .mst_req_ready_i  (mem_req_ready    ),
+    .mst_rsp_i        (mem_rsp_chan     ),
+    .mst_rsp_valid_i  (mem_rsp_valid    ),
+    .mst_rsp_ready_o  (mem_rsp_ready    ),
+    .mst_sel_i        (mem_rsp_sel      )
   );
 
-  reqrsp_demux #(
-    .NrPorts   (3     ),
-    .req_t     (dreq_t),
-    .rsp_t     (drsp_t),
-    .RespDepth (4     )
-  ) i_snitch_reqrsp_demux (
-    .clk_i        (clk_i                      ),
-    .rst_ni       (rst_ni                     ),
-    .slv_select_i (snitch_select              ),
-    .slv_req_i    (snitch_dreq_q              ),
-    .slv_rsp_o    (snitch_drsp_q              ),
-    .mst_req_o    ({data_soc_req, data_cache_req, data_spm_req}),
-    .mst_rsp_i    ({data_soc_rsp, data_cache_rsp, data_spm_rsp})
-  );
+  localparam int unsigned TotStackAddrWidth = $clog2(cachepool_pkg::TotStackSize);
 
-  // Spatz FPU needs to decide: Stack or Data
-  dreq_t fpu_cache_req, fpu_spm_req;
-  drsp_t fpu_cache_rsp, fpu_spm_rsp;
+  logic [$clog2(cachepool_pkg::NumCores)-1:0] stack_addr_check;
+  assign stack_addr_check = mem_req_chan[TotStack].addr[($clog2(cachepool_pkg::TotStackSize)-1)-:$clog2(cachepool_pkg::NumCores)];
 
-  addr_decode_napot #(
-    .NoIndices (2                    ),
-    .NoRules   (1                    ),
-    .addr_t    (logic [AddrWidth-1:0]),
-    .rule_t    (reqrsp_rule_t        )
-  ) i_fpu_decode_napot (
-    .addr_i           (fp_lsu_mem_req.q.addr),
-    .addr_map_i       (addr_map[0]          ),
-    .idx_o            (fpu_select           ),
-    .dec_valid_o      (/* Unused */         ),
-    .dec_error_o      (/* Unused */         ),
-    .en_default_idx_i (1'b1                 ),
-    .default_idx_i    (1'd1                 )
-  );
+  always_comb begin
+    for (int i = 0; i < NrScalarXbarSlv; i ++) begin
+      mem_req[i].q             = mem_req_chan [i];
+      mem_req[i].q_valid       = mem_req_valid[i];
+      mem_req[i].p_ready       = mem_rsp_ready[i];
+      mem_req[i].q.user.is_fpu = (core_selected[i] == FPUMem);
+      // Alter the address for sw stack
+      if (i == TotStack) begin
+        // Change the higher bits to core id
+        // All cores need unique stack in shared stack region
+        mem_req[i].q.addr[($clog2(cachepool_pkg::TotStackSize)-1)-:$clog2(cachepool_pkg::NumCores)] =
+          hart_id_i[$clog2(cachepool_pkg::NumCores)-1:0];
 
-  reqrsp_demux #(
-    .NrPorts   (2     ),
-    .req_t     (dreq_t),
-    .rsp_t     (drsp_t),
-    .RespDepth (4     )
-  ) i_fpu_reqrsp_demux (
-    .clk_i        (clk_i                      ),
-    .rst_ni       (rst_ni                     ),
-    .slv_select_i (fpu_select                 ),
-    .slv_req_i    (fp_lsu_mem_req             ),
-    .slv_rsp_o    (fp_lsu_mem_rsp             ),
-    .mst_req_o    ({fpu_cache_req, fpu_spm_req}),
-    .mst_rsp_i    ({fpu_cache_rsp, fpu_spm_rsp})
-  );
+      end
 
-  // Use ID Remapper for Out-of-Order transactions from Cache
-  tcdm_id_remapper #(
-    .NumIn       (2                     ),
-    .AddrWidth   (AddrWidth             ),
-    .DataWidth   (DataWidth             ),
-    .IdWidth     ($clog2(NumIntOutstandingLoads) ),
-    .RobDepth    (NumIntOutstandingLoads),
-    .dreq_t      (dreq_t                ),
-    .drsp_t      (drsp_t                ),
-    .user_t      (tcdm_user_t           )
-  ) i_cache_id_mux (
-    .clk_i     (clk_i                          ),
-    .rst_ni    (rst_ni                         ),
-    .slv_req_i ({fpu_cache_req, data_cache_req}),
-    .slv_rsp_o ({fpu_cache_rsp, data_cache_rsp}),
-    .mst_req_o (merged_cache_dreq              ),
-    .mst_rsp_i (merged_cache_drsp              )
-  );
+      mem_rsp_chan [i] = mem_rsp[i].p;
+      mem_rsp_valid[i] = mem_rsp[i].p_valid;
+      mem_req_ready[i] = mem_rsp[i].q_ready;
+      mem_rsp_sel  [i] = (mem_rsp[i].p.user.is_fpu == FPUMem);
+    end
+  end
 
-  // SPM access do not need to consider OoO
+  assign data_req_o = mem_req[Periph];
+  assign mem_rsp[Periph] = data_rsp_i;
+
+  // Merge the L1 stack access with L1 memory access
   reqrsp_mux #(
-    .NrPorts     (2           ),
-    .AddrWidth   (AddrWidth   ),
-    .DataWidth   (DataWidth   ),
-    .UserWidth   ($bits(tcdm_user_t) ),
-    .req_t       (dreq_t      ),
-    .rsp_t       (drsp_t      ),
+    .NrPorts     (2                 ),
+    .AddrWidth   (AddrWidth         ),
+    .DataWidth   (DataWidth         ),
+    .UserWidth   ($bits(tcdm_user_t)),
+    .req_t       (dreq_t            ),
+    .rsp_t       (drsp_t            ),
     // TODO(zarubaf): Wire-up to top-level.
-    .RespDepth   (4           ),
-    .RegisterReq ({1'b1, 1'b0})
+    .RespDepth   (4                 ),
+    .RegisterReq ({1'b1, 1'b1}      )
   ) i_spm_reqrsp_mux (
-    .clk_i     (clk_i                      ),
-    .rst_ni    (rst_ni                     ),
-    .slv_req_i ({fpu_spm_req, data_spm_req}),
-    .slv_rsp_o ({fpu_spm_rsp, data_spm_rsp}),
-    .mst_req_o (merged_spm_dreq            ),
-    .mst_rsp_i (merged_spm_drsp            ),
-    .idx_o     (/*not connected*/          )
-  );
-
-  // Add a fifo here to store id information for non-tcdm request (in-order AXI)
-  fifo_v3 #(
-    .DATA_WIDTH(4               ),
-    .DEPTH     (NumIntOutstandingMem)
-  ) i_id_fifo (
-    .clk_i     (clk_i           ),
-    .rst_ni    (rst_ni          ),
-    .flush_i   (1'b0            ),
-    .testmode_i(1'b0            ),
-    .data_i    (data_soc_req_id ),
-    .push_i    (data_soc_push   ),
-    .data_o    (data_soc_rsp_id ),
-    .pop_i     (data_soc_pop    ),
-    .full_o    (data_soc_full   ),
-    .empty_o   (data_soc_empty  ),
-    .usage_o   (/* Unused */    )
+    .clk_i     (clk_i                                ),
+    .rst_ni    (rst_ni                               ),
+    .slv_req_i ({mem_req[MainMem], mem_req[TotStack]}),
+    .slv_rsp_o ({mem_rsp[MainMem], mem_rsp[TotStack]}),
+    .mst_req_o (merged_cache_dreq                    ),
+    .mst_rsp_i (merged_cache_drsp                    ),
+    .idx_o     (/*not connected*/                    )
   );
 
   // Stack SPM
   localparam int unsigned StackLatency    = 1;
-  localparam int unsigned StackAddrWidth  = $clog2(StackDepth);
+  localparam int unsigned StackAddrWidth  = $clog2(SpmStackDepth);
 
   typedef logic [$clog2(NumSpatzOutstandingLoads)-1:0] reqid_t;
-  typedef logic [StackAddrWidth-1:0]  tcdm_mem_addr_t;
+  typedef logic [StackAddrWidth-1:0]  tcdm_stack_addr_t;
 
   typedef struct packed {
     tcdm_user_t user;
     logic       valid;
     logic       write;
-  } mem_meta_t;
+  } stack_meta_t;
 
   // Memory bank signals
-  logic           mem_req, mem_we;
-  tcdm_mem_addr_t mem_add;
-  strb_t          mem_be;
-  data_t          mem_rdata, mem_wdata;
+  logic           stack_valid, stack_we;
+  tcdm_stack_addr_t stack_add;
+  strb_t          stack_be;
+  data_t          stack_rdata, stack_wdata;
 
   // Meta infomation signals
-  mem_meta_t mem_req_meta, mem_rsp_meta;
+  stack_meta_t stack_req_meta, stack_rsp_meta;
 
   // Converter/reg signals
   tcdm_req_t stack_req;
@@ -631,105 +570,81 @@ module cachepool_cc
 
   // Converter for buffering the response if xbar congested
   reqrsp_to_tcdm #(
-    .AddrWidth    (AddrWidth       ),
-    .DataWidth    (DataWidth       ),
-    .BufDepth     (4               ),
+    .AddrWidth    (AddrWidth          ),
+    .DataWidth    (DataWidth          ),
+    .BufDepth     (4                  ),
     .UserWidth    ($bits(tcdm_user_t) ),
-    .reqrsp_req_t (dreq_t          ),
-    .reqrsp_rsp_t (drsp_t          ),
-    .tcdm_req_t   (tcdm_req_t      ),
-    .tcdm_rsp_t   (tcdm_rsp_t      )
+    .reqrsp_req_t (dreq_t             ),
+    .reqrsp_rsp_t (drsp_t             ),
+    .tcdm_req_t   (tcdm_req_t         ),
+    .tcdm_rsp_t   (tcdm_rsp_t         )
   ) i_core_to_stack (
-    .clk_i        (clk_i           ),
-    .rst_ni       (rst_ni          ),
-    .reqrsp_req_i (merged_spm_dreq ),
-    .reqrsp_rsp_o (merged_spm_drsp ),
-    .tcdm_req_o   (stack_req       ),
-    .tcdm_rsp_i   (stack_rsp       )
+    .clk_i        (clk_i              ),
+    .rst_ni       (rst_ni             ),
+    .reqrsp_req_i (mem_req[SpmStack]  ),
+    .reqrsp_rsp_o (mem_rsp[SpmStack]  ),
+    .tcdm_req_o   (stack_req          ),
+    .tcdm_rsp_i   (stack_rsp          )
   );
 
   // Match the type for the memory bank
-  assign mem_req   = stack_req.q_valid;
-  assign mem_we    = stack_req.q.write;
-  assign mem_add   = stack_req.q.addr[StackAddrWidth-1:0];
-  assign mem_wdata = stack_req.q.data;
-  assign mem_be    = stack_req.q.strb;
+  assign stack_valid = stack_req.q_valid;
+  assign stack_we    = stack_req.q.write;
+  assign stack_add   = stack_req.q.addr[StackAddrWidth+1:2];
+  assign stack_wdata = stack_req.q.data;
+  assign stack_be    = stack_req.q.strb;
 
-  assign mem_req_meta = '{
+  assign stack_req_meta = '{
     user:  stack_req.q.user,
     valid: stack_req.q_valid,
     write: stack_req.q.write
   };
 
-  assign stack_rsp.p.data  = mem_rdata;
-  assign stack_rsp.p.user  = mem_rsp_meta.user;
-  assign stack_rsp.p.write = mem_rsp_meta.write;
-  assign stack_rsp.p_valid = mem_rsp_meta.valid;
+  assign stack_rsp.p.data  = stack_rdata;
+  assign stack_rsp.p.user  = stack_rsp_meta.user;
+  assign stack_rsp.p.write = stack_rsp_meta.write;
+  assign stack_rsp.p_valid = stack_rsp_meta.valid;
   assign stack_rsp.q_ready = 1'b1;
 
   tc_sram_impl #(
-    .NumWords  (StackDepth  ),
-    .DataWidth (DataWidth   ),
-    .ByteWidth (8           ),
-    .NumPorts  (1           ),
-    .Latency   (StackLatency),
-    .SimInit   ("zeros"     )
+    .NumWords  (SpmStackDepth ),
+    .DataWidth (DataWidth     ),
+    .ByteWidth (8             ),
+    .NumPorts  (1             ),
+    .Latency   (StackLatency  ),
+    .SimInit   ("zeros"       )
   ) i_spm_mem  (
-    .clk_i     (clk_i       ),
-    .rst_ni    (rst_ni      ),
-    .impl_i    ('0          ),
-    .impl_o    (/* Unused */),
-    .req_i     (mem_req     ),
-    .we_i      (mem_we      ),
-    .addr_i    (mem_add     ),
-    .wdata_i   (mem_wdata   ),
-    .be_i      (mem_be      ),
-    .rdata_o   (mem_rdata   )
+    .clk_i     (clk_i         ),
+    .rst_ni    (rst_ni        ),
+    .impl_i    ('0            ),
+    .impl_o    (/* Unused */  ),
+    .req_i     (stack_valid   ),
+    .we_i      (stack_we      ),
+    .addr_i    (stack_add     ),
+    .wdata_i   (stack_wdata   ),
+    .be_i      (stack_be      ),
+    .rdata_o   (stack_rdata   )
   );
 
   shift_reg #(
-    .dtype (mem_meta_t       ),
-    .Depth (StackLatency     )
+    .dtype (stack_meta_t      ),
+    .Depth (StackLatency      )
   ) i_req_meta_pipe (
-    .clk_i (clk_i            ),
-    .rst_ni(rst_ni           ),
-    .d_i   (mem_req_meta     ),
-    .d_o   (mem_rsp_meta     )
+    .clk_i (clk_i             ),
+    .rst_ni(rst_ni            ),
+    .d_i   (stack_req_meta    ),
+    .d_o   (stack_rsp_meta    )
   );
 
-
-  always_comb begin : id_fifo_comb
-    // pass input response
-    data_soc_rsp      = data_rsp_i;
-    data_req_o        = data_soc_req;
-
-    // push in id when
-    // 1. req is read
-    // 2. req HS
-    data_soc_push     = data_soc_req.q_valid & data_soc_rsp.q_ready;
-    data_soc_req_id   = {data_soc_req.q.user.req_id, data_soc_req.q.write};
-
-    // pop out id when
-    // 1. rsp from read
-    // 2. rsp HS
-    data_soc_pop      = data_soc_req.p_ready & data_soc_rsp.p_valid;
-    {data_soc_rsp.p.user.req_id, data_soc_rsp.p.write} = data_soc_rsp_id;
-
-    // if FIFO is empty, stop taking in response
-    data_req_o.p_ready &= (!data_soc_empty);
-    // if FIFO is full, stop taking in request
-    data_soc_rsp.q_ready &= (!data_soc_full);
-  end
-
   reqrsp_to_tcdm #(
-    .AddrWidth    (AddrWidth ),
-    .DataWidth    (DataWidth ),
-    .BufDepth     (4         ),
-    .reqrsp_req_t (dreq_t    ),
-    .reqrsp_rsp_t (drsp_t    ),
+    .AddrWidth    (AddrWidth          ),
+    .DataWidth    (DataWidth          ),
+    .BufDepth     (4                  ),
+    .reqrsp_req_t (dreq_t             ),
+    .reqrsp_rsp_t (drsp_t             ),
     .UserWidth    ($bits(tcdm_user_t) ),
-    .tcdm_req_t   (tcdm_req_t),
-    .tcdm_rsp_t   (tcdm_rsp_t)
+    .tcdm_req_t   (tcdm_req_t         ),
+    .tcdm_rsp_t   (tcdm_rsp_t         )
   ) i_reqrsp_to_tcdm (
     .clk_i        (clk_i                          ),
     .rst_ni       (rst_ni                         ),
@@ -755,6 +670,9 @@ module cachepool_cc
   int           f;
   string        fn;
   logic  [63:0] cycle;
+
+  `ASSERT(stack_overflow, mem_req_valid[TotStack] |-> (&stack_addr_check == 1'b1), clk_i, !rst_ni,
+            "Core ID bits cannot be used for stack")
 
   int spatz_f;
   string spatz_f_name;
@@ -854,7 +772,7 @@ module cachepool_cc
   end
 
   final begin
-
+    `ifndef TARGET_SYNTHESIS
     /***** Controller Report *****/
     automatic real ctrl_vlsu_insn       = i_spatz.i_controller.ctrl_vlsu_insn_q;
     automatic real ctrl_vlsu_stall      = i_spatz.i_controller.ctrl_vlsu_stall_q;
@@ -1008,17 +926,12 @@ module cachepool_cc
     $fwrite(spatz_f, "   AVG Insn Cycles:                  %32.2f\n", vfu_avg_insn_cyc        );
     $fwrite(spatz_f, "*********************************************************************\n");
 
-
+    `endif
     $fclose(f);
     $fclose(spatz_f);
 
   end
 
-
-
-  // final begin
-  //   $fclose(f);
-  // end
   // verilog_lint: waive-stop always-ff-non-blocking
   // pragma translate_on
 

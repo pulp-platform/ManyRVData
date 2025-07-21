@@ -104,19 +104,21 @@ snrt.crt0.init_stack:
     sub       a3, a3, t0
     mv        a5, a3
 
-    # Compute the stack top for this hart, and the cluster-wide stack bottom.
-    lw        t2, snrt_stack_size  # load stack size (overridable by binary)
+    mv        sp, a3
 
-    sll       t0, a0, t2  # this hart
-    sll       t1, a1, t2  # all harts
-    sub       sp, a3, t0
-    sub       a3, a3, t1
+    # # Compute the stack top for this hart, and the cluster-wide stack bottom.
+    # lw        t2, snrt_stack_size  # load stack size (overridable by binary)
 
-    # Misalign stacks in the TCDM to reduce banking conflicts
-    slli      t0, a0, 3  # this hart
-    slli      t1, a1, 3  # all harts
-    sub       sp, sp, t0
-    sub       a3, a3, t1
+    # sll       t0, a0, t2  # this hart
+    # sll       t1, a1, t2  # all harts
+    # sub       sp, a3, t0
+    # sub       a3, a3, t1
+
+    # # Misalign stacks in the TCDM to reduce banking conflicts
+    # slli      t0, a0, 3  # this hart
+    # slli      t1, a1, 3  # all harts
+    # sub       sp, sp, t0
+    # sub       a3, a3, t1
 
     # Allocate thread-local storage at the top of the stack and set tp
     # to the base of the tls

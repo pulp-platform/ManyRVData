@@ -5,6 +5,8 @@
 # Create group for core $1
 onerror {resume}
 
+add wave -noupdate -group tile[$1]_core[$2] -group scalar_xbar /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_scalar_xbar/*
+
 add wave -noupdate -group tile[$1]_core[$2] -group id_remapper /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_cache_id_mux/*
 
 add wave -noupdate -group tile[$1]_core[$2] -group Params /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/BootAddr

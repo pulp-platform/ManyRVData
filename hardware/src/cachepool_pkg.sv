@@ -28,7 +28,7 @@ package cachepool_pkg;
   localparam int unsigned SpatzAxiAddrWidth       = 32;
   // AXI ID Width
   localparam int unsigned SpatzAxiIdInWidth       = 6;
-  localparam int unsigned SpatzAxiIdOutWidth      = 8;
+  localparam int unsigned SpatzAxiIdOutWidth      = 7;
 
   // FIXED AxiIdOutWidth
   // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
@@ -77,19 +77,20 @@ package cachepool_pkg;
   localparam int unsigned ByteOffset      = $clog2(BeWidth);
 
   localparam int unsigned ICacheLineWidth = 128;
-  localparam int unsigned ICacheLineCount = 256;
+  localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets      = 4;
 
-  localparam int unsigned TCDMStartAddr   = 32'h5100_0000;
-  localparam int unsigned TCDMSize        = 32'h4000;
+  localparam int unsigned TCDMStartAddr   = 32'hBFFF_F800;
+  localparam int unsigned TCDMSize        = 32'h800;
 
-  localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
+  // localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
+  localparam int unsigned PeriStartAddr   = 32'hC000_0000;
 
   localparam int unsigned BootAddr        = 32'h1000;
 
 
   // UART Configuration
-  localparam int unsigned UartAddr        = 32'hC000_0000;
+  localparam int unsigned UartAddr        = 32'hC001_0000;
 
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
@@ -110,9 +111,9 @@ package cachepool_pkg;
   localparam int unsigned NFpu          = 4;
   localparam int unsigned NIpu          = 4;
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 64};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 64};
-  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 64};
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 32};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 32};
+  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 32};
 
   localparam int unsigned NumAxiMaxTrans                      = 32;
 
@@ -142,8 +143,13 @@ package cachepool_pkg;
   //  CachePool L1  //
   ////////////////////
 
-  // Stack
-  localparam int unsigned StackDepth          = 512;
+  // Stack: 128*32/8 = 512 Byte per core
+  localparam int unsigned SpmStackDepth       = 256;
+  localparam int unsigned SpmStackSize        = SpmStackDepth * 32 / 8;
+
+  // Total Stack Size in Byte (Shared in main memory + SpmStack)
+  localparam int unsigned TotStackDepth       = 512;
+  localparam int unsigned TotStackSize        = TotStackDepth * 32 / 8;
 
   // Address width of cache
   localparam int unsigned L1AddrWidth         = 32;
@@ -204,8 +210,9 @@ package cachepool_pkg;
 
   typedef struct packed {
     logic [CoreIDWidth-1:0] core_id;
-    logic is_amo;
-    reqid_t req_id;
+    logic                   is_amo;
+    reqid_t                 req_id;
+    logic                   is_fpu;
   } tcdm_user_t;
 
   typedef struct packed {

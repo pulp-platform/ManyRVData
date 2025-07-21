@@ -7,9 +7,9 @@
     cluster: {
         mempool: 0,
         boot_addr: 4096,               // 0x1000
-        cluster_base_addr: 1358954496, // 0x51000000
+        cluster_base_addr: 3221223424, // 0xBFFF_F800 = C000_0000 - 800 3221217280
         cluster_base_offset: 0,        // 0x0
-        cluster_base_hartid: 16,
+        cluster_base_hartid: 0,
         addr_width: 32,
         data_width: 32,
         id_width_in: 6,
@@ -19,8 +19,8 @@
         sw_rst_enable: true,
         axi_isolate_enable: false,
         tcdm: {
-            size:  16,
-            banks: 16,
+            size:  2,
+            banks: 1,
         },
         cluster_periph_size: 64, // kB
         dma_data_width: 128,
@@ -52,7 +52,7 @@
             register_offload_rsp: true
         },
         cores: [
-            { $ref: "#/dma_core_template" },
+            { $ref: "#/compute_core_template" },
             { $ref: "#/compute_core_template" },
             { $ref: "#/compute_core_template" },
             { $ref: "#/compute_core_template" },
@@ -83,25 +83,25 @@
 
     compute_core_template: {
         isa: "rv32imafd",
-        xf16: true,
-        xf8: true,
-        xfdotp: true,
+        xf16: false,
+        xf8: false,
+        xfdotp: false,
         xdma: false,
-        num_int_outstanding_loads: 64,
-        num_int_outstanding_mem: 64,
-        num_spatz_outstanding_loads: 64,
+        num_int_outstanding_loads: 32,
+        num_int_outstanding_mem: 32,
+        num_spatz_outstanding_loads: 32,
         num_dtlb_entries: 1,
         num_itlb_entries: 1
     },
     dma_core_template: {
         isa: "rv32imafd",
         xdma: true
-        xf16: true,
-        xf8: true,
-        xfdotp: true,
-        num_int_outstanding_loads: 64,
-        num_int_outstanding_mem: 64,
-        num_spatz_outstanding_loads: 64,
+        xf16: false,
+        xf8: false,
+        xfdotp: false,
+        num_int_outstanding_loads: 32,
+        num_int_outstanding_mem: 32,
+        num_spatz_outstanding_loads: 32,
         num_dtlb_entries: 1,
         num_itlb_entries: 1
     }

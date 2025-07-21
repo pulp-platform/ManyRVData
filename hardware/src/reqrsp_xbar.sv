@@ -188,12 +188,15 @@ module reqrsp_xbar #(
   // IO Assignment
   // --------
 
-  assign mst_req_o = mem_req;
-  assign mst_req_valid_o = mem_req_valid;
-  assign mem_req_ready = mst_req_ready_i;
+  for (genvar port = 0; port < NumOut; port++) begin
+    // Mute the req/rsp channel if not valid => easier to debug
+    assign mst_req_o      [port] = mem_req_valid  [port] ? mem_req[port] : '0;
+    assign mst_req_valid_o[port] = mem_req_valid  [port];
+    assign mem_req_ready  [port] = mst_req_ready_i[port];
 
-  assign mem_rsp = mst_rsp_i;
-  assign mem_rsp_valid = mst_rsp_valid_i;
-  assign mst_rsp_ready_o = mem_rsp_ready;
+    assign mem_rsp        [port] = mst_rsp_valid_i[port] ? mst_rsp_i[port] : '0;
+    assign mem_rsp_valid  [port] = mst_rsp_valid_i[port];
+    assign mst_rsp_ready_o[port] = mem_rsp_ready  [port];
+  end
 
 endmodule

@@ -47,7 +47,7 @@ void l1d_init(uint32_t size) {
   l1d_wait();
   // Write in the default config immediately after initialization
   // No need to call outside unless need a different config
-  l1d_spm_config(size);
+  // l1d_spm_config(size);
 }
 
 void l1d_flush() {

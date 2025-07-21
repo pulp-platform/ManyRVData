@@ -151,9 +151,6 @@ module cachepool_tile
     /// Wide AXI ports to cluster level
     output axi_out_req_t  [NumTileWideAxi-1:0] axi_wide_req_o,
     input  axi_out_resp_t [NumTileWideAxi-1:0] axi_wide_rsp_i,
-    // /// Narrow AXI ports to cluster level (peripheral)
-    // output axi_in_req_t   [NumNarrowAxi-1:0]   axi_narrow_req_o,
-    // input  axi_in_resp_t  [NumNarrowAxi-1:0]   axi_narrow_rsp_i,
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t      [NrSramCfg-1:0]    impl_i,
     /// Indicate the program execution is error
@@ -171,7 +168,6 @@ module cachepool_tile
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
-  localparam int unsigned TCDMSize          = NrBanks * TCDMDepth * BeWidth;
   // The short address for SPM
   localparam int unsigned SPMAddrWidth      = $clog2(TCDMSize);
   // Enlarge the address width for Spatz due to cache
@@ -203,18 +199,16 @@ module cachepool_tile
   localparam int unsigned NarrowDataWidth  = ELEN;
   localparam int unsigned NarrowUserWidth  = AxiUserWidth;
 
-  // TCDM, Peripherals, SoC Request, UART
-  localparam int unsigned NrNarrowSlaves = 4;
+  // Peripherals, SoC Request, UART
+  localparam int unsigned NrNarrowSlaves = 3;
   localparam int unsigned NrNarrowRules  = NrNarrowSlaves - 1;
 
-  // Core Request, DMA, Instruction cache
-  localparam int unsigned NrWideMasters  = 3;
-  // localparam int unsigned WideIdWidthOut = AxiIdWidthOut;
-  // localparam int unsigned WideIdWidthIn  = WideIdWidthOut - $clog2(NrWideMasters);
-  localparam int unsigned WideIdWidthOut = 5;
+  // Core Request, Instruction cache
+  localparam int unsigned NrWideMasters  = 2;
+  localparam int unsigned WideIdWidthOut = 4;
   localparam int unsigned WideIdWidthIn  = 3;
-  // DMA X-BAR configuration
-  localparam int unsigned NrWideSlaves   = 3;
+  // Wide X-BAR configuration: Core Request, ICache
+  localparam int unsigned NrWideSlaves   = 2;
 
   // AXI Configuration
   localparam axi_pkg::xbar_cfg_t ClusterXbarCfg = '{
@@ -271,22 +265,13 @@ module cachepool_tile
   typedef logic [TCDMAddrWidth-1:0]     tcdm_addr_t;
   typedef logic [SPMAddrWidth-1:0]      spm_addr_t;
 
-  // typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
-
   typedef logic [$clog2(L1NumSet)-1:0] tcdm_bank_addr_t;
-
-  // typedef struct packed {
-  //   logic [CoreIDWidth-1:0] core_id;
-  //   logic is_amo;
-  //   reqid_t req_id;
-  // } tcdm_user_t;
 
   // The metadata type used to restore the information from req to rsp
   typedef struct packed {
     tcdm_user_t user;
     logic       write;
   } tcdm_meta_t;
-
 
   // Regbus peripherals.
   `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)
@@ -421,9 +406,6 @@ module cachepool_tile
   axi_slv_dma_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
 
   // 3. Memory Subsystem (Interconnect)
-  tcdm_dma_req_t ext_dma_req;
-  tcdm_dma_rsp_t ext_dma_rsp;
-
   tcdm_req_t [NrTCDMPortsCores-1:0] tcdm_req;
   tcdm_rsp_t [NrTCDMPortsCores-1:0] tcdm_rsp;
 
@@ -486,7 +468,7 @@ module cachepool_tile
   logic                       l1d_busy;
 
   // High if a port access an illegal SPM region (mapped to cache)
-  logic [NrTCDMPortsCores-1:0] spm_error;
+  // logic [NrTCDMPortsCores-1:0] spm_error;
 
 
   // 9. SRAM Configuration
@@ -498,7 +480,9 @@ module cachepool_tile
   // impl_in_t [ICacheSets-1:0] impl_l1i_tag;
 
   // assign {impl_l1d_data, impl_l1d_tag, impl_l1d_fifo, impl_l1i_data, impl_l1i_tag} = impl_i;
-  assign error_o = |spm_error;
+
+  // TODO: Connect to stack overflow error
+  assign error_o = 1'b0;
 
 
   // -------------
@@ -535,11 +519,6 @@ module cachepool_tile
 
   assign dma_xbar_default_port = '{default: SoCDMAOut};
   assign dma_xbar_rule         = '{
-    '{
-      idx       : TCDMDMA,
-      start_addr: tcdm_start_address,
-      end_addr  : tcdm_end_address
-    },
     '{
       idx       : BootROM,
       start_addr: BootAddr,
@@ -578,94 +557,29 @@ module cachepool_tile
     .default_mst_port_i    (dma_xbar_default_port  )
   );
 
-  addr_t ext_dma_req_q_addr_nontrunc;
-
-  // TODO: fully remove the DMA Xbar port and connection
-
-  axi_to_mem_interleaved #(
-    .axi_req_t  (axi_slv_dma_req_t     ),
-    .axi_resp_t (axi_slv_dma_resp_t    ),
-    .AddrWidth  (AxiAddrWidth          ),
-    .DataWidth  (AxiDataWidth          ),
-    .IdWidth    (WideIdWidthOut        ),
-    .NumBanks   (1                     ),
-    .BufDepth   (MemoryMacroLatency + 1)
-  ) i_axi_to_mem_dma (
-    .clk_i        (clk_i                                 ),
-    .rst_ni       (rst_ni                                ),
-    .busy_o       (/* Unused */                          ),
-    .test_i       (1'b0                                  ),
-    .axi_req_i    (wide_axi_slv_req[TCDMDMA]             ),
-    .axi_resp_o   (wide_axi_slv_rsp[TCDMDMA]             ),
-    .mem_req_o    (ext_dma_req.q_valid                   ),
-    .mem_gnt_i    (ext_dma_rsp.q_ready                   ),
-    .mem_addr_o   (ext_dma_req_q_addr_nontrunc           ),
-    .mem_wdata_o  (ext_dma_req.q.data                    ),
-    .mem_strb_o   (ext_dma_req.q.strb                    ),
-    .mem_atop_o   (/* The DMA does not support atomics */),
-    .mem_we_o     (ext_dma_req.q.write                   ),
-    .mem_rvalid_i (ext_dma_rsp.p_valid                   ),
-    .mem_rdata_i  (ext_dma_rsp.p.data                    )
-  );
-
-  assign ext_dma_req.q.addr = tcdm_addr_t'(ext_dma_req_q_addr_nontrunc);
-  assign ext_dma_req.q.amo  = reqrsp_pkg::AMONone;
-  assign ext_dma_req.q.user = '0;
-
-  spatz_tcdm_interconnect #(
-    .NumInp                (1                 ),
-    .NumOut                (NrSuperBanks      ),
-    .tcdm_req_t            (tcdm_dma_req_t    ),
-    .tcdm_rsp_t            (tcdm_dma_rsp_t    ),
-    .mem_req_t             (mem_dma_req_t     ),
-    .mem_rsp_t             (mem_dma_rsp_t     ),
-    .user_t                (logic             ),
-    .MemAddrWidth          (TCDMMemAddrWidth  ),
-    .DataWidth             (AxiDataWidth      ),
-    .MemoryResponseLatency (MemoryMacroLatency)
-  ) i_dma_interconnect (
-    .clk_i     (clk_i      ),
-    .rst_ni    (rst_ni     ),
-    .req_i     (ext_dma_req),
-    .rsp_o     (ext_dma_rsp),
-    .mem_req_o (   ),
-    .mem_rsp_i ('0 )
-  );
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready, cache_amo_pready;
 
   // TODO: remove this module
   // where to deal with cache flushing protection?
-  spatz_addr_mapper #(
-    .NumIO          (NrTCDMPortsCores ),
-    .AddrWidth      (L1AddrWidth      ),
-    .SPMAddrWidth   (SPMAddrWidth     ),
-    .DataWidth      (DataWidth        ),
-    .mem_req_t      (tcdm_req_t       ),
-    .mem_rsp_t      (tcdm_rsp_t       ),
-    .mem_rsp_chan_t (tcdm_rsp_chan_t  ),
-    .spm_req_t      (spm_req_t        ),
-    .spm_rsp_t      (spm_rsp_t        )
-  ) i_tcdm_mapper (
-    .clk_i                (clk_i           ),
-    .rst_ni               (rst_ni          ),
-    // Input
-    .mem_req_i            (tcdm_req        ),
-    .mem_rsp_o            (tcdm_rsp        ),
-    .error_o              (spm_error       ),
-    // Address
-    .tcdm_start_address_i (tcdm_start_address[L1AddrWidth-1:0] ),
-    .tcdm_end_address_i   (tcdm_end_address[L1AddrWidth-1:0]   ),
-    .spm_size_i           (tcdm_end_address[L1AddrWidth-1:0] -  tcdm_start_address[L1AddrWidth-1:0]),
-    .flush_i              (l1d_busy        ),
-    // Output
-    .spm_req_o            (                ),
-    .spm_rsp_i            ('0              ),
-    .cache_req_o          (unmerge_req     ),
-    .cache_pready_o       (unmerge_pready  ),
-    .cache_rsp_i          (unmerge_rsp     )
-  );
+
+  always_comb begin : cache_flush_protection
+    for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
+      /***** REQ *****/
+      // Wire to Cache outputs
+      unmerge_req[j].q       = tcdm_req[j].q;
+      // invalidate the request when cache is busy
+      unmerge_req[j].q_valid = tcdm_req[j].q_valid && (!l1d_busy);
+      unmerge_pready[j]      = 1'b1;
+
+      /***** RSP *****/
+      tcdm_rsp[j].p       = unmerge_rsp[j].p;
+      tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
+      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !(l1d_busy);
+    end
+
+  end
 
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
     for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin
@@ -677,18 +591,18 @@ module cachepool_tile
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
-  logic [$clog2(32)-1:0] dynamic_offset;
+  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
     tcdm_cache_interco #(
-      .NumCore               (NrCores             ),
-      .NumCache              (NumL1CacheCtrl      ),
-      .AddrWidth             (32'd32              ),
-      .tcdm_req_t            (tcdm_req_t          ),
-      .tcdm_rsp_t            (tcdm_rsp_t          ),
-      .tcdm_req_chan_t       (tcdm_req_chan_t     ),
-      .tcdm_rsp_chan_t       (tcdm_rsp_chan_t     )
+      .NumCore               (NrCores           ),
+      .NumCache              (NumL1CacheCtrl    ),
+      .AddrWidth             (TCDMAddrWidth     ),
+      .tcdm_req_t            (tcdm_req_t        ),
+      .tcdm_rsp_t            (tcdm_rsp_t        ),
+      .tcdm_req_chan_t       (tcdm_req_chan_t   ),
+      .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
       .clk_i            (clk_i                  ),
       .rst_ni           (rst_ni                 ),
@@ -722,21 +636,50 @@ module cachepool_tile
         .mem_rsp_ready_o  (cache_amo_pready [j][cb] ),
         .mem_rsp_i        (cache_amo_rsp    [j][cb] )
       );
-      assign cache_req_valid[cb][j] = cache_amo_req[j][cb].q_valid;
-      assign cache_req_addr [cb][j] = cache_amo_req[j][cb].q.addr;
-      assign cache_req_meta [cb][j] = cache_amo_req[j][cb].q.user;
-      assign cache_req_write[cb][j] = cache_amo_req[j][cb].q.write;
-      assign cache_req_data [cb][j] = cache_amo_req[j][cb].q.data;
 
-      // assign cache_rsp_ready[cb][j] = 1'b1;
-      assign cache_rsp_ready[cb][j] = cache_amo_pready[j][cb];
+      tcdm_req_t cache_req_reg;
+      tcdm_rsp_t cache_rsp_reg;
 
-      assign cache_amo_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
-      assign cache_amo_rsp[j][cb].q_ready = cache_req_ready[cb][j];
-      assign cache_amo_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
-      assign cache_amo_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
+      spill_register #(
+        .T      ( tcdm_req_chan_t ),
+        .Bypass ( 1'b0            )
+      ) i_spill_reg_cache_req (
+        .clk_i                            ,
+        .rst_ni  ( rst_ni                ),
+        .valid_i ( cache_amo_req[j][cb].q_valid ),
+        .ready_o ( cache_amo_rsp[j][cb].q_ready ),
+        .data_i  ( cache_amo_req[j][cb].q       ),
+        .valid_o ( cache_req_reg.q_valid        ),
+        .ready_i ( cache_rsp_reg.q_ready        ),
+        .data_o  ( cache_req_reg.q              )
+      );
 
-      assign cache_amo_rsp[j][cb].p.write = cache_rsp_write[cb][j];
+      spill_register #(
+        .T      ( tcdm_rsp_chan_t ),
+        .Bypass ( 1'b1            )
+      ) i_spill_reg_cache_rsp (
+        .clk_i                                     ,
+        .rst_ni  ( rst_ni                         ),
+        .valid_i ( cache_rsp_reg.p_valid          ),
+        .ready_o ( cache_rsp_ready [cb][j]        ),
+        .data_i  ( cache_rsp_reg.p                ),
+        .valid_o ( cache_amo_rsp   [j][cb].p_valid),
+        .ready_i ( cache_amo_pready[j][cb]        ),
+        .data_o  ( cache_amo_rsp   [j][cb].p      )
+      );
+
+      assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
+      assign cache_req_addr [cb][j] = cache_req_reg.q.addr;
+      assign cache_req_meta [cb][j] = cache_req_reg.q.user;
+      assign cache_req_write[cb][j] = cache_req_reg.q.write;
+      assign cache_req_data [cb][j] = cache_req_reg.q.data;
+
+      assign cache_rsp_reg.p_valid = cache_rsp_valid[cb][j];
+      assign cache_rsp_reg.q_ready = cache_req_ready[cb][j];
+      assign cache_rsp_reg.p.data  = cache_rsp_data [cb][j];
+      assign cache_rsp_reg.p.user  = cache_rsp_meta [cb][j];
+
+      assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
     end
   end
 
@@ -792,57 +735,41 @@ module cachepool_tile
       // Request
       .core_req_valid_i      (cache_req_valid[cb]            ),
       .core_req_ready_o      (cache_req_ready[cb]            ),
-      .core_req_addr_i       (cache_req_addr[cb]             ),
-      .core_req_meta_i       (cache_req_meta[cb]             ),
+      .core_req_addr_i       (cache_req_addr [cb]            ),
+      .core_req_meta_i       (cache_req_meta [cb]            ),
       .core_req_write_i      (cache_req_write[cb]            ),
-      .core_req_wdata_i      (cache_req_data[cb]             ),
+      .core_req_wdata_i      (cache_req_data [cb]            ),
       // Response
       .core_resp_valid_o     (cache_rsp_valid[cb]            ),
       .core_resp_ready_i     (cache_rsp_ready[cb]            ),
       .core_resp_write_o     (cache_rsp_write[cb]            ),
-      .core_resp_data_o      (cache_rsp_data[cb]             ),
-      .core_resp_meta_o      (cache_rsp_meta[cb]             ),
-      // // AXI refill
-      // .axi_req_o             (axi_cache_req_prescrambled[cb] ),
-      // .axi_resp_i            (axi_cache_rsp_i[cb]            ),
-      .refill_req_o          (cache_refill_req[cb]   ),
-      .refill_req_valid_o    (cache_refill_req_valid[cb] ),
-      .refill_req_ready_i    (cache_refill_req_ready[cb] ),
-      .refill_rsp_i          (cache_refill_rsp[cb]   ),
-      .refill_rsp_valid_i    (cache_refill_rsp_valid[cb] ),
-      .refill_rsp_ready_o    (cache_refill_rsp_ready[cb] ),
+      .core_resp_data_o      (cache_rsp_data [cb]            ),
+      .core_resp_meta_o      (cache_rsp_meta [cb]            ),
+      // TCDM Refill
+      .refill_req_o          (cache_refill_req      [cb]     ),
+      .refill_req_valid_o    (cache_refill_req_valid[cb]     ),
+      .refill_req_ready_i    (cache_refill_req_ready[cb]     ),
+      .refill_rsp_i          (cache_refill_rsp      [cb]     ),
+      .refill_rsp_valid_i    (cache_refill_rsp_valid[cb]     ),
+      .refill_rsp_ready_o    (cache_refill_rsp_ready[cb]     ),
       // Tag Banks
-      .tcdm_tag_bank_req_o   (l1_tag_bank_req[cb]            ),
-      .tcdm_tag_bank_we_o    (l1_tag_bank_we[cb]             ),
-      .tcdm_tag_bank_addr_o  (l1_tag_bank_addr[cb]           ),
+      .tcdm_tag_bank_req_o   (l1_tag_bank_req  [cb]          ),
+      .tcdm_tag_bank_we_o    (l1_tag_bank_we   [cb]          ),
+      .tcdm_tag_bank_addr_o  (l1_tag_bank_addr [cb]          ),
       .tcdm_tag_bank_wdata_o (l1_tag_bank_wdata[cb]          ),
-      .tcdm_tag_bank_be_o    (l1_tag_bank_be[cb]             ),
+      .tcdm_tag_bank_be_o    (l1_tag_bank_be   [cb]          ),
       .tcdm_tag_bank_rdata_i (l1_tag_bank_rdata[cb]          ),
       // Data Banks
-      .tcdm_data_bank_req_o  (l1_data_bank_req[cb]           ),
-      .tcdm_data_bank_we_o   (l1_data_bank_we[cb]            ),
-      .tcdm_data_bank_addr_o (l1_data_bank_addr[cb]          ),
+      .tcdm_data_bank_req_o  (l1_data_bank_req  [cb]         ),
+      .tcdm_data_bank_we_o   (l1_data_bank_we   [cb]         ),
+      .tcdm_data_bank_addr_o (l1_data_bank_addr [cb]         ),
       .tcdm_data_bank_wdata_o(l1_data_bank_wdata[cb]         ),
-      .tcdm_data_bank_be_o   (l1_data_bank_be[cb]            ),
+      .tcdm_data_bank_be_o   (l1_data_bank_be   [cb]         ),
       .tcdm_data_bank_rdata_i(l1_data_bank_rdata[cb]         ),
-      .tcdm_data_bank_gnt_i  (l1_data_bank_gnt[cb]           )
+      .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
     );
 
     always_comb begin : bank_addr_scramble
-      // axi_cache_req_o[cb] = axi_cache_req_prescrambled[cb];
-      // // Pass the lower bits first
-      // axi_cache_req_o[cb].ar.addr  =   axi_cache_req_prescrambled[cb].ar.addr & bitmask_lo;
-      // // Shift the upper part to its location
-      // axi_cache_req_o[cb].ar.addr |= ((axi_cache_req_prescrambled[cb].ar.addr & bitmask_up) << NumSelBits);
-      // // Add back the removed cache bank ID
-      // axi_cache_req_o[cb].ar.addr |= (cb << dynamic_offset);
-
-      // axi_cache_req_o[cb].ar.id = cb;
-      // axi_cache_req_o[cb].aw.id = cb;
-
-      // axi_cache_rsp_prescrambled[cb]      = axi_cache_rsp_i[cb];
-      // axi_cache_rsp_prescrambled[cb].r.id = '0;
-
       // TODO: use info and cb to calculate ID correctly
       cache_refill_req_o[cb].q = '{
         addr : cache_refill_req[cb].addr,
@@ -863,8 +790,6 @@ module cachepool_tile
       };
       cache_refill_req_o[cb].q_valid = cache_refill_req_valid[cb];
       cache_refill_req_o[cb].p_ready = cache_refill_rsp_ready[cb];
-      // cache_refill_req_o[cb].p_ready = 1'b1;
-
 
       cache_refill_rsp[cb] = '{
         data  : cache_refill_rsp_i[cb].p.data,
@@ -977,10 +902,7 @@ module cachepool_tile
     localparam int unsigned TcdmPorts     = get_tcdm_ports(i);
     localparam int unsigned TcdmPortsOffs = get_tcdm_port_offs(i);
 
-    axi_mst_dma_req_t axi_dma_req;
-    axi_mst_dma_resp_t axi_dma_res;
     interrupts_t irq;
-    dma_events_t dma_core_events;
 
     sync #(.STAGES (2))
     i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i[i]), .serial_o (irq.debug));
@@ -1015,6 +937,8 @@ module cachepool_tile
       .DMAReqFifoDepth         (DMAReqFifoDepth            ),
       .dreq_t                  (reqrsp_req_t               ),
       .drsp_t                  (reqrsp_rsp_t               ),
+      .dreq_chan_t             (reqrsp_req_chan_t          ),
+      .drsp_chan_t             (reqrsp_rsp_chan_t          ),
       .tcdm_req_t              (tcdm_req_t                 ),
       .tcdm_user_t             (tcdm_user_t                ),
       .tcdm_req_chan_t         (tcdm_req_chan_t            ),
@@ -1033,15 +957,15 @@ module cachepool_tile
       .dma_perf_t              (axi_dma_pkg::dma_perf_t    ),
       .XDivSqrt                (1'b0                       ),
       .XF16                    (1'b1                       ),
-      .XF16ALT                 (1'b1                       ),
+      .XF16ALT                 (1'b0                       ),
       .XF8                     (1'b1                       ),
-      .XF8ALT                  (1'b1                       ),
+      .XF8ALT                  (1'b0                       ),
       .IsoCrossing             (1'b0                       ),
       .NumIntOutstandingLoads  (NumIntOutstandingLoads  [i]),
       .NumIntOutstandingMem    (NumIntOutstandingMem    [i]),
       .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads[i]),
       .FPUImplementation       (FPUImplementation       [i]),
-      .StackDepth              (StackDepth                 ),
+      .SpmStackDepth           (SpmStackDepth              ),
       .RegisterOffloadRsp      (RegisterOffloadRsp         ),
       .RegisterCoreReq         (RegisterCoreReq            ),
       .RegisterCoreRsp         (RegisterCoreRsp            ),
@@ -1060,11 +984,6 @@ module cachepool_tile
       .data_rsp_i       (core_rsp[i]                         ),
       .tcdm_req_o       (tcdm_req_wo_user                    ),
       .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]),
-      .axi_dma_req_o    (axi_dma_req                         ),
-      .axi_dma_res_i    (axi_dma_res                         ),
-      .axi_dma_busy_o   (/* Unused */                        ),
-      .axi_dma_perf_o   (/* Unused */                        ),
-      .axi_dma_events_o (dma_core_events                     ),
       .core_events_o    (core_events[i]                      ),
       .tcdm_addr_base_i (tcdm_start_address                  )
     );
@@ -1074,13 +993,6 @@ module cachepool_tile
         tcdm_req[TcdmPortsOffs+j].q.user.core_id = i[CoreIDWidth-1:0];
         tcdm_req[TcdmPortsOffs+j].q_valid        = tcdm_req_wo_user[j].q_valid;
       end
-    end
-    if (Xdma[i]) begin : gen_dma_connection
-      assign wide_axi_mst_req[SDMAMst] = axi_dma_req;
-      assign axi_dma_res               = wide_axi_mst_rsp[SDMAMst];
-      assign dma_events                = dma_core_events;
-    end else begin
-      assign axi_dma_res = '0;
     end
   end
 
@@ -1213,11 +1125,6 @@ module cachepool_tile
 
   assign cluster_xbar_rules = '{
     '{
-      idx       : TCDM,
-      start_addr: tcdm_start_address,
-      end_addr  : tcdm_end_address
-    },
-    '{
       idx       : ClusterPeripherals,
       start_addr: cluster_periph_start_address,
       end_addr  : cluster_periph_end_address
@@ -1261,32 +1168,6 @@ module cachepool_tile
     .default_mst_port_i    (ClusterXbarDefaultPort     )
   );
 
-  // axi_to_tcdm #(
-  //   .axi_req_t  (axi_slv_req_t         ),
-  //   .axi_rsp_t  (axi_slv_resp_t        ),
-  //   .tcdm_req_t (spm_req_t             ),
-  //   .tcdm_rsp_t (spm_rsp_t             ),
-  //   .AddrWidth  (AxiAddrWidth          ),
-  //   .DataWidth  (NarrowDataWidth       ),
-  //   .UserWidth  ('0),
-  //   .IdWidth    (NarrowIdWidthOut      ),
-  //   .BufDepth   (MemoryMacroLatency + 1)
-  // ) i_axi_to_tcdm (
-  //   .clk_i      (clk_i                   ),
-  //   .rst_ni     (rst_ni                  ),
-  //   .axi_req_i  (narrow_axi_slv_req[TCDM]),
-  //   .axi_rsp_o  (narrow_axi_slv_rsp[TCDM]),
-  //   .tcdm_req_o (             ),
-  //   .tcdm_rsp_i ('0             )
-  // );
-
-  assign narrow_axi_slv_rsp[TCDM] = '0;
-
-  // // 2. Peripherals
-  // // Peripherals at cluster level.
-  // assign axi_narrow_req_o[TilePeriph] = narrow_axi_slv_req[ClusterPeripherals];
-  // assign narrow_axi_slv_rsp[ClusterPeripherals] = axi_narrow_rsp_i[TilePeriph];
-
   // 2. Peripherals
   // Diyou: should we move it to cluster level?
   axi_to_reg #(
@@ -1310,6 +1191,8 @@ module cachepool_tile
     .reg_req_o  (reg_req                               ),
     .reg_rsp_i  (reg_rsp                               )
   );
+
+  assign dma_events = '0;
 
   spatz_cluster_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
@@ -1382,6 +1265,8 @@ module cachepool_tile
     .mst_resp_i (narrow_axi_slv_resp_soc )
   );
 
+  // TODO: Do we need this data path?
+  // core will never use it as wide destination is only BootRom and main memory
   axi_dw_converter #(
     .AxiAddrWidth       (AxiAddrWidth               ),
     .AxiIdWidth         (WideIdWidthIn              ),

@@ -24,14 +24,22 @@ workspace:
 export_include_dirs:
 
 sources:
+  # Level 0
   - hardware/src/reqrsp_xbar.sv
   - hardware/src/tcdm_cache_interco.sv
-  - hardware/src/cachepool_pkg.sv
   - hardware/src/tcdm_id_remapper.sv
+  - hardware/src/spatz_cache_amo.sv
+  # Level 1
+  - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
+  # Level 2
   - hardware/src/cachepool_tile.sv
+  # Level 3
   - hardware/src/cachepool_cluster.sv
-  # testbench
+  # Level 4
   - hardware/tb/cachepool_cluster_wrapper.sv
-  - hardware/tb/axi_uart.sv
-  - hardware/tb/tb_cachepool.sv
+  # testbench
+  - target: simulation
+    files:
+    - hardware/tb/axi_uart.sv
+    - hardware/tb/tb_cachepool.sv

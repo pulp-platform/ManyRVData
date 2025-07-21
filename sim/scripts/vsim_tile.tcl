@@ -35,6 +35,7 @@ for {set c 0} {$c < 5} {incr c} {
 
 # Add waves for atomic units
 add wave -noupdate -group tile[$1] -group amo0_4 /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_cache_connect[0]/gen_cache_amo[4]/i_cache_amo/*
+add wave -noupdate -group tile[$1] -group amo2_4 /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_cache_connect[2]/gen_cache_amo[4]/i_cache_amo/*
 
 # Add waves for remaining signals
 add wave -noupdate -group tile[$1] /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/*

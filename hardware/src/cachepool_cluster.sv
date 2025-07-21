@@ -454,7 +454,6 @@ module cachepool_cluster
       l2_req[ch].q.user  = '{
         bank_id: l2_req_chan[ch].user.bank_id,
         info:    l2_req_chan[ch].user.info,
-        // xbar_id: tile_selected[ch],
         default: '0
       };
       l2_req[ch].q_valid = l2_req_valid[ch] ;
@@ -511,7 +510,7 @@ module cachepool_cluster
   // Optionally decouple the external wide AXI master port.
   for (genvar port = 0; port < NumClusterSlv; port ++) begin : gen_axi_out_cut
     axi_cut #(
-      .Bypass     (!RegisterExt               ),
+      .Bypass     (0               ),
       .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
       .w_chan_t   (axi_slv_cache_w_chan_t     ),
       .b_chan_t   (axi_slv_cache_b_chan_t     ),
