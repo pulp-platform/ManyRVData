@@ -20,10 +20,10 @@
   "pkg_length": 1350,
   "pdcp_header_length": 10,
   "src_addr": "0xA0000000",
-  "src_length": 16384, // 16384 bytes = 16 KiB
+  "src_length": 16777216, // 16777216 bytes = 16 MiB
   "tgt_addr": "0xB0000000",
-  "tgt_length": 16384, // 16384 bytes = 16 KiB
-  "total_pkg_number": 10 // max 12 packages = 16384 bytes / (1350 + 10) bytes per package
+  "tgt_length": 16777216, // 16777216 bytes = 16 MiB
+  "total_pkg_number": 100 // max 12336 packages = 16777216 bytes / (1350 + 10) bytes per package
 }
 
 // {

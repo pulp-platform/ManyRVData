@@ -1,52 +1,74 @@
 #ifndef RLC_H
 #define RLC_H
 
+#include <stdint.h>
+#include <stdatomic.h>
+#include <stddef.h>
 #include "mm.h"
 #include "llist.h"
 #include "data_move_vec.h"
 #define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes (in current architeture is 16 bytes, but put 64 here for now)
 
-/* rlc_context_t holds the RLC kernel state:
-   - rlcId: RLC entity ID
-   - cellId: Cell ID to which the RLC entity belongs
-   - pollPdu: Number of PDUs polled
-   - pollByte: Number of bytes polled
-   - pduWithoutPoll: Total number of PDUs that are not polled
-   - byteWithoutPoll: Total bytes of PDUs that are not polled
-   - vtNextAck: First SN to be confirmed
-   - vtNext: Next available RLCSN
-   - sendPduNum: Number of PDUs to be confirmed
-   - sendPduBytes: Number of bytes to be confirmed
-   - waitAckLinkHdr/Tail: Linked list for SDUs to be confirmed
+/* rlc_context_t maintains the state of the RLC kernel, including:
+
+   - rlcId: Unique identifier for the RLC entity.
+   - cellId: Identifier for the cell to which this RLC entity belongs.
+   - pollPdu: Number of PDUs for which polling is enabled.
+   - pollByte: Number of bytes for which polling is enabled.
+   - pduWithoutPoll: Total number of PDUs sent without polling.
+   - byteWithoutPoll: Total bytes of PDUs sent without polling.
+   - vtNextAck: Sequence number (SN) of the first unacknowledged PDU.
+   - vtNext: Next available sequence number for a new PDU.
+   - list: Linked list of SDUs pending transmission (to_send list).
+   - sent_list: Linked list of SDUs that have been sent and are awaiting acknowledgment.
+
+   State transitions:
+   - When a producer adds a new node to the to_send list:
+       list.sduNum++
+       list.sduBytes++
+
+   - When a consumer removes a node from the to_send list and transmits it:
+       pduWithoutPoll++
+       byteWithoutPoll++
+       list.sduNum--
+       list.sduBytes--
+       vtNext++
+       sent_list.sduNum++
+       sent_list.sduBytes++
+
+   - When an acknowledgment is received from the UE:
+       vtNextAck++
+       sent_list.sduNum--
+       sent_list.sduBytes--
 */
 typedef struct {
-   unsigned int rlcId;
-   unsigned int cellId; /* Indicates the cell to which the RLC entity belongs.*/
-   unsigned int pollPdu;
-   unsigned int pollByte;
-   unsigned int pduWithoutPoll;  /* Indicates the total number of PDUs that are not polled. */
-   unsigned int byteWithoutPoll; /* Indicates the total bytes of PDUs that are not polled. */
+   unsigned int rlcId __attribute__((aligned(4)));
+   unsigned int cellId __attribute__((aligned(4))); /* Indicates the cell to which the RLC entity belongs.*/
+   _Atomic unsigned int pollPdu __attribute__((aligned(4)));
+   _Atomic unsigned int pollByte __attribute__((aligned(4)));
+   _Atomic unsigned int pduWithoutPoll __attribute__((aligned(4)));  /* Indicates the total number of PDUs that are not polled. */
+   _Atomic unsigned int byteWithoutPoll __attribute__((aligned(4))); /* Indicates the total bytes of PDUs that are not polled. */
 
    // unsigned int sduNum; /* Number of sdus to be sent */
    // unsigned int sduBytes; /* Number of sdus bytes to be sent */
    // void *sduLinkHdr; /* First SDU to be sent */
    // void *sduLinkTail; /* Last SDU to be sent */
-   LinkedList list;
-   char Reserve1[CACHE_LINE_SIZE-6-sizeof(LinkedList)]; /* Reserved for future use, pieced into a cacheline */
+   LinkedList list __attribute__((aligned(4)));
+   char Reserve1[CACHE_LINE_SIZE-6-sizeof(LinkedList)] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
 
-   unsigned int vtNextAck; /* First SN to be confirmed */
-   unsigned int vtNext; /* Next Available RLCSN */
+   _Atomic unsigned int vtNextAck __attribute__((aligned(4))); /* First SN to be confirmed */
+   _Atomic unsigned int vtNext __attribute__((aligned(4))); /* Next Available RLCSN */
    // unsigned int sendPduNum; /* Number of pdus to be confirmed */
    // unsigned int sendPduBytes; /* Number of pdus to be confirmed */
    // void *waitAckLinkHdr;  /* First SDU to be confirmed */
    // void *waitAckLinkTail; /* Last SDU to be confirmed */
-   LinkedList sent_list;
-   char Reserve2[CACHE_LINE_SIZE-2-sizeof(LinkedList)]; /* Reserved for future use, pieced into a cacheline */
+   LinkedList sent_list __attribute__((aligned(4)));
+   char Reserve2[CACHE_LINE_SIZE-2-sizeof(LinkedList)] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
 
-   mm_context_t *mm_ctx;
+   mm_context_t *mm_ctx __attribute__((aligned(4)));
 } rlc_context_t;
 
-volatile rlc_context_t rlc_ctx;
+rlc_context_t rlc_ctx;
 
 /* rlc_init() initializes the RLC context for the given RLC ID and cell ID.
    It sets the initial values for pollPdu, pollByte, pduWithoutPoll, byteWithoutPoll,

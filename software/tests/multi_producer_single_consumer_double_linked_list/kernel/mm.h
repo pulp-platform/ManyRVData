@@ -5,8 +5,9 @@
 #include <stdint.h>
 #include "llist.h"
 
-#define PAGE_SIZE (1024)             /* Fixed size of each memory page in bytes */
-#define BUFFER_SIZE (PAGE_SIZE * 32)      /* memory pool size in byte */
+// #define PAGE_SIZE (1024)                 /* Fixed size of each memory page in bytes */
+#define PAGE_SIZE (sizeof(Node))          /* Fixed size of each memory page in bytes */
+#define BUFFER_SIZE (PAGE_SIZE * 1024)      /* memory pool size in byte */
 
 static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))
@@ -29,7 +30,7 @@ typedef struct {
 
 mm_context_t mm_ctx;
 
-/* 
+/*
    mm_init() initializes the memory management context.
 */
 void mm_init();

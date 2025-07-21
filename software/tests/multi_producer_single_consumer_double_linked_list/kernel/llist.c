@@ -20,7 +20,7 @@ void list_init(LinkedList *list) {
     list->lock = 0;
 }
 
-void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
+void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *node) {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_body_0, timer_body_1;
@@ -37,25 +37,25 @@ void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
 
     timer_body_0 = benchmark_get_cycle();
     node->next = NULL;
-    node->prev = rlc_ctx.list.tail;
+    node->prev = list->tail;
 
     // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][list_push_back] rlc_ctx.list.tail=0x%x\n",
-    //     snrt_cluster_core_idx(), rlc_ctx.list.tail);
+    // printf("[core %u][list_push_back] list->tail=0x%x\n",
+    //     snrt_cluster_core_idx(), list->tail);
     // printf_lock_release(&printf_lock);
-    if (rlc_ctx.list.tail != NULL) {
-        rlc_ctx.list.tail->next = node;
+    if (list->tail != NULL) {
+        list->tail->next = node;
     } else {
         /* If the list is empty, set the head to the new node */
-        rlc_ctx.list.head = node;
+        list->head = node;
     }
-    rlc_ctx.list.tail = node;
+    list->tail = node;
     // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][list_push_back] rlc_ctx.list.head=0x%x, rlc_ctx.list.tail=0x%x\n", 
-    //     snrt_cluster_core_idx(), rlc_ctx.list.head, rlc_ctx.list.tail);
+    // printf("[core %u][list_push_back] list->head=0x%x, list->tail=0x%x\n",
+    //     snrt_cluster_core_idx(), list->head, list->tail);
     // printf_lock_release(&printf_lock);
-    rlc_ctx.list.sduNum++;
-    rlc_ctx.list.sduBytes += node->data_size;
+    list->sduNum++;
+    list->sduBytes += node->data_size;
     timer_body_1 = benchmark_get_cycle();
 
     // spin_unlock(&list->lock);
@@ -65,11 +65,11 @@ void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
 
     printf_lock_acquire(&printf_lock);
     printf("[core %u][list_push_back] spin_unlock, node=%p, \
-        rlc_ctx.list.head=0x%x, rlc_ctx.list.tail=0x%x, ac=%d, bd=%d, rl=%d\n",
+        list->head=0x%x, list->tail=0x%x, ac=%d, bd=%d, rl=%d\n",
         snrt_cluster_core_idx(),
         (void *)node,
-        rlc_ctx.list.head,
-        rlc_ctx.list.tail,
+        list->head,
+        list->tail,
         (timer_ac_lock_1 - timer_ac_lock_0),
         (timer_body_1 - timer_body_0),
         (timer_rl_lock_1 - timer_rl_lock_0)
@@ -77,7 +77,7 @@ void list_push_back(spinlock_t *llist_lock, volatile Node *node) {
     printf_lock_release(&printf_lock);
 }
 
-Node *list_pop_front(spinlock_t *llist_lock) {
+Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_body_0, timer_body_1;
@@ -93,16 +93,16 @@ Node *list_pop_front(spinlock_t *llist_lock) {
     printf_lock_release(&printf_lock);
 
     timer_body_0 = benchmark_get_cycle();
-    if (rlc_ctx.list.head != NULL) {
-        node = rlc_ctx.list.head;
-        rlc_ctx.list.head = node->next;
+    if (list->head != NULL) {
+        node = list->head;
+        list->head = node->next;
 
         // printf_lock_acquire(&printf_lock);
         // printf("[core %u][list_pop_front] p1\n", snrt_cluster_core_idx());
         // printf_lock_release(&printf_lock);
 
-        if (rlc_ctx.list.head != NULL) {
-            rlc_ctx.list.head->prev = NULL;
+        if (list->head != NULL) {
+            list->head->prev = NULL;
 
             // printf_lock_acquire(&printf_lock);
             // printf("[core %u][list_pop_front] p2\n", snrt_cluster_core_idx());
@@ -110,7 +110,7 @@ Node *list_pop_front(spinlock_t *llist_lock) {
 
         } else {
             /* List becomes empty, so tail is also NULL */
-            rlc_ctx.list.tail = NULL;
+            list->tail = NULL;
 
 
             // printf_lock_acquire(&printf_lock);
@@ -119,8 +119,8 @@ Node *list_pop_front(spinlock_t *llist_lock) {
         }
         node->next = NULL;
         node->prev = NULL;
-        rlc_ctx.list.sduNum--;
-        rlc_ctx.list.sduBytes -= node->data_size;
+        list->sduNum--;
+        list->sduBytes -= node->data_size;
     }
     timer_body_1 = benchmark_get_cycle();
 
@@ -155,13 +155,13 @@ void list_remove(spinlock_t *llist_lock, LinkedList *list, Node *node) {
         node->prev->next = node->next;
     } else {
         /* If removing the head */
-        rlc_ctx.list.head = node->next;
+        list->head = node->next;
     }
     if (node->next != NULL) {
         node->next->prev = node->prev;
     } else {
         /* If removing the tail */
-        rlc_ctx.list.tail = node->prev;
+        list->tail = node->prev;
     }
     node->prev = NULL;
     node->next = NULL;

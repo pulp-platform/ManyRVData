@@ -12,7 +12,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_10.h"
+#include "../data/data_1_1350_100.h"
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
@@ -100,9 +100,8 @@ int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
 /* Consumer behavior (runs on core 0) */
 static void consumer(const unsigned int core_id) {
     while (1) {
-        Node *node = list_pop_front(&tosend_llist_lock);
+        Node *node = list_pop_front(&tosend_llist_lock, &rlc_ctx.list);
         if (node != 0) {
-
             printf_lock_acquire(&printf_lock);
             printf("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x\n",
                    core_id, (void *)node, node->data_size, node->data, node->tgt);
@@ -120,8 +119,12 @@ static void consumer(const unsigned int core_id) {
             vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, rlc_ctx.vtNext);
             timer_mv_1 = benchmark_get_cycle();
 
+            // Update the RLC struct variables
+            atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,                  memory_order_relaxed);
+            atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size,    memory_order_relaxed);
             // Increment the next available RLC sequence number
-            rlc_ctx.vtNext++;
+            atomic_fetch_add_explicit(&rlc_ctx.vtNext,          1,                  memory_order_relaxed);
+
 
             printf_lock_acquire(&printf_lock);
             printf("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
@@ -130,7 +133,35 @@ static void consumer(const unsigned int core_id) {
                    (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
             printf_lock_release(&printf_lock);
 
-            mm_free(node);
+             // Add the node to the sent list
+            list_push_back(&sent_llist_lock, &rlc_ctx.sent_list, node);
+
+            // Simulate receiving ACK from UE after certain sent pkgs, and we assume the ACK_SN is rlc_ctx.vtNextAck+2
+            if (rlc_ctx.sent_list.sduNum >= 6) {
+                int ACK_SN = rlc_ctx.vtNextAck + 2; // Assume each time ack 2 sent pkgs
+                // printf_lock_acquire(&printf_lock);
+                // printf("[core %u][consumer] pollPdu=%d, pollByte=%d, sent_list.sduNum=%d, sent_list.sduBytes=%d\n",
+                //        snrt_cluster_core_idx(), rlc_ctx.pollPdu, rlc_ctx.pollByte,
+                //        rlc_ctx.sent_list.sduNum, rlc_ctx.sent_list.sduBytes);
+                // printf_lock_release(&printf_lock);
+
+                for (int i = rlc_ctx.vtNextAck; i < ACK_SN; i++) {
+                    Node *sent_node = list_pop_front(&sent_llist_lock, &rlc_ctx.sent_list);
+                    if (sent_node != NULL) {
+                        printf_lock_acquire(&printf_lock);
+                        printf("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
+                               snrt_cluster_core_idx(), ACK_SN, i, (void *)sent_node, sent_node->data_size);
+                        printf_lock_release(&printf_lock);
+                    } else {
+                        printf_lock_acquire(&printf_lock);
+                        printf("[core %u][consumer] ERROR: pop sent_list, ACK_SN=%d, SN=%d, but sent_node is NULL\n",
+                               snrt_cluster_core_idx(), ACK_SN, i);
+                        printf_lock_release(&printf_lock);
+                    }
+                    mm_free(sent_node); // Free the sent node memory
+                }
+                atomic_store_explicit(&rlc_ctx.vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
+            }
         } else {
             // delay(10);   /* Wait briefly if list is empty */
         }
@@ -140,10 +171,10 @@ static void consumer(const unsigned int core_id) {
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
     printf_lock_acquire(&printf_lock);
-    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[6][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
+    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
         core_id,
         pdcp_src_data[0][0],
-        pdcp_src_data[6][500],
+        pdcp_src_data[3657][500],
         NUM_SRC_SLOTS,
         PDU_SIZE,
         pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1]);
@@ -200,7 +231,7 @@ static void producer(const unsigned int core_id) {
         // /* Zero-initialize the payload using our custom mm_memset */
         // mm_memset(node->data, 0, PACKET_SIZE);
         /* Append the node to the shared linked list */
-        list_push_back(&tosend_llist_lock, node);
+        list_push_back(&tosend_llist_lock, &rlc_ctx.list, node);
 
         printf_lock_acquire(&printf_lock);
         printf("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 

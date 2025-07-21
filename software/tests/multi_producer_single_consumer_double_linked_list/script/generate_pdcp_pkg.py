@@ -74,7 +74,7 @@ def parse_args():
     parser.add_argument('-o', '--output',
                         help='Output header file (default: ../data/data_<users>_<len>_<pkgs>.h)')
     parser.add_argument('-f', '--fill-zero',
-                        help='Fill unused slots with zeroes (default: True)', action='store_true', default=True)
+                        help='Fill unused slots with zeroes (default: True)', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=42,
                         help='Optional seed for random generator for reproducibility')
     return parser.parse_args()
@@ -156,13 +156,13 @@ def main():
         h.write(f'#define NUM_PKGS      {num_pkgs}\n\n')
 
         # metadata in .pdcp_info
-        h.write('static const pdcp_pkg_t __attribute__((section(".pdcp_info"))) pdcp_pkgs[NUM_PKGS] = {\n')
+        h.write('static const pdcp_pkg_t __attribute__((section(".pdcp_info"), used)) pdcp_pkgs[NUM_PKGS] = {\n')
         for uid, s, t, plen in entries:
             h.write(f'    {{ {uid}, 0x{s:08X}, 0x{t:08X}, {plen} }},\n')
         h.write('};\n\n')
 
         # src data in its own section so .pdcp_src can be located at src_base
-        h.write('static const uint8_t __attribute__((section(".pdcp_src"))) '
+        h.write('static const uint8_t __attribute__((section(".pdcp_src"), used)) '
                'pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE] = {\n')
         for slot in range(num_src_slots):
             if args.fill_zero:
