@@ -120,78 +120,60 @@ module cachepool_cluster_wrapper
   `FF (axi_ar_valid_cnt_q, axi_ar_valid_cnt_d, '0)
   `FF (axi_ar_trans_cnt_q, axi_ar_trans_cnt_d, '0)
 
-  // AW channel utilization
-  cnt_t [NumClusterSlv-1:0] axi_aw_valid_cnt_d, axi_aw_valid_cnt_q;
-  cnt_t [NumClusterSlv-1:0] axi_aw_trans_cnt_d, axi_aw_trans_cnt_q;
-  `FF (axi_aw_valid_cnt_q, axi_aw_valid_cnt_d, '0)
-  `FF (axi_aw_trans_cnt_q, axi_aw_trans_cnt_d, '0)
+  // R channel utilization
+  cnt_t [NumClusterSlv-1:0] axi_r_valid_cnt_d, axi_r_valid_cnt_q;
+  cnt_t [NumClusterSlv-1:0] axi_r_trans_cnt_d, axi_r_trans_cnt_q;
+  `FF (axi_r_valid_cnt_q, axi_r_valid_cnt_d, '0)
+  `FF (axi_r_trans_cnt_q, axi_r_trans_cnt_d, '0)
 
   // number of cycles inside kernel
   cnt_t act_cyc_d, act_cyc_q;
-  cnt_t [NumClusterSlv-1:0] act_ar_trans_cnt_d, act_ar_trans_cnt_q;
   `FF (act_cyc_q, act_cyc_d, '0)
-  `FF (act_ar_trans_cnt_q, act_ar_trans_cnt_d, '0)
 
 
   always_comb begin : gen_axi_perf_cnt_comb
     axi_ar_valid_cnt_d = axi_ar_valid_cnt_q;
     axi_ar_trans_cnt_d = axi_ar_trans_cnt_q;
-    axi_aw_valid_cnt_d = axi_aw_valid_cnt_q;
-    axi_aw_trans_cnt_d = axi_aw_trans_cnt_q;
+    axi_r_valid_cnt_d  = axi_r_valid_cnt_q;
+    axi_r_trans_cnt_d  = axi_r_trans_cnt_q;
 
     act_cyc_d = act_cyc_q;
-    act_ar_trans_cnt_d = act_ar_trans_cnt_q;
 
     if (cluster_probe_o) begin
       act_cyc_d ++;
-    end
 
-    for (int i = 0; i < NumClusterSlv; i++) begin
-      if (axi_out_req_o[i].ar_valid) begin
-        // AR valid
-        axi_ar_valid_cnt_d[i] ++;
-        if (axi_out_resp_i[i].ar_ready) begin
-          // AR valid HS
-          axi_ar_trans_cnt_d[i] ++;
-          if (cluster_probe_o) begin
-            act_ar_trans_cnt_d[i] ++;
+      for (int i = 0; i < NumClusterSlv; i++) begin
+        if (axi_out_req_o[i].ar_valid) begin
+          // AR valid
+          axi_ar_valid_cnt_d[i] ++;
+          if (axi_out_resp_i[i].ar_ready) begin
+            // AR valid HS
+            axi_ar_trans_cnt_d[i] ++;
+          end
+        end
+
+        if (axi_out_resp_i[i].r_valid) begin
+          // AR valid
+          axi_r_valid_cnt_d[i] ++;
+          if (axi_out_req_o[i].r_ready) begin
+            // AR valid HS
+            axi_r_trans_cnt_d[i] ++;
           end
         end
       end
-
-      if (axi_out_req_o[i].aw_valid) begin
-        // AW valid
-        axi_aw_valid_cnt_d[i] ++;
-        if (axi_out_resp_i[i].aw_ready) begin
-          // AW valid HS
-          axi_aw_trans_cnt_d[i] ++;
-        end
-      end
-
     end
   end
 
   final begin
-    automatic real ar_cnt_tot  = axi_ar_valid_cnt_q[0] + axi_ar_valid_cnt_q[1] + axi_ar_valid_cnt_q[2] + axi_ar_valid_cnt_q[3];
-    automatic real ar_tran_tot = axi_ar_trans_cnt_q[0] + axi_ar_trans_cnt_q[1] + axi_ar_trans_cnt_q[2] + axi_ar_trans_cnt_q[3];
-    automatic real ar_util     = ar_cnt_tot == 0 ?
-                                 0 : 100 * ar_tran_tot / ar_cnt_tot;
-    automatic real ar_avg_cyc  = ar_tran_tot == 0 ?
-                                 0 : ar_cnt_tot / ar_tran_tot;
-
-
-    automatic real aw_cnt_tot  = axi_aw_valid_cnt_q[0] + axi_aw_valid_cnt_q[1] + axi_aw_valid_cnt_q[2] + axi_aw_valid_cnt_q[3];
-    automatic real aw_tran_tot = axi_aw_trans_cnt_q[0] + axi_aw_trans_cnt_q[1] + axi_aw_trans_cnt_q[2] + axi_aw_trans_cnt_q[3];
-    automatic real aw_util     = aw_cnt_tot == 0 ?
-                                 0 : 100 * aw_tran_tot / aw_cnt_tot;
-    automatic real aw_avg_cyc  = aw_tran_tot == 0 ?
-                                 0 : aw_cnt_tot / aw_tran_tot;
-
 
     automatic real active_cyc  = act_cyc_q;
     automatic real ar_act_tran = axi_ar_trans_cnt_q[0] + axi_ar_trans_cnt_q[1] + axi_ar_trans_cnt_q[2]+ axi_ar_trans_cnt_q[3];
     automatic real ar_act_util = active_cyc == 0 ?
                                 0 : 100 * ar_act_tran / active_cyc / 4;
+
+    automatic real r_act_tran  = axi_r_trans_cnt_q[0] + axi_r_trans_cnt_q[1] + axi_r_trans_cnt_q[2]+ axi_r_trans_cnt_q[3];
+    automatic real r_act_util  = active_cyc == 0 ?
+                                0 : 100 * r_act_tran / active_cyc / 4;
 
     automatic real ar_act_util0 = active_cyc == 0 ?
                                   0 : 100 * axi_ar_trans_cnt_q[0]/active_cyc;
@@ -202,37 +184,49 @@ module cachepool_cluster_wrapper
     automatic real ar_act_util3 = active_cyc == 0 ?
                                   0 : 100 * axi_ar_trans_cnt_q[3]/active_cyc;
 
+    automatic real r_act_util0  = active_cyc == 0 ?
+                                  0 : 100 * axi_r_trans_cnt_q[0]/active_cyc;
+    automatic real r_act_util1  = active_cyc == 0 ?
+                                  0 : 100 * axi_r_trans_cnt_q[1]/active_cyc;
+    automatic real r_act_util2  = active_cyc == 0 ?
+                                  0 : 100 * axi_r_trans_cnt_q[2]/active_cyc;
+    automatic real r_act_util3  = active_cyc == 0 ?
+                                  0 : 100 * axi_r_trans_cnt_q[3]/active_cyc;
+
     $display(" ");
     $display(" ");
     $display("*********************************************************************");
     $display("***            CachePool Off-Chip AXI Utilization Report          ***");
     $display("   ---------------------------------------------------------------   ");
-    $display("   Total Kernel Cycles:              %16d", active_cyc  );
-    $display("   Total AR Trans in Kernel:         %16d", ar_act_tran );
+    $display("Read");
+    $display("   Total Kernel Cycles:              %16d",   active_cyc  );
+    $display("   Total AR Trans in Kernel:         %16d",   ar_act_tran );
     $display("   Active AR Utilization:            %16.2f", ar_act_util );
-    $display("   CH0 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[0] );
+    $display("   Total R Trans in Kernel:          %16d",   r_act_tran  );
+    $display("   Active R Utilization:             %16.2f", r_act_util  );
+    $display(" Channel 0");
+    $display("   CH0 AR Trans in Kernel:           %16d",   axi_ar_trans_cnt_q[0] );
     $display("   Active AR Utilization:            %16.2f", ar_act_util0 );
-    $display("   CH1 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[1] );
+    $display("   CH0 R Trans in Kernel:            %16d",   axi_r_trans_cnt_q[0] );
+    $display("   Active R Utilization:             %16.2f", r_act_util0 );
+    $display(" Channel 1");
+    $display("   CH1 AR Trans in Kernel:           %16d",   axi_ar_trans_cnt_q[1] );
     $display("   Active AR Utilization:            %16.2f", ar_act_util1 );
-    $display("   CH2 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[2] );
+    $display("   CH1 R Trans in Kernel:            %16d",   axi_r_trans_cnt_q[1] );
+    $display("   Active R Utilization:             %16.2f", r_act_util1 );
+    $display(" Channel 2");
+    $display("   CH2 AR Trans in Kernel:           %16d",   axi_ar_trans_cnt_q[2] );
     $display("   Active AR Utilization:            %16.2f", ar_act_util2 );
-    $display("   CH3 AR Trans in Kernel:           %16d", axi_ar_trans_cnt_q[3] );
+    $display("   CH2 R Trans in Kernel:            %16d",   axi_r_trans_cnt_q[2] );
+    $display("   Active R Utilization:             %16.2f", r_act_util2 );
+    $display(" Channel 3");
+    $display("   CH3 AR Trans in Kernel:           %16d",   axi_ar_trans_cnt_q[3] );
     $display("   Active AR Utilization:            %16.2f", ar_act_util3 );
-    $display("                                                       ");
-    $display("   Number of AR Valid Cycles:        %16d", ar_cnt_tot  );
-    $display("   Number of AR Transaction Counts:  %16d", ar_tran_tot );
-    $display("   AR Utilization:                   %16.2f",ar_util    );
-    $display("   AR AVG Cycles:                    %16.2f",ar_avg_cyc );
-    $display("                                                       ");
-    $display("   Number of AW Valid Cycles:        %16d", aw_cnt_tot  );
-    $display("   Number of AW Transaction Counts:  %16d", aw_tran_tot );
-    $display("   AW Utilization:                   %16.2f",aw_util    );
-    $display("   AW AVG Cycles:                    %16.2f",aw_avg_cyc );
+    $display("   CH3 R Trans in Kernel:            %16d",   axi_r_trans_cnt_q[3] );
+    $display("   Active R Utilization:             %16.2f", r_act_util3 );
     $display("*********************************************************************");
 
   end
-
-`endif
 
   // Assertions
 
@@ -250,5 +244,6 @@ module cachepool_cluster_wrapper
 
   if (AxiOutIdWidth != SpatzAxiIdOutWidth)
     $error("[spatz_cluster_wrapper] AXI Id Width (Out) does not match the configuration.");
+`endif
 
 endmodule

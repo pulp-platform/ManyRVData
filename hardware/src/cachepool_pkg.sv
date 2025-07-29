@@ -35,7 +35,7 @@ package cachepool_pkg;
   localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
 
   // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth       = 10;
+  localparam int unsigned SpatzAxiUserWidth       = 17;
 
 
   typedef logic [SpatzAxiDataWidth-1:0]  axi_data_t;
@@ -154,53 +154,50 @@ package cachepool_pkg;
   // Address width of cache
   localparam int unsigned L1AddrWidth         = 32;
   // Cache lane width
-  localparam int unsigned L1LineWidth         = SpatzAxiDataWidth;
+  localparam int unsigned L1LineWidth         = 512;
   // Coalecser window
   localparam int unsigned L1CoalFactor        = 2;
-  // Total number of Data banks
-  localparam int unsigned L1NumDataBank       = 128;
-  // Number of bank wraps SPM can see
-  localparam int unsigned L1NumWrapper        = NumBank;
-  // SPM view: Number of banks in each bank wrap (Use to mitigate routing complexity of such many banks)
-  localparam int unsigned L1BankPerWP         = L1NumDataBank / NumBank;
+  // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
+  localparam int unsigned NumL1CacheCtrl      = NumCores;
+  // Number of ways per cache controller
+  localparam int unsigned L1AssoPerCtrl       = 4;
   // Pesudo dual bank
   localparam int unsigned L1BankFactor        = 2;
-  // Cache ways (total way number across multiple cache controllers)
-  localparam int unsigned L1Associativity     = L1NumDataBank / (L1LineWidth / SpatzDataWidth) / L1BankFactor;
-  // 8 * 1024 * 64 / 512 = 1024)
+  // DataWidth of Tag bank
+  localparam int unsigned L1TagDataWidth      = 64;
+
+  // Number of data banks assigned to each cache controller
+  localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;
+  // Number of tag banks assigned to each cache controller
+  localparam int unsigned NumTagBankPerCtrl   = L1AssoPerCtrl * L1BankFactor;
   // Number of entrys of L1 Cache (total number across multiple cache controllers)
   localparam int unsigned L1NumEntry          = NumBank * L1Depth * SpatzDataWidth / L1LineWidth;
   // Number of cache entries each cache way has
-  localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1Associativity;
-  // Number of cache sets each cache way has
-  localparam int unsigned L1NumSet            = L1CacheWayEntry / L1BankFactor;
-  // Number of Tag banks
-  localparam int unsigned L1NumTagBank        = L1BankFactor * L1Associativity;
-  // Number of lines per bank unit
-  localparam int unsigned DepthPerBank        = L1Depth / L1BankPerWP;
-  // Cache total size in KB
-  localparam int unsigned L1Size              = NumBank * L1Depth * BeWidth / 1024;
-
-  localparam int unsigned L1TagDataWidth      = 64;
-
-  // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
-  localparam int unsigned NumL1CacheCtrl      = NumCores;
-  // Number of data banks assigned to each cache controller
-  localparam int unsigned NumDataBankPerCtrl  = L1NumDataBank / NumL1CacheCtrl;
-  // Number of tag banks assigned to each cache controller
-  localparam int unsigned NumTagBankPerCtrl   = L1NumTagBank / NumL1CacheCtrl;
-  // Number of ways per cache controller
-  localparam int unsigned L1AssoPerCtrl       = L1Associativity / NumL1CacheCtrl;
+  localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1AssoPerCtrl / NumL1CacheCtrl;
   // Number of entries per cache controller
   localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
+  // Number of cache sets each cache way has
+  localparam int unsigned L1NumSet            = L1CacheWayEntry / L1BankFactor;
 
-  localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NumCores);
-  localparam int unsigned BankIDWidth       = cf_math_pkg::idx_width(NumL1CacheCtrl);
+  localparam int unsigned CoreIDWidth         = cf_math_pkg::idx_width(NumCores);
+  localparam int unsigned BankIDWidth         = cf_math_pkg::idx_width(NumL1CacheCtrl);
+
+  localparam int unsigned RefillDataWidth     = 128;
+  localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
 
   typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 
   typedef logic [$clog2(L1CacheWayEntry)-1:0] cache_ways_entry_ptr_t;
   typedef logic [$clog2(L1AssoPerCtrl)-1:0]   way_ptr_t;
+
+  typedef logic [RefillDataWidth-1:0]                     refill_data_t;
+  typedef logic [RefillStrbWidth-1:0]                     refill_strb_t;
+  typedef logic [$clog2(L1LineWidth/RefillDataWidth)-1:0] burst_len_t;
+
+  typedef struct packed {
+    logic        is_burst;
+    burst_len_t  burst_len;
+  } burst_req_t;
 
   typedef struct packed {
       logic                  for_write_pend;
@@ -218,6 +215,7 @@ package cachepool_pkg;
   typedef struct packed {
     logic [BankIDWidth:0]   bank_id;
     cache_info_t            info;
+    burst_req_t             burst;
   } refill_user_t;
 
   // Do we need to keep DMA here?
@@ -242,24 +240,24 @@ package cachepool_pkg;
   // Cache refill bus
   // This bus is at the interface of each cache controller
   typedef struct packed {
-    axi_addr_t   addr;
-    cache_info_t info;
-    logic        write;
-    axi_data_t   wdata;
-    axi_strb_t   wstrb;
+    axi_addr_t      addr;
+    cache_info_t    info;
+    logic           write;
+    refill_data_t   wdata;
+    refill_strb_t   wstrb;
   } cache_refill_req_chan_t;
 
   typedef struct packed {
-    logic        write;
-    axi_data_t   data;
-    cache_info_t info;
+    logic           write;
+    refill_data_t   data;
+    cache_info_t    info;
   } cache_refill_rsp_chan_t;
 
   `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
 
   // L2 Memory
   localparam int unsigned NumL2Channel        = 4;
-  localparam int unsigned L2BankWidth         = 256;
+  localparam int unsigned L2BankWidth         = 512;
   localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
   parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase            = 32'h8000_0000;
@@ -270,13 +268,7 @@ package cachepool_pkg;
   // One more for UART?
   localparam int unsigned NumClusterSlv    = NumL2Channel;
 
-  // Additional id for route back
-  typedef struct packed {
-    logic [BankIDWidth:0]                      bank_id;
-    cache_info_t                               info;
-  } l2_user_t;
-
-  `REQRSP_TYPEDEF_ALL (l2,          axi_addr_t, axi_data_t, axi_strb_t, l2_user_t)
+  `REQRSP_TYPEDEF_ALL (l2,          axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
 
   // DRAM Configuration
   localparam int unsigned DramAddr        = 32'h8000_0000;
@@ -291,7 +283,7 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  parameter int unsigned Interleave  = 512;
+  parameter int unsigned Interleave  = 16;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;

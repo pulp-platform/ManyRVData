@@ -469,6 +469,8 @@ module cachepool_cc
     .NumInp           (NrScalarXbarMst  ),
     .NumOut           (NrScalarXbarSlv  ),
     .PipeReg          (1'b1             ),
+    .ExtReqPrio       (1'b0             ),
+    .ExtRspPrio       (1'b0             ),
     .tcdm_req_chan_t  (dreq_chan_t      ),
     .tcdm_rsp_chan_t  (drsp_chan_t      )
   ) i_scalar_xbar (
@@ -481,11 +483,13 @@ module cachepool_cc
     .slv_rsp_valid_o  (core_rsp_valid   ),
     .slv_rsp_ready_i  (core_rsp_ready   ),
     .slv_sel_i        (core_req_sel     ),
+    .slv_rr_i         ('0               ),
     .slv_selected_o   (core_selected    ),
     .mst_req_o        (mem_req_chan     ),
     .mst_req_valid_o  (mem_req_valid    ),
     .mst_req_ready_i  (mem_req_ready    ),
     .mst_rsp_i        (mem_rsp_chan     ),
+    .mst_rr_i         ('0               ),
     .mst_rsp_valid_i  (mem_rsp_valid    ),
     .mst_rsp_ready_o  (mem_rsp_ready    ),
     .mst_sel_i        (mem_rsp_sel      )

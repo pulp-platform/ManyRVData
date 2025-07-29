@@ -13,6 +13,9 @@ module reqrsp_xbar #(
   parameter int unsigned NumOut               = 32'd0,
   /// Generate Register
   parameter int unsigned PipeReg              = 1'b1,
+  /// Do we need to provide external priority for Xbar?
+  parameter int unsigned ExtReqPrio           = 1'b0,
+  parameter int unsigned ExtRspPrio           = 1'b0,
   /// Payload type of the data request ports.
   parameter type         tcdm_req_chan_t      = logic,
   /// Payload type of the data response ports.
@@ -30,6 +33,8 @@ module reqrsp_xbar #(
   input  logic                                rst_ni,
   /// Request port.
   input  tcdm_req_chan_t         [NumInp-1:0] slv_req_i,
+  /// Only used when use external priority
+  input  mst_sel_t               [NumOut-1:0] slv_rr_i,
   input  logic                   [NumInp-1:0] slv_req_valid_i,
   output logic                   [NumInp-1:0] slv_req_ready_o,
 
@@ -38,6 +43,7 @@ module reqrsp_xbar #(
   input  logic                   [NumInp-1:0] slv_rsp_ready_i,
   // Slave (req input) selects which master (req output)
   input  slv_sel_t               [NumInp-1:0] slv_sel_i,
+
   // Which slave (req input) selected for routing
   output mst_sel_t               [NumOut-1:0] slv_selected_o,
 
@@ -48,6 +54,8 @@ module reqrsp_xbar #(
   input  logic                   [NumOut-1:0] mst_req_ready_i,
 
   input  tcdm_rsp_chan_t         [NumOut-1:0] mst_rsp_i,
+  /// Only used when use external priority
+  input  slv_sel_t               [NumInp-1:0] mst_rr_i,
   input  logic                   [NumOut-1:0] mst_rsp_valid_i,
   output logic                   [NumOut-1:0] mst_rsp_ready_o,
 
@@ -75,6 +83,7 @@ module reqrsp_xbar #(
   logic           [NumOut-1:0] mem_rsp_valid,   mem_rsp_ready;
 
   slv_sel_t [NumInp-1:0] slv_sel;
+  mst_sel_t [NumOut-1:0] core_rr;
 
   typedef struct packed {
     tcdm_req_chan_t payload;
@@ -88,13 +97,17 @@ module reqrsp_xbar #(
   stream_xbar #(
     .NumInp      (NumInp          ),
     .NumOut      (NumOut          ),
+    // LockIn cannot be set when using external priority
+    .ExtPrio     (ExtReqPrio      ),
+    .AxiVldRdy   (~ExtReqPrio     ),
+    .LockIn      (~ExtReqPrio     ),
     .payload_t   (tcdm_req_chan_t )
   ) i_req_xbar (
     .clk_i  (clk_i            ),
     .rst_ni (rst_ni           ),
     .flush_i(1'b0             ),
     // External priority flag
-    .rr_i   ('0               ),
+    .rr_i   (core_rr          ),
     // Master
     .data_i (core_req         ),
     .valid_i(core_req_valid   ),
@@ -110,13 +123,17 @@ module reqrsp_xbar #(
   stream_xbar #(
     .NumInp       (NumOut           ),
     .NumOut       (NumInp           ),
+    // LockIn cannot be set when using external priority
+    .ExtPrio      (ExtRspPrio       ),
+    .AxiVldRdy    (~ExtRspPrio      ),
+    .LockIn       (~ExtRspPrio      ),
     .payload_t    (tcdm_rsp_chan_t  )
   ) i_rsp_xbar (
     .clk_i  (clk_i            ),
     .rst_ni (rst_ni           ),
     .flush_i(1'b0             ),
     // External priority flag
-    .rr_i   ('0               ),
+    .rr_i   (mst_rr_i         ),
     // Master
     .data_i (mem_rsp          ),
     .valid_i(mem_rsp_valid    ),
@@ -146,10 +163,10 @@ module reqrsp_xbar #(
       ) i_tcdm_req_reg (
         .clk_i  (clk_i                    ),
         .rst_ni (rst_ni                   ),
-        .data_i (prereg_data       ),
-        .valid_i(slv_req_valid_i[port] ),
-        .ready_o(slv_req_ready_o[port] ),
-        .data_o (postreg_data           ),
+        .data_i (prereg_data              ),
+        .valid_i(slv_req_valid_i[port]    ),
+        .ready_o(slv_req_ready_o[port]    ),
+        .data_o (postreg_data             ),
         .valid_o(core_req_valid[port]     ),
         .ready_i(core_req_ready[port]     )
       );
@@ -167,21 +184,38 @@ module reqrsp_xbar #(
         .data_i    (core_rsp[port]            ),
         .valid_i   (core_rsp_valid[port]      ),
         .ready_o   (core_rsp_ready[port]      ),
-        .data_o    (slv_rsp_o[port]        ),
-        .valid_o   (slv_rsp_valid_o[port]  ),
-        .ready_i   (slv_rsp_ready_i[port]  )
+        .data_o    (slv_rsp_o[port]           ),
+        .valid_o   (slv_rsp_valid_o[port]     ),
+        .ready_i   (slv_rsp_ready_i[port]     )
       );
     end else begin : bypass_reg
-      assign core_req[port] = slv_req_i[port];
-      assign core_req_valid[port] = slv_req_valid_i[port];
+      assign core_req[port]        = slv_req_i[port];
+      assign core_req_valid[port]  = slv_req_valid_i[port];
       assign slv_req_ready_o[port] = core_req_ready[port];
       assign slv_sel[port]         = slv_sel_i[port];
 
-      assign slv_rsp_o[port] = core_rsp[port];
+      assign slv_rsp_o[port]       = core_rsp[port];
       assign slv_rsp_valid_o[port] = core_rsp_valid[port];
-      assign core_rsp_ready[port] = slv_rsp_ready_i[port];
+      assign core_rsp_ready[port]  = slv_rsp_ready_i[port];
     end
   end
+
+  for (genvar port = 0; port < NumOut; port++) begin : gen_rr_reg
+    if (PipeReg == 1) begin : gen_regs
+      shift_reg #(
+        .dtype(mst_sel_t         ),
+        .Depth(1                 )
+      ) i_rr_pipe (
+        .clk_i (clk_i            ),
+        .rst_ni(rst_ni           ),
+        .d_i   (slv_rr_i[port]   ),
+        .d_o   (core_rr[port]    )
+      );
+    end else begin : bypass_reg
+      assign core_rr[port] = slv_rr_i[port];
+    end
+  end
+
 
 
   // --------

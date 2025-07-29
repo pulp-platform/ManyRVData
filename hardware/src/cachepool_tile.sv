@@ -683,10 +683,6 @@ module cachepool_tile
     end
   end
 
-  // TODO: remove
-  tcdm_bank_addr_t num_spm_lines;
-  assign num_spm_lines = cfg_spm_size * (DepthPerBank / L1Size);
-
   // For address scrambling
   localparam NumSelBits = $clog2(NumL1CacheCtrl);
   logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
@@ -695,6 +691,7 @@ module cachepool_tile
   assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
 
   cache_refill_req_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_req;
+  burst_req_t             [NumL1CacheCtrl-1 : 0] cache_refill_burst;
   logic                   [NumL1CacheCtrl-1 : 0] cache_refill_req_valid, cache_refill_req_ready;
   cache_refill_rsp_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_rsp;
   logic                   [NumL1CacheCtrl-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
@@ -712,13 +709,13 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .BankFactor       (L1BankFactor       ),
+      .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),
       .impl_in_t        (impl_in_t          ),
-      .axi_req_t        (axi_out_req_t      ),
-      .axi_resp_t       (axi_out_resp_t     ),
       .refill_req_t     (cache_refill_req_chan_t),
-      .refill_rsp_t     (cache_refill_rsp_chan_t)
+      .refill_rsp_t     (cache_refill_rsp_chan_t),
+      .burst_req_t      (burst_req_t        )
     ) i_l1_controller (
       .clk_i                 (clk_i                          ),
       .rst_ni                (rst_ni                         ),
@@ -747,6 +744,7 @@ module cachepool_tile
       .core_resp_meta_o      (cache_rsp_meta [cb]            ),
       // TCDM Refill
       .refill_req_o          (cache_refill_req      [cb]     ),
+      .refill_burst_o        (cache_refill_burst    [cb]     ),
       .refill_req_valid_o    (cache_refill_req_valid[cb]     ),
       .refill_req_ready_i    (cache_refill_req_ready[cb]     ),
       .refill_rsp_i          (cache_refill_rsp      [cb]     ),
@@ -777,7 +775,7 @@ module cachepool_tile
         data : cache_refill_req[cb].wdata,
         strb : cache_refill_req[cb].wstrb,
         // We always want full size from cache
-        size : $clog2(L1LineWidth/8),
+        size : $clog2(RefillDataWidth/8),
         amo  : reqrsp_pkg::AMONone,
         default : '0
       };
@@ -786,6 +784,7 @@ module cachepool_tile
       cache_refill_req_o[cb].q.user = '{
         bank_id : cb + 1,
         info    : cache_refill_req[cb].info,
+        burst   : cache_refill_burst[cb],
         default : '0
       };
       cache_refill_req_o[cb].q_valid = cache_refill_req_valid[cb];
@@ -839,9 +838,9 @@ module cachepool_tile
         .NumWords   (L1CacheWayEntry/L1BankFactor),
         .DataWidth  (DataWidth*4),
         .ByteWidth  (DataWidth  ),
-        .NumPorts   (1),
-        .Latency    (1),
-        .SimInit    ("zeros")
+        .NumPorts   (1          ),
+        .Latency    (1          ),
+        .SimInit    ("zeros"    )
       ) i_data_bank (
         .clk_i  (clk_i                       ),
         .rst_ni (rst_ni                      ),

@@ -175,7 +175,6 @@ module tb_cachepool;
 
     // Load the entry point
     entry_point = get_entry_point();
-    // entry_point = 32'h80003000;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while
@@ -302,7 +301,6 @@ module tb_cachepool;
   // DRAMSys address scrambling
   for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_dram_scrambler
     always_comb begin
-      // automatic logic [31:0] temp_addr_aw, temp_addr_ar;
       axi_dram_req[ch]         = axi_from_cluster_req[ch];
       temp_addr_aw[ch]         = revertAddr(axi_from_cluster_req[ch].aw.addr);
       temp_addr_ar[ch]         = revertAddr(axi_from_cluster_req[ch].ar.addr);
@@ -310,8 +308,6 @@ module tb_cachepool;
       temp_dram_info_ar[ch]    = getDramCTRLInfo(temp_addr_ar[ch]);
       axi_dram_req[ch].aw.addr = temp_dram_info_aw[ch].dram_ctrl_addr;
       axi_dram_req[ch].ar.addr = temp_dram_info_ar[ch].dram_ctrl_addr;
-      // axi_dram_req[ch].aw.addr = removeOffset(temp_addr_aw[ch]);
-      // axi_dram_req[ch].ar.addr = removeOffset(temp_addr_ar[ch]);
     end
   end
 

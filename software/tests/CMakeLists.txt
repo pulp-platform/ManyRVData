@@ -93,3 +93,4 @@ add_spatz_test_threeParam(sp-fmatmul sp-fmatmul/main.c 128 128 128)
 # add_spatz_test_threeParam(sp-fmatmul sp-fmatmul/main.c 256 128 32)
 
 
+add_spatz_test_oneParam(load-store load-store/main.c 16)

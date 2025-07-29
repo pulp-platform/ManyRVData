@@ -81,12 +81,15 @@ module tcdm_cache_interco #(
     .NumInp           (NumCore          ),
     .NumOut           (NumCache         ),
     .PipeReg          (1'b0             ),
+    .ExtReqPrio       (1'b0             ),
+    .ExtRspPrio       (1'b0             ),
     .tcdm_req_chan_t  (tcdm_req_chan_t  ),
     .tcdm_rsp_chan_t  (tcdm_rsp_chan_t  )
   ) i_cache_xbar (
     .clk_i            (clk_i            ),
     .rst_ni           (rst_ni           ),
     .slv_req_i        (core_req         ),
+    .slv_rr_i         ('0               ),
     .slv_req_valid_i  (core_req_valid   ),
     .slv_req_ready_o  (core_req_ready   ),
     .slv_rsp_o        (core_rsp         ),
@@ -95,6 +98,7 @@ module tcdm_cache_interco #(
     .slv_sel_i        (core_req_sel     ),
     .slv_selected_o   ( /* unused */    ),
     .mst_req_o        (mem_req          ),
+    .mst_rr_i         ('0               ),
     .mst_req_valid_o  (mem_req_valid    ),
     .mst_req_ready_i  (mem_req_ready    ),
     .mst_rsp_i        (mem_rsp          ),

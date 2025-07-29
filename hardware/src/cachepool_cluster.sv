@@ -237,11 +237,11 @@ module cachepool_cluster
   assign error_o = |error;
   assign eoc_o   = |eoc;
 
-  cache_trans_req_t [NumTiles*NumL1CacheCtrl-1:0] cache_refill_req;
-  cache_trans_rsp_t [NumTiles*NumL1CacheCtrl-1:0] cache_refill_rsp;
+  cache_trans_req_t      [NumTiles*NumL1CacheCtrl-1:0] cache_refill_req;
+  cache_trans_rsp_t      [NumTiles*NumL1CacheCtrl-1:0] cache_refill_rsp;
 
-  cache_trans_req_t [NumTiles-1               :0] cache_core_req;
-  cache_trans_rsp_t [NumTiles-1               :0] cache_core_rsp;
+  cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
+  cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
 
   cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
   cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
@@ -263,6 +263,80 @@ module cachepool_cluster
   l2_sel_t   [NumClusterSlv-1:0]                     tile_selected;
   // which tile we want to select for each rsp
   l2_sel_t   [NumClusterSlv-1:0]                     l2_sel;
+  // What is the priority for response wiring?
+  // Here we want to make sure the responses from one burst
+  // continues until done
+  // If the rsp is a burst with blen != 0, then we will keep
+  // the rr same, until got a burst rsp with blen == 0
+  tile_sel_t [NumTiles*NumClusterMst-1 :0]           l2_rsp_rr;
+
+  logic      [NumTiles*NumClusterMst-1:0] rr_lock_d, rr_lock_q;
+  tile_sel_t [NumTiles*NumClusterMst-1:0] l2_prio_d, l2_prio_q;
+
+  `FF(rr_lock_q, rr_lock_d, 1'b0)
+  `FF(l2_prio_q, l2_prio_d, 1'b0)
+
+  for (genvar port = 0; port < NumTiles*NumClusterMst; port ++) begin : gen_rsp_rr
+    tile_sel_t l2_rr;
+    logic [NumClusterSlv-1:0] arb_valid;
+    for (genvar i = 0; i < NumClusterSlv; i ++) begin
+      // Used to check the round-robin selection
+      assign arb_valid[i] = (l2_rsp_chan[i].user.bank_id == port) & l2_rsp_valid[i];
+    end
+
+    always_comb begin
+      l2_prio_d[port] = l2_prio_q[port];
+      rr_lock_d[port] = rr_lock_q[port];
+
+      // Determine the priority we give
+      // round-robin or locked to previous value?
+      if (|arb_valid) begin
+        if (rr_lock_q[port]) begin
+          // rr is locked because of burst
+          l2_prio_d[port] = l2_prio_q[port];
+        end else begin
+          l2_prio_d[port] = l2_rr;
+        end
+      end
+      // assigned to xbar rr_i
+      l2_rsp_rr[port] = l2_prio_d[port];
+
+      // Lock judgement
+      if (tile_rsp_chan[port].user.burst.is_burst & |arb_valid) begin
+        // We got a burst response
+        if (tile_rsp_chan[port].user.burst.burst_len == 0) begin
+          // this is the last transaction within a burt, remove lock
+          rr_lock_d[port] = 1'b0;
+        end else begin
+          // the burst response is not finished yet, lock the rr
+          rr_lock_d[port] = 1'b1;
+        end
+      end
+    end
+
+    // We use the rr_arb_tree to get the round-robin selection
+    // No data is needed here, only need the handshaking
+    rr_arb_tree #(
+      .NumIn     ( NumClusterSlv    ),
+      .DataType  ( logic     ),
+      .ExtPrio   ( 1'b0      ),
+      .AxiVldRdy ( 1'b1      ),
+      .LockIn    ( 1'b1      )
+    ) i_rr_arb_tree (
+      .clk_i   ( clk_i        ),
+      .rst_ni  ( rst_ni       ),
+      .flush_i ( '0           ),
+      .rr_i    ( '0           ),
+      .req_i   ( arb_valid    ),
+      .gnt_o   ( /*not used*/ ),
+      .data_i  ( '0           ),
+      .req_o   ( /*not used*/ ),
+      .gnt_i   ( tile_rsp_ready[port] ),
+      .data_o  ( /*not used*/ ),
+      .idx_o   ( l2_rr        )
+    );
+  end
+
 
   for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
     cachepool_tile #(
@@ -324,8 +398,8 @@ module cachepool_cluster
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
       .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
-      .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi] ),
-      .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi] )
+      .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi]   ),
+      .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi]   )
     );
 
     axi_to_reqrsp #(
@@ -416,9 +490,11 @@ module cachepool_cluster
   reqrsp_xbar #(
     .NumInp           (NumClusterMst*NumTiles ),
     .NumOut           (NumClusterSlv          ),
-    .PipeReg          (1'b1             ),
-    .tcdm_req_chan_t  (cache_trans_req_chan_t  ),
-    .tcdm_rsp_chan_t  (cache_trans_rsp_chan_t  )
+    .PipeReg          (1'b1                   ),
+    .ExtReqPrio       (1'b0                   ),
+    .ExtRspPrio       (1'b1                   ),
+    .tcdm_req_chan_t  (cache_trans_req_chan_t ),
+    .tcdm_rsp_chan_t  (cache_trans_rsp_chan_t )
   ) i_cluster_xbar (
     .clk_i            (clk_i            ),
     .rst_ni           (rst_ni           ),
@@ -429,11 +505,13 @@ module cachepool_cluster
     .slv_rsp_valid_o  (tile_rsp_valid   ),
     .slv_rsp_ready_i  (tile_rsp_ready   ),
     .slv_sel_i        (tile_sel         ),
+    .slv_rr_i         ('0               ),
     .slv_selected_o   (tile_selected    ),
     .mst_req_o        (l2_req_chan      ),
     .mst_req_valid_o  (l2_req_valid     ),
     .mst_req_ready_i  (l2_req_ready     ),
     .mst_rsp_i        (l2_rsp_chan      ),
+    .mst_rr_i         (l2_rsp_rr        ),
     .mst_rsp_valid_i  (l2_rsp_valid     ),
     .mst_rsp_ready_o  (l2_rsp_ready     ),
     .mst_sel_i        (l2_sel           )
@@ -451,11 +529,7 @@ module cachepool_cluster
         size : l2_req_chan[ch].size,
         default: '0
       };
-      l2_req[ch].q.user  = '{
-        bank_id: l2_req_chan[ch].user.bank_id,
-        info:    l2_req_chan[ch].user.info,
-        default: '0
-      };
+      l2_req[ch].q.user  = l2_req_chan[ch].user;
       l2_req[ch].q_valid = l2_req_valid[ch] ;
       l2_req_ready[ch]   = l2_rsp[ch].q_ready;
 
@@ -465,11 +539,7 @@ module cachepool_cluster
         write: l2_rsp[ch].p.write,
         default: '0
       };
-      l2_rsp_chan [ch].user = '{
-        bank_id: l2_rsp[ch].p.user.bank_id,
-        info   : l2_rsp[ch].p.user.info,
-        default: '0
-      };
+      l2_rsp_chan [ch].user = l2_rsp[ch].p.user;
       l2_rsp_valid[ch]   = l2_rsp[ch].p_valid;
       l2_req[ch].p_ready = l2_rsp_ready[ch];
       l2_sel[ch]         = l2_rsp[ch].p.user.bank_id;
@@ -479,9 +549,10 @@ module cachepool_cluster
   for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_output_axi
     reqrsp_to_axi #(
       .MaxTrans           (NumSpatzOutstandingLoads[0]),
-      .ID                 (ch                         ),
-      .ShuffleId          (0                          ),
-      .UserWidth          ($bits(l2_user_t)           ),
+      .ID                 ('0                         ),
+      .EnBurst            (1                          ),
+      .ShuffleId          (1                          ),
+      .UserWidth          ($bits(refill_user_t)       ),
       .ReqUserFallThrough (1'b0                       ),
       .DataWidth          (AxiDataWidth               ),
       .AxiUserWidth       (AxiUserWidth               ),
@@ -492,7 +563,7 @@ module cachepool_cluster
     ) i_reqrsp2axi  (
       .clk_i        (clk_i                ),
       .rst_ni       (rst_ni               ),
-      .user_i       ('0                   ),
+      .user_i       (l2_req[ch].q.user    ),
       .reqrsp_req_i (l2_req[ch]           ),
       .reqrsp_rsp_o (l2_rsp[ch]           ),
       .axi_req_o    (wide_axi_slv_req[ch] ),
@@ -500,7 +571,6 @@ module cachepool_cluster
     );
   end
 
-  // TODO: Add AXI MUX and assign ID correctly here
   assign axi_narrow_req_o = axi_out_req[0];
   assign axi_out_resp[0] = axi_narrow_resp_i;
 
@@ -510,7 +580,7 @@ module cachepool_cluster
   // Optionally decouple the external wide AXI master port.
   for (genvar port = 0; port < NumClusterSlv; port ++) begin : gen_axi_out_cut
     axi_cut #(
-      .Bypass     (0               ),
+      .Bypass     (0                          ),
       .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
       .w_chan_t   (axi_slv_cache_w_chan_t     ),
       .b_chan_t   (axi_slv_cache_b_chan_t     ),
@@ -562,7 +632,9 @@ module cachepool_cluster
     .addr_i (addr_t'(bootrom_reg_req.addr)),
     .rdata_o(bootrom_reg_rsp.rdata        )
   );
+
   `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+
   assign bootrom_reg_rsp.error = 1'b0;
 
 endmodule
