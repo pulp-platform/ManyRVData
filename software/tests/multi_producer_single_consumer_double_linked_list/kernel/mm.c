@@ -11,7 +11,7 @@
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void mm_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { delay(100); }
+    while (__sync_lock_test_and_set(lock, 1)) { delay(20); }
 }
 
 static inline void mm_lock_release(volatile int *lock) {
@@ -19,7 +19,7 @@ static inline void mm_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
-    delay(100);
+    delay(20);
 }
 
 

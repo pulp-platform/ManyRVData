@@ -30,33 +30,134 @@ static inline int fp_check(const float a, const float b) {
 }
 
 // 32-bit dot-product: a * b
-float fdotp_v32b(const float *a, const float *b, unsigned int avl) {
-  const unsigned int orig_avl = avl;
+float fdotp_v32b_lmul8(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds) {
   unsigned int vl;
+  unsigned int iter = rounds;
 
   float red;
 
+  // Set the vl
+  asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
+
+  asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+  iter --;
+  asm volatile("vle32.v v16, (%0)" ::"r"(b));
+  asm volatile("vfmul.vv v24, v8, v16");
+
   // Stripmine and accumulate a partial reduced vector
   do {
-    // Set the vl
-    asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
-
     // Load chunk a and b
+    a += offset;
     asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+    b += offset;
     asm volatile("vle32.v v16, (%0)" ::"r"(b));
+    iter --;
 
     // Multiply and accumulate
-    if (avl == orig_avl) {
-      asm volatile("vfmul.vv v24, v8, v16");
-    } else {
-      asm volatile("vfmacc.vv v24, v8, v16");
-    }
+    asm volatile("vfmacc.vv v24, v8, v16");
+  } while (iter > 0);
 
-    // Bump pointers
-    a += vl;
-    b += vl;
-    avl -= vl;
-  } while (avl > 0);
+  // Reduce and return
+  asm volatile("vfredusum.vs v0, v24, v0");
+  asm volatile("vfmv.f.s %0, v0" : "=f"(red));
+  return red;
+}
+
+// 32-bit dot-product: a * b
+float fdotp_v32b_lmul4(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds) {
+  unsigned int vl;
+  unsigned int iter = rounds;
+
+  float red;
+
+  // Set the vl
+  asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
+
+  asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+  iter --;
+  asm volatile("vle32.v v16, (%0)" ::"r"(b));
+  asm volatile("vfmul.vv v24, v8, v16");
+
+  // Stripmine and accumulate a partial reduced vector
+  do {
+    // Load chunk a and b
+    a += offset;
+    asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+    b += offset;
+    asm volatile("vle32.v v16, (%0)" ::"r"(b));
+    iter --;
+
+    // Multiply and accumulate
+    asm volatile("vfmacc.vv v24, v8, v16");
+  } while (iter > 0);
+
+  // Reduce and return
+  asm volatile("vfredusum.vs v0, v24, v0");
+  asm volatile("vfmv.f.s %0, v0" : "=f"(red));
+  return red;
+}
+
+// 32-bit dot-product: a * b
+float fdotp_v32b_lmul2(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds) {
+  unsigned int vl;
+  unsigned int iter = rounds;
+
+  float red;
+
+  // Set the vl
+  asm volatile("vsetvli %0, %1, e32, m2, ta, ma" : "=r"(vl) : "r"(avl));
+
+  asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+  iter --;
+  asm volatile("vle32.v v16, (%0)" ::"r"(b));
+  asm volatile("vfmul.vv v24, v8, v16");
+
+  // Stripmine and accumulate a partial reduced vector
+  do {
+    // Load chunk a and b
+    a += offset;
+    asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+    b += offset;
+    asm volatile("vle32.v v16, (%0)" ::"r"(b));
+    iter --;
+
+    // Multiply and accumulate
+    asm volatile("vfmacc.vv v24, v8, v16");
+  } while (iter > 0);
+
+  // Reduce and return
+  asm volatile("vfredusum.vs v0, v24, v0");
+  asm volatile("vfmv.f.s %0, v0" : "=f"(red));
+  return red;
+}
+
+// 32-bit dot-product: a * b
+float fdotp_v32b_lmul1(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds) {
+  unsigned int vl;
+  unsigned int iter = rounds;
+
+  float red;
+
+  // Set the vl
+  asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(avl));
+
+  asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+  iter --;
+  asm volatile("vle32.v v16, (%0)" ::"r"(b));
+  asm volatile("vfmul.vv v24, v8, v16");
+
+  // Stripmine and accumulate a partial reduced vector
+  do {
+    // Load chunk a and b
+    a += offset;
+    asm volatile("vle32.v v8,  (%0)" ::"r"(a));
+    b += offset;
+    asm volatile("vle32.v v16, (%0)" ::"r"(b));
+    iter --;
+
+    // Multiply and accumulate
+    asm volatile("vfmacc.vv v24, v8, v16");
+  } while (iter > 0);
 
   // Reduce and return
   asm volatile("vfredusum.vs v0, v24, v0");

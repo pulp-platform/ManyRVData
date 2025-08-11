@@ -2,6 +2,8 @@
 #define LLIST_H
 
 #include <stddef.h>
+#include "printf_lock.h"
+// #include "spin_lock.h"
 
 /* --- Simple spinlock implementation --- */
 /* We use a volatile int as a spinlock. Zero means unlocked. */
@@ -10,15 +12,16 @@ typedef volatile int spinlock_t __attribute__((aligned(8)));
 spinlock_t tosend_llist_lock;
 spinlock_t sent_llist_lock;
 
-static inline void spin_lock(spinlock_t *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { }
+static inline void spin_lock(spinlock_t *lock, int cycle) {
+    while (__sync_lock_test_and_set(lock, 1)) { delay(cycle);}
 }
 
-static inline void spin_unlock(volatile int *lock) {
+static inline void spin_unlock(volatile int *lock, int cycle) {
    asm volatile (
        "amoswap.w zero, zero, %0"
        : "+A" (*lock)
    );
+   delay(cycle);
 }
 
 

@@ -465,7 +465,7 @@ module cachepool_tile
   logic [NumL1CacheCtrl-1:0]  l1d_insn_ready;
   logic [1:0]                 l1d_insn;
   tcdm_bank_addr_t            cfg_spm_size;
-  logic                       l1d_busy;
+  logic [NumL1CacheCtrl-1:0]  l1d_busy;
 
   // High if a port access an illegal SPM region (mapped to cache)
   // logic [NrTCDMPortsCores-1:0] spm_error;
@@ -570,13 +570,13 @@ module cachepool_tile
       // Wire to Cache outputs
       unmerge_req[j].q       = tcdm_req[j].q;
       // invalidate the request when cache is busy
-      unmerge_req[j].q_valid = tcdm_req[j].q_valid && (!l1d_busy);
+      unmerge_req[j].q_valid = tcdm_req[j].q_valid && !(|l1d_busy);
       unmerge_pready[j]      = 1'b1;
 
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
       tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
-      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !(l1d_busy);
+      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !(|l1d_busy);
     end
 
   end
@@ -1196,6 +1196,7 @@ module cachepool_tile
   spatz_cluster_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
+    .NumCacheCtrl  (NumL1CacheCtrl  ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
     .tcdm_events_t (tcdm_events_t   ),
@@ -1223,7 +1224,7 @@ module cachepool_tile
     .l1d_insn_o               (l1d_insn              ),
     .l1d_insn_valid_o         (l1d_insn_valid        ),
     // TODO: Here we only check controller 0
-    .l1d_insn_ready_i         (l1d_insn_ready[0]     ),
+    .l1d_insn_ready_i         (l1d_insn_ready        ),
     .l1d_busy_o               (l1d_busy              )
   );
 

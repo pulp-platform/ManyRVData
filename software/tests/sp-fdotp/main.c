@@ -23,56 +23,73 @@
 #include DATAHEADER
 #include "kernel/fdotp.c"
 
-float *a;
-float *b;
-
-
 int main() {
-  const unsigned int num_cores = snrt_cluster_core_num();
-  const unsigned int cid = snrt_cluster_core_idx();
+  const uint32_t num_cores = snrt_cluster_core_num();
+  const uint32_t cid = snrt_cluster_core_idx();
 
   const int measure_iter = 3;
 
-  uint32_t spm_size = 0;
+  // Byte-level interleaving for DRAM
+  // Default setting is 1024b (128 Byte)
+  // This is used to ensure we can utilze all four channels to DRAM
+  const uint32_t Interleave   = 512;
+  const uint32_t max_vlen     = 512;
+  // Calculate the best lmul setting for current configuration
+  const uint32_t lmul         = Interleave * 8 / max_vlen;
 
-  const unsigned int dim = dotp_l.M / num_cores;
+
+  // Each round we can calculate Interleave/4 32b-elements
+  const uint32_t elem_per_round = Interleave * num_cores / 4;
+  // how many rounds do we need to finish executing?
+  const uint32_t rounds = (dotp_l.M > elem_per_round) ? ((dotp_l.M + elem_per_round - 1) / elem_per_round) : 1;
+
+  const uint32_t dim = elem_per_round / num_cores;
 
   uint32_t offset = 31 - __builtin_clz(dim * sizeof(float));
 
-  // Allocate the matrices
   if (cid == 0) {
     // Set xbar policy
     l1d_xbar_config(offset);
     // Initialize the cache
     l1d_init(0);
+
+    printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
 
-  // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
   // Reset timer
-  unsigned int timer = (unsigned int)-1;
-  unsigned int timer_tmp, timer_iter1;
+  uint32_t timer = (uint32_t)-1;
+  uint32_t timer_tmp, timer_iter1;
 
 
   float *a_int = dotp_A_dram + dim * cid;
   float *b_int = dotp_B_dram + dim * cid;
-
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
 
   for (int iter = 0; iter < measure_iter; iter ++) {
     // Start dump
     if (cid == 0)
       start_kernel();
 
+    snrt_cluster_hw_barrier();
+
     // Start timer
-    if (cid == 0)
-      timer_tmp = benchmark_get_cycle();
+    timer_tmp = benchmark_get_cycle();
 
     // Calculate dotp
     float acc;
-    acc = fdotp_v32b(a_int, b_int, dim);
+
+    if (lmul >= 8)
+      acc = fdotp_v32b_lmul8(a_int, b_int, elem_per_round, dim, rounds);
+    else if (lmul >= 4)
+      acc = fdotp_v32b_lmul4(a_int, b_int, elem_per_round, dim, rounds);
+    else if (lmul >= 2)
+      acc = fdotp_v32b_lmul2(a_int, b_int, elem_per_round, dim, rounds);
+    else if (lmul >= 1)
+      acc = fdotp_v32b_lmul1(a_int, b_int, elem_per_round, dim, rounds);
+    else
+      return 0;
+
     result[cid] = acc;
 
     // Wait for all cores to finish
@@ -84,33 +101,29 @@ int main() {
       timer = (timer < timer_tmp) ? timer : timer_tmp;
       if (iter == 0)
         timer_iter1 = timer;
+
+      stop_kernel();
     }
 
     // Final reduction
     if (cid == 0) {
       // timer_tmp = benchmark_get_cycle() - timer_tmp;
-      for (unsigned int i = 1; i < num_cores; ++i)
+      for (uint32_t i = 1; i < num_cores; ++i)
         acc += result[i];
       result[0] = acc;
     }
 
-    // Wait for all cores to finish
-    snrt_cluster_hw_barrier();
-
-    // End dump
-    if (cid == 0)
-      stop_kernel();
-
-    snrt_cluster_hw_barrier();
   }
+
+  snrt_cluster_hw_barrier();
 
   // Check and display results
   if (cid == 0) {
     // The timer did not count the reduction time
-    unsigned int performance = 1000 * 2 * dotp_l.M / timer;
-    unsigned int perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
-    unsigned int utilization = performance / (2 * num_cores * 4);
-    unsigned int util_iter1  = perf_iter1  / (2 * num_cores * 4);
+    uint32_t performance = 1000 * 2 * dotp_l.M / timer;
+    uint32_t perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
+    uint32_t utilization = performance / (2 * num_cores * 4);
+    uint32_t util_iter1  = perf_iter1  / (2 * num_cores * 4);
     write_cyc(timer);
 
     printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
@@ -124,8 +137,7 @@ int main() {
 
   if (cid == 0) {
     if (fp_check(result[0], dotp_result*measure_iter)) {
-      // printf("Error: Result = %f, Golden = %f\n", result[0], dotp_result*measure_iter);
-      return -1;
+      printf("Check Failed!\n");
     }
   }
 

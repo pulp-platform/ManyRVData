@@ -15,7 +15,7 @@ void debug_print_lock_init(void);
 void debug_printf_locked(const char * __attribute__((aligned(8))) fmt, ...);
 
 /* Read mcycle */
-size_t benchmark_get_cycle() { return read_csr(mcycle); }
+// size_t benchmark_get_cycle() { return read_csr(mcycle); }
 
 /* A simple busy-loop delay function. Adjust iterations as needed. */
 static void delay(volatile int iterations);

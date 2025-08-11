@@ -6,7 +6,7 @@
 
 #include "layer.h"
 
-dotp_layer dotp_l = {
+dotp_layer dotp_l __attribute__((section(".pdcp_src"))) = {
 	.M = 1024,
 	.dtype = FP32,
 };

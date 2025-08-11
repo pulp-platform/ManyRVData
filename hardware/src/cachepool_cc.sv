@@ -820,6 +820,8 @@ module cachepool_cc
                                           0 : 100 * i_spatz.i_vlsu.rob_usage_q / i_spatz.i_vlsu.rob_use_cyc_q / NumSpatzOutstandingLoads;
     automatic real vlsu_rob_peak_util   = 100 * i_spatz.i_vlsu.rob_peak_q / NumSpatzOutstandingLoads;
 
+    automatic real vlsu_stall_cyc       = i_spatz.i_vlsu.rob_full_cyc_q;
+
     // Average instruction cycle can be used to caclulate the latency from VLSU to memory
     // AVG_insn_cyc / VLEN = AVG_LD_cyc_per_elem
     automatic real vlsu_insn_cnt        = i_spatz.i_vlsu.vlsu_insn_cnt_q;
@@ -892,6 +894,7 @@ module cachepool_cc
     $fwrite(spatz_f, "   Mem Utilization:                  %32.2f\n",vlsu_mem_util            );
     $fwrite(spatz_f, "   Mem AVG Req Accept Cycles:        %32.2f\n",vlsu_mem_avg_cyc         );
     $fwrite(spatz_f, "\n"                                                                     );
+    $fwrite(spatz_f, "   VLSU Stall Cycles (ROB Full):     %32d\n", vlsu_stall_cyc            );
     $fwrite(spatz_f, "   ROB AVG Utilization:              %32.2f\n", vlsu_rob_usage_avg      );
     $fwrite(spatz_f, "   ROB Peak Utilization:             %32.2f\n", vlsu_rob_peak_util      );
     $fwrite(spatz_f, "\n"                                                                     );

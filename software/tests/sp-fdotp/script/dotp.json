@@ -6,7 +6,7 @@
 
 {
     kernel: "DOTP"
-    M: 1024,
+    M: 8192,
     prec: 32,
     expand: 0
 }

@@ -19,23 +19,11 @@
 #include <benchmark.h>
 #include <snrt.h>
 #include <stdio.h>
+#include "spin_lock.h"
 
 static float result __attribute__((section(".data")));
 
-typedef volatile int spinlock_t __attribute__((aligned(8)));
 spinlock_t lock;
-
-static inline void spin_lock (spinlock_t *lock) {
-  while (__sync_lock_test_and_set(lock, 1)) {
-    volatile int i = 20;
-    while (i > 0)
-      i --;
-  }
-}
-
-static inline void spin_unlock(spinlock_t *lock) {
-  __sync_lock_release(lock);
-}
 
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
@@ -45,7 +33,7 @@ int main() {
   snrt_cluster_hw_barrier();
 
   // Fetch lock
-  spin_lock (&lock);
+  spin_lock (&lock, 20);
 
   // Each core print its core id
   printf("Core%d:hello\n", cid);
@@ -54,7 +42,7 @@ int main() {
   result += cid;
 
   // Release the lock
-  spin_unlock(&lock);
+  spin_unlock(&lock, 20);
 
   snrt_cluster_hw_barrier();
 

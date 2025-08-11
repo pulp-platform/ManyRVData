@@ -16,7 +16,7 @@
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { delay(100); }
+    while (__sync_lock_test_and_set(lock, 1)) { delay(20); }
 }
 
 static inline void pdcp_pkg_lock_release(volatile int *lock) {
@@ -24,7 +24,7 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
-    delay(10);
+    delay(20);
 }
 
 void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t *mm_ctx) {

@@ -19,7 +19,15 @@
 #ifndef _FDOTPROD_H_
 #define _FDOTPROD_H_
 
-inline float fdotp_v32b(const float *a, const float *b, unsigned int avl)
+inline float fdotp_v32b_lmul8(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
     __attribute__((always_inline));
 
+inline float fdotp_v32b_lmul4(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
+    __attribute__((always_inline));
+
+inline float fdotp_v32b_lmul2(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
+    __attribute__((always_inline));
+
+inline float fdotp_v32b_lmul1(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
+    __attribute__((always_inline));
 #endif

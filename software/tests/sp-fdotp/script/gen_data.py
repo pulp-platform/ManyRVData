@@ -64,7 +64,7 @@ def emit_dotp_layer(name="dotp", **kwargs):
 
     layer_str = ""
     layer_str += '#include "layer.h"\n\n'
-    layer_str += f"dotp_layer {name}_l = {{\n"
+    layer_str += f"dotp_layer {name}_l __attribute__((section(\".pdcp_src\"))) = {{\n"
     layer_str += f"\t.M = {m},\n"
     layer_str += f'\t.dtype = FP{kwargs["prec"]},\n'
     layer_str += "};\n\n\n"
