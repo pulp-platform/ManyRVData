@@ -273,68 +273,76 @@ module cachepool_cluster
   logic      [NumTiles*NumClusterMst-1:0] rr_lock_d, rr_lock_q;
   tile_sel_t [NumTiles*NumClusterMst-1:0] l2_prio_d, l2_prio_q;
 
-  `FF(rr_lock_q, rr_lock_d, 1'b0)
-  `FF(l2_prio_q, l2_prio_d, 1'b0)
+  if (Burst_Enable) begin
+    `FF(rr_lock_q, rr_lock_d, 1'b0)
+    `FF(l2_prio_q, l2_prio_d, 1'b0)
 
-  for (genvar port = 0; port < NumTiles*NumClusterMst; port ++) begin : gen_rsp_rr
-    tile_sel_t l2_rr;
-    logic [NumClusterSlv-1:0] arb_valid;
-    for (genvar i = 0; i < NumClusterSlv; i ++) begin
-      // Used to check the round-robin selection
-      assign arb_valid[i] = (l2_rsp_chan[i].user.bank_id == port) & l2_rsp_valid[i];
-    end
+    for (genvar port = 0; port < NumTiles*NumClusterMst; port ++) begin : gen_rsp_rr
+      tile_sel_t l2_rr;
+      logic [NumClusterSlv-1:0] arb_valid;
+      for (genvar i = 0; i < NumClusterSlv; i ++) begin
+        // Used to check the round-robin selection
+        assign arb_valid[i] = (l2_rsp_chan[i].user.bank_id == port) & l2_rsp_valid[i];
+      end
 
-    always_comb begin
-      l2_prio_d[port] = l2_prio_q[port];
-      rr_lock_d[port] = rr_lock_q[port];
+      always_comb begin
+        l2_prio_d[port] = l2_prio_q[port];
+        rr_lock_d[port] = rr_lock_q[port];
 
-      // Determine the priority we give
-      // round-robin or locked to previous value?
-      if (|arb_valid) begin
-        if (rr_lock_q[port]) begin
-          // rr is locked because of burst
-          l2_prio_d[port] = l2_prio_q[port];
-        end else begin
-          l2_prio_d[port] = l2_rr;
+        // Determine the priority we give
+        // round-robin or locked to previous value?
+        if (|arb_valid) begin
+          if (rr_lock_q[port]) begin
+            // rr is locked because of burst
+            l2_prio_d[port] = l2_prio_q[port];
+          end else begin
+            l2_prio_d[port] = l2_rr;
+          end
+        end
+        // assigned to xbar rr_i
+        l2_rsp_rr[port] = l2_prio_d[port];
+
+        // Lock judgement
+        if (tile_rsp_chan[port].user.burst.is_burst & |arb_valid) begin
+          // We got a burst response
+          if (tile_rsp_chan[port].user.burst.burst_len == 0) begin
+            // this is the last transaction within a burt, remove lock
+            rr_lock_d[port] = 1'b0;
+          end else begin
+            // the burst response is not finished yet, lock the rr
+            rr_lock_d[port] = 1'b1;
+          end
         end
       end
-      // assigned to xbar rr_i
-      l2_rsp_rr[port] = l2_prio_d[port];
 
-      // Lock judgement
-      if (tile_rsp_chan[port].user.burst.is_burst & |arb_valid) begin
-        // We got a burst response
-        if (tile_rsp_chan[port].user.burst.burst_len == 0) begin
-          // this is the last transaction within a burt, remove lock
-          rr_lock_d[port] = 1'b0;
-        end else begin
-          // the burst response is not finished yet, lock the rr
-          rr_lock_d[port] = 1'b1;
-        end
-      end
+      // We use the rr_arb_tree to get the round-robin selection
+      // No data is needed here, only need the handshaking
+      rr_arb_tree #(
+        .NumIn     ( NumClusterSlv    ),
+        .DataType  ( logic     ),
+        .ExtPrio   ( 1'b0      ),
+        .AxiVldRdy ( 1'b1      ),
+        .LockIn    ( 1'b1      )
+      ) i_rr_arb_tree (
+        .clk_i   ( clk_i        ),
+        .rst_ni  ( rst_ni       ),
+        .flush_i ( '0           ),
+        .rr_i    ( '0           ),
+        .req_i   ( arb_valid    ),
+        .gnt_o   ( /*not used*/ ),
+        .data_i  ( '0           ),
+        .req_o   ( /*not used*/ ),
+        .gnt_i   ( tile_rsp_ready[port] ),
+        .data_o  ( /*not used*/ ),
+        .idx_o   ( l2_rr        )
+      );
     end
-
-    // We use the rr_arb_tree to get the round-robin selection
-    // No data is needed here, only need the handshaking
-    rr_arb_tree #(
-      .NumIn     ( NumClusterSlv    ),
-      .DataType  ( logic     ),
-      .ExtPrio   ( 1'b0      ),
-      .AxiVldRdy ( 1'b1      ),
-      .LockIn    ( 1'b1      )
-    ) i_rr_arb_tree (
-      .clk_i   ( clk_i        ),
-      .rst_ni  ( rst_ni       ),
-      .flush_i ( '0           ),
-      .rr_i    ( '0           ),
-      .req_i   ( arb_valid    ),
-      .gnt_o   ( /*not used*/ ),
-      .data_i  ( '0           ),
-      .req_o   ( /*not used*/ ),
-      .gnt_i   ( tile_rsp_ready[port] ),
-      .data_o  ( /*not used*/ ),
-      .idx_o   ( l2_rr        )
-    );
+  end else begin
+    assign l2_prio_d = '0;
+    assign l2_prio_q = '0;
+    assign rr_lock_d = '0;
+    assign rr_lock_q = '0;
+    assign l2_rsp_rr = '0;
   end
 
 
@@ -492,7 +500,7 @@ module cachepool_cluster
     .NumOut           (NumClusterSlv          ),
     .PipeReg          (1'b1                   ),
     .ExtReqPrio       (1'b0                   ),
-    .ExtRspPrio       (1'b1                   ),
+    .ExtRspPrio       (Burst_Enable           ),
     .tcdm_req_chan_t  (cache_trans_req_chan_t ),
     .tcdm_rsp_chan_t  (cache_trans_rsp_chan_t )
   ) i_cluster_xbar (
@@ -550,7 +558,7 @@ module cachepool_cluster
     reqrsp_to_axi #(
       .MaxTrans           (NumSpatzOutstandingLoads[0]),
       .ID                 ('0                         ),
-      .EnBurst            (1                          ),
+      .EnBurst            (Burst_Enable               ),
       .ShuffleId          (1                          ),
       .UserWidth          ($bits(refill_user_t)       ),
       .ReqUserFallThrough (1'b0                       ),

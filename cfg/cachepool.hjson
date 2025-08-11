@@ -7,7 +7,7 @@
     cluster: {
         mempool: 0,
         boot_addr: 4096,               // 0x1000
-        cluster_base_addr: 3221223424, // 0xBFFF_F800 = C000_0000 - 800 3221217280
+        cluster_base_addr: 3221223424, // 0xBFFF_F800 = C000_0000 - 800
         cluster_base_offset: 0,        // 0x0
         cluster_base_hartid: 0,
         addr_width: 32,

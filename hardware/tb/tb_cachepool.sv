@@ -23,9 +23,6 @@ module tb_cachepool;
    *  Definitions  *
    *****************/
 
-  // timeunit      1ns;
-  // timeprecision 1ps;
-
   import cachepool_pkg::*;
   import spatz_cluster_peripheral_reg_pkg::*;
   import axi_pkg::xbar_cfg_t;

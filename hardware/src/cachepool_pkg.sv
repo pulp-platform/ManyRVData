@@ -37,15 +37,12 @@ package cachepool_pkg;
   // AXI User Width
   localparam int unsigned SpatzAxiUserWidth       = 17;
 
-
   typedef logic [SpatzAxiDataWidth-1:0]  axi_data_t;
   typedef logic [SpatzAxiStrbWidth-1:0]  axi_strb_t;
   typedef logic [SpatzAxiAddrWidth-1:0]  axi_addr_t;
   typedef logic [SpatzAxiIdInWidth-1:0]  axi_id_in_t;
   typedef logic [SpatzAxiIdOutWidth-1:0] axi_id_out_t;
   typedef logic [SpatzAxiUserWidth-1:0]  axi_user_t;
-
-
 
   // --------
   // Typedefs
@@ -184,6 +181,8 @@ package cachepool_pkg;
 
   localparam int unsigned RefillDataWidth     = 128;
   localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
+
+  localparam int unsigned Burst_Enable        = (L1LineWidth > RefillDataWidth);
 
   typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 

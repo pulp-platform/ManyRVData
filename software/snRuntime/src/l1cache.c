@@ -14,7 +14,7 @@ void l1d_xbar_config(uint32_t offset) {
 
   // 4 is the cacheline width (log2(256b/8))
   // granularity cannot be less than cacheline width
-  offset = (offset > 4) ? offset : 4;
+  offset = (offset > 6) ? offset : 6;
 
   uint32_t *cfg =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +

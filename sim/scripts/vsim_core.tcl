@@ -7,10 +7,7 @@ onerror {resume}
 
 add wave -noupdate -group tile[$1]_core[$2] -group scalar_xbar /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_scalar_xbar/*
 
-add wave -noupdate -group tile[$1]_core[$2] -group id_remapper /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_cache_id_mux/*
-
 add wave -noupdate -group tile[$1]_core[$2] -group Params /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/BootAddr
-add wave -noupdate -group tile[$1]_core[$2] -group Params /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/StackDepth
 add wave -noupdate -group tile[$1]_core[$2] /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_snitch/clk_i
 add wave -noupdate -group tile[$1]_core[$2] /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_snitch/rst_i
 add wave -noupdate -group tile[$1]_core[$2] -radix unsigned /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_core[$2]/i_spatz_cc/i_snitch/hart_id_i

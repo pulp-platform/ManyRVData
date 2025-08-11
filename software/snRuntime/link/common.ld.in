@@ -21,36 +21,38 @@ SECTIONS
   /* The program code and other data goes into DRAM */
   .text :
   {
-    . = ALIGN(4);
+    . = ALIGN(64);
     *(.text.init)
     *(.text.startup)
     *(.text)
     *(.text*)
     *(.text)
-    . = ALIGN(4);
     _etext = .;
   } >DRAM
 
   .rodata :
   {
-    . = ALIGN(4);
     *(.rodata)
     *(.rodata*)
-    . = ALIGN(4);
+    . = ALIGN(64);
   } >DRAM
 
   /* HTIF */
-  .htif         : { } >DRAM
+  .htif         : {
+    . = ALIGN(64);
+  } >DRAM
 
   /* Thread Local Storage sections  */
   .tdata    :
   {
+    . = ALIGN(64);
     __tdata_start = .;
     *(.tdata .tdata.* .gnu.linkonce.td.*)
     __tdata_end = .;
   }
   .tbss :
   {
+    . = ALIGN(64);
     __tbss_start = .;
     *(.tbss .tbss.* .gnu.linkonce.tb.*)
     *(.tcommon)
@@ -58,7 +60,11 @@ SECTIONS
   }
   /* add a section after .tbss to put the __tbss_end symbol into for
      the LLD linker */
-  .tbssend : { __tbss_end2 = .; }
+  .tbssend :
+  {
+    . = ALIGN(64);
+    __tbss_end2 = .;
+  }
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
@@ -66,6 +72,7 @@ SECTIONS
   /* small data section that can be addressed through the global pointer */
   .sdata          :
   {
+    . = ALIGN(64);
     __SDATA_BEGIN__ = .;
     __global_pointer$ = . + 0x7f0;
     *(.srodata.cst16) *(.srodata.cst8) *(.srodata.cst4) *(.srodata.cst2) *(.srodata .srodata.*)
@@ -75,7 +82,7 @@ SECTIONS
   /* Initialized data sections goes into uncached region */
   .data :
   {
-    . = ALIGN(1024);
+    . = ALIGN(64);
     __DATA_BEGIN__ = .;
     *(.data .data.* .gnu.linkonce.d.*)
     SORT(CONSTRUCTORS)

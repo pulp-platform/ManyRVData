@@ -62,7 +62,7 @@ The xbars to the cache banks can be configured during runtime to select the scra
 Current CachePool system uses a 32b Spatz RVV accelerator and Snitch RISCV core. The double-precision is off by default in consideration of scalability.
 
 ## Stack
-Currently each core-complex has a local stack SPM. The size of SPM bank is configured from `StackDepth` in the `cachepool_pkg.sv`. This system is still under development and may encountered problem if the `StackDepth` is configured below `512` (size is enough, but program generation needs to be adapted for support).
+Currently each core-complex has a local stack SPM. The size of SPM bank is configured from `SpmStackDepth` in the `cachepool_pkg.sv`. When the stack goes beyond this region, it will be wired to the cache with additional bits from core ID. The shared stack size can be configured from `TotStackDepth` in the `cachepool_pkg.sv`.Currently the shared stack region still has some bugs since the cache controller does not support byte write yet. It is safer to assign a large local stack SPM for this reason (512 Byte or 1 KiB should be enough)
 
 ## Address Map (WIP)
 Here is a summary of current address map of the system:
@@ -72,9 +72,8 @@ Here is a summary of current address map of the system:
 |-----------------|----------------|---------------|----------------------------------------|
 | `0x0000_0000`   | `0x1000`       | Unused        | —                                      |
 | `0x0000_1000`   | `0x1000`       | Boot ROM      | —                                      |
-| `0x0000_2000`   | `0x50FF_E000`  | Unused        | Approximate, until start of stack      |
-| `0x5100_0000`   | `0x4000`       | Stack (WIP)   | —                                      |
-| `0x5100_4000`   | `0x0001_0000`  | Peripheral    | Offset = 0x40 for hardware barrier     |
-| `0x5101_4000`   | `0x2EFE_C000`  | Unused        | Approximate, until DRAM start          |
+| `0x0000_2000`   | —              | Unused        | Until start of stack                   |
 | `0x8000_0000`   | `0x4000_0000`  | DRAM          | 16 GB                                  |
-| `0xC000_0000`   | `0x1000`       | UART          | —                                      |
+| `0xBFFF_F800`   | `0x200`        | Stack         | —                                      |
+| `0xC000_0000`   | `0x0001_0000`  | Peripheral    | Offset = 0x40 for hardware barrier     |
+| `0xC001_0000`   | `0x1000`       | UART          | —                                      |

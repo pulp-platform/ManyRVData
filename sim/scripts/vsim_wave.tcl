@@ -8,12 +8,11 @@ quietly WaveActivateNextPane {} 0
 # Add the cluster probe
 add wave /tb_cachepool/cluster_probe
 
-# Add cluster waves
-# for {set port 0}  {$port < 4} {incr port} {
-#     add wave -noupdate -group Cluster -group ReqRsp$port /tb_cachepool/i_cluster_wrapper/i_cluster/gen_output_axi[$port]/i_reqrsp2axi/*
-# }
+add wave -noupdate -group Cluster -group xbar -group req_xbar /tb_cachepool/i_cluster_wrapper/i_cluster/i_cluster_xbar/i_req_xbar/*
+add wave -noupdate -group Cluster -group xbar -group rsp_xbar /tb_cachepool/i_cluster_wrapper/i_cluster/i_cluster_xbar/i_rsp_xbar/*
 add wave -noupdate -group Cluster -group xbar /tb_cachepool/i_cluster_wrapper/i_cluster/i_cluster_xbar/*
-add wave -noupdate -group Cluster /tb_cachepool/i_cluster_wrapper/i_cluster/*
+
+add wave -noupdate -group Cluster -group Internal /tb_cachepool/i_cluster_wrapper/i_cluster/*
 
 do sim/scripts/vsim_tile.tcl 0
 

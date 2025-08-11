@@ -544,7 +544,7 @@ module cachepool_tile
     .mst_req_t     (axi_slv_dma_req_t    ),
     .mst_resp_t    (axi_slv_dma_resp_t   ),
     .rule_t        (xbar_rule_t          )
-  ) i_axi_dma_xbar (
+  ) i_axi_wide_xbar (
     .clk_i                 (clk_i                  ),
     .rst_ni                (rst_ni                 ),
     .test_i                (1'b0                   ),
@@ -1154,7 +1154,7 @@ module cachepool_tile
     .mst_req_t     (axi_slv_req_t    ),
     .mst_resp_t    (axi_slv_resp_t   ),
     .rule_t        (xbar_rule_t      )
-  ) i_cluster_xbar (
+  ) i_axi_narrow_xbar (
     .clk_i                 (clk_i                      ),
     .rst_ni                (rst_ni                     ),
     .test_i                (1'b0                       ),

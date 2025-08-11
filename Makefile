@@ -227,6 +227,7 @@ cache-init:
 
 # Options
 USE_DRAMSYS ?= 1
+VSIM_FLAGS :=
 
 ifeq ($(USE_DRAMSYS),1)
 	VSIM_BENDER += -t DRAMSYS
@@ -257,7 +258,6 @@ VSIM_FLAGS += -sv_lib $(SIM_DIR)/${DPI_LIB}/cachepool_dpi
 VSIM_FLAGS += -t 1ps
 VSIM_FLAGS += -voptargs=+acc
 VSIM_FLAGS += -suppress vsim-3999
-VSIM_FLAGS += -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a"
 
 VLOG_FLAGS += -svinputport=compat
 VLOG_FLAGS += -override_timescale 1ns/1ps
@@ -275,14 +275,14 @@ define QUESTASIM
 	@mkdir -p bin
 	@echo "#!/bin/bash" > $@
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR} -c \
-				-ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
+	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "run -a"\
+				-work ${WORK_DIR} -c -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
 				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@
 	@chmod +x $@
 	@echo "#!/bin/bash" > $@.gui
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -work ${WORK_DIR}  \
-				-ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
+	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a"\
+				-work ${WORK_DIR}  -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
 				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@.gui
 	@chmod +x $@.gui
 endef
