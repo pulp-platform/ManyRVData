@@ -65,8 +65,11 @@ include_directories(${SNRUNTIME_INCLUDE_DIRS})
 
 # Kernels
 ## Vector Kernels
-add_library(sp-fdotp sp-fdotp/kernel/fdotp.c)
-add_library(sp-fmatmul sp-fmatmul/kernel/sp-fmatmul.c)
+add_library(fdotp-32b fdotp-32b/kernel/fdotp.c)
+add_library(idotp-32b idotp-32b/kernel/idotp.c)
+add_library(fmatmul-32b fmatmul-32b/kernel/fmatmul.c)
+
+
 ## RLC
 add_library(debug_print multi_producer_single_consumer_double_linked_list/kernel/printf_lock.c)
 add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
@@ -80,7 +83,6 @@ set(SNITCH_TEST_PREFIX cachepool-)
 
 ## RLC
 add_spatz_test_zeroParam(spin-lock spin-lock/main.c)
-# target_link_libraries(test-${SNITCH_TEST_PREFIX}${spin-lock} benchmark spin_lock ${SNITCH_RUNTIME})
 
 # add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
@@ -89,17 +91,22 @@ add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list mult
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)
 
 ## Vector
-
-add_spatz_test_oneParam(sp-fdotp sp-fdotp/main.c 1024)
-add_spatz_test_oneParam(sp-fdotp sp-fdotp/main.c 8192)
-add_spatz_test_oneParam(sp-fdotp sp-fdotp/main.c 32768)
+### Floating-Point
+add_spatz_test_oneParam(fdotp-32b fdotp-32b/main.c 1024)
+add_spatz_test_oneParam(fdotp-32b fdotp-32b/main.c 8192)
+add_spatz_test_oneParam(fdotp-32b fdotp-32b/main.c 32768)
 
 add_spatz_test_threeParam(gemv-col gemv-col/main.c 128 128 32)
 add_spatz_test_threeParam(gemv-col gemv-col/main.c 256 128 32)
 add_spatz_test_threeParam(gemv-col gemv-col/main.c 512 128 32)
 
-add_spatz_test_threeParam(sp-fmatmul sp-fmatmul/main.c 32 32 32)
-add_spatz_test_threeParam(sp-fmatmul sp-fmatmul/main.c 64 64 64)
-add_spatz_test_threeParam(sp-fmatmul sp-fmatmul/main.c 128 128 128)
+add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 32 32 32)
+add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 64 64 64)
+add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 128 128 128)
+
+### Integer-Point
+add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 1024)
+add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 32768)
+
 
 add_spatz_test_oneParam(load-store load-store/main.c 16)

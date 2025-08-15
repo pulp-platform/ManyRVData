@@ -16,7 +16,7 @@
 
 // Author: Matheus Cavalcante, ETH Zurich
 
-#include "sp-fmatmul.h"
+#include "fmatmul.h"
 #include <stddef.h>
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

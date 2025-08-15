@@ -21,7 +21,7 @@
 #include <stdio.h>
 
 #include DATAHEADER
-#include "kernel/sp-fmatmul.c"
+#include "kernel/fmatmul.c"
 
 
 #ifndef KERNEL_SIZE
