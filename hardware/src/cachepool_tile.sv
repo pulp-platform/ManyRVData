@@ -110,51 +110,51 @@ module cachepool_tile
     parameter int                     unsigned               NrSramCfg                          = 1
   ) (
     /// System clock.
-    input  logic                             clk_i,
+    input  logic                                    clk_i,
     /// Asynchronous active high reset. This signal is assumed to be _async_.
-    input  logic                             rst_ni,
+    input  logic                                    rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]      debug_req_i,
+    input  logic              [NrCores-1:0]         debug_req_i,
     /// End of Computing indicator to notify the host/tb
-    output logic                             eoc_o,
+    output logic                                    eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]      meip_i,
+    input  logic              [NrCores-1:0]         meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]      mtip_i,
+    input  logic              [NrCores-1:0]         mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]      msip_i,
+    input  logic              [NrCores-1:0]         msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic          [9:0]              hart_base_id_i,
+    input  logic              [9:0]                 hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  logic          [AxiAddrWidth-1:0] cluster_base_addr_i,
+    input  logic              [AxiAddrWidth-1:0]    cluster_base_addr_i,
     /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
     /// to the overall system that the cluster is executing something.
-    output logic                               tile_probe_o,
+    output logic                                    tile_probe_o,
     /// AXI Core cluster in-port.
-    input  axi_in_req_t                        axi_in_req_i,
-    output axi_in_resp_t                       axi_in_resp_o,
+    input  axi_in_req_t                             axi_in_req_i,
+    output axi_in_resp_t                            axi_in_resp_o,
     /// AXI Narrow out-port (UART)
-    output axi_narrow_req_t                    axi_out_req_o,
-    input  axi_narrow_resp_t                   axi_out_resp_i,
+    output axi_narrow_req_t                         axi_out_req_o,
+    input  axi_narrow_resp_t                        axi_out_resp_i,
     /// AXI Cache Refill ports
-    output cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req_o,
-    input  cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CacheCtrl-1:0]  cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CacheCtrl-1:0]  cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
-    output axi_out_req_t  [NumTileWideAxi-1:0] axi_wide_req_o,
-    input  axi_out_resp_t [NumTileWideAxi-1:0] axi_wide_rsp_i,
+    output axi_out_req_t      [NumTileWideAxi-1:0]  axi_wide_req_o,
+    input  axi_out_resp_t     [NumTileWideAxi-1:0]  axi_wide_rsp_i,
     /// SRAM Configuration Ports, usually not used.
-    input  impl_in_t      [NrSramCfg-1:0]    impl_i,
+    input  impl_in_t          [NrSramCfg-1:0]       impl_i,
     /// Indicate the program execution is error
-    output logic                             error_o
+    output logic                                    error_o
   );
   // ---------
   // Imports
@@ -685,6 +685,7 @@ module cachepool_tile
 
   // For address scrambling
   localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  localparam NumWordPerLine = L1LineWidth / DataWidth;
   logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
   assign bitmask_lo = (1 << dynamic_offset) - 1;
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
@@ -833,10 +834,10 @@ module cachepool_tile
     end
 
     // TODO: Should we use a single large bank or multiple narrow ones?
-    for (genvar j = 0; j < NumDataBankPerCtrl; j = j+4) begin : gen_l1_data_banks
+    for (genvar j = 0; j < NumDataBankPerCtrl; j = j+NumWordPerLine) begin : gen_l1_data_banks
       tc_sram_impl #(
         .NumWords   (L1CacheWayEntry/L1BankFactor),
-        .DataWidth  (DataWidth*4),
+        .DataWidth  (L1LineWidth),
         .ByteWidth  (DataWidth  ),
         .NumPorts   (1          ),
         .Latency    (1          ),
@@ -849,24 +850,15 @@ module cachepool_tile
         .req_i  ( l1_data_bank_req  [cb][j]  ),
         .we_i   ( l1_data_bank_we   [cb][j]  ),
         .addr_i ( l1_data_bank_addr [cb][j]  ),
-        .wdata_i({l1_data_bank_wdata[cb][j+3],
-                  l1_data_bank_wdata[cb][j+2],
-                  l1_data_bank_wdata[cb][j+1],
-                  l1_data_bank_wdata[cb][j]} ),
-        .be_i   ({l1_data_bank_be   [cb][j+3],
-                  l1_data_bank_be   [cb][j+2],
-                  l1_data_bank_be   [cb][j+1],
-                  l1_data_bank_be   [cb][j]} ),
-        .rdata_o({l1_data_bank_rdata[cb][j+3],
-                  l1_data_bank_rdata[cb][j+2],
-                  l1_data_bank_rdata[cb][j+1],
-                  l1_data_bank_rdata[cb][j]} )
+        .wdata_i( l1_data_bank_wdata[cb][j+:NumWordPerLine]),
+        .be_i   ( l1_data_bank_be   [cb][j+:NumWordPerLine]),
+        .rdata_o( l1_data_bank_rdata[cb][j+:NumWordPerLine])
       );
 
-      assign l1_data_bank_gnt[cb][j]   = 1'b1;
-      assign l1_data_bank_gnt[cb][j+1] = 1'b1;
-      assign l1_data_bank_gnt[cb][j+2] = 1'b1;
-      assign l1_data_bank_gnt[cb][j+3] = 1'b1;
+      assign l1_data_bank_gnt[cb][j+:NumWordPerLine] = {NumWordPerLine{1'b1}};
+      // assign l1_data_bank_gnt[cb][j+1] = 1'b1;
+      // assign l1_data_bank_gnt[cb][j+2] = 1'b1;
+      // assign l1_data_bank_gnt[cb][j+3] = 1'b1;
     end
 
     // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
