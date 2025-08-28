@@ -4,15 +4,34 @@
 
 # Author: Diyou Shen, ETH Zurich
 
-# Base Directory
+
+###############
+#  Directory  #
+###############
 SHELL = /usr/bin/env bash
 ROOT_DIR := $(patsubst %/,%, $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CACHEPOOL_DIR)
-CXX   := /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
-CC    := /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
 
-# Directoriy Path
-PYTHON                ?= python3.6
+# Software root (toolchain.mk depends on this)
+SOFTWARE_DIR ?= ${CACHEPOOL_DIR}/software
+
+# Host compilers (for DPI, simulators, tools)
+CXX ?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
+CC  ?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
+CXX_PATH ?= $(shell realpath -P $(CXX))
+CC_PATH  ?= $(shell realpath -P $(CC))
+GCC_LIB  ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
+
+# Tools
+CMAKE  ?= cmake
+PYTHON ?= python3.6
+
+# -------- Toolchain (exports GCC/LLVM/Spike/Bender install dirs) --------
+include toolchain.mk
+
+###############
+#  Directory  #
+###############
 
 ## Hardware related
 HARDWARE_DIR          ?= ${CACHEPOOL_DIR}/hardware
@@ -25,209 +44,104 @@ DRAMSYS_DIR           ?= ${DEP_DIR}/dram_rtl_sim
 DRAMSYS_LIB_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/build/lib
 DRAMSYS_RES_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/configs
 
-## Toolchain related
-TOOLCHAIN_DIR         ?= ${SOFTWARE_DIR}/toolchain
-INSTALL_PREFIX        ?= install
-INSTALL_DIR           ?= ${ROOT_DIR}/${INSTALL_PREFIX}
-GCC_INSTALL_DIR       ?= ${INSTALL_DIR}/riscv-gcc
-ISA_SIM_INSTALL_DIR   ?= ${INSTALL_DIR}/riscv-isa-sim
-LLVM_INSTALL_DIR      ?= ${INSTALL_DIR}/llvm
-HALIDE_INSTALL_DIR    ?= ${INSTALL_DIR}/halide
-BENDER_INSTALL_DIR    ?= ${INSTALL_DIR}/bender
-VERILATOR_INSTALL_DIR ?= ${INSTALL_DIR}/verilator
-RISCV_TESTS_DIR       ?= ${ROOT_DIR}/${SOFTWARE_DIR}/riscv-tests
-
-## Software related
-SOFTWARE_DIR          ?= ${CACHEPOOL_DIR}/software
+## Software subpaths
 SPATZ_SW_DIR          ?= ${SPATZ_DIR}/sw
 
 ## Simulation related
 SIM_DIR               ?= ${CACHEPOOL_DIR}/sim
-### local c lib for simulation
-SIMLIB_DIR            ?= ${SIM_DIR}/simlib
-### Snitch testbench c lib for simulation
+SIMLIB_DIR            ?= ${SIM_DIR}/simlib              # local c lib for simulation
 SNLIB_DIR             ?= ${SPATZ_DIR}/hw/ip/snitch_test/src
-### Spatz bootrom c lib for simulation
 BOOTLIB_DIR           := ${SPZ_CLS_DIR}/test
-### QuestaSim work directory
 WORK_DIR              := ${SIM_DIR}/work
 SIMBIN_DIR            := ${SIM_DIR}/bin
 DPI_PATH              := ${HARDWARE_DIR}/tb/dpi
 DPI_LIB               ?= work-dpi
 
-## Bender
+## Bender usage (binary comes from toolchain.mk install)
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
-CACHE_PATH            := $(shell $(BENDER) path insitu-cache)
-
-## SpyGlass
-LINT_PATH 						?= ${CACHEPOOL_DIR}/util/lint
-SNPS_SG 							?= spyglass-2022.06
+# Guarded to avoid failing before bender is installed
+CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cache || true)
 
 # Configurations
-CFG_DIR               ?= ${CACHEPOOL_DIR}/cfg
-CFG                   ?= cachepool.hjson
+CFG_DIR               ?= ${CACHEPOOL_DIR}/config
+config             		?= cachepool
 
-# Tools
+# Compiler choice for SW cmake
 COMPILER              ?= llvm
-
-# Version needs to be larger than 3.28
-CMAKE                 ?= cmake
-
-CXX 									?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
-CC  									?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
-
-# Default value for ETH users only, GCC and CXX needs to be higher than 11.2.0
-CXX_PATH              ?= $(shell realpath -P $(CXX))
-CC_PATH               ?= $(shell realpath -P $(CC))
-GCC_LIB               ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
 
 ############
 #  Bender  #
 ############
-
-BENDER_VERSION = 0.28.1
-
-bender: check-bender
+# Optional sanity target to ensure the right bender version is installed
+BENDER_VERSION ?= 0.28.1
+.PHONY: bender check-bender
+bender: $(BENDER_INSTALL_DIR)/bender
 check-bender:
-	@if [ -x $(BENDER_INSTALL_DIR)/bender ]; then \
-		req="bender $(BENDER_VERSION)"; \
-		current="$$($(BENDER_INSTALL_DIR)/bender --version)"; \
-		if [ "$$(printf '%s\n' "$${req}" "$${current}" | sort -V | head -n1)" != "$${req}" ]; then \
-			rm -rf $(BENDER_INSTALL_DIR); \
-		fi \
+	@if [ -x "$(BENDER)" ]; then \
+	  req="bender $(BENDER_VERSION)"; \
+	  current="$$($(BENDER) --version)"; \
+	  if [ "$$(printf '%s\n' "$${req}" "$${current}" | sort -V | head -n1)" != "$${req}" ]; then \
+	    echo "Existing bender is older than $(BENDER_VERSION); reinstalling..."; \
+	    rm -rf $(BENDER_INSTALL_DIR); \
+	    $(MAKE) bender; \
+	  fi \
+	else \
+	  $(MAKE) bender; \
 	fi
-	@$(MAKE) -C $(ROOT_DIR) $(BENDER_INSTALL_DIR)/bender
 
-$(BENDER_INSTALL_DIR)/bender:
-	mkdir -p $(BENDER_INSTALL_DIR) && cd $(BENDER_INSTALL_DIR) && \
-	curl --proto '=https' --tlsv1.2 https://pulp-platform.github.io/bender/init -sSf | sh -s -- $(BENDER_VERSION)
-
+# Project-level Bender op
+.PHONY: checkout
 checkout: bender
 	${BENDER} checkout
-
-
-###############
-#  Toolchain  #
-###############
-
-toolchain: checkout download tc-llvm tc-riscv-gcc
-
-.PHONY: download
-download: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain ${TOOLCHAIN_DIR}/llvm-project ${TOOLCHAIN_DIR}/riscv-opcodes ${TOOLCHAIN_DIR}/riscv-isa-sim ${TOOLCHAIN_DIR}/dtc
-
-
-${TOOLCHAIN_DIR}/riscv-gnu-toolchain: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain.version
-	mkdir -p ${TOOLCHAIN_DIR}
-	cd ${TOOLCHAIN_DIR} && git clone https://github.com/pulp-platform/pulp-riscv-gnu-toolchain.git riscv-gnu-toolchain
-	cd ${TOOLCHAIN_DIR}/riscv-gnu-toolchain &&           \
-		git checkout `cat ../riscv-gnu-toolchain.version` && \
-		git submodule update --init --recursive --jobs=8 .
-
-${TOOLCHAIN_DIR}/llvm-project: ${TOOLCHAIN_DIR}/llvm-project.version
-	mkdir -p ${TOOLCHAIN_DIR}
-	cd ${TOOLCHAIN_DIR} && git clone https://github.com/mp-17/llvm-project.git
-	cd ${TOOLCHAIN_DIR}/llvm-project &&                  \
-		git checkout `cat ../llvm-project.version` && \
-		git submodule update --init --recursive --jobs=8 .
-
-${TOOLCHAIN_DIR}/riscv-opcodes: ${TOOLCHAIN_DIR}/riscv-opcodes.version
-	mkdir -p ${TOOLCHAIN_DIR}
-	cd ${TOOLCHAIN_DIR} && git clone https://github.com/mp-17/riscv-opcodes.git
-	cd ${TOOLCHAIN_DIR}/riscv-opcodes &&                 \
-		git checkout `cat ../riscv-opcodes.version` && \
-		git submodule update --init --recursive --jobs=8 .
-
-${TOOLCHAIN_DIR}/riscv-isa-sim: ${TOOLCHAIN_DIR}/riscv-isa-sim.version
-	mkdir -p ${TOOLCHAIN_DIR}
-	cd ${TOOLCHAIN_DIR} && git clone https://github.com/riscv-software-src/riscv-isa-sim.git
-	cd ${TOOLCHAIN_DIR}/riscv-isa-sim &&                 \
-		git checkout `cat ../riscv-isa-sim.version` && \
-		git submodule update --init --recursive --jobs=8 .
-
-${TOOLCHAIN_DIR}/dtc:
-	mkdir -p ${TOOLCHAIN_DIR}/dtc
-	cd ${TOOLCHAIN_DIR}/dtc && wget -c https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.7.0.tar.gz
-	cd ${TOOLCHAIN_DIR}/dtc && tar xf dtc-1.7.0.tar.gz
-
-tc-riscv-gcc: ${TOOLCHAIN_DIR}/riscv-gnu-toolchain
-	mkdir -p $(GCC_INSTALL_DIR)
-	cd ${TOOLCHAIN_DIR}/riscv-gnu-toolchain && rm -rf build && mkdir -p build && cd build && \
-	../configure --prefix=$(GCC_INSTALL_DIR) --with-arch=rv32imaf --with-abi=ilp32f --with-cmodel=medlow --enable-multilib && \
-	$(MAKE) MAKEINFO=true -j4
-
-tc-llvm: ${TOOLCHAIN_DIR}/llvm-project
-	mkdir -p $(LLVM_INSTALL_DIR)
-	cd ${TOOLCHAIN_DIR}/llvm-project && mkdir -p build && cd build; \
-	$(CMAKE) \
-		-DCMAKE_INSTALL_PREFIX=$(LLVM_INSTALL_DIR) \
-		-DCMAKE_CXX_COMPILER=g++-11.2.0 \
-		-DCMAKE_C_COMPILER=gcc-11.2.0 \
-		-DLLVM_OPTIMIZED_TABLEGEN=True \
-		-DLLVM_ENABLE_PROJECTS="clang;lld" \
-		-DLLVM_TARGETS_TO_BUILD="RISCV" \
-		-DLLVM_DEFAULT_TARGET_TRIPLE=riscv32-unknown-elf \
-		-DLLVM_ENABLE_LLD=False \
-		-DLLVM_APPEND_VC_REV=ON \
-		-DCMAKE_BUILD_TYPE=Release \
-		../llvm && \
-	make -j8 all && \
-	make install
-
-tc-riscv-isa-sim: ${TOOLCHAIN_DIR}/riscv-isa-sim ${TOOLCHAIN_DIR}/dtc
-	mkdir -p $(ISA_SIM_INSTALL_DIR)
-	cd ${TOOLCHAIN_DIR}/dtc/dtc-1.7.0 && make install PREFIX=$(ISA_SIM_INSTALL_DIR)
-	cd ${ISA_SIM_INSTALL_DIR} && rm -rf build && mkdir -p build && cd build && \
-	PATH=$(ISA_SIM_INSTALL_DIR)/bin:$(PATH) ../configure --prefix=$(ISA_SIM_INSTALL_DIR) && \
-	$(MAKE) MAKEINFO=true -j4 install
-
-
-#############
-#  Opcodes  #
-#############
-
-.PHONY: update_opcodes
-update_opcodes: clean-opcodes ${TOOLCHAIN_DIR}/riscv-opcodes ${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h ${SPATZ_DIR}/hw/ip/snitch/src/riscv_instr.sv
-
-clean-opcodes:
-	rm -rf ${TOOLCHAIN_DIR}/riscv-opcodes
-
-${SPATZ_DIR}hw/ip/snitch/src/riscv_instr.sv: ${TOOLCHAIN_DIR}/riscv-opcodes
-	MY_OPCODES=$(OPCODES) make -C ${TOOLCHAIN_DIR}/riscv-opcodes inst.sverilog
-	mv ${TOOLCHAIN_DIR}/riscv-opcodes/inst.sverilog $@
-
-${TOOLCHAIN_DIR}/riscv-opcodes/encoding.h:
-	MY_OPCODES=$(OPCODES) make -C ${TOOLCHAIN_DIR}/riscv-opcodes all
-	cp ${TOOLCHAIN_DIR}/riscv-opcodes/encoding_out.h $@
-
 
 #################
 # Prerequisites #
 #################
 
-# Initialize, setup the toolchain for Spatz
+# Export make vars so Python sees them (simple and robust)
+.EXPORT_ALL_VARIABLES:
+
+config_mk       := $(abspath $(CACHEPOOL_DIR)/config/config.mk)
+HJSON_TEMPLATE  := $(CFG_DIR)/cachepool.hjson.tmpl
+HJSON_OUT       := $(CFG_DIR)/cachepool.hjson
+
+include $(config_mk)
+
+.PHONY: gen-spatz-cfg
+gen-spatz-cfg: $(config_mk) $(HJSON_TEMPLATE) ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py
+	@mkdir -p $(CFG_DIR)
+	@python3 ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py --template $(HJSON_TEMPLATE) --out $(HJSON_OUT)
+
+
+# Initialize submodules
+.PHONY: init
 init:
 	git submodule update --init --recursive --jobs=8
 
+# ETH-only quick tool switch (softlink prebuilt toolchains)
+.PHONY: quick-tool
 quick-tool:
 	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
-# Build bootrom and spatz
+# Build bootrom and spatz (depends on opcodes repo being present)
 .PHONY: generate
-generate: update_opcodes
-	make -C $(SPZ_CLS_DIR) generate bootrom SPATZ_CLUSTER_CFG=${CFG_DIR}/${CFG}
+generate: update_opcodes gen-spatz-cfg
+	$(MAKE) -C $(SPZ_CLS_DIR) generate bootrom SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson
 
 .PHONY: cache-init
 cache-init:
+ifneq ($(CACHE_PATH),)
 	cd ${CACHE_PATH} && source sourceme.sh
-
+else
+	@echo "insitu-cache path unavailable (bender not installed yet?)"
+endif
 
 ###########
 # DramSys #
 ###########
-
-# Options
 USE_DRAMSYS ?= 1
 VSIM_FLAGS :=
+VSIM_BENDER =
 
 ifeq ($(USE_DRAMSYS),1)
 	VSIM_BENDER += -t DRAMSYS
@@ -237,20 +151,24 @@ ifeq ($(USE_DRAMSYS),1)
 endif
 
 ## Build DramSys
+.PHONY: dram-build
 dram-build:
-	make -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
-
+	$(MAKE) -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
 
 ############
 # Modelsim #
 ############
-# QuestaSim
+
+# Configuration read
+# config_mk = $(abspath $(CACHEPOOL_DIR)/config/config.mk)
+
+
 QUESTA_VER ?= questa-2023.4-zr
 VSIM        = ${QUESTA_VER} vsim
 VLOG        = ${QUESTA_VER} vlog
 VSIM_HOME   = /usr/pack/${QUESTA_VER}/questasim
 
-# fesvr is being installed here
+# fesvr is built locally into work dir; needs dtc/spike path
 FESVR          ?= ${SIM_DIR}/work
 FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
 
@@ -264,6 +182,59 @@ VLOG_FLAGS += -override_timescale 1ns/1ps
 VLOG_FLAGS += -suppress 2583
 VLOG_FLAGS += -suppress 13314
 VLOG_FLAGS += -64
+
+# ------------------------
+# Compile-time definitions
+# ------------------------
+
+VLOG_DEFS = -DCACHEPOOL
+
+# Cluster configuration
+VLOG_DEFS += -DNUM_TILES=$(num_tiles)
+VLOG_DEFS += -DNUM_CORES=$(num_cores)
+VLOG_DEFS += -DDATA_WIDTH=$(data_width)
+VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
+
+# Tile configuration
+VLOG_DEFS += -DNUM_CORES_PER_TILE=$(num_cores_per_tile)
+VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
+
+# L1 Data Cache
+VLOG_DEFS += -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
+VLOG_DEFS += -DL1D_SIZE=$(l1d_size)
+VLOG_DEFS += -DL1D_BANK_FACTOR=$(l1d_bank_factor)
+VLOG_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
+VLOG_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
+VLOG_DEFS += -DL1D_TILE_SIZE=$(l1d_tile_size)
+VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
+# derived (no spaces so vlog gets one arg)
+VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
+VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
+
+# CachePool CC / core cluster
+VLOG_DEFS += -DSPATZ_FPU_EN=$(spatz_fpu_en)
+VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
+VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
+VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
+VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
+
+# AXI configuration
+VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
+
+# L2 / main memory
+VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
+VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
+VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
+
+# Peripherals / memory map
+VLOG_DEFS += -DSTACK_ADDR=$(stack_addr)
+VLOG_DEFS += -DSTACK_HW_SIZE=$(stack_hw_size)
+VLOG_DEFS += -DSTACK_HW_DEPTH=$(stack_hw_depth)
+VLOG_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
+VLOG_DEFS += -DPERIPH_START_ADDR=$(periph_start_addr)
+VLOG_DEFS += -DBOOT_ADDR=$(boot_addr)
+VLOG_DEFS += -DUART_ADDR=$(uart_addr)
+
 
 ENABLE_CACHEPOOL_TESTS ?= 1
 
@@ -301,7 +272,6 @@ ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so: ${dpi_target}
 	mkdir -p ${SIM_DIR}/${DPI_LIB}
 	$(CXX) -shared -m64 -o ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so $^
 
-
 ## Questa Build
 ${WORK_DIR}/${FESVR_VERSION}_unzip:
 	mkdir -p $(dir $@)
@@ -311,13 +281,13 @@ ${WORK_DIR}/${FESVR_VERSION}_unzip:
 
 ${WORK_DIR}/lib/libfesvr_vsim.a: ${WORK_DIR}/${FESVR_VERSION}_unzip
 	cd $(dir $<)/ && PATH=${ISA_SIM_INSTALL_DIR}/bin:${PATH} CC=${CC_PATH} CXX=${CXX_PATH} ./configure --prefix `pwd`
-	make -C $(dir $<) install-config-hdrs install-hdrs libfesvr.a
+	$(MAKE) -C $(dir $<) install-config-hdrs install-hdrs libfesvr.a
 	mkdir -p $(dir $@)
 	cp $(dir $<)libfesvr.a $@
 
 ${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc ${BOOTLIB_DIR}/bootrom.bin
 	vlib $(dir $@)
-	${BENDER} script vsim ${VSIM_BENDER} ${DEFS} --vlog-arg="${VLOG_FLAGS} -work $(dir $@) " > $@
+	${BENDER} script vsim ${VSIM_BENDER} --vlog-arg="${VLOG_FLAGS} -work $(dir $@)" ${VLOG_DEFS} > $@
 	echo '${VLOG} -work $(dir $@) ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc -ccflags "-std=c++17 -I${BOOTLIB_DIR} -I${WORK_DIR}/include -I${SNLIB_DIR}"' >> $@
 	echo '${VLOG} -work $(dir $@) ${BOOTLIB_DIR}/uartdpi/uartdpi.c -ccflags "-I${BOOTLIB_DIR}/uartdpi" -cpppath "${CXX_PATH}"' >> $@
 	echo 'return 0' >> $@
@@ -326,56 +296,68 @@ ${SIMBIN_DIR}/cachepool_cluster.vsim: ${WORK_DIR}/compile.vsim.tcl ${WORK_DIR}/l
 	mkdir -p ${SIMBIN_DIR}/logs
 	$(call QUESTASIM,tb_cachepool)
 
+.PHONY: clean.vsim
 clean.vsim:
 	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim \
-				 ${SIM_DIR}/work-dpi ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs *.tdb *.vstf bin
+	       ${SIM_DIR}/work-dpi ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs *.tdb *.vstf bin
 
 ######
 # SW #
 ######
 
-## Delete sw/build
+.PHONY: clean.sw
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
-## Build SW into sw/build with the LLVM toolchain
 .PHONY: sw
 sw: clean.sw
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	-DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	-DRUNTIME_DIR=${SOFTWARE_DIR} -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	-DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DPYTHON=${PYTHON} -DBUILD_TESTS=ON .. && make
-
+	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
+	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
+	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
+	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
+	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
+	  -DGCC_PATH=${GCC_INSTALL_DIR} \
+	  -DPYTHON=${PYTHON} \
+	  -DBUILD_TESTS=ON .. && $(MAKE)
 
 .PHONY: vsim
 vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	-DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	-DRUNTIME_DIR=${SOFTWARE_DIR} -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	-DLLVM_PATH=${LLVM_INSTALL_DIR} -DGCC_PATH=${GCC_INSTALL_DIR} -DPYTHON=${PYTHON} \
-	-DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim -DBUILD_TESTS=ON .. && make
+	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
+	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
+	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
+	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
+	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
+	  -DGCC_PATH=${GCC_INSTALL_DIR} \
+	  -DPYTHON=${PYTHON} \
+	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
+	  -DBUILD_TESTS=ON .. && $(MAKE)
 
 .PHONY: clean
 clean: clean.sw clean.vsim
+	rm -rf ${CFG_DIR}/cachepool.hjson
 
+########
+# Lint #
+########
 
-############
-# SPYGLASS #
-############
+LINT_PATH ?= ${CACHEPOOL_DIR}/util/lint
+SNPS_SG   ?= spyglass-2024.09
 
-SNPS_SG ?= spyglass-2024.09
-
-.PHONY: lint ${LINT_PATH}/tmp/files
+.PHONY: lint
 lint: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/lint.tcl
 	cd ${LINT_PATH} && $(SNPS_SG) sg_shell -tcl ${LINT_PATH}/script/lint.tcl
 
-${LINT_PATH}/tmp/files: ${BENDER}
+${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
+	@if [ ! -x "$(BENDER)" ]; then echo "bender not installed; run 'make bender'"; exit 1; fi
 	${BENDER} script verilator -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
+
 
 ########
 # Help #
@@ -389,10 +371,10 @@ help:
 	@echo "Initialization:"
 	@echo ""
 	@echo "*init*:       clone the git submodules"
-	@echo "*toolchain*:  build the necessary toochains, including LLVM and GCC"
+	@echo "*toolchain*:  build the necessary toolchains (LLVM/GCC/Spike)"
 	@echo "*quick-tool*: *ETH Member Only* soft link to prebuilt toolchains"
 	@echo "*generate*:   generate the Spatz package, bootrom and opcodes"
-	@echo "*dram-build*: build DramSys for simulation"
+	@echo "*dram-build*: build DRAMSys for simulation"
 	@echo ""
 	@echo "SW Build:"
 	@echo ""
@@ -402,11 +384,13 @@ help:
 	@echo "Simulation:"
 	@echo ""
 	@echo "*clean.vsim*: remove the current hardware build"
-	@echo "*vsim*:       build both the software and hardware (will not overwrite the previous build by default"
-	@echo "              *USE_DRAMSYS*: set to 1 to use the DRAMSYS system (*1* by default)"
+	@echo "*vsim*:       build both the software and hardware (not overwriting prev build by default)"
+	@echo "              USE_DRAMSYS=1 to use DRAMSys (default 1)"
+	@echo ""
+	@echo "Lint:"
+	@echo "*lint*:       run SpyGlass lint (requires bender + SpyGlass in PATH)"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings"
-	@echo "*CMAKE*:      CMake version needs to be greater or equal to 3.28 for DRAMSyS"
+	@echo "*CMAKE*:      CMake version needs to be >= 3.28 for DRAMSys"
 	@echo ""
-

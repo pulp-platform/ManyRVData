@@ -2,6 +2,8 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
+// Author: Diyou Shen <dishen@iis.ee.ethz.ch>
+
 package cachepool_pkg;
   import fpnew_pkg::*;
 
@@ -14,18 +16,18 @@ package cachepool_pkg;
   `include "reqrsp_interface/assign.svh"
   `include "reqrsp_interface/typedef.svh"
 
-  localparam int unsigned NumTiles = 1;
+  localparam int unsigned NumTiles = `ifdef NUM_TILES `NUM_TILES `else 0 `endif;
 
   ///////////
   //  AXI  //
   ///////////
 
   // AXI Data Width
-  localparam int unsigned SpatzAxiDataWidth       = 128;
+  localparam int unsigned SpatzAxiDataWidth       = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned SpatzAxiStrbWidth       = SpatzAxiDataWidth / 8;
-  localparam int unsigned SpatzAxiNarrowDataWidth = 32;
+  localparam int unsigned SpatzAxiNarrowDataWidth = `ifdef DATA_WIDTH `DATA_WIDTH `else 0 `endif;
   // AXI Address Width
-  localparam int unsigned SpatzAxiAddrWidth       = 32;
+  localparam int unsigned SpatzAxiAddrWidth       = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
   // AXI ID Width
   localparam int unsigned SpatzAxiIdInWidth       = 6;
   localparam int unsigned SpatzAxiIdOutWidth      = 7;
@@ -35,7 +37,7 @@ package cachepool_pkg;
   localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
 
   // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth       = 17;
+  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif;
 
   typedef logic [SpatzAxiDataWidth-1:0]  axi_data_t;
   typedef logic [SpatzAxiStrbWidth-1:0]  axi_strb_t;
@@ -63,13 +65,13 @@ package cachepool_pkg;
   //  Spatz Cluster //
   ////////////////////
 
-  localparam int unsigned NumCores        = 4;
+  localparam int unsigned NumCores        = `ifdef NUM_CORES `NUM_CORES `else 0 `endif;
   // TODO: read from CFG
-  localparam int unsigned NumBank         = 16;
+  localparam int unsigned NumBank         = `ifdef L1D_NUM_BANKS `L1D_NUM_BANKS `else 0 `endif;
   localparam int unsigned TCDMDepth       = 256;
-  localparam int unsigned L1Depth         = 4096;
+  localparam int unsigned L1Depth         = `ifdef L1D_DEPTH `L1D_DEPTH `else 0 `endif;
 
-  localparam int unsigned SpatzDataWidth  = 32;
+  localparam int unsigned SpatzDataWidth  = `ifdef DATA_WIDTH `DATA_WIDTH `else 0 `endif;
   localparam int unsigned BeWidth         = SpatzDataWidth / 8;
   localparam int unsigned ByteOffset      = $clog2(BeWidth);
 
@@ -77,14 +79,14 @@ package cachepool_pkg;
   localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets      = 4;
 
+  // Be careful on unsigned long int passed in from configuration
+  // Currently use fixed values
   localparam int unsigned TCDMStartAddr   = 32'hBFFF_F800;
   localparam int unsigned TCDMSize        = 32'h800;
 
-  // localparam int unsigned PeriStartAddr   = TCDMStartAddr + TCDMSize;
   localparam int unsigned PeriStartAddr   = 32'hC000_0000;
 
   localparam int unsigned BootAddr        = 32'h1000;
-
 
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC001_0000;
@@ -101,16 +103,17 @@ package cachepool_pkg;
       CachedRegion: get_cached_regions(),
       default: 0
   };
+
   /////////////////
   //  Spatz Core //
   /////////////////
 
-  localparam int unsigned NFpu          = 4;
-  localparam int unsigned NIpu          = 4;
+  localparam int unsigned NFpu          = `ifdef SPATZ_NUM_FPU `SPATZ_NUM_FPU `else 0 `endif;
+  localparam int unsigned NIpu          = `ifdef SPATZ_NUM_IPU `SPATZ_NUM_IPU `else 1 `endif;
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: 32};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: 32};
-  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: 32};
+  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
+  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
+  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: `ifdef SPATZ_MAX_TRANS `SPATZ_MAX_TRANS `else 0 `endif};
 
   localparam int unsigned NumAxiMaxTrans                      = 32;
 
@@ -141,27 +144,27 @@ package cachepool_pkg;
   ////////////////////
 
   // Stack: 128*32/8 = 512 Byte per core
-  localparam int unsigned SpmStackDepth       = 256;
-  localparam int unsigned SpmStackSize        = SpmStackDepth * 32 / 8;
+  localparam int unsigned SpmStackDepth       = `ifdef STACK_HW_DEPTH `STACK_HW_DEPTH `else 0 `endif;
+  localparam int unsigned SpmStackSize        = `ifdef STACK_HW_SIZE `STACK_HW_SIZE `else 0 `endif;
 
   // Total Stack Size in Byte (Shared in main memory + SpmStack)
-  localparam int unsigned TotStackDepth       = 512;
-  localparam int unsigned TotStackSize        = TotStackDepth * 32 / 8;
+  localparam int unsigned TotStackDepth       = `ifdef STACK_TOT_DEPTH `STACK_TOT_DEPTH `else 0 `endif;
+  localparam int unsigned TotStackSize        = `ifdef STACK_TOT_SIZE `STACK_TOT_SIZE `else 0 `endif;
 
   // Address width of cache
-  localparam int unsigned L1AddrWidth         = 32;
+  localparam int unsigned L1AddrWidth         = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
   // Cache lane width
-  localparam int unsigned L1LineWidth         = 512;
+  localparam int unsigned L1LineWidth         = `ifdef L1D_CACHELINE_WIDTH `L1D_CACHELINE_WIDTH `else 0 `endif;
   // Coalecser window
-  localparam int unsigned L1CoalFactor        = 2;
+  localparam int unsigned L1CoalFactor        = `ifdef L1D_COAL_WINDOW `L1D_COAL_WINDOW `else 0 `endif;
   // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
-  localparam int unsigned NumL1CacheCtrl      = NumCores;
+  localparam int unsigned NumL1CacheCtrl      = `ifdef NUM_CORES_PER_TILE `NUM_CORES_PER_TILE `else 0 `endif;
   // Number of ways per cache controller
-  localparam int unsigned L1AssoPerCtrl       = 4;
+  localparam int unsigned L1AssoPerCtrl       = `ifdef L1D_NUM_WAY `L1D_NUM_WAY `else 0 `endif;
   // Pesudo dual bank
   localparam int unsigned L1BankFactor        = 2;
   // DataWidth of Tag bank
-  localparam int unsigned L1TagDataWidth      = 64;
+  localparam int unsigned L1TagDataWidth      = `ifdef L1D_TAG_DATA_WIDTH `L1D_TAG_DATA_WIDTH `else 0 `endif;
 
   // Number of data banks assigned to each cache controller
   localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;
@@ -179,7 +182,7 @@ package cachepool_pkg;
   localparam int unsigned CoreIDWidth         = cf_math_pkg::idx_width(NumCores);
   localparam int unsigned BankIDWidth         = cf_math_pkg::idx_width(NumL1CacheCtrl);
 
-  localparam int unsigned RefillDataWidth     = 128;
+  localparam int unsigned RefillDataWidth     = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
 
   localparam int unsigned Burst_Enable        = (L1LineWidth > RefillDataWidth);
@@ -255,8 +258,8 @@ package cachepool_pkg;
   `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
 
   // L2 Memory
-  localparam int unsigned NumL2Channel        = 4;
-  localparam int unsigned L2BankWidth         = 512;
+  localparam int unsigned NumL2Channel        = `ifdef L2_CHANNEL `L2_CHANNEL `else 0 `endif;
+  localparam int unsigned L2BankWidth         = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
   localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
   parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase            = 32'h8000_0000;
@@ -282,7 +285,7 @@ package cachepool_pkg;
   } dram_ctrl_interleave_t;
 
   // Currently set to 16 for now
-  parameter int unsigned Interleave  = 16;
+  parameter int unsigned Interleave  = `ifdef L2_INTERLEAVE `L2_INTERLEAVE `else 0 `endif;
 
   function automatic dram_ctrl_interleave_t getDramCTRLInfo(axi_addr_t addr);
     automatic dram_ctrl_interleave_t res;
