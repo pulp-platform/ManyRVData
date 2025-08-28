@@ -188,7 +188,7 @@ module spatz_cache_amo
   `FF(amo_result_en_q, amo_result_en_d, '0)
 
   assign idx_d     = ((DataWidth == 64) ? amo_req.strb[DataWidth/8/2] : 0);
-  assign load_amo  = amo_req_valid & amo_req_ready &
+  assign load_amo  = amo_req_valid & amo_req_ready & core_ready &
           ~(amo_insn inside {AMONone, AMOLR, AMOSC});
   assign operand_a = amo_rsp.data[32*idx_q+:32];
 
