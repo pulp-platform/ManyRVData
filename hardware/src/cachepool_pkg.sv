@@ -277,7 +277,6 @@ package cachepool_pkg;
   localparam int unsigned DramSize        = 32'h4000_0000; // 1GB
   localparam int unsigned DramPerChSize   = DramSize / NumL2Channel;
 
-`ifdef TARGET_DRAMSYS
   // DRAM Interleaving Functions
   typedef struct packed {
     int                           dram_ctrl_id;
@@ -357,8 +356,5 @@ package cachepool_pkg;
       return addr;
     end
   endfunction
-
-`endif
-
 
 endpackage : cachepool_pkg

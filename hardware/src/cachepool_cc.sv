@@ -2,7 +2,9 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-// Author: Matheus Cavalcante <matheusd@iis.ee.ethz.ch>
+// Author: Diyou Shen <dishen@iis.ee.ethz.ch>
+//         Hong Pang  <hopang@iis.ee.ethz.ch>
+//         Zexin Fu   <zexifu@iis.ee.ethz.ch>
 
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
@@ -670,6 +672,8 @@ module cachepool_cc
   // --------------------------
   // Tracer
   // --------------------------
+`ifndef VERILATOR
+
   // pragma translate_off
   int           f;
   string        fn;
@@ -943,5 +947,7 @@ module cachepool_cc
   // pragma translate_on
 
   `ASSERT_INIT(BootAddrAligned, BootAddr[1:0] == 2'b00)
+
+`endif
 
 endmodule

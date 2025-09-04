@@ -143,13 +143,6 @@ USE_DRAMSYS ?= 1
 VSIM_FLAGS :=
 VSIM_BENDER =
 
-ifeq ($(USE_DRAMSYS),1)
-	VSIM_BENDER += -t DRAMSYS
-	VSIM_FLAGS += +DRAMSYS_RES=$(DRAMSYS_RES_PATH)
-	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libsystemc
-	VSIM_FLAGS += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
-endif
-
 ## Build DramSys
 .PHONY: dram-build
 dram-build:
@@ -158,10 +151,6 @@ dram-build:
 ############
 # Modelsim #
 ############
-
-# Configuration read
-# config_mk = $(abspath $(CACHEPOOL_DIR)/config/config.mk)
-
 
 QUESTA_VER ?= questa-2023.4-zr
 VSIM        = ${QUESTA_VER} vsim
@@ -238,68 +227,11 @@ VLOG_DEFS += -DUART_ADDR=$(uart_addr)
 
 ENABLE_CACHEPOOL_TESTS ?= 1
 
-VSIM_BENDER   += -t test -t rtl -t simulation -t spatz -t spatz_test -t snitch_test -t cachepool
+# Bender targets
+VSIM_BENDER   += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
 
-define QUESTASIM
-	${VSIM} -c -do "source $<; quit" | tee $(dir $<)vsim.log
-	@! grep -P "Errors: [1-9]*," $(dir $<)vsim.log
-	@mkdir -p bin
-	@echo "#!/bin/bash" > $@
-	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "run -a"\
-				-work ${WORK_DIR} -c -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
-				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@
-	@chmod +x $@
-	@echo "#!/bin/bash" > $@.gui
-	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $@
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a"\
-				-work ${WORK_DIR}  -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" \
-				$1 +permissive-off ++$$1 +PRELOAD=$$1' >> $@.gui
-	@chmod +x $@.gui
-endef
-
-## DPI Build
-dpi_target := $(patsubst ${DPI_PATH}/%.cpp,${SIM_DIR}/${DPI_LIB}/%.o,$(wildcard ${DPI_PATH}/*.cpp))
-
-.PHONY: dpi
-dpi: ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so
-
-${SIM_DIR}/${DPI_LIB}/%.o: ${DPI_PATH}/%.cpp
-	mkdir -p ${SIM_DIR}/${DPI_LIB}
-	$(CXX) -shared -fPIC -std=c++11 -Bsymbolic -c $< -I$(VSIM_HOME)/include -o $@
-
-${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so: ${dpi_target}
-	mkdir -p ${SIM_DIR}/${DPI_LIB}
-	$(CXX) -shared -m64 -o ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so $^
-
-## Questa Build
-${WORK_DIR}/${FESVR_VERSION}_unzip:
-	mkdir -p $(dir $@)
-	wget -O $(dir $@)/${FESVR_VERSION} https://github.com/riscv/riscv-isa-sim/tarball/${FESVR_VERSION}
-	tar xfm $(dir $@)${FESVR_VERSION} --strip-components=1 -C $(dir $@)
-	touch $@
-
-${WORK_DIR}/lib/libfesvr_vsim.a: ${WORK_DIR}/${FESVR_VERSION}_unzip
-	cd $(dir $<)/ && PATH=${ISA_SIM_INSTALL_DIR}/bin:${PATH} CC=${CC_PATH} CXX=${CXX_PATH} ./configure --prefix `pwd`
-	$(MAKE) -C $(dir $<) install-config-hdrs install-hdrs libfesvr.a
-	mkdir -p $(dir $@)
-	cp $(dir $<)libfesvr.a $@
-
-${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc ${BOOTLIB_DIR}/bootrom.bin
-	vlib $(dir $@)
-	${BENDER} script vsim ${VSIM_BENDER} --vlog-arg="${VLOG_FLAGS} -work $(dir $@)" ${VLOG_DEFS} > $@
-	echo '${VLOG} -work $(dir $@) ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTLIB_DIR}/bootdata.cc -ccflags "-std=c++17 -I${BOOTLIB_DIR} -I${WORK_DIR}/include -I${SNLIB_DIR}"' >> $@
-	echo '${VLOG} -work $(dir $@) ${BOOTLIB_DIR}/uartdpi/uartdpi.c -ccflags "-I${BOOTLIB_DIR}/uartdpi" -cpppath "${CXX_PATH}"' >> $@
-	echo 'return 0' >> $@
-
-${SIMBIN_DIR}/cachepool_cluster.vsim: ${WORK_DIR}/compile.vsim.tcl ${WORK_DIR}/lib/libfesvr_vsim.a
-	mkdir -p ${SIMBIN_DIR}/logs
-	$(call QUESTASIM,tb_cachepool)
-
-.PHONY: clean.vsim
-clean.vsim:
-	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim \
-	       ${SIM_DIR}/work-dpi ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs *.tdb *.vstf bin
+# Include the simulation makefile
+include sim/sim.mk
 
 ######
 # SW #

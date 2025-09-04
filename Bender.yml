@@ -39,7 +39,8 @@ sources:
   # Level 4
   - hardware/tb/cachepool_cluster_wrapper.sv
   # testbench
-  - target: simulation
+  - target: cachepool_test
     files:
     - hardware/tb/axi_uart.sv
     - hardware/tb/tb_cachepool.sv
+    - hardware/tb/tb_cachepool_verilator.sv
