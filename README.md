@@ -1,79 +1,130 @@
 # CachePool
 
-This reporistory is still under construction...
+> ⚠️ This repository is under active development. Interfaces and build flows may change.
 
-## Get Started
+## Overview
 
-First, initialize and generated the needed hardware with:
+CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cache (“CachePool”) and optional DRAMSys-backed main memory. Configuration is centralized in `config/config.mk` and propagated automatically to:
+- SystemVerilog (via `VLOG_DEFS` at compile time)
+- The Spatz cluster generator (via an auto-generated `config/cachepool.hjson`)
+
+## Configurations
+
+- All hardware knobs live in **`config/config.mk`** (and flavor files it includes, e.g., `cachepool.mk`, `cachepool_fpu.mk`).
+  - `cachepool.mk`: no floating-point support
+  - `cachepool_fpu.mk`: enables single/half precision in the Spatz vector core
+- The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
+  - `config/cachepool.hjson.tmpl` (skeleton with comments)
+  - `config/config.mk` (source of truth)
+
+To switch flavors, set `config=<flavor>` (or export `CACHEPOOL_CONFIGURATION=<flavor>`), then rebuild:
+
+```bash
+# Example: switch to FPU flavor
+make clean
+make generate config=cachepool_fpu
+```
+
+> `make clean` is recommended when changing configurations.
+
+## Requirements
+
+- Linux environment with: `make`, `git`, `python3`, `wget`, `curl`
+- **CMake ≥ 3.28**, **GCC/G++ ≥ 11.2**
+- **QuestaSim** (tested with `questa-2023.4-zr`)
+- Optional: SpyGlass for lint
+
+## Quick Start
+
+Initialize submodules and generate the Spatz configuration + RTL packages:
 
 ```bash
 make init
 make generate
 ```
 
-Then, DramSys needs to be built correctly with GCC version higher than 11.2.0, CMAKE higher than 3.28.0
+Build DRAMSys (if `USE_DRAMSYS=1`, default). You can override tool paths inline:
+
 ```bash
-make dram-build CMAKE=/path/to/cmake-3.28.3 CC=/path/to/gcc-11.2.0 CXX=/path/to/g++-11.2.0
+make dram-build CMAKE=/path/to/cmake-3.28.x CC=/path/to/gcc-11.2 CXX=/path/to/g++-11.2
 ```
 
-LLVM and GCC toolchain are required to be built for the project. You can build the toolchain using
+Build RISC-V toolchains (LLVM + GCC). Spike (`riscv-isa-sim`) is available via a separate target if needed.
 
 ```bash
 make toolchain
-````
-
-Or, you can link the pre-built toolchain within ETH domain
-
-```bash
+# or (ETH only) link a prebuilt toolchain
 make quick-tool
-````
+```
 
-
-You can build the software only with:
+Build software only:
 
 ```bash
 make sw
 ```
 
-Or, build the software and hardware together with (only support QuestaSim for now):
+Build software + hardware (QuestaSim):
 
 ```bash
 make vsim
 ```
 
-The QuestaSim simulation can be run with:
+Run the simulation (GUI or CLI). The wrapper script expects the software ELF path as argument:
 
 ```bash
-./sim/bin/spatz_cluster.vsim.gui ./software/build/TESTNAME
+# GUI
+./sim/bin/cachepool_cluster.vsim.gui ./software/build/TESTNAME
+# Headless
+./sim/bin/cachepool_cluster.vsim      ./software/build/TESTNAME
 ```
 
-## Address Scrambling
+## How configuration flows
 
-Multiple address scrambling are used in CachePool to fully utilize the available bandwidth
+1. **`config/config.mk`** defines all parameters (e.g., `num_cores`, `l1d_cacheline_width`, `axi_user_width`, addresses, etc.).
+   - Derived values (like `axi_user_width`) are pre-computed so tools receive integers, not expressions.
+2. `make generate` calls the Python generator to produce **`config/cachepool.hjson`** from the template.
+3. The Makefile passes the same values to **QuestaSim** via `VLOG_DEFS`, keeping RTL, sim, and HJSON in sync.
 
-### DramSys
-CachePool uses a multi-channel main memory built on DramSys. Address scrambling is made to better utilize the channels. The granularity of scrambling is controlled by the `Interleave` paramemter sets in the `cachepool_pkg.sv`, which `granularity = log2(512/8 * Interleave)`. This interleaving pattern is determined at elaboration time and cannot be modified during runtime.
+## Address Scrambling (overview)
 
-### Cache Bank
-The xbars to the cache banks can be configured during runtime to select the scrambling bits for parallism visits between cores. The function `l1d_xbar_config` can be used to set the offset.
+- **DRAMSys**: multi-channel main memory with compile-time interleaving.
+  The interleave granularity (bytes) is determined by the DRAM beat width and an `Interleave` factor in RTL. This is fixed at elaboration and not configurable at runtime.
+- **L1D cache banking**: runtime-configurable crossbar bit selection allows distributing core traffic across banks for parallelism. Use `l1d_xbar_config(...)` at runtime to choose the offset.
 
+## Snitch–Spatz Core Complex
 
-## Snitch-Spatz Core Complex
-Current CachePool system uses a 32b Spatz RVV accelerator and Snitch RISCV core. The double-precision is off by default in consideration of scalability.
+The default system uses a 32-bit Snitch core with a Spatz RVV accelerator. Double-precision is disabled by default for scalability; enable the FPU flavor (`cachepool_fpu.mk`) for single/half precision support.
 
 ## Stack
-Currently each core-complex has a local stack SPM. The size of SPM bank is configured from `SpmStackDepth` in the `cachepool_pkg.sv`. When the stack goes beyond this region, it will be wired to the cache with additional bits from core ID. The shared stack size can be configured from `TotStackDepth` in the `cachepool_pkg.sv`.Currently the shared stack region still has some bugs since the cache controller does not support byte write yet. It is safer to assign a large local stack SPM for this reason (512 Byte or 1 KiB should be enough)
 
-## Address Map (WIP)
-Here is a summary of current address map of the system:
+Each core complex has a local **stack SPM**. Its depth is configured via parameters in `config/config.mk` (forwarded to RTL). If the stack exceeds the local SPM, it spills into the cache space (indexed with core ID bits).
+**Known limitation:** the cache controller currently lacks byte-write support in the shared stack path. Prefer a larger local stack SPM (e.g., 512 B–1 KiB) to avoid issues.
 
+## Address Map (example)
 
-| Start Address   | Size           | Region        | Notes                                  |
-|-----------------|----------------|---------------|----------------------------------------|
-| `0x0000_0000`   | `0x1000`       | Unused        | —                                      |
-| `0x0000_1000`   | `0x1000`       | Boot ROM      | —                                      |
-| `0x0000_2000`   | —              | Unused        | Until start of stack                   |
-| `0x8000_0000`   | `0x4000_0000`  | DRAM          | 16 GB                                  |
-| `0xBFFF_F800`   | `0x200`        | Stack         | —                                      |
-| `0xC000_0000`   | `0x0001_0000`  | Peripheral    | Offset = 0x40 for hardware barrier     |
-| `0xC001_0000`   | `0x1000`       | UART          | —                                      |
+> Actual values come from `config/config.mk`. Example below reflects the defaults used by the generated HJSON/template.
+
+| Start Address | Size         | Region       | Notes                                   |
+|---------------|--------------|--------------|-----------------------------------------|
+| `0x0000_0000` | `0x0000_1000`| Unused       | —                                       |
+| `0x0000_1000` | `0x0000_1000`| Boot ROM     | Boot address typically `0x0000_1000`    |
+| `0x8000_0000` | `0x2000_0000`| DRAM         | 512 MiB (default in template)           |
+| `0xBFFF_F800` | `0x0000_0200`| Stack (local)| Example stack window                    |
+| `0xC000_0000` | `0x2000_0000`| Uncached     | MMIO/peripherals region                 |
+| `0xC001_0000` | `0x0000_1000`| UART         | UART base inside peripheral window      |
+
+## Lint
+
+SpyGlass lint (optional):
+
+```bash
+make lint
+```
+
+---
+
+### Tips
+
+- To see the exact macros passed to vlog, check `VLOG_DEFS` in the Makefile and `sim/work/compile.vsim.tcl`.
+- If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
+- Use `make clean` when switching flavors/configs to prevent stale build artifacts.

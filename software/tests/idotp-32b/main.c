@@ -49,9 +49,9 @@ int main() {
 
   if (cid == 0) {
     // Set xbar policy
+    l1d_init(0);
     l1d_xbar_config(offset);
     // Initialize the cache
-    l1d_init(0);
 
     printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
@@ -126,7 +126,7 @@ int main() {
     uint32_t util_iter1  = perf_iter1  / (2 * num_cores * 4);
     write_cyc(timer);
 
-    printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
+    printf("\n----- (%d) 32b idotp -----\n", dotp_l.M);
     printf("The 1st execution took %u cycles.\n", timer_iter1);
     printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
            perf_iter1 , util_iter1);

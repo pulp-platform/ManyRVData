@@ -237,7 +237,6 @@ module tb_cachepool;
    *  L2  *
    ********/
 
-`ifdef TARGET_DRAMSYS
   localparam int unsigned ConstantBits = $clog2(L2BankBeWidth * Interleave);
   localparam int unsigned ScrambleBits = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
   localparam int unsigned ReminderBits = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
@@ -330,25 +329,5 @@ module tb_cachepool;
       .axi_resp_o   ( axi_from_cluster_resp[mem])
     );
   end
-
-`else
-
-  for (genvar mem = 0; mem < NumL2Channel; mem++) begin: gen_axi_mem
-    // Wide port into simulation memory.
-    tb_memory_axi #(
-      .AxiAddrWidth ( SpatzAxiAddrWidth    ),
-      .AxiDataWidth ( SpatzAxiDataWidth    ),
-      .AxiIdWidth   ( SpatzAxiIdOutWidth   ),
-      .AxiUserWidth ( SpatzAxiUserWidth    ),
-      .req_t        ( spatz_axi_out_req_t  ),
-      .rsp_t        ( spatz_axi_out_resp_t )
-    ) i_mem (
-      .clk_i (clk                       ),
-      .rst_ni(rst_n                     ),
-      .req_i (axi_from_cluster_req [mem]),
-      .rsp_o (axi_from_cluster_resp[mem])
-    );
-  end
-`endif
 
 endmodule : tb_cachepool
