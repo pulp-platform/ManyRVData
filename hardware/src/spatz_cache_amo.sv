@@ -185,7 +185,7 @@ module spatz_cache_amo
   // -------
   logic [63:0] wdata;
   assign wdata = $unsigned(amo_req.data);
-  logic amo_result_en_d, amo_result_en_q;
+  logic amo_result_en;
 
   `FF(state_q, state_d, Idle)
   `FFL(amo_user_q, amo_user, load_amo, '0)
@@ -195,8 +195,7 @@ module spatz_cache_amo
   // Which word to pick.
   `FFL(idx_q,    idx_d,        load_amo, '0)
   `FFL(operand_b_q, (amo_req.strb[0] ? wdata[31:0] : wdata[63:32]), load_amo, '0)
-  `FFL(amo_result_q, amo_result, amo_result_en_q, '0)
-  `FF(amo_result_en_q, amo_result_en_d, '0)
+  `FFL(amo_result_q, amo_result, amo_result_en, '0)
 
   assign idx_d     = ((DataWidth == 64) ? amo_req.strb[DataWidth/8/2] : 0);
   assign load_amo  = amo_req_valid & amo_req_ready & core_ready &
@@ -213,7 +212,7 @@ module spatz_cache_amo
     mem_req_o.q.amo   = AMONone;
     mem_req_o.q.data  = amo_req.data;
 
-    amo_result_en_d = 1'b0;
+    amo_result_en   = 1'b0;
 
     state_d = state_q;
 
@@ -222,8 +221,6 @@ module spatz_cache_amo
       Idle: begin
         if (load_amo) begin
           state_d = DoAMO;
-          // Load result only in the first cycle entering DoAMO state
-          amo_result_en_d = 1'b1;
         end
       end
       DoAMO: begin
@@ -235,6 +232,7 @@ module spatz_cache_amo
             (amo_user_q.req_id == amo_rsp.user.req_id)
             ) begin
           state_d = WriteBackAMO;
+          amo_result_en = 1'b1; // Only load amo result when we receive the data response
         end
       end
       // Third cycle: Try to write-back result.
