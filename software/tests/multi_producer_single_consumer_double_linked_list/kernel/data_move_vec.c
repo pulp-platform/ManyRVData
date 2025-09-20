@@ -641,7 +641,7 @@ void __attribute__((noinline)) vector_memcpy32_1360B_opt_with_header(void* dst,
                                                      const void* src,
                                                      uint32_t SN) {
   uint32_t* d32 = (uint32_t*)dst;
-  const uint32_t* s32 = (const uint32_t*)src;
+  const uint32_t* s32 = (const uint32_t*)src + 1; // skip the first word (a padding), as it will be replaced by SN
 
   const size_t word_size       = sizeof(uint32_t);
   const size_t VLEN_BITS       = 512;
