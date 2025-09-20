@@ -1,6 +1,8 @@
 #ifndef LLIST_C
 #define LLIST_C
 
+#include "mcs_lock.h"
+#include "mcs_lock.c"
 #include "llist.h"
 #include "rlc.h"
 #include <snrt.h>
@@ -28,7 +30,8 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
     /* Acquire the list lock to ensure exclusive access while modifying the list */
     // spin_lock(&list->lock);
     timer_ac_lock_0 = benchmark_get_cycle();
-    spin_lock(llist_lock, 20);
+    // spin_lock(llist_lock, 20);
+    mcs_lock_acquire(llist_lock);
     timer_ac_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -60,7 +63,8 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
 
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
-    spin_unlock(llist_lock, 20);
+    // spin_unlock(llist_lock, 20);
+    mcs_lock_release(llist_lock);
     timer_rl_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -85,7 +89,8 @@ Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
     Node *node = NULL;
     // spin_lock(&list->lock);
     timer_ac_lock_0 = benchmark_get_cycle();
-    spin_lock(llist_lock, 20);
+    // spin_lock(llist_lock, 20);
+    mcs_lock_acquire(llist_lock);
     timer_ac_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);
@@ -127,7 +132,8 @@ Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
 
     // spin_unlock(&list->lock);
     timer_rl_lock_0 = benchmark_get_cycle();
-    spin_unlock(llist_lock, 20);
+    // spin_unlock(llist_lock, 20);
+    mcs_lock_release(llist_lock);
     timer_rl_lock_1 = benchmark_get_cycle();
 
     printf_lock_acquire(&printf_lock);

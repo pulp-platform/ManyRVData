@@ -7,6 +7,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "kernel/printf_lock.h"
+#include "kernel/mcs_lock.h"
 #include DATAHEADER
 
 #define L1LineWidth (128/8) // 128 bits = 16 bytes
@@ -37,6 +38,7 @@ int main(void) {
         mm_lock = 0;
         tosend_llist_lock = 0;
         sent_llist_lock = 0;
+        mcs_lock_init(tosend_llist_lock_2);
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);

@@ -7,10 +7,11 @@
 
 /* --- Simple spinlock implementation --- */
 /* We use a volatile int as a spinlock. Zero means unlocked. */
-typedef volatile int spinlock_t __attribute__((aligned(8)));
+typedef volatile int spinlock_t __attribute__((aligned(4)));
 
 spinlock_t tosend_llist_lock;
 spinlock_t sent_llist_lock;
+static _Atomic spinlock_t tosend_llist_lock_2 __attribute__((aligned(4)));
 
 static inline void spin_lock(spinlock_t *lock, int cycle) {
     while (__sync_lock_test_and_set(lock, 1)) { delay(cycle);}

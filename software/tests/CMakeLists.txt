@@ -76,6 +76,7 @@ add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist
 add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
 add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
 add_library(data_move_vec multi_producer_single_consumer_double_linked_list/kernel/data_move_vec.c)
+add_library(mcs_lock multi_producer_single_consumer_double_linked_list/kernel/mcs_lock.c)
 
 # Tests
 enable_testing()
