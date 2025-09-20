@@ -19,6 +19,7 @@ int main(void) {
 
     if (core_id == 0) {
         // Set xbar policy
+        l1d_flush();
         uint32_t offset = 31 - __builtin_clz(L1LineWidth);
         l1d_xbar_config(offset); // cacheline interleaving
 
