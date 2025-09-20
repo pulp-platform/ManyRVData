@@ -352,7 +352,7 @@ static void producer(const unsigned int core_id) {
 
 /* cluster_entry() dispatches behavior based on core_id */
 void cluster_entry(const unsigned int core_id) {
-    if (core_id == 1) {
+    if (core_id >= 1) {
         consumer(core_id);
     } else if (core_id == 0) {
         producer(core_id);
