@@ -7,7 +7,8 @@
 #include "mm.h"
 #include "llist.h"
 #include "data_move_vec.h"
-#define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes (in current architeture is 16 bytes, but put 64 here for now)
+
+#define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes
 
 /* rlc_context_t maintains the state of the RLC kernel, including:
 
