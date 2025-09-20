@@ -27,6 +27,103 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
     delay(20);
 }
 
+static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
+    const uint8_t *p = (const uint8_t *)a;
+    const uint8_t *q = (const uint8_t *)b;
+    const uint32_t *p_32 = (const uint8_t *)a;
+    const uint32_t *q_32 = (const uint8_t *)b;
+
+    size_t i = 0;
+
+    // 1) Bytewise until both pointers are 4B-aligned or we run out
+    while (i < len_bytes && (((uintptr_t)(p + i) | (uintptr_t)(q + i)) & 3)) {
+        if (p[i] != q[i]) return i;
+        i++;
+    }
+
+    // 2) 32-bit chunks
+    size_t n_words = (len_bytes - i) / 4;
+    const uint32_t *wp = (const uint32_t *)(p + i);
+    const uint32_t *wq = (const uint32_t *)(q + i);
+    for (size_t k = 0; k < n_words; ++k) {
+        uint32_t x = wp[k] ^ wq[k];
+        if (x) {
+            // Find the first differing byte within this 32-bit word
+            size_t base = i + (k * 4);
+            // if ((x & 0x000000FFu) && p[base + 0] != q[base + 0]) return base + 0;
+            // if ((x & 0x0000FF00u) && p[base + 1] != q[base + 1]) return base + 1;
+            // if ((x & 0x00FF0000u) && p[base + 2] != q[base + 2]) return base + 2;
+            // if ((x & 0xFF000000u) && p[base + 3] != q[base + 3]) return base + 3;
+            if(p_32[base] != q_32[base]) return base;
+        }
+    }
+    i += n_words * 4;
+
+    // 3) Trailing bytes
+    while (i < len_bytes) {
+        if (p[i] != q[i]) return i;
+        i++;
+    }
+
+    return len_bytes; // equal
+}
+
+static inline void memprint32(const void *a, const void *b, size_t len_bytes) {
+    const uint8_t *p = (const uint8_t *)a;
+    const uint8_t *q = (const uint8_t *)b;
+    printf_lock_acquire(&printf_lock);
+    printf("a: ");
+    for (int i = 0; i < len_bytes; i++) {
+        printf("%02X ", (uint8_t)(p[i]));
+    }
+    printf("\n");
+    printf("b: ");
+    for (int i = 0; i < len_bytes; i++) {
+        printf("%02X ", (uint8_t)(q[i]));
+    }
+    printf("\n");
+    printf_lock_release(&printf_lock);
+}
+
+
+void self_check(pdcp_pkg_t *meta, int size) {
+    for (int i = 0; i < size; i++) {
+        unsigned int  src_addr = meta[i].src_addr;
+        unsigned int  tgt_addr = meta[i].tgt_addr;
+        unsigned int  pkg_length = meta[i].pkg_length;
+
+        void *src = (const void *)(uintptr_t)src_addr;
+        void *tgt = (const void *)(uintptr_t)tgt_addr;
+
+        memprint32(src, tgt, pkg_length);
+        size_t idx = memdiff32(src, tgt, pkg_length);
+        // size_t idx = meta;
+        if (idx == pkg_length) {
+            // Exactly equal
+            // printf_lock_acquire(&printf_lock);
+            // printf("[core %u][self test] pass pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
+            //     snrt_cluster_core_idx(),
+            //     i,
+            //     src_addr,
+            //     tgt_addr,
+            //     pkg_length
+            // );
+            // printf_lock_release(&printf_lock);
+        } else {
+            // Mismatch at byte offset `idx`
+            printf_lock_acquire(&printf_lock);
+            printf("[core %u][self test] fail pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
+                snrt_cluster_core_idx(),
+                i,
+                src_addr,
+                tgt_addr,
+                pkg_length
+            );
+            printf_lock_release(&printf_lock);
+        }
+    }
+}
+
 void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t *mm_ctx) {
     rlc_ctx.rlcId = rlcId;
     rlc_ctx.cellId = cellId;
@@ -104,8 +201,8 @@ static void consumer(const unsigned int core_id) {
         Node *node = list_pop_front(&tosend_llist_lock_2, &rlc_ctx.list);
         if (node != 0) {
             printf_lock_acquire(&printf_lock);
-            printf("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x\n",
-                   core_id, (void *)node, node->data_size, node->data, node->tgt);
+            printf("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x, @mcycle = %d\n",
+                   core_id, (void *)node, node->data_size, node->data, node->tgt, benchmark_get_cycle());
             printf_lock_release(&printf_lock);
 
             // delay(100);  /* Simulate processing delay */
@@ -172,13 +269,14 @@ static void consumer(const unsigned int core_id) {
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
     printf_lock_acquire(&printf_lock);
-    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d\n",
+    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
         core_id,
         pdcp_src_data[0][0],
         pdcp_src_data[3657][500],
         NUM_SRC_SLOTS,
         PDU_SIZE,
-        pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1]);
+        pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1],
+        benchmark_get_cycle());
     printf_lock_release(&printf_lock);
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
     while (new_pdcp_pkg_ptr >= 0) {
@@ -247,6 +345,9 @@ static void producer(const unsigned int core_id) {
         new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
         // delay(200);  /* Delay between node productions */
     }
+
+    // Finished all the PDCP packages, start self check
+    self_check(pdcp_pkgs, NUM_PKGS);
 }
 
 /* cluster_entry() dispatches behavior based on core_id */
