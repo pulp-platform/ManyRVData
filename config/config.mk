@@ -1,8 +1,8 @@
 # Copyright 2025 ETH Zurich and University of Bologna.
-# Solderpad Hardware License, Version 0.51, see LICENSE for details.
-# SPDX-License-Identifier: SHL-0.51
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
 
-# Author: Diyou Shen <dishen@iis.ee.ethz.ch>
+# Author: Diyou Shen, ETH Zurich
 
 
 ########################
@@ -111,9 +111,9 @@ endif
 ifeq ($(l1d_cacheline_width),512)
   axi_user_width := 17
 else ifeq ($(l1d_cacheline_width),256)
-  axi_user_width := 18
-else ifeq ($(l1d_cacheline_width),128)
   axi_user_width := 19
+else ifeq ($(l1d_cacheline_width),128)
+  axi_user_width := 21
 endif
 
 #####################
