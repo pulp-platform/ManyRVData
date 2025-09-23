@@ -64,7 +64,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config             		?= cachepool
+config             		?= cachepool_512
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -272,7 +272,6 @@ vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
 .PHONY: clean
 clean: clean.sw clean.vsim
-	rm -rf ${CFG_DIR}/cachepool.hjson
 
 ########
 # Lint #

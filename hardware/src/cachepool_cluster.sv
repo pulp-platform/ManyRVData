@@ -255,10 +255,13 @@ module cachepool_cluster
   logic                  [NumClusterSlv-1 :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready  ;
 
   typedef logic [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
+  // one more bit for out-of-range alert
+  typedef logic [$clog2(NumClusterSlv)           :0] tile_sel_err_t;
   typedef logic [$clog2(NumClusterSlv)-1         :0] tile_sel_t;
 
   // Which l2 we want to select for each req
-  tile_sel_t [NumTiles*NumClusterMst-1 :0]           tile_sel;
+  tile_sel_err_t [NumTiles*NumClusterMst-1 :0]       tile_sel_err;
+  tile_sel_t     [NumTiles*NumClusterMst-1 :0]       tile_sel;
   // Which tile we selected for each req
   l2_sel_t   [NumClusterSlv-1:0]                     tile_selected;
   // which tile we want to select for each rsp
@@ -465,9 +468,9 @@ module cachepool_cluster
     logic [AxiAddrWidth-1:0] mask;
   } reqrsp_rule_t;
 
-  reqrsp_rule_t [NumClusterSlv-2:0] xbar_rule;
+  reqrsp_rule_t [NumClusterSlv-1:0] xbar_rule;
 
-  for (genvar i = 0; i < NumClusterSlv-1; i ++) begin
+  for (genvar i = 0; i < NumClusterSlv; i ++) begin
     assign xbar_rule[i] = '{
       idx  : i,
       base : DramAddr + DramPerChSize * i,
@@ -475,24 +478,34 @@ module cachepool_cluster
     };
   end
 
-  logic [$clog2(NumClusterSlv)-1:0] default_idx;
-  assign default_idx = (NumClusterSlv-1);
+  logic [$clog2(NumClusterSlv):0] default_idx;
+  assign default_idx = NumClusterSlv;
 
   for (genvar inp = 0; inp < NumClusterMst*NumTiles; inp ++) begin : gen_xbar_sel
     addr_decode_napot #(
-      .NoIndices (NumClusterSlv   ),
-      .NoRules   (NumClusterSlv-1      ),
-      .addr_t    (axi_addr_t    ),
-      .rule_t    (reqrsp_rule_t )
+      .NoIndices (NumClusterSlv+1   ),
+      .NoRules   (NumClusterSlv     ),
+      .addr_t    (axi_addr_t        ),
+      .rule_t    (reqrsp_rule_t     )
     ) i_snitch_decode_napot (
       .addr_i           (tile_req_chan[inp].addr),
       .addr_map_i       (xbar_rule              ),
-      .idx_o            (tile_sel[inp]          ),
+      .idx_o            (tile_sel_err[inp]      ),
       .dec_valid_o      (/* Unused */           ),
       .dec_error_o      (/* Unused */           ),
       .en_default_idx_i (1'b1                   ),
       .default_idx_i    (default_idx            )
     );
+
+    assign tile_sel[inp] = tile_sel_err[inp][NumTiles*NumClusterMst-2:0];
+
+`ifndef TARGET_SYNTHESIS
+    // Alert the system that we have illegal memory access
+    IllegalMemAccess : assert property(
+      @(posedge clk_i) disable iff (!rst_ni) (tile_req_valid[inp] |-> !tile_sel_err[inp][$clog2(NumClusterSlv)]))
+      else $error("Visited illegal address: time=%0t, port=%0d, addr=0x%08h", $time, inp, tile_req_chan[inp].addr);
+      // else $fatal (1, "Visited address is not mapped");
+`endif
   end
 
   reqrsp_xbar #(
@@ -512,7 +525,7 @@ module cachepool_cluster
     .slv_rsp_o        (tile_rsp_chan    ),
     .slv_rsp_valid_o  (tile_rsp_valid   ),
     .slv_rsp_ready_i  (tile_rsp_ready   ),
-    .slv_sel_i        (tile_sel         ),
+    .slv_sel_i        (tile_sel[NumTiles*NumClusterMst-1:0] ),
     .slv_rr_i         ('0               ),
     .slv_selected_o   (tile_selected    ),
     .mst_req_o        (l2_req_chan      ),
@@ -558,7 +571,7 @@ module cachepool_cluster
     reqrsp_to_axi #(
       .MaxTrans           (NumSpatzOutstandingLoads[0]),
       .ID                 ('0                         ),
-      .EnBurst            (Burst_Enable               ),
+      .EnBurst            (1                          ),
       .ShuffleId          (1                          ),
       .UserWidth          ($bits(refill_user_t)       ),
       .ReqUserFallThrough (1'b0                       ),
