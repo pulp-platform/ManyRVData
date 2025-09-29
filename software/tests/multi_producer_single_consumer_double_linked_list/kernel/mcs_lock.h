@@ -45,9 +45,9 @@ typedef struct mcs_lock {
 
 // API
 void mcs_lock_init(mcs_lock_t* L);
-void mcs_lock_acquire(mcs_lock_t* L);
+void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L);
 uint32_t mcs_lock_try_acquire(mcs_lock_t* L);
-void mcs_lock_release(mcs_lock_t* L);
+void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L);
 
 // // ---- Optional: shim to your existing TAS API names ----
 // // Compile with -DMCS_SHIM_SPINLOCK to alias.

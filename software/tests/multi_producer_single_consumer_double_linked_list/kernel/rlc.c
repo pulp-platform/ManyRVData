@@ -12,11 +12,12 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_100.h"
+#include "../data/data_1_1350_300.h"
+#include <stdatomic.h>
 
 /* Simple spinlock functions using GCC built‑ins */
 static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { delay(20); }
+    while (__sync_lock_test_and_set(lock, 1)) { /*delay(20);*/ }
 }
 
 static inline void pdcp_pkg_lock_release(volatile int *lock) {
@@ -24,7 +25,7 @@ static inline void pdcp_pkg_lock_release(volatile int *lock) {
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
     );
-    delay(20);
+    // delay(20);
 }
 
 static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
@@ -71,22 +72,23 @@ static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
 static inline void memprint32(const void *a, const void *b, size_t len_bytes) {
     const uint8_t *p = (const uint8_t *)a;
     const uint8_t *q = (const uint8_t *)b;
-    printf_lock_acquire(&printf_lock);
-    printf("a: ");
+    DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    DEBUG_PRINTF("a: ");
     for (int i = 0; i < len_bytes; i++) {
-        printf("%02X ", (uint8_t)(p[i]));
+        DEBUG_PRINTF("%02X ", (uint8_t)(p[i]));
     }
-    printf("\n");
-    printf("b: ");
+    DEBUG_PRINTF("\n");
+    DEBUG_PRINTF("b: ");
     for (int i = 0; i < len_bytes; i++) {
-        printf("%02X ", (uint8_t)(q[i]));
+        DEBUG_PRINTF("%02X ", (uint8_t)(q[i]));
     }
-    printf("\n");
-    printf_lock_release(&printf_lock);
+    DEBUG_PRINTF("\n");
+    DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
 
 void self_check(pdcp_pkg_t *meta, int size) {
+    uint32_t core_id = snrt_cluster_core_idx();
     for (int i = 0; i < size; i++) {
         unsigned int  src_addr = meta[i].src_addr;
         unsigned int  tgt_addr = meta[i].tgt_addr;
@@ -100,26 +102,26 @@ void self_check(pdcp_pkg_t *meta, int size) {
         // size_t idx = meta;
         if (idx == pkg_length) {
             // Exactly equal
-            // printf_lock_acquire(&printf_lock);
-            // printf("[core %u][self test] pass pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
-            //     snrt_cluster_core_idx(),
+            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+            // DEBUG_PRINTF("[core %u][self test] pass pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
+            //     core_id,
             //     i,
             //     src_addr,
             //     tgt_addr,
             //     pkg_length
             // );
-            // printf_lock_release(&printf_lock);
+            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
         } else {
             // Mismatch at byte offset `idx`
-            printf_lock_acquire(&printf_lock);
-            printf("[core %u][self test] fail pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
-                snrt_cluster_core_idx(),
+            DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+            DEBUG_PRINTF("[core %u][self test] fail pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
+                core_id,
                 i,
                 src_addr,
                 tgt_addr,
                 pkg_length
             );
-            printf_lock_release(&printf_lock);
+            DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
         }
     }
 }
@@ -143,48 +145,56 @@ void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t 
 
     // Initialize PDCP package pointer and lock
     pdcp_pkd_ptr = 0;
-    pdcp_pkd_ptr_lock = 0;
+    // pdcp_pkd_ptr_lock = 0;
+    mcs_lock_init(&pdcp_pkd_ptr_lock);
 
-    // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][rlc_init] RLC context initialized for RLC ID %u, Cell ID %u\n",
+    // Initialize producer done flag
+    producer_done = 0;
+
+    rlc_ctx_lock = 0;
+
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u][rlc_init] RLC context initialized for RLC ID %u, Cell ID %u\n",
     //        snrt_cluster_core_idx(), rlcId, cellId);
-    // printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
-int pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
+int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
     uint32_t timer_rl_lock_0, timer_rl_lock_1;
     uint32_t timer_body_0, timer_body_1;
 
-    timer_ac_lock_0 = benchmark_get_cycle();
-    pdcp_pkg_lock_acquire(lock); // Acquire the lock to ensure exclusive access
-    timer_ac_lock_1 = benchmark_get_cycle();
+    // timer_ac_lock_0 = benchmark_get_cycle();
+    // pdcp_pkg_lock_acquire(lock); // Acquire the lock to ensure exclusive access
+    mcs_lock_acquire(lock);
+    // timer_ac_lock_1 = benchmark_get_cycle();
 
-    timer_body_0 = benchmark_get_cycle();
+    // timer_body_0 = benchmark_get_cycle();
     int pkg_ptr = -1; // Initialize package pointer to -1 (indicating no package)
     if (pdcp_pkd_ptr < NUM_PKGS) {
         // If the pointer is within bounds, return the package pointer
         pkg_ptr = pdcp_pkd_ptr;
         pdcp_pkd_ptr++; // Increment the pointer for the next package
     } else {
-        printf_lock_acquire(&printf_lock);
-        printf("Producer (core %u): out of PDCP pkg, pdcp_pkd_ptr = %d\n", core_id, pdcp_pkd_ptr);
-        printf_lock_release(&printf_lock);
+        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        DEBUG_PRINTF("Producer (core %u): out of PDCP pkg, pdcp_pkd_ptr = %d\n", core_id, pdcp_pkd_ptr);
+        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
     }
-    timer_body_1 = benchmark_get_cycle();
+    // timer_body_1 = benchmark_get_cycle();
 
-    timer_rl_lock_0 = benchmark_get_cycle();
-    pdcp_pkg_lock_release(lock); // Release the lock
-    timer_rl_lock_1 = benchmark_get_cycle();
+    // timer_rl_lock_0 = benchmark_get_cycle();
+    // pdcp_pkg_lock_release(lock); // Release the lock
+    mcs_lock_release(lock);
+    // timer_rl_lock_1 = benchmark_get_cycle();
 
-    printf_lock_acquire(&printf_lock);
-    printf("[core %u][pdcp_receive_pkg] spin_unlock, ac=%d, bd=%d, rl=%d\n",
-        snrt_cluster_core_idx(),
-        (timer_ac_lock_1 - timer_ac_lock_0),
-        (timer_body_1 - timer_body_0),
-        (timer_rl_lock_1 - timer_rl_lock_0)
-    );
-    printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u][pdcp_receive_pkg] spin_unlock, ac=%d, bd=%d, rl=%d\n",
+    //     core_id,
+    //     (timer_ac_lock_1 - timer_ac_lock_0),
+    //     (timer_body_1 - timer_body_0),
+    //     (timer_rl_lock_1 - timer_rl_lock_0)
+    // );
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
     return pkg_ptr; // Return the package pointer
 }
 
@@ -200,67 +210,75 @@ static void consumer(const unsigned int core_id) {
     while (1) {
         Node *node = list_pop_front(&tosend_llist_lock_2, &rlc_ctx.list);
         if (node != 0) {
-            printf_lock_acquire(&printf_lock);
-            printf("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x, @mcycle = %d\n",
-                   core_id, (void *)node, node->data_size, node->data, node->tgt, benchmark_get_cycle());
-            printf_lock_release(&printf_lock);
+            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+            // DEBUG_PRINTF("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x, @mcycle = %d\n",
+            //        core_id, (void *)node, node->data_size, node->data, node->tgt, benchmark_get_cycle());
+            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
             // delay(100);  /* Simulate processing delay */
 
             uint32_t timer_mv_0, timer_mv_1;
-            timer_mv_0 = benchmark_get_cycle();
+            // timer_mv_0 = benchmark_get_cycle();
             // vector_memcpy32_m4_opt(node->tgt, node->data, node->data_size);
             // vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
             // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
             // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
             // vector_memcpy32_1360B_opt(node->tgt, node->data);
             vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, rlc_ctx.vtNext);
-            timer_mv_1 = benchmark_get_cycle();
+            // timer_mv_1 = benchmark_get_cycle();
 
             // Update the RLC struct variables
-            atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,                  memory_order_relaxed);
-            atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size,    memory_order_relaxed);
+            // atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,                  memory_order_relaxed);
+            // atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size,    memory_order_relaxed);
+            rlc_ctx.pduWithoutPoll += 1;
+            rlc_ctx.byteWithoutPoll += node->data_size;
             // Increment the next available RLC sequence number
-            atomic_fetch_add_explicit(&rlc_ctx.vtNext,          1,                  memory_order_relaxed);
+            rlc_ctx.vtNext += 1;
+            // atomic_fetch_add_explicit(&rlc_ctx.vtNext,          1,                  memory_order_relaxed);
 
 
-            printf_lock_acquire(&printf_lock);
-            printf("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
-                   core_id, (void *)node, node->data, node->tgt, node->data_size,
-                   (timer_mv_1 - timer_mv_0),
-                   (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
-            printf_lock_release(&printf_lock);
+            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+            // DEBUG_PRINTF("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
+            //        core_id, (void *)node, node->data, node->tgt, node->data_size,
+            //        (timer_mv_1 - timer_mv_0),
+            //        (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
+            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
              // Add the node to the sent list
             list_push_back(&sent_llist_lock_2, &rlc_ctx.sent_list, node);
 
             // Simulate receiving ACK from UE after certain sent pkgs, and we assume the ACK_SN is rlc_ctx.vtNextAck+2
-            if (rlc_ctx.sent_list.sduNum >= 6) {
-                int ACK_SN = rlc_ctx.vtNextAck + 2; // Assume each time ack 2 sent pkgs
-                // printf_lock_acquire(&printf_lock);
-                // printf("[core %u][consumer] pollPdu=%d, pollByte=%d, sent_list.sduNum=%d, sent_list.sduBytes=%d\n",
-                //        snrt_cluster_core_idx(), rlc_ctx.pollPdu, rlc_ctx.pollByte,
+            if (rlc_ctx.sent_list.sduNum >= 10000) {
+                uint32_t vtNextAck = atomic_load_explicit(&rlc_ctx.vtNextAck, memory_order_relaxed);
+                int ACK_SN = vtNextAck + 2; // Assume each time ack 2 sent pkgs
+                // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+                // DEBUG_PRINTF("[core %u][consumer] pollPdu=%d, pollByte=%d, sent_list.sduNum=%d, sent_list.sduBytes=%d\n",
+                //        core_id, rlc_ctx.pollPdu, rlc_ctx.pollByte,
                 //        rlc_ctx.sent_list.sduNum, rlc_ctx.sent_list.sduBytes);
-                // printf_lock_release(&printf_lock);
+                // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
-                for (int i = rlc_ctx.vtNextAck; i < ACK_SN; i++) {
+                for (int i = vtNextAck; i < ACK_SN; i++) {
                     Node *sent_node = list_pop_front(&sent_llist_lock_2, &rlc_ctx.sent_list);
                     if (sent_node != NULL) {
-                        printf_lock_acquire(&printf_lock);
-                        printf("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
-                               snrt_cluster_core_idx(), ACK_SN, i, (void *)sent_node, sent_node->data_size);
-                        printf_lock_release(&printf_lock);
+                        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+                        // DEBUG_PRINTF("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
+                        //        core_id, ACK_SN, i, (void *)sent_node, sent_node->data_size);
+                        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
                     } else {
-                        printf_lock_acquire(&printf_lock);
-                        printf("[core %u][consumer] ERROR: pop sent_list, ACK_SN=%d, SN=%d, but sent_node is NULL\n",
-                               snrt_cluster_core_idx(), ACK_SN, i);
-                        printf_lock_release(&printf_lock);
+                        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+                        DEBUG_PRINTF("[core %u][consumer] ERROR: pop sent_list, ACK_SN=%d, SN=%d, but sent_node is NULL\n",
+                               core_id, ACK_SN, i);
+                        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
                     }
                     mm_free(sent_node); // Free the sent node memory
                 }
                 atomic_store_explicit(&rlc_ctx.vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
             }
         } else {
+            if (atomic_load_explicit(&producer_done, memory_order_relaxed) == 1) {
+                // If producer is done and the list is empty, exit the loop
+                break;
+            }
             // delay(10);   /* Wait briefly if list is empty */
         }
     }
@@ -268,35 +286,35 @@ static void consumer(const unsigned int core_id) {
 
 /* Producer behavior (runs on cores other than 0) */
 static void producer(const unsigned int core_id) {
-    printf_lock_acquire(&printf_lock);
-    printf("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
-        core_id,
-        pdcp_src_data[0][0],
-        pdcp_src_data[3657][500],
-        NUM_SRC_SLOTS,
-        PDU_SIZE,
-        pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1],
-        benchmark_get_cycle());
-    printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
+    //     core_id,
+    //     pdcp_src_data[0][0],
+    //     pdcp_src_data[3657][500],
+    //     NUM_SRC_SLOTS,
+    //     PDU_SIZE,
+    //     pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1],
+    //     benchmark_get_cycle());
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
     while (new_pdcp_pkg_ptr >= 0) {
-        printf_lock_acquire(&printf_lock);
-        printf("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
-            core_id,
-            new_pdcp_pkg_ptr,
-            pdcp_pkgs[new_pdcp_pkg_ptr].user_id,
-            pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length,
-            pdcp_pkgs[new_pdcp_pkg_ptr].src_addr,
-            pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr);
-        printf_lock_release(&printf_lock);
+        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        // DEBUG_PRINTF("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
+        //     core_id,
+        //     new_pdcp_pkg_ptr,
+        //     pdcp_pkgs[new_pdcp_pkg_ptr].user_id,
+        //     pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length,
+        //     pdcp_pkgs[new_pdcp_pkg_ptr].src_addr,
+        //     pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr);
+        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
 
         Node *node = (Node *)mm_alloc();
         if (!node) {
 
-            printf_lock_acquire(&printf_lock);
-            printf("Producer (core %u): Out of memory\n", core_id);
-            printf_lock_release(&printf_lock);
+            DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+            DEBUG_PRINTF("Producer (core %u): Out of memory\n", core_id);
+            DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
             delay(200);  /* Delay before retrying */
             continue;
@@ -304,7 +322,7 @@ static void producer(const unsigned int core_id) {
 
         uint32_t timer_body_0, timer_body_1;
 
-        timer_body_0 = benchmark_get_cycle();
+        // timer_body_0 = benchmark_get_cycle();
         /* Initialize the node header */
         node->lock = 0;
         node->prev = 0;
@@ -313,18 +331,18 @@ static void producer(const unsigned int core_id) {
         node->data = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].src_addr));
         node->tgt = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr));
         node->data_size = pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length;
-        timer_body_1 = benchmark_get_cycle();
+        // timer_body_1 = benchmark_get_cycle();
 
-        printf_lock_acquire(&printf_lock);
-        printf("[core %u][bd fill_node] mm_alloc: node = %p, data = 0x%x, tgt = 0x%x, data_size = %zu, bd=%d\n",
-            core_id,
-            (void *)node,
-            node->data,
-            node->tgt,
-            node->data_size,
-            (timer_body_1 - timer_body_0)
-        );
-        printf_lock_release(&printf_lock);
+        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        // DEBUG_PRINTF("[core %u][bd fill_node] mm_alloc: node = %p, data = 0x%x, tgt = 0x%x, data_size = %zu, bd=%d\n",
+        //     core_id,
+        //     (void *)node,
+        //     node->data,
+        //     node->tgt,
+        //     node->data_size,
+        //     (timer_body_1 - timer_body_0)
+        // );
+        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
 
         // /* Zero-initialize the payload using our custom mm_memset */
@@ -332,33 +350,46 @@ static void producer(const unsigned int core_id) {
         /* Append the node to the shared linked list */
         list_push_back(&tosend_llist_lock_2, &rlc_ctx.list, node);
 
-        printf_lock_acquire(&printf_lock);
-        printf("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
+        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        DEBUG_PRINTF("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
             core_id,
             (void *)node,
             node->data_size,
             node->data,
             node->tgt);
-        printf_lock_release(&printf_lock);
+        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
         // Get the pointer to the next PDCP package
         new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
         // delay(200);  /* Delay between node productions */
     }
 
-    // Finished all the PDCP packages, start self check
-    self_check(pdcp_pkgs, NUM_PKGS);
+    // Set producer done flag
+    atomic_store_explicit(&producer_done, 1, memory_order_relaxed);
 }
 
 /* cluster_entry() dispatches behavior based on core_id */
 void cluster_entry(const unsigned int core_id) {
-    if (core_id >= 1) {
+    uint32_t timer_0, timer_1;
+    timer_0 = benchmark_get_cycle();
+
+    if (core_id >= 2) {
         consumer(core_id);
-    } else if (core_id == 0) {
+    } else /*if (core_id == 0)*/ {
         producer(core_id);
-    } else {
+    }/* else {
         while (1) {}
-    }
+    }*/
+    // consumer(core_id);
+
+    timer_1 = benchmark_get_cycle();
+    printf_lock_acquire(&printf_lock);
+    printf("[core %u]: start cycle = %d, end cycle = %d, total cycles = %d\n",
+        core_id,
+        timer_0,
+        timer_1,
+        (timer_1 - timer_0));
+    printf_lock_release(&printf_lock);
 }
 
 

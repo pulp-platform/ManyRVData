@@ -4,8 +4,6 @@
 #include "printf.h"
 #include "printf_lock.h"
 
-#define DEBUG_PRINTF 1 // Enable debug printf
-
 /* Spinlock acquire/release helpers */
 static inline void printf_lock_acquire(volatile int *lock) {
     while (__sync_lock_test_and_set(lock, 1)) { delay(20); }

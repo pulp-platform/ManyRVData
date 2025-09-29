@@ -7,6 +7,7 @@
 #include "mm.h"
 #include "llist.h"
 #include "data_move_vec.h"
+#include <stdatomic.h>
 
 #define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes
 
@@ -47,8 +48,8 @@ typedef struct {
    unsigned int cellId __attribute__((aligned(4))); /* Indicates the cell to which the RLC entity belongs.*/
    _Atomic unsigned int pollPdu __attribute__((aligned(4)));
    _Atomic unsigned int pollByte __attribute__((aligned(4)));
-   _Atomic unsigned int pduWithoutPoll __attribute__((aligned(4)));  /* Indicates the total number of PDUs that are not polled. */
-   _Atomic unsigned int byteWithoutPoll __attribute__((aligned(4))); /* Indicates the total bytes of PDUs that are not polled. */
+   unsigned int pduWithoutPoll __attribute__((aligned(4)));  /* Indicates the total number of PDUs that are not polled. */
+   unsigned int byteWithoutPoll __attribute__((aligned(4))); /* Indicates the total bytes of PDUs that are not polled. */
 
    // unsigned int sduNum; /* Number of sdus to be sent */
    // unsigned int sduBytes; /* Number of sdus bytes to be sent */
@@ -58,7 +59,7 @@ typedef struct {
    char Reserve1[CACHE_LINE_SIZE-6-sizeof(LinkedList)] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
 
    _Atomic unsigned int vtNextAck __attribute__((aligned(4))); /* First SN to be confirmed */
-   _Atomic unsigned int vtNext __attribute__((aligned(4))); /* Next Available RLCSN */
+   unsigned int vtNext __attribute__((aligned(4))); /* Next Available RLCSN */
    // unsigned int sendPduNum; /* Number of pdus to be confirmed */
    // unsigned int sendPduBytes; /* Number of pdus to be confirmed */
    // void *waitAckLinkHdr;  /* First SDU to be confirmed */

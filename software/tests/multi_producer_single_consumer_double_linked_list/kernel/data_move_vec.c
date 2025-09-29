@@ -98,11 +98,11 @@ void __attribute__((noinline)) vector_memcpy32_m4_opt(void* dst,
     avl = big_chunk_words;
     asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
 
-    // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][vector_memcpy32_m4_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u][vector_memcpy32_m4_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
     //     snrt_cluster_core_idx(),
     //     vl, avl, copied, word_count, copied * word_size, len_bytes);
-    // printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
     // pipeline 8 loads
     asm volatile("vle32.v v0,  (%0)" :: "r"(s32 + copied + 0*elems_per_vreg));
@@ -135,11 +135,11 @@ void __attribute__((noinline)) vector_memcpy32_m4_opt(void* dst,
 
     asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
 
-    // printf_lock_acquire(&printf_lock);
-    // printf("[core %u][vector_memcpy32_m4_opt vec_med] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u][vector_memcpy32_m4_opt vec_med] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
     //     snrt_cluster_core_idx(),
     //     vl, avl, copied, word_count, copied * word_size, len_bytes);
-    // printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
     asm volatile("vle32.v v0, (%0)" :: "r"(s32 + copied));
     asm volatile("vse32.v v0, (%0)" :: "r"(d32 + copied));
@@ -148,11 +148,11 @@ void __attribute__((noinline)) vector_memcpy32_m4_opt(void* dst,
   }
 
   // 3. Scalar tail for final <4 words and <word_size bytes
-//   printf_lock_acquire(&printf_lock);
-//   printf("[core %u][vector_memcpy32_m4_opt sca_32b] copied_byte_count = %d/%d\n", 
+//   DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+//   DEBUG_PRINTF("[core %u][vector_memcpy32_m4_opt sca_32b] copied_byte_count = %d/%d\n", 
 //         snrt_cluster_core_idx(),
 //         copied * word_size, len_bytes);
-//   printf_lock_release(&printf_lock);
+//   DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   for (; copied < word_count; ++copied) {
     d32[copied] = s32[copied];
@@ -162,11 +162,11 @@ void __attribute__((noinline)) vector_memcpy32_m4_opt(void* dst,
   const uint8_t* s8 = (const uint8_t*)(s32 + copied);
   size_t tail = len_bytes - word_count * word_size;
 
-//   printf_lock_acquire(&printf_lock);
-//   printf("[core %u][vector_memcpy32_m4_opt sca_8b] tail = %d, copied_byte_count = %d/%d\n", 
+//   DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+//   DEBUG_PRINTF("[core %u][vector_memcpy32_m4_opt sca_8b] tail = %d, copied_byte_count = %d/%d\n", 
 //         snrt_cluster_core_idx(),
 //         tail, copied * word_size, len_bytes);
-//   printf_lock_release(&printf_lock);
+//   DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   for (size_t i = 0; i < tail; ++i) {
     d8[i] = s8[i];
@@ -611,11 +611,11 @@ void __attribute__((noinline)) vector_memcpy32_1360B_opt(void* dst,
   avl = 128; // load 128 words, 512 bytes per vle, 1024 bytes in total
   asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
 
-  // printf_lock_acquire(&printf_lock);
-  // printf("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n", 
   //     snrt_cluster_core_idx(),
   //     vl, avl, copied, word_count, copied * word_size, len_bytes);
-  // printf_lock_release(&printf_lock);
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   asm volatile("vle32.v v0,  (%0)" :: "r"(s32 + 0*elems_per_vreg));
   asm volatile("vle32.v v8,  (%0)" :: "r"(s32 + 1*elems_per_vreg));
@@ -656,11 +656,11 @@ void __attribute__((noinline)) vector_memcpy32_1360B_opt_with_header(void* dst,
 
   size_t word_count = len_bytes / word_size;
 
-  // printf_lock_acquire(&printf_lock);
-  // printf("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n",
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][vector_memcpy32_1360B_opt vec_big] vl = %d, avl = %d, copied = %d, word_count = %d, copied_byte_count = %d/%d\n",
   //     snrt_cluster_core_idx(),
   //     vl, avl, copied, word_count, copied * word_size, len_bytes);
-  // printf_lock_release(&printf_lock);
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   // Load
   // 1. Medium smaller vector chunks, leading 336 bytes
@@ -684,6 +684,12 @@ void __attribute__((noinline)) vector_memcpy32_1360B_opt_with_header(void* dst,
   // 4. Load a scalar value (SN) into a vector register
   asm volatile("vmv.s.x v24, %0" :: "r"(SN)); // move scalar SN into v24
   // asm volatile("vor.vv v16, v16, v24"); // bitwise OR, put the SN as the header
+
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][vector_memcpy32_1360B_opt vec_big] SN = %d\n",
+  //     snrt_cluster_core_idx(),
+  //     SN);
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   // Store
   // 5. Medium smaller vector chunks, leading 336 bytes

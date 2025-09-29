@@ -23,7 +23,7 @@
   "src_length": 16777216, // 16777216 bytes = 16 MiB
   "tgt_addr": "0xB0000000",
   "tgt_length": 16777216, // 16777216 bytes = 16 MiB
-  "total_pkg_number": 100 // max 12336 packages = 16777216 bytes / (1350 + 10) bytes per package
+  "total_pkg_number": 300 // max 12336 packages = 16777216 bytes / (1350 + 10) bytes per package
 }
 
 // {

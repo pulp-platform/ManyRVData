@@ -79,18 +79,18 @@ uint32_t mcs_lock_try_acquire(mcs_lock_t* L) {
 
   if (!ok) mcs_bind_release_slot(b);
 
-  // printf_lock_acquire(&printf_lock);
-  // printf("[core %u][mcs_lock_try_acquire] try result = %d, try add me = 0x%x to the tail if the list is empty.\n",
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][mcs_lock_try_acquire] try result = %d, try add me = 0x%x to the tail if the list is empty.\n",
   //     snrt_cluster_core_idx(),
   //     ok,
   //     me
   // );
-  // printf_lock_release(&printf_lock);
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
   return ok;
 }
 
-void mcs_lock_acquire(mcs_lock_t* L) {
+void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L) {
   mcs_binding_t* b = mcs_bind_acquire_slot(L);
   struct mcs_node* me = &b->node;
 
@@ -102,26 +102,27 @@ void mcs_lock_acquire(mcs_lock_t* L) {
     atomic_store_explicit(&me->locked, true, memory_order_relaxed);
     atomic_store_explicit(&pred->next, me, memory_order_release);
     while (atomic_load_explicit(&me->locked, memory_order_acquire)) {
-      MCS_CPU_RELAX();
+      delay(10); // prevent busy spinning
     }
   }
 
-  printf_lock_acquire(&printf_lock);
-  printf("[core %u][mcs_lock_acquire] pred = 0x%x, added me = 0x%x to the pred->next.\n",
-      snrt_cluster_core_idx(),
-      pred,
-      me
-  );
-  printf_lock_release(&printf_lock);
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][mcs_lock_acquire] pred = 0x%x, added me = 0x%x to the pred->next.\n",
+  //     snrt_cluster_core_idx(),
+  //     pred,
+  //     me
+  // );
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
-void mcs_lock_release(mcs_lock_t* L) {
+void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L) {
   mcs_binding_t* b = mcs_bind_find(L);
   if (!b) return; // or assert in debug
 
   struct mcs_node* me = &b->node;
   struct mcs_node* succ =
-      atomic_load_explicit(&me->next, memory_order_acquire);
+      // atomic_load_explicit(&me->next, memory_order_acquire);
+      atomic_load_explicit(&me->next, memory_order_relaxed);
 
   if (!succ) {
     // No visible successor: try to swing tail back to NULL.
@@ -133,8 +134,9 @@ void mcs_lock_release(mcs_lock_t* L) {
     }
     // A successor is enqueuing; wait for linkage.
     do {
-      MCS_CPU_RELAX();
-      succ = atomic_load_explicit(&me->next, memory_order_acquire);
+      delay(10); // prevent busy spinning
+      // succ = atomic_load_explicit(&me->next, memory_order_acquire);
+      succ = atomic_load_explicit(&me->next, memory_order_relaxed);
     } while (!succ);
   }
 
@@ -142,11 +144,11 @@ void mcs_lock_release(mcs_lock_t* L) {
   atomic_store_explicit(&succ->locked, false, memory_order_release);
   mcs_bind_release_slot(b);
 
-  printf_lock_acquire(&printf_lock);
-  printf("[core %u][mcs_lock_release] removed me = 0x%x from the list, next node is 0x%x.\n",
-      snrt_cluster_core_idx(),
-      me,
-      succ
-  );
-  printf_lock_release(&printf_lock);
+  // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+  // DEBUG_PRINTF("[core %u][mcs_lock_release] removed me = 0x%x from the list, next node is 0x%x.\n",
+  //     snrt_cluster_core_idx(),
+  //     me,
+  //     succ
+  // );
+  // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }

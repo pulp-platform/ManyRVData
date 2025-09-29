@@ -10,7 +10,7 @@
 #include "kernel/mcs_lock.h"
 #include DATAHEADER
 
-#define L1LineWidth (128/8) // 128 bits = 16 bytes
+#define L1LineWidth (512/8) // 512 bits
 
 int main(void) {
     /* Retrieve the core index only once in main */
@@ -39,7 +39,9 @@ int main(void) {
         mm_lock = 0;
         tosend_llist_lock = 0;
         sent_llist_lock = 0;
-        mcs_lock_init(tosend_llist_lock_2);
+        mcs_lock_init(&tosend_llist_lock_2);
+    } else {
+        delay(100*(64/L1LineWidth)); // Ensure core 0 finishes initialization first
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);
@@ -48,12 +50,12 @@ int main(void) {
     snrt_cluster_hw_barrier();
 
     // debug_printf_locked("[core %u] post snrt_cluster_hw_barrier()\n", core_id);
-    // printf("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
+    // DEBUG_PRINTF("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
 
 
-    printf_lock_acquire(&printf_lock);
-    printf("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
-    printf_lock_release(&printf_lock);
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
     rlc_start(core_id);
 
