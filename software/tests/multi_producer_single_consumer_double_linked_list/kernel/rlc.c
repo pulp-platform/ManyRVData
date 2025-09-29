@@ -232,7 +232,7 @@ static void consumer(const unsigned int core_id) {
             printf_lock_release(&printf_lock);
 
              // Add the node to the sent list
-            list_push_back(&sent_llist_lock, &rlc_ctx.sent_list, node);
+            list_push_back(&sent_llist_lock_2, &rlc_ctx.sent_list, node);
 
             // Simulate receiving ACK from UE after certain sent pkgs, and we assume the ACK_SN is rlc_ctx.vtNextAck+2
             if (rlc_ctx.sent_list.sduNum >= 6) {
@@ -244,7 +244,7 @@ static void consumer(const unsigned int core_id) {
                 // printf_lock_release(&printf_lock);
 
                 for (int i = rlc_ctx.vtNextAck; i < ACK_SN; i++) {
-                    Node *sent_node = list_pop_front(&sent_llist_lock, &rlc_ctx.sent_list);
+                    Node *sent_node = list_pop_front(&sent_llist_lock_2, &rlc_ctx.sent_list);
                     if (sent_node != NULL) {
                         printf_lock_acquire(&printf_lock);
                         printf("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
