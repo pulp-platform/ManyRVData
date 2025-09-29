@@ -154,7 +154,10 @@ module spatz_cache_amo
       // Place a reservation on the address if there isn't already a valid reservation.
       // We prevent a live-lock by don't throwing away the reservation of a hart unless
       // it makes a new reservation in program order or issues any SC.
-      if (amo_req.amo == AMOLR && (!reservation_q.valid || reservation_q.core == amo_cid)) begin
+
+      // But it is legal to only run the lr but never run the paired sc,
+      // so this live lock method would cause another live lock
+      if (amo_req.amo == AMOLR /* && (!reservation_q.valid || reservation_q.core == amo_cid) */) begin
         reservation_d.valid = 1'b1;
         reservation_d.addr = amo_req.addr;
         reservation_d.core = amo_cid;
