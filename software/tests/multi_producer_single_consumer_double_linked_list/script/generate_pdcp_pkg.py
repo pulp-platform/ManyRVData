@@ -74,7 +74,7 @@ def parse_args():
     parser.add_argument('-o', '--output',
                         help='Output header file (default: ../data/data_<users>_<len>_<pkgs>.h)')
     parser.add_argument('-f', '--fill-zero',
-                        help='Fill unused slots with zeroes (default: True)', action='store_true', default=False)
+                        help='Fill unused slots with zeroes (default: False)', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=42,
                         help='Optional seed for random generator for reproducibility')
     return parser.parse_args()
@@ -131,8 +131,10 @@ def main():
         src_addr = src_base + slot * pdu_size
         tgt_addr = tgt_base + slot * pdu_size
         entries.append((uid, src_addr, tgt_addr, pdu_size))
+        data = slot
         for i in range(hdr_len, pdu_size):
-            pdu_buf[slot][i] = slot & 0xFF
+            pdu_buf[slot][i] = data & 0xFF
+            data = data+1
 
     # write header
     with open(out_path, 'w') as h:
