@@ -6,7 +6,7 @@
 #include "encoding.h"
 
 /* Global spinlock aligned to 8 bytes to ensure correctness */
-static volatile int printf_lock __attribute__((aligned(8))) = 0;
+static volatile int printf_lock __attribute__((aligned(8))) __attribute__((section(".data"))) = 0;
 
 /* Raw printf protected by global spinlock */
 void debug_print_lock_init(void);

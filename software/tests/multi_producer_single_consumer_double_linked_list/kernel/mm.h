@@ -13,7 +13,7 @@ static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))
    __attribute__((aligned(32)));
 
-spinlock_t mm_lock;
+spinlock_t mm_lock __attribute__((section(".data")));
 
 /* Type for free list entries */
 typedef struct MM_FreePage {
@@ -28,7 +28,7 @@ typedef struct {
     spinlock_t lock;    /* Spinlock for mutual exclusion */
 } mm_context_t __attribute__((aligned(8)));
 
-mm_context_t mm_ctx;
+mm_context_t mm_ctx __attribute__((section(".data")));
 
 /*
    mm_init() initializes the memory management context.
@@ -45,7 +45,7 @@ void *mm_alloc();
 */
 void mm_free(void *p);
 
-/* 
+/*
    A simple custom memset implementation that fills count bytes in dest
    with the given value.
 */

@@ -18,7 +18,7 @@ typedef struct __attribute__((aligned(MCS_CACHELINE))) {
   uint32_t            in_use __attribute__((aligned(4)));
 } mcs_binding_t;
 
-static mcs_binding_t mcs_bindings[MCS_MAX_HARTS][MCS_TLS_SLOTS] __attribute__((aligned(4)));
+static mcs_binding_t mcs_bindings[MCS_MAX_HARTS][MCS_TLS_SLOTS] __attribute__((aligned(4))) __attribute__((section(".data")));
 
 // Acquire a free slot for this hart and lock
 static inline mcs_binding_t* mcs_bind_acquire_slot(mcs_lock_t* L) {

@@ -69,7 +69,7 @@ typedef struct {
    mm_context_t *mm_ctx __attribute__((aligned(4)));
 } rlc_context_t;
 
-rlc_context_t rlc_ctx;
+rlc_context_t rlc_ctx __attribute__((section(".data")));
 
 /* rlc_init() initializes the RLC context for the given RLC ID and cell ID.
    It sets the initial values for pollPdu, pollByte, pduWithoutPoll, byteWithoutPoll,
@@ -94,7 +94,11 @@ void cluster_entry(const unsigned int core_id);
 /*
    pdcp_pkd_ptr is a pointer to the new PDCP packet data structure.
 */
-spinlock_t pdcp_pkd_ptr;
-spinlock_t pdcp_pkd_ptr_lock;
+spinlock_t pdcp_pkd_ptr __attribute__((section(".data")));
+mcs_lock_t pdcp_pkd_ptr_lock __attribute__((section(".data")));
+
+_Atomic(uint32_t) producer_done __attribute__((section(".data")));
+
+spinlock_t rlc_ctx_lock __attribute__((section(".data")));
 
 #endif
