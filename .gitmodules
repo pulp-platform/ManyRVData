@@ -1,0 +1,10 @@
+[submodule "hardware/deps/spatz"]
+	path = hardware/deps/spatz
+	url = https://github.com/pulp-platform/spatz.git
+[submodule "hardware/deps/dram_rtl_sim"]
+	path = hardware/deps/dram_rtl_sim
+	url = git@github.com:pulp-platform/dram_rtl_sim.git
+[submodule "hardware/deps/insitu-cache"]
+	path = hardware/deps/insitu-cache
+	url = https://github.com/pulp-platform/Insitu-Cache.git
+	branch = zexin/cachepool_dev

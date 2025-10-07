@@ -1,0 +1,106 @@
+// CachePool cluster configuration (generated from config.mk)
+// Edit this skeleton for fixed values
+
+{
+  cluster: {
+    mempool: 0,
+    boot_addr: 4096,               // e.g., 4096 (0x1000)
+    cluster_base_addr: 3221223424,      // 0xBFFF_F800 typically
+    cluster_base_offset: 0,
+    cluster_base_hartid: 0,
+    addr_width: 32,
+    data_width: 32,
+    id_width_in: 6,                        // fixed for now
+    id_width_out: 2,                       // fixed for now
+    user_width: 17,
+    axi_cdc_enable: false,
+    sw_rst_enable: true,
+    axi_isolate_enable: false,
+
+    tcdm: {
+      size:  2,                            // kB (fixed for now)
+      banks: 1,
+    },
+
+    cluster_periph_size: 64,               // kB (fixed)
+    dma_data_width: 128,
+    dma_axi_req_fifo_depth: 3,
+    dma_req_fifo_depth: 3,
+
+    // Spatz parameters
+    vlen: 512,
+    n_fpu: 0,
+    n_ipu: 4,
+    spatz_fpu: false,
+    norvd: true,
+
+    // Timing parameters (fixed defaults; tweak in template if needed)
+    timing: {
+      lat_comp_fp32: 1,
+      lat_comp_fp64: 2,
+      lat_comp_fp16: 1,
+      lat_comp_fp16_alt: 1,
+      lat_comp_fp8: 0,
+      lat_comp_fp8_alt: 0,
+      lat_noncomp: 1,
+      lat_conv: 2,
+      lat_sdotp: 4,
+      fpu_pipe_config: "BEFORE",
+      xbar_latency: "CUT_ALL_PORTS",
+      register_tcdm_cuts: true,
+      register_core_req: true,
+      register_core_rsp: true,
+      register_offload_rsp: true
+    },
+
+    // Repeat the compute core template N times (driven by 4)
+    cores: [
+      { $ref: "#/compute_core_template" },{ $ref: "#/compute_core_template" },{ $ref: "#/compute_core_template" },{ $ref: "#/compute_core_template" }
+    ],
+
+    icache: {
+      size: 16,            // kB (fixed)
+      sets: 4,             // ways
+      cacheline: 128       // bits
+    }
+  },
+
+  dram: {
+    address: 2147483648,   // 0x8000_0000
+    length:  536870912     // 0x2000_0000
+  },
+
+  uncached_region: {
+    address: 3221225472, // 0xC000_0000
+    length:  536870912   // 0x2000_0000
+  },
+
+  peripherals: { },
+
+  // Templates
+  compute_core_template: {
+    isa: "rv32imafd",
+    xf16: false,
+    xf8: false,
+    xfdotp: false,
+    xdma: false,
+    num_int_outstanding_loads: 32,
+    num_int_outstanding_mem: 32,
+    num_spatz_outstanding_loads: 32,
+    num_dtlb_entries: 1,
+    num_itlb_entries: 1
+  },
+
+  dma_core_template: {
+    isa: "rv32imafd",
+    xdma: true,
+    xf16: false,
+    xf8: false,
+    xfdotp: false,
+    num_int_outstanding_loads: 32,
+    num_int_outstanding_mem: 32,
+    num_spatz_outstanding_loads: 32,
+    num_dtlb_entries: 1,
+    num_itlb_entries: 1
+  }
+}

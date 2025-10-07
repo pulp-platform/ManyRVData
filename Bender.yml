@@ -1,0 +1,45 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.1
+
+package:
+  name: cachepool
+
+dependencies:
+  axi:                { git: "https://github.com/pulp-platform/axi.git",                version: =0.39.1-beta   }
+  axi_riscv_atomics:  { git: "https://github.com/pulp-platform/axi_riscv_atomics.git",  version: 0.7.0          }
+  common_cells:       { git: "https://github.com/pulp-platform/common_cells.git",       version: 1.28.0         }
+  FPnew:              { git: "https://github.com/pulp-platform/cvfpu.git",              rev:     pulp-v0.1.3    }
+  idma:               { git: "https://github.com/pulp-platform/iDMA.git",               version: 0.4.2          }
+  register_interface: { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.8          }
+  riscv-dbg:          { git: "https://github.com/pulp-platform/riscv-dbg.git",          version: 0.7.0          }
+  tech_cells_generic: { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11         }
+  insitu-cache:       { path: "hardware/deps/insitu-cache"                                               }
+  spatz:              { path: "hardware/deps/spatz"                                                             }
+  dram_rtl_sim:       { path: "hardware/deps/dram_rtl_sim"                                                      }
+
+workspace:
+  checkout_dir: "./hardware/deps"
+
+export_include_dirs:
+
+sources:
+  # Level 0
+  - hardware/src/reqrsp_xbar.sv
+  - hardware/src/tcdm_cache_interco.sv
+  - hardware/src/tcdm_id_remapper.sv
+  - hardware/src/spatz_cache_amo.sv
+  # Level 1
+  - hardware/src/cachepool_pkg.sv
+  - hardware/src/cachepool_cc.sv
+  # Level 2
+  - hardware/src/cachepool_tile.sv
+  # Level 3
+  - hardware/src/cachepool_cluster.sv
+  # Level 4
+  - hardware/tb/cachepool_cluster_wrapper.sv
+  # testbench
+  - target: cachepool_test
+    files:
+    - hardware/tb/axi_uart.sv
+    - hardware/tb/tb_cachepool.sv
