@@ -430,8 +430,12 @@ module cachepool_tile
   tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req;
   tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp;
 
-  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req, cache_amo_req;
-  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp, cache_amo_rsp;
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp;
+
+  tcdm_req_t  [NumL1CacheCtrl-1:0] cache_amo_req;
+  tcdm_rsp_t  [NumL1CacheCtrl-1:0] cache_amo_rsp;
+
 
   logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
   logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
@@ -559,7 +563,8 @@ module cachepool_tile
 
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
-  logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready, cache_amo_pready;
+  logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready;
+  logic  [NumL1CacheCtrl-1:0] cache_amo_pready;
 
   // TODO: remove this module
   // where to deal with cache flushing protection?
@@ -617,69 +622,91 @@ module cachepool_tile
   end
 
   for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin : gen_cache_connect
-    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_amo
-      spatz_cache_amo #(
-        .DataWidth        ( DataWidth        ),
-        .CoreIDWidth      ( CoreIDWidth      ),
-        .tcdm_req_t       ( tcdm_req_t       ),
-        .tcdm_rsp_t       ( tcdm_rsp_t       ),
-        .tcdm_req_chan_t  ( tcdm_req_chan_t  ),
-        .tcdm_rsp_chan_t  ( tcdm_rsp_chan_t  ),
-        .tcdm_user_t      ( tcdm_user_t      )
-      ) i_cache_amo (
-        .clk_i            (clk_i                    ),
-        .rst_ni           (rst_ni                   ),
-        .core_req_i       (cache_xbar_req   [j][cb] ),
-        .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
-        .core_rsp_o       (cache_xbar_rsp   [j][cb] ),
-        .mem_req_o        (cache_amo_req    [j][cb] ),
-        .mem_rsp_ready_o  (cache_amo_pready [j][cb] ),
-        .mem_rsp_i        (cache_amo_rsp    [j][cb] )
-      );
+    // Only Snitch will send out amo requests
+    // Ports from Spatz can bypass this module
 
-      tcdm_req_t cache_req_reg;
-      tcdm_rsp_t cache_rsp_reg;
+    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_amo_connect
+      if (j == NrTCDMPortsPerCore-1) begin : gen_amo
+        spatz_cache_amo #(
+          .DataWidth        ( DataWidth        ),
+          .CoreIDWidth      ( CoreIDWidth      ),
+          .tcdm_req_t       ( tcdm_req_t       ),
+          .tcdm_rsp_t       ( tcdm_rsp_t       ),
+          .tcdm_req_chan_t  ( tcdm_req_chan_t  ),
+          .tcdm_rsp_chan_t  ( tcdm_rsp_chan_t  ),
+          .tcdm_user_t      ( tcdm_user_t      )
+        ) i_cache_amo (
+          .clk_i            (clk_i                    ),
+          .rst_ni           (rst_ni                   ),
+          .core_req_i       (cache_xbar_req   [j][cb] ),
+          .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
+          .core_rsp_o       (cache_xbar_rsp   [j][cb] ),
+          .mem_req_o        (cache_amo_req    [cb]    ),
+          .mem_rsp_ready_o  (cache_amo_pready [cb]    ),
+          .mem_rsp_i        (cache_amo_rsp    [cb]    )
+        );
 
-      spill_register #(
-        .T      ( tcdm_req_chan_t ),
-        .Bypass ( 1'b0            )
-      ) i_spill_reg_cache_req (
-        .clk_i                            ,
-        .rst_ni  ( rst_ni                ),
-        .valid_i ( cache_amo_req[j][cb].q_valid ),
-        .ready_o ( cache_amo_rsp[j][cb].q_ready ),
-        .data_i  ( cache_amo_req[j][cb].q       ),
-        .valid_o ( cache_req_reg.q_valid        ),
-        .ready_i ( cache_rsp_reg.q_ready        ),
-        .data_o  ( cache_req_reg.q              )
-      );
+        tcdm_req_t cache_req_reg;
+        tcdm_rsp_t cache_rsp_reg;
 
-      spill_register #(
-        .T      ( tcdm_rsp_chan_t ),
-        .Bypass ( 1'b1            )
-      ) i_spill_reg_cache_rsp (
-        .clk_i                                     ,
-        .rst_ni  ( rst_ni                         ),
-        .valid_i ( cache_rsp_reg.p_valid          ),
-        .ready_o ( cache_rsp_ready [cb][j]        ),
-        .data_i  ( cache_rsp_reg.p                ),
-        .valid_o ( cache_amo_rsp   [j][cb].p_valid),
-        .ready_i ( cache_amo_pready[j][cb]        ),
-        .data_o  ( cache_amo_rsp   [j][cb].p      )
-      );
+        spill_register #(
+          .T      ( tcdm_req_chan_t ),
+          .Bypass ( 1'b0            )
+        ) i_spill_reg_cache_req (
+          .clk_i                            ,
+          .rst_ni  ( rst_ni                ),
+          .valid_i ( cache_amo_req[cb].q_valid ),
+          .ready_o ( cache_amo_rsp[cb].q_ready ),
+          .data_i  ( cache_amo_req[cb].q       ),
+          .valid_o ( cache_req_reg.q_valid        ),
+          .ready_i ( cache_rsp_reg.q_ready        ),
+          .data_o  ( cache_req_reg.q              )
+        );
 
-      assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
-      assign cache_req_addr [cb][j] = cache_req_reg.q.addr;
-      assign cache_req_meta [cb][j] = cache_req_reg.q.user;
-      assign cache_req_write[cb][j] = cache_req_reg.q.write;
-      assign cache_req_data [cb][j] = cache_req_reg.q.data;
+        spill_register #(
+          .T      ( tcdm_rsp_chan_t ),
+          .Bypass ( 1'b1            )
+        ) i_spill_reg_cache_rsp (
+          .clk_i   ( clk_i                       ),
+          .rst_ni  ( rst_ni                      ),
+          .valid_i ( cache_rsp_reg.p_valid       ),
+          .ready_o ( cache_rsp_ready [cb][j]     ),
+          .data_i  ( cache_rsp_reg.p             ),
+          .valid_o ( cache_amo_rsp   [cb].p_valid),
+          .ready_i ( cache_amo_pready[cb]        ),
+          .data_o  ( cache_amo_rsp   [cb].p      )
+        );
 
-      assign cache_rsp_reg.p_valid = cache_rsp_valid[cb][j];
-      assign cache_rsp_reg.q_ready = cache_req_ready[cb][j];
-      assign cache_rsp_reg.p.data  = cache_rsp_data [cb][j];
-      assign cache_rsp_reg.p.user  = cache_rsp_meta [cb][j];
+        assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
+        assign cache_req_addr [cb][j] = cache_req_reg.q.addr;
+        assign cache_req_meta [cb][j] = cache_req_reg.q.user;
+        assign cache_req_write[cb][j] = cache_req_reg.q.write;
+        assign cache_req_data [cb][j] = cache_req_reg.q.data;
 
-      assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
+        assign cache_rsp_reg.p_valid = cache_rsp_valid[cb][j];
+        assign cache_rsp_reg.q_ready = cache_req_ready[cb][j];
+        assign cache_rsp_reg.p.data  = cache_rsp_data [cb][j];
+        assign cache_rsp_reg.p.user  = cache_rsp_meta [cb][j];
+
+        assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
+
+      end else begin : gen_no_amo
+        // Bypass AMO and registers
+        assign cache_req_valid[cb][j] = cache_xbar_req   [j][cb].q_valid;
+        assign cache_rsp_ready[cb][j] = cache_xbar_pready[j][cb];
+        assign cache_req_addr [cb][j] = cache_xbar_req   [j][cb].q.addr;
+        assign cache_req_meta [cb][j] = cache_xbar_req   [j][cb].q.user;
+        assign cache_req_write[cb][j] = cache_xbar_req   [j][cb].q.write;
+        assign cache_req_data [cb][j] = cache_xbar_req   [j][cb].q.data;
+
+        assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
+        assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
+        assign cache_xbar_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
+        assign cache_xbar_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
+
+        assign cache_xbar_rsp[j][cb].p.write = cache_rsp_write[cb][j];
+
+      end
     end
   end
 
@@ -963,7 +990,7 @@ module cachepool_tile
       .NumSpatzFPUs            (NumSpatzFPUs               ),
       .NumSpatzIPUs            (NumSpatzIPUs               ),
       .TCDMAddrWidth           (SPMAddrWidth               )
-    ) i_spatz_cc (
+    ) i_cachepool_cc (
       .clk_i            (clk_i                               ),
       .rst_ni           (rst_ni                              ),
       .testmode_i       (1'b0                                ),

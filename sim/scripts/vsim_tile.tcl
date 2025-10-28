@@ -16,9 +16,7 @@ add wave -noupdate -group tile[$1] -group wide_xbar /tb_cachepool/i_cluster_wrap
 for {set c 0}  {$c < 4} {incr c} {
 	onerror {resume}
 
-	for {set p 0} {$p < 5} {incr p} {
-		add wave -noupdate -group tile[$1] -group cache[$c] -group amo[$p] /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_cache_connect[$c]/gen_cache_amo[$p]/i_cache_amo/*
-  }
+	add wave -noupdate -group tile[$1] -group cache[$c] -group amo /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_cache_connect[$c]/gen_cache_amo_connect[4]/gen_amo/i_cache_amo/*
 
 	add wave -noupdate -group tile[$1] -group cache[$c] -group coalescer  /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_l1_cache_ctrl[$c]/i_l1_controller/i_par_coalescer_for_spatz/gen_extend_window/i_par_coalescer_extend_window/i_par_coalescer/*
 	add wave -noupdate -group tile[$1] -group cache[$c] -group core			  /tb_cachepool/i_cluster_wrapper/i_cluster/gen_tiles[$1]/i_tile/gen_l1_cache_ctrl[$c]/i_l1_controller/i_insitu_cache_tcdm_wrapper/i_insitu_cache_core/*
