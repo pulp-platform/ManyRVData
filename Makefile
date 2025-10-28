@@ -287,7 +287,7 @@ lint: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/lint.
 ${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
 	@if [ ! -x "$(BENDER)" ]; then echo "bender not installed; run 'make bender'"; exit 1; fi
-	${BENDER} script verilator -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
+	${BENDER} script verilator  $(VLOG_DEFS) -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
 
 
 ########
