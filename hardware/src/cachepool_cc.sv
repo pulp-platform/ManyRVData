@@ -470,7 +470,7 @@ module cachepool_cc
   reqrsp_xbar #(
     .NumInp           (NrScalarXbarMst  ),
     .NumOut           (NrScalarXbarSlv  ),
-    .PipeReg          (1'b1             ),
+    .PipeReg          (1'b0             ),
     .ExtReqPrio       (1'b0             ),
     .ExtRspPrio       (1'b0             ),
     .tcdm_req_chan_t  (dreq_chan_t      ),
@@ -537,7 +537,7 @@ module cachepool_cc
     .rsp_t       (drsp_t            ),
     // TODO(zarubaf): Wire-up to top-level.
     .RespDepth   (4                 ),
-    .RegisterReq ({1'b1, 1'b1}      )
+    .RegisterReq ({1'b0, 1'b0}      )
   ) i_spm_reqrsp_mux (
     .clk_i     (clk_i                                ),
     .rst_ni    (rst_ni                               ),
