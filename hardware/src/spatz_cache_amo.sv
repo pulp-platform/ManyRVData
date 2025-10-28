@@ -122,16 +122,22 @@ module spatz_cache_amo
   tcdm_user_t     sc_user_d, sc_user_q;
   tcdm_rsp_chan_t sc_rsp;
 
+  logic           is_sc_rsp;
+
   assign  sc_req_valid = core_req_i.q_valid & (core_req_i.q.amo inside {AMOSC});
   assign  sc_req_ready = mem_rsp_i.q_ready;
-  assign  sc_rsp_valid = sc_clr & sc_q;
+  assign  sc_rsp_valid = is_sc_rsp;
 
   assign sc_user_d  = core_req_i.q.user;
   assign sc_en      = sc_set | sc_clr;
   assign sc_set     = amo_req_valid & amo_req_ready & (amo_insn == AMOSC);
-  assign sc_clr     = amo_rsp_valid & amo_rsp_ready & sc_q &
+
+  assign is_sc_rsp  = amo_rsp_valid & sc_q &
                       (sc_user_q.core_id == amo_rsp.user.core_id) &
                       (sc_user_q.req_id  == amo_rsp.user.req_id);
+
+  assign sc_clr     = is_sc_rsp & amo_rsp_ready;
+
   assign sc_d       = sc_set & ~sc_clr;
 
   `FFL(sc_successful_q, sc_successful, sc_set, 1'b0)
