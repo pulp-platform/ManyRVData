@@ -1,8 +1,28 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Author: Zexin Fu     <zexifu@iis.ee.ethz.ch>
+
 #ifndef LLIST_C
 #define LLIST_C
 
+#undef  USE_MCS_LOCK
+// #define USE_MCS_LOCK
+
 #include "mcs_lock.h"
-#include "mcs_lock.c"
 #include "llist.h"
 #include "rlc.h"
 #include <snrt.h>
@@ -12,6 +32,7 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
+#include "benchmark.h"
 
 void list_init(LinkedList *list) {
     list->head = NULL;
@@ -31,8 +52,11 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
     /* Acquire the list lock to ensure exclusive access while modifying the list */
     // spin_lock(&list->lock);
     // timer_ac_lock_0 = benchmark_get_cycle();
-    // spin_lock(llist_lock, 20);
-    mcs_lock_acquire(llist_lock);
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
     // timer_ac_lock_1 = benchmark_get_cycle();
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -64,8 +88,11 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
 
     // spin_unlock(&list->lock);
     // timer_rl_lock_0 = benchmark_get_cycle();
-    // spin_unlock(llist_lock, 20);
-    mcs_lock_release(llist_lock);
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
     // timer_rl_lock_1 = benchmark_get_cycle();
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -91,8 +118,11 @@ Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
     Node *node = NULL;
     // spin_lock(&list->lock);
     // timer_ac_lock_0 = benchmark_get_cycle();
-    // spin_lock(llist_lock, 20);
-    mcs_lock_acquire(llist_lock);
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
     // timer_ac_lock_1 = benchmark_get_cycle();
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -134,8 +164,11 @@ Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
 
     // spin_unlock(&list->lock);
     // timer_rl_lock_0 = benchmark_get_cycle();
-    // spin_unlock(llist_lock, 20);
-    mcs_lock_release(llist_lock);
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
     // timer_rl_lock_1 = benchmark_get_cycle();
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);

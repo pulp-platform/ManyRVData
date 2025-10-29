@@ -1,5 +1,29 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Author: Zexin Fu     <zexifu@iis.ee.ethz.ch>
+
 #ifndef RLC_C
 #define RLC_C
+
+#undef  USE_MCS_LOCK
+// #define USE_MCS_LOCK
+
+#undef  USE_MCS_LOCK_2
+// #define USE_MCS_LOCK_2
 
 #include "rlc.h"
 #include "mm.h"
@@ -12,21 +36,9 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_300.h"
+#include "../data/data_1_1350_100.h"
 #include <stdatomic.h>
-
-/* Simple spinlock functions using GCC built‑ins */
-static inline void pdcp_pkg_lock_acquire(volatile int *lock) {
-    while (__sync_lock_test_and_set(lock, 1)) { /*delay(20);*/ }
-}
-
-static inline void pdcp_pkg_lock_release(volatile int *lock) {
-    asm volatile (
-        "amoswap.w zero, zero, %0"
-        : "+A" (*lock)
-    );
-    // delay(20);
-}
+#include "benchmark.h"
 
 static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
     const uint8_t *p = (const uint8_t *)a;
@@ -165,8 +177,11 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
     uint32_t timer_body_0, timer_body_1;
 
     // timer_ac_lock_0 = benchmark_get_cycle();
-    // pdcp_pkg_lock_acquire(lock); // Acquire the lock to ensure exclusive access
-    mcs_lock_acquire(lock);
+#ifdef USE_MCS_LOCK_2
+    mcs_lock_acquire(lock, 10);
+#else
+    spin_lock(lock, 10);
+#endif
     // timer_ac_lock_1 = benchmark_get_cycle();
 
     // timer_body_0 = benchmark_get_cycle();
@@ -183,8 +198,11 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
     // timer_body_1 = benchmark_get_cycle();
 
     // timer_rl_lock_0 = benchmark_get_cycle();
-    // pdcp_pkg_lock_release(lock); // Release the lock
-    mcs_lock_release(lock);
+#ifdef USE_MCS_LOCK_2
+    mcs_lock_release(lock, 10);
+#else
+    spin_unlock(lock, 10);
+#endif
     // timer_rl_lock_1 = benchmark_get_cycle();
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -373,6 +391,10 @@ void cluster_entry(const unsigned int core_id) {
     uint32_t timer_0, timer_1;
     timer_0 = benchmark_get_cycle();
 
+    if(core_id == 0) {
+        start_kernel();
+    }
+
     if (core_id >= 2) {
         consumer(core_id);
     } else /*if (core_id == 0)*/ {
@@ -382,13 +404,27 @@ void cluster_entry(const unsigned int core_id) {
     }*/
     // consumer(core_id);
 
+    snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
+
+    if(core_id == 0) {
+        stop_kernel();
+    }
+
     timer_1 = benchmark_get_cycle();
+
+    int use_mcs_lock;
+#ifdef USE_MCS_LOCK
+    use_mcs_lock = 1;
+#else
+    use_mcs_lock = 0;
+#endif
     printf_lock_acquire(&printf_lock);
-    printf("[core %u]: start cycle = %d, end cycle = %d, total cycles = %d\n",
+    printf("[core %u]: start cycle = %d, end cycle = %d, total cycles = %d, use_mcs_lock=%d\n",
         core_id,
         timer_0,
         timer_1,
-        (timer_1 - timer_0));
+        (timer_1 - timer_0),
+        use_mcs_lock);
     printf_lock_release(&printf_lock);
 }
 

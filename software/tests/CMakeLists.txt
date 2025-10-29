@@ -27,28 +27,28 @@ add_compile_options(-O3 -g -ffunction-sections)
 macro(add_spatz_test_zeroParam name file)
     set(target_name ${name})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock ${SNITCH_RUNTIME})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
     # target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name})
 endmacro()
 
 macro(add_spatz_test_oneParam name file param1)
     set(target_name ${name}_M${param1})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock ${SNITCH_RUNTIME})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
     target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}.h")
 endmacro()
 
 macro(add_spatz_test_twoParam name file param1 param2)
     set(target_name ${name}_M${param1}_N${param2})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock ${SNITCH_RUNTIME})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
     target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}_${param2}.h")
 endmacro()
 
 macro(add_spatz_test_threeParam name file param1 param2 param3)
     set(target_name ${name}_M${param1}_N${param2}_K${param3})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock ${SNITCH_RUNTIME})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
     target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC DATAHEADER="data/data_${param1}_${param2}_${param3}.h")
 endmacro()
 
@@ -56,6 +56,7 @@ endmacro()
 # Benchmark library
 add_library(benchmark benchmark/benchmark.c)
 add_library(spin_lock benchmark/spin_lock.c)
+add_library(mcs_lock benchmark/mcs_lock.c)
 
 add_compile_options(-O3 -g -ffunction-sections)
 add_compile_options(-DELEN=64)
@@ -71,12 +72,11 @@ add_library(fmatmul-32b fmatmul-32b/kernel/fmatmul.c)
 
 
 ## RLC
-add_library(debug_print multi_producer_single_consumer_double_linked_list/kernel/printf_lock.c)
+add_library(printf_lock multi_producer_single_consumer_double_linked_list/kernel/printf_lock.c)
 add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
 add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
 add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
 add_library(data_move_vec multi_producer_single_consumer_double_linked_list/kernel/data_move_vec.c)
-add_library(mcs_lock multi_producer_single_consumer_double_linked_list/kernel/mcs_lock.c)
 
 # Tests
 enable_testing()
@@ -84,10 +84,12 @@ set(SNITCH_TEST_PREFIX cachepool-)
 
 ## RLC
 add_spatz_test_zeroParam(spin-lock spin-lock/main.c)
+add_spatz_test_zeroParam(mcs-lock mcs-lock/main.c)
 
 # add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 2044 100)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 300)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)
 

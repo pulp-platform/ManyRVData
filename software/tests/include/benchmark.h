@@ -7,10 +7,17 @@
 #include <l1cache.h>
 #include "printf.h"
 
-size_t benchmark_get_cycle();
+inline size_t benchmark_get_cycle() { return read_csr(mcycle); }
 
 void start_kernel();
 void stop_kernel();
 size_t get_perf();
 void write_cyc(uint32_t cyc);
-void cachepool_wait (volatile uint32_t loop);
+static inline void cachepool_wait (uint32_t cycle) {
+  if(cycle > 0) {
+    size_t start = benchmark_get_cycle();
+    while ((benchmark_get_cycle() - start) < cycle) {
+      // busy wait
+    }
+  }
+}

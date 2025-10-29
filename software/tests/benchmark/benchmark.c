@@ -10,8 +10,6 @@
 
 extern __thread struct snrt_team *_snrt_team_current;
 
-size_t benchmark_get_cycle() { return read_csr(mcycle); }
-
 void start_kernel() {
   uint32_t *bench =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
@@ -45,8 +43,4 @@ void write_cyc(uint32_t cyc) {
   // There is a constant delay of using performance counter for cycle recording
   // substract the constant delay
   *perf = cyc;
-}
-
-void cachepool_wait (volatile uint32_t loop) {
-  while (loop > 0) loop --;
 }
