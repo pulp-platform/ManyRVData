@@ -8,25 +8,6 @@ CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cac
 - SystemVerilog (via `VLOG_DEFS` at compile time)
 - The Spatz cluster generator (via an auto-generated `config/cachepool.hjson`)
 
-## Configurations
-
-- All hardware knobs live in **`config/config.mk`** (and flavor files it includes, e.g., `cachepool.mk`, `cachepool_fpu.mk`).
-  - `cachepool.mk`: no floating-point support
-  - `cachepool_fpu.mk`: enables single/half precision in the Spatz vector core
-- The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
-  - `config/cachepool.hjson.tmpl` (skeleton with comments)
-  - `config/config.mk` (source of truth)
-
-To switch flavors, set `config=<flavor>` (or export `CACHEPOOL_CONFIGURATION=<flavor>`), then rebuild:
-
-```bash
-# Example: switch to FPU flavor
-make clean
-make generate config=cachepool_fpu
-```
-
-> `make clean` is recommended when changing configurations.
-
 ## Requirements
 
 - Linux environment with: `make`, `git`, `python3`, `wget`, `curl`
@@ -60,13 +41,15 @@ make quick-tool
 Build software only:
 
 ```bash
-make sw
+# Example of building 512b cacheline configuration with FPU
+make sw config=cachepool_fpu_512
 ```
 
 Build software + hardware (QuestaSim):
 
 ```bash
-make vsim
+# Example of building 512b cacheline configuration with FPU
+make vsim config=cachepool_fpu_512
 ```
 
 Run the simulation (GUI or CLI). The wrapper script expects the software ELF path as argument:
@@ -78,7 +61,78 @@ Run the simulation (GUI or CLI). The wrapper script expects the software ELF pat
 ./sim/bin/cachepool_cluster.vsim      ./software/build/TESTNAME
 ```
 
-## How configuration flows
+## Benchmark
+
+A lightweight benchmarking automation flow is provided under `util/auto-benchmark` to simplify batch testing of multiple configurations and kernels.
+
+### Files
+
+| File | Description |
+|------|--------------|
+| `configs.sh` | Defines configurations (`CONFIGS`) and kernel suffixes (`KERNELS`) to test, along with optional `PREFIX` and `ROOT_PATH`. |
+| `run_all.sh` | Main automation script that builds each configuration, runs all kernels, saves logs, and generates summaries. |
+| `write_results.py` | Extracts `[UART]` lines from simulator logs and appends them to per-configuration summary files. |
+
+### Usage
+
+1. Edit `configs.sh` to list the desired configurations and kernels:
+
+       CONFIGS="cachepool_fpu_512 cachepool_fpu_256 cachepool_fpu_128"
+       KERNELS="fdotp-32b_M32768 ffft-64b_M16384 fmatmul-64b_M2048"
+       PREFIX="test-cachepool-"
+       ROOT_PATH=../..
+
+2. Run all builds and simulations:
+
+       ./run_all.sh
+
+3. Results will appear in:
+
+       logs/<timestamp>/
+
+   and a symlink:
+
+       logs/latest -> logs/<timestamp>/
+
+### Output Structure
+
+Example directory after a run:
+
+    logs/20251028-1230/
+    ├── cachepool_fpu_512_fdotp-32b_M32768.log
+    ├── cachepool_fpu_512_fdotp-32b_M32768_pm/
+    ├── cachepool_fpu_512_summary.txt
+    ├── cachepool_fpu_256_summary.txt
+    └── ...
+
+Each run includes:
+- `*.log` — Full simulation output
+- `*_pm/` — Performance monitor logs automatically moved from `sim/bin/logs` and renamed to `<config>_<kernel>_pm/`
+- `*_summary.txt` — `[UART]` summaries for each configuration, grouped by kernel with clear headers
+
+This setup allows quick reproducible benchmarks with all results neatly organized per run.
+
+
+## Configurations
+
+- All hardware knobs live in **`config/config.mk`** (and flavor files it includes, e.g., `cachepool.mk`, `cachepool_fpu.mk`).
+  - `cachepool.mk`: no floating-point support
+  - `cachepool_fpu.mk`: enables single/half precision in the Spatz vector core
+- The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
+  - `config/cachepool.hjson.tmpl` (skeleton with comments)
+  - `config/config.mk` (source of truth)
+
+To switch flavors, set `config=<flavor>` (or export `CACHEPOOL_CONFIGURATION=<flavor>`), then rebuild:
+
+```bash
+# Example: switch to FPU flavor
+make clean
+make generate config=cachepool_fpu_512
+```
+
+> `make clean` is recommended when changing configurations.
+
+### How configuration flows
 
 1. **`config/config.mk`** defines all parameters (e.g., `num_cores`, `l1d_cacheline_width`, `axi_user_width`, addresses, etc.).
    - Derived values (like `axi_user_width`) are pre-computed so tools receive integers, not expressions.
@@ -118,7 +172,8 @@ Each core complex has a local **stack SPM**. Its depth is configured via paramet
 SpyGlass lint (optional):
 
 ```bash
-make lint
+# Example of testing 512b cacheline configuration with FPU
+make lint config=cachepool_fpu_512
 ```
 
 ---
