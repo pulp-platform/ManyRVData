@@ -497,7 +497,7 @@ module cachepool_cluster
       .default_idx_i    (default_idx            )
     );
 
-    assign tile_sel[inp] = tile_sel_err[inp][NumTiles*NumClusterMst-2:0];
+    assign tile_sel[inp] = tile_sel_err[inp][$clog2(NumClusterSlv)-1:0];
 
 `ifndef TARGET_SYNTHESIS
     // Alert the system that we have illegal memory access
