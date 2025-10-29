@@ -1,0 +1,81 @@
+digraph {
+	fontsize=10 rankdir=TB
+	node [fillcolor=lightgray fontname=Helvetica shape=rectangle style=filled]
+	edge [fontname=Helvetica]
+	start [label=Start]
+	core_id [label="Get core_id = snrt_cluster_core_idx()"]
+	"core0?" [label="core_id == 0?" fillcolor=lightblue shape=diamond]
+	init_xbar [label="Set XBAR policy"]
+	init_mm [label="Initialize memory management runtime"]
+	init_rlc [label="Initialize RLC runtime
+- Initialize RLC struct variables
+- Initialize to_send and sent linked lists
+"]
+	init_locks [label="Initialize spinlocks
+- tosend_llist_lock
+- sent_llist_lock
+- mm_lock" shape=rectangle]
+	barrier [label="snrt_cluster_hw_barrier()"]
+	rlc_start [label="rlc_start(core_id)"]
+	core0_loop [label="Consumer Loop (Core 0)" fillcolor=lightyellow shape=rectangle]
+	pop_node [label="Pop node from tosend llist
+(lock: tosend_llist_lock)" shape=rectangle]
+	"is_null?" [label="Node == NULL?" fillcolor=lightblue shape=diamond]
+	wait_retry [label="Retry (wait)" shape=rectangle]
+	data_move [label="Vector Copy from src to tgt" shape=rectangle]
+	rlc_update [label="- Increment pduWithoutPoll, byteWithoutPoll;
+- Decrement to_send llist sduNum, sduBytes;
+- Increment vtNext;
+ - Increment sent_llist sduNum, sduBytes" shape=rectangle]
+	push_sent [label="Push to sent llist
+(lock: sent_llist_lock)" shape=rectangle]
+	ack_check [label="Sent llist size ≥ 6?
+(simulate reveiving ACK from UE,
+and the ACK_SN is 2 pkg)" fillcolor=lightblue shape=diamond]
+	ack_handle [label="- Pop sent_llist to ACK_SN node, and free the nodes; (lock: mm_lock)
+- Increment vtNextAck;
+- Decrement sent_llist sduNum, sduBytes" shape=rectangle]
+	producer_loop [label="Producer Loop (Core 1..N)" fillcolor=lightyellow shape=rectangle]
+	get_pkgid [label="Receive new pkg from PDCP
+" shape=rectangle]
+	alloc_node [label="Allocate Node with mm_alloc()
+(lock: mm_lock)" shape=rectangle]
+	"alloc_null?" [label="node == NULL?
+(out of memory)" fillcolor=lightblue shape=diamond]
+	retry_alloc [label="Wait, Retry Allocation" shape=rectangle]
+	fill_node [label="Initialize Node:
+- Set src, tgt, size etc.
+- Set pointers" shape=rectangle]
+	push_tosend [label="Push Node to tosend llist
+(lock: tosend_llist_lock)" shape=rectangle]
+	start -> core_id
+	core_id -> "core0?"
+	"core0?" -> init_xbar [label=Yes]
+	init_xbar -> init_mm
+	init_mm -> init_rlc
+	init_rlc -> init_locks
+	init_locks -> barrier
+	"core0?" -> barrier [label=No]
+	barrier -> rlc_start
+	rlc_start -> core0_loop [label="core_id == 0"]
+	rlc_start -> producer_loop [label="core_id > 0"]
+	core0_loop -> pop_node
+	pop_node -> "is_null?"
+	"is_null?" -> wait_retry [label=Yes]
+	wait_retry -> pop_node
+	"is_null?" -> data_move [label=No]
+	data_move -> rlc_update
+	rlc_update -> push_sent
+	push_sent -> ack_check
+	ack_check -> ack_handle [label=Yes]
+	ack_check -> pop_node [label=No]
+	ack_handle -> pop_node
+	producer_loop -> get_pkgid
+	get_pkgid -> alloc_node
+	alloc_node -> "alloc_null?"
+	"alloc_null?" -> retry_alloc [label=Yes]
+	retry_alloc -> alloc_node
+	"alloc_null?" -> fill_node [label=No]
+	fill_node -> push_tosend
+	push_tosend -> get_pkgid
+}

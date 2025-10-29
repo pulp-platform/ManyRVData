@@ -1,63 +1,90 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Author: Zexin Fu     <zexifu@iis.ee.ethz.ch>
+
 // mcs_lock.c — RISC-V bare-metal MCS spinlock (hart-local nodes)
 #include <snrt.h>
 #include "mcs_lock.h"
 #include <stdio.h>
 #include "printf.h"
-#include "printf_lock.h"
+#include "benchmark.h"
+// #include "printf_lock.h"
 
 // Each waiter spins on its own node (aligned to keep it on a single line)
 struct __attribute__((aligned(MCS_CACHELINE))) mcs_node {
-  _Atomic(struct mcs_node*) next __attribute__((aligned(4)));
-  _Atomic(uint32_t)         locked __attribute__((aligned(4)));
+  _Atomic(struct mcs_node*) next __attribute__((aligned(MCS_CACHELINE)));
+  _Atomic(uint32_t)         locked __attribute__((aligned(MCS_CACHELINE)));
 };
 
+
 // Hart-local binding table: [hart][slot] -> (lock,node)
-typedef struct __attribute__((aligned(MCS_CACHELINE))) {
-  mcs_lock_t*         lock __attribute__((aligned(4)));
-  struct mcs_node     node __attribute__((aligned(4)));
-  uint32_t            in_use __attribute__((aligned(4)));
+typedef struct {
+  mcs_lock_t*         lock __attribute__((aligned(MCS_CACHELINE)));
+  struct mcs_node     node __attribute__((aligned(MCS_CACHELINE)));
+  uint32_t            in_use __attribute__((aligned(MCS_CACHELINE)));
+} mcs_binding_core_t;
+
+// Force starting alignment to a cache line, and size to *exactly* one line.
+// If core > 64B in the future, the static assert will catch it.
+typedef union __attribute__((aligned(MCS_CACHELINE))) {
+  mcs_binding_core_t core;
+  uint8_t            pad[(sizeof(mcs_binding_core_t)/MCS_CACHELINE + 1) * MCS_CACHELINE - sizeof(mcs_binding_core_t)];
 } mcs_binding_t;
 
-static mcs_binding_t mcs_bindings[MCS_MAX_HARTS][MCS_TLS_SLOTS] __attribute__((aligned(4))) __attribute__((section(".data")));
+static mcs_binding_t mcs_bindings[MCS_MAX_HARTS][MCS_TLS_SLOTS] __attribute__((aligned(MCS_CACHELINE))) __attribute__((section(".data")));
 
 // Acquire a free slot for this hart and lock
-static inline mcs_binding_t* mcs_bind_acquire_slot(mcs_lock_t* L) {
+static inline mcs_binding_core_t* mcs_bind_acquire_slot(mcs_lock_t* L) {
   uint32_t h = snrt_cluster_core_idx();
   mcs_binding_t* row = mcs_bindings[h];
-  for (int i = 0; i < MCS_TLS_SLOTS; ++i) {
-    if (!row[i].in_use) {
-      row[i].in_use = true;
-      row[i].lock   = L;
-      atomic_store_explicit(&row[i].node.next, NULL, memory_order_relaxed);
-      atomic_store_explicit(&row[i].node.locked, false, memory_order_relaxed);
-      return &row[i];
+  for (int i = h; i < MCS_TLS_SLOTS; ++i) {
+    if (!row[i].core.in_use) {
+      row[i].core.in_use = true;
+      row[i].core.lock   = L;
+      atomic_store_explicit(&row[i].core.node.next, NULL, memory_order_relaxed);
+      atomic_store_explicit(&row[i].core.node.locked, false, memory_order_relaxed);
+      return &row[i].core;
     }
   }
   // If all slots busy, spin until one frees (or raise MCS_TLS_SLOTS)
   for (;;) {
-    for (int i = 0; i < MCS_TLS_SLOTS; ++i) {
-      if (!row[i].in_use) {
-        row[i].in_use = true;
-        row[i].lock   = L;
-        atomic_store_explicit(&row[i].node.next, NULL, memory_order_relaxed);
-        atomic_store_explicit(&row[i].node.locked, false, memory_order_relaxed);
-        return &row[i];
+    for (int i = h; i < MCS_TLS_SLOTS; ++i) {
+      if (!row[i].core.in_use) {
+        row[i].core.in_use = true;
+        row[i].core.lock   = L;
+        atomic_store_explicit(&row[i].core.node.next, NULL, memory_order_relaxed);
+        atomic_store_explicit(&row[i].core.node.locked, false, memory_order_relaxed);
+        return &row[i].core;
       }
     }
     MCS_CPU_PARK();
   }
 }
 
-static inline mcs_binding_t* mcs_bind_find(mcs_lock_t* L) {
+static inline mcs_binding_core_t* mcs_bind_find(mcs_lock_t* L) {
   uint32_t h = snrt_cluster_core_idx();
   mcs_binding_t* row = mcs_bindings[h];
-  for (int i = 0; i < MCS_TLS_SLOTS; ++i) {
-    if (row[i].in_use && row[i].lock == L) return &row[i];
+  for (int i = h; i < MCS_TLS_SLOTS; ++i) {
+    if (row[i].core.in_use && row[i].core.lock == L) return &row[i].core;
   }
   return NULL; // unlocking a lock not held on this hart → no-op (or assert in debug)
 }
 
-static inline void mcs_bind_release_slot(mcs_binding_t* b) {
+static inline void mcs_bind_release_slot(mcs_binding_core_t* b) {
   b->lock   = NULL;
   b->in_use = false;
 }
@@ -67,7 +94,7 @@ void mcs_lock_init(mcs_lock_t* L) {
 }
 
 uint32_t mcs_lock_try_acquire(mcs_lock_t* L) {
-  mcs_binding_t* b = mcs_bind_acquire_slot(L);
+  mcs_binding_core_t* b = mcs_bind_acquire_slot(L);
   struct mcs_node* me = &b->node;
 
   atomic_store_explicit(&me->next, NULL, memory_order_relaxed);
@@ -90,8 +117,8 @@ uint32_t mcs_lock_try_acquire(mcs_lock_t* L) {
   return ok;
 }
 
-void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L) {
-  mcs_binding_t* b = mcs_bind_acquire_slot(L);
+void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L, int delay) {
+  mcs_binding_core_t* b = mcs_bind_acquire_slot(L);
   struct mcs_node* me = &b->node;
 
   atomic_store_explicit(&me->next, NULL, memory_order_relaxed);
@@ -100,9 +127,9 @@ void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L) {
 
   if (pred) {
     atomic_store_explicit(&me->locked, true, memory_order_relaxed);
-    atomic_store_explicit(&pred->next, me, memory_order_release);
-    while (atomic_load_explicit(&me->locked, memory_order_acquire)) {
-      delay(10); // prevent busy spinning
+    atomic_store_explicit(&pred->next, me, memory_order_relaxed);
+    while (atomic_load_explicit(&me->locked, memory_order_relaxed)) {
+      // cachepool_wait(delay); // prevent busy spinning
     }
   }
 
@@ -115,8 +142,8 @@ void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L) {
   // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
-void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L) {
-  mcs_binding_t* b = mcs_bind_find(L);
+void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L, int delay) {
+  mcs_binding_core_t* b = mcs_bind_find(L);
   if (!b) return; // or assert in debug
 
   struct mcs_node* me = &b->node;
@@ -134,7 +161,7 @@ void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L) {
     }
     // A successor is enqueuing; wait for linkage.
     do {
-      delay(10); // prevent busy spinning
+      // cachepool_wait(delay); // prevent busy spinning
       // succ = atomic_load_explicit(&me->next, memory_order_acquire);
       succ = atomic_load_explicit(&me->next, memory_order_relaxed);
     } while (!succ);
