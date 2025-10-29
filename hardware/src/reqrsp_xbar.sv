@@ -23,9 +23,9 @@ module reqrsp_xbar #(
 
   parameter snitch_pkg::topo_e Topology       = snitch_pkg::LogarithmicInterconnect,
 
-  parameter type         slv_sel_t            = logic [$clog2(NumOut)-1 :0],
+  parameter type         slv_sel_t            = logic [((NumOut > 1) ? $clog2(NumOut) : 1)-1 :0],
 
-  parameter type         mst_sel_t            = logic [$clog2(NumInp)-1 :0]
+  parameter type         mst_sel_t            = logic [((NumInp > 1) ? $clog2(NumInp) : 1)-1 :0]
 ) (
   /// Clock, positive edge triggered.
   input  logic                                clk_i,
