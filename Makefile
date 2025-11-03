@@ -117,6 +117,7 @@ gen-spatz-cfg: $(config_mk) $(HJSON_TEMPLATE) ${CACHEPOOL_DIR}/util/scripts/gen_
 .PHONY: init
 init:
 	git submodule update --init --recursive --jobs=8
+	${BENDER} checkout
 
 # ETH-only quick tool switch (softlink prebuilt toolchains)
 .PHONY: quick-tool
