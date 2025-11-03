@@ -3,16 +3,11 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
   APPS: "tests"
-  RUST_LOG: 'memora=debug'
-  VERILATOR_ROOT: '$CI_PROJECT_DIR/install/verilator/share/verilator'
   PATH: '/home/gitlabci/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:/home/gitlabci/.local/bin'
   OBJCACHE: ''
-  RISCV_WARNINGS: '-Werror'
   CC: 'gcc-11.2.0'
   CXX: 'g++-11.2.0'
   CMAKE: 'cmake-3.28.3'
-  CTEST: 'ctest-3.28.3'
-  VCS: 'vcs-2022.06'
   python: 'python3'
   python3: 'python3'
 
@@ -30,9 +25,9 @@ build-deps:
   stage: build
   script:
     - make init
+    - make quick-tool
     - make generate config=cachepool_fpu_512
     - make dram-build CMAKE=cmake-3.28.3
-    - make quick-tool
 
 build-vsim:
   extends: .base
