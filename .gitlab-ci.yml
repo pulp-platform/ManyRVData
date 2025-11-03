@@ -1,10 +1,49 @@
 # .gitlab-ci.yml (in the root of your repository)
-stages:
-  - test
+variables:
+  GIT_SUBMODULE_STRATEGY: none
+  ROOT_DIR: '$CI_PROJECT_DIR'
+  APPS: "tests"
+  RUST_LOG: 'memora=debug'
+  VERILATOR_ROOT: '$CI_PROJECT_DIR/install/verilator/share/verilator'
+  PATH: '/home/gitlabci/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:/home/gitlabci/.local/bin'
+  OBJCACHE: ''
+  RISCV_WARNINGS: '-Werror'
+  CC: 'gcc-11.2.0'
+  CXX: 'g++-11.2.0'
+  CMAKE: 'cmake-3.28.3'
+  CTEST: 'ctest-3.28.3'
+  VCS: 'vcs-2022.06'
+  python: 'python3'
+  python3: 'python3'
 
-run_tests:
-  stage: test
-  image: ubuntu:latest # Use a standard environment image
+stages:
+  - build
+  - sim-vsim
+
+.base:
+  artifacts:
+    when: always
+    expire_in: 1 day
+
+build-deps:
+  extends: .base
+  stage: build
   script:
-    - echo "Starting CI job from GitLab..."
-    - echo "GitLab CI job succeeded!"
+    - make init
+    - make generate config=cachepool_fpu_512
+    - make dram-build CMAKE=cmake-3.28.3
+    - make quick-tool
+
+build-vsim:
+  extends: .base
+  needs: [ build-deps ]
+  stage: build
+  script:
+    - make vsim config=cachepool_fpu_512
+
+run_dotp:
+  extends: .base
+  needs: [ build-vsim ]
+  stage: sim-vsim
+  script:
+    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
