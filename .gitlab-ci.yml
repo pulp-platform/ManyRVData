@@ -1,0 +1,10 @@
+# .gitlab-ci.yml (in the root of your repository)
+stages:
+  - test
+
+run_tests:
+  stage: test
+  image: ubuntu:latest # Use a standard environment image
+  script:
+    - echo "Starting CI job from GitLab..."
+    - echo "GitLab CI job succeeded!"
