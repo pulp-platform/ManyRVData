@@ -24,8 +24,9 @@ build-deps:
   extends: .base
   stage: build
   script:
+    - make bender
     - make init
-    - make quick-tool
+    - make toolchain
     - make generate config=cachepool_fpu_512
     - make dram-build CMAKE=cmake-3.28.3
 
