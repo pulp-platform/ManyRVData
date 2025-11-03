@@ -121,7 +121,8 @@ init:
 # ETH-only quick tool switch (softlink prebuilt toolchains)
 .PHONY: quick-tool
 quick-tool:
-	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool-32b/install $(CACHEPOOL_DIR)/install
+	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
+# 	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz (depends on opcodes repo being present)
 .PHONY: generate
