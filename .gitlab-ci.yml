@@ -34,7 +34,7 @@ build-tc:
     - if [ ! -d "install/llvm" ]; then
     -   echo "Toolchain not found in cache. Building dependencies..."
     -   make bender
-    -   make quick-tool
+    -   make toolchain
     -   echo "Toolchain built. Will be cached."
     - else
     -   echo "Toolchain found in cache. Skipping build."
