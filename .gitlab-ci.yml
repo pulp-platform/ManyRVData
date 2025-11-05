@@ -40,7 +40,7 @@ build-tc:
     -   echo "Toolchain found in cache. Skipping build."
     - fi
 
-build-deps:
+build-vsim:
   extends: .base
   needs: [ build-tc ]
   stage: build
@@ -48,13 +48,9 @@ build-deps:
     - make init
     - make dram-build CMAKE=cmake-3.28.3
     - make generate config=cachepool_fpu_512
-
-build-vsim:
-  extends: .base
-  needs: [ build-deps ]
-  stage: build
-  script:
     - make vsim config=cachepool_fpu_512
+  artifacts:
+    paths:[ "software/build", "sim/bin" ]
 
 run_dotp:
   extends: .base
@@ -62,3 +58,5 @@ run_dotp:
   stage: sim-vsim
   script:
     - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
+  artifacts:
+    paths:[ "software/build", "sim/bin" ]
