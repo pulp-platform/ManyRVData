@@ -50,7 +50,7 @@ build-vsim:
     - make generate config=cachepool_fpu_512
     - make vsim config=cachepool_fpu_512
   artifacts:
-    paths:[ "software/build", "sim/bin" ]
+    paths: [ "software/build", "sim/bin" ]
 
 run_dotp:
   extends: .base
@@ -59,4 +59,4 @@ run_dotp:
   script:
     - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
   artifacts:
-    paths:[ "software/build", "sim/bin" ]
+    paths: [ "software/build", "sim/bin" ]
