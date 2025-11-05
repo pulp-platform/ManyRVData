@@ -1,4 +1,3 @@
-# .gitlab-ci.yml (in the root of your repository)
 variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
@@ -15,20 +14,40 @@ stages:
   - build
   - sim-vsim
 
+cache:
+  paths:
+    - install/
+  key: "$CI_COMMIT_REF_SLUG-toolchain-v1" # Recommended key structure
+  policy: pull-push
+
 .base:
   artifacts:
     when: always
     expire_in: 1 day
 
-build-deps:
+build-tc:
   extends: .base
   stage: build
+  timeout: 3h
   script:
-    - make bender
+    # Check if the cache was restored (i.e., if 'install/bin' exists)
+    - if [ ! -d "install/llvm" ]; then
+    -   echo "Toolchain not found in cache. Building dependencies..."
+    -   make bender
+    -   make quick-tool
+    -   echo "Toolchain built. Will be cached."
+    - else
+    -   echo "Toolchain found in cache. Skipping build."
+    - fi
+
+build-deps:
+  extends: .base
+  needs: [ build-tc ]
+  stage: build
+  script:
     - make init
-    - make toolchain
-    - make generate config=cachepool_fpu_512
     - make dram-build CMAKE=cmake-3.28.3
+    - make generate config=cachepool_fpu_512
 
 build-vsim:
   extends: .base
