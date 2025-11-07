@@ -28,6 +28,9 @@ jobs:
           docs/*
           install/*
           config/*
+          hardware/tb/dpi/*
+          Bender.lock
+          .gitignore
 
   lint-sv:
     runs-on: ubuntu-latest
