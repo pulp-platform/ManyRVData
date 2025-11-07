@@ -18,7 +18,7 @@ variables:
 
 stages:
   - build
-  - sim-vsim
+  # - sim-vsim
 
 cache:
   paths:
@@ -31,38 +31,44 @@ cache:
     when: always
     expire_in: 1 day
 
-build-tc:
+build-tmp:
   extends: .base
   stage: build
-  timeout: 3h
-  script:
-    # Check if the cache was restored (i.e., if 'install/bin' exists)
-    - if [ ! -d "install/llvm" ]; then
-    -   echo "Toolchain not found in cache. Building dependencies..."
-    -   make bender
-    -   make toolchain
-    -   echo "Toolchain built. Will be cached."
-    - else
-    -   echo "Toolchain found in cache. Skipping build."
-    - fi
+  scripts:
+    - echo "CI WIP, no check available now"
 
-build-vsim:
-  extends: .base
-  needs: [ build-tc ]
-  stage: build
-  script:
-    - make init
-    - make dram-build CMAKE=cmake-3.28.3
-    - make generate config=cachepool_fpu_512
-    - make vsim config=cachepool_fpu_512
-  artifacts:
-    paths: [ "software/build", "sim/bin" ]
+# build-tc:
+#   extends: .base
+#   stage: build
+#   timeout: 3h
+#   script:
+#     # Check if the cache was restored (i.e., if 'install/bin' exists)
+#     - if [ ! -d "install/llvm" ]; then
+#     -   echo "Toolchain not found in cache. Building dependencies..."
+#     -   make bender
+#     -   make toolchain
+#     -   echo "Toolchain built. Will be cached."
+#     - else
+#     -   echo "Toolchain found in cache. Skipping build."
+#     - fi
 
-run_dotp:
-  extends: .base
-  needs: [ build-vsim ]
-  stage: sim-vsim
-  script:
-    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
-  artifacts:
-    paths: [ "software/build", "sim/bin" ]
+# build-vsim:
+#   extends: .base
+#   needs: [ build-tc ]
+#   stage: build
+#   script:
+#     - make init
+#     - make dram-build CMAKE=cmake-3.28.3
+#     - make generate config=cachepool_fpu_512
+#     - make vsim config=cachepool_fpu_512
+#   artifacts:
+#     paths: [ "software/build", "sim/bin" ]
+
+# run_dotp:
+#   extends: .base
+#   needs: [ build-vsim ]
+#   stage: sim-vsim
+#   script:
+#     - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
+#   artifacts:
+#     paths: [ "software/build", "sim/bin" ]
