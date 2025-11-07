@@ -34,7 +34,7 @@ cache:
 build-tmp:
   extends: .base
   stage: build
-  scripts:
+  script:
     - echo "CI WIP, no check available now"
 
 # build-tc:
