@@ -1,7 +1,8 @@
-// Copyright 2021 ETH Zurich and University of Bologna.
+// Copyright 2025 ETH Zurich and University of Bologna.
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
+// Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 
 `include "axi/typedef.svh"
