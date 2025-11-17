@@ -12,52 +12,82 @@ CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cac
 
 - Linux environment with: `make`, `git`, `python3`, `wget`, `curl`
 - **CMake ≥ 3.28**, **GCC/G++ ≥ 11.2**
-- **QuestaSim** (tested with `questa-2023.4-zr`)
+- **QuestaSim** (tested with `questa-2023.4`)
 - Optional: SpyGlass for lint
 
 ## Quick Start
 
-Initialize submodules and generate the Spatz configuration + RTL packages:
+### Build Toolchains
+
+This repository uses **Bender** to manage dependencies and generate simulation scripts. Ensure Bender is installed, or build it locally:
+
+```bash
+make bender
+```
+
+Build the RISC-V toolchains (LLVM + GCC). Spike (`riscv-isa-sim`) is also available through a dedicated target:
+
+```bash
+make toolchain
+```
+
+For ETH users, a **pre-built toolchain** is available for faster setup:
+
+```bash
+# ETH only: link a prebuilt toolchain
+make quick-tool
+```
+
+### Initialize Submodules
+
+Use Bender to initialize all required submodules:
 
 ```bash
 make init
-make generate
 ```
 
-Build DRAMSys (if `USE_DRAMSYS=1`, default). You can override tool paths inline:
+
+### Build DRAMSys
+
+If `USE_DRAMSYS=1` (default), DRAMSys must be compiled. Tool versions can be overridden inline:
 
 ```bash
 make dram-build CMAKE=/path/to/cmake-3.28.x CC=/path/to/gcc-11.2 CXX=/path/to/g++-11.2
 ```
 
-Build RISC-V toolchains (LLVM + GCC). Spike (`riscv-isa-sim`) is available via a separate target if needed.
+### Generate Required RTL
+
+Some RTL components (e.g., BootROM, package headers) must be generated prior to simulation.
+Generation requires specifying a **configuration**. If none is provided, the default is `cachepool_512`.
+
+Example for generating files for the `cachepool_fpu_512` configuration:
 
 ```bash
-make toolchain
-# or (ETH only) link a prebuilt toolchain
-make quick-tool
+make generate config=cachepool_fpu_512
 ```
 
-Build software only:
+### Compilation and Simulation
+#### Build Software Only
 
 ```bash
-# Example of building 512b cacheline configuration with FPU
+# Example: 512b cacheline configuration with FPU
 make sw config=cachepool_fpu_512
 ```
 
-Build software + hardware (QuestaSim):
-
+#### Build Hardware + Software (QuestaSim)
 ```bash
-# Example of building 512b cacheline configuration with FPU
+# Example: 512b cacheline configuration with FPU
 make vsim config=cachepool_fpu_512
 ```
 
-Run the simulation (GUI or CLI). The wrapper script expects the software ELF path as argument:
+#### Run the Simulation
+The wrapper script launches the simulation (GUI or CLI) and expects a software ELF path as argument:
 
 ```bash
-# GUI
-./sim/bin/cachepool_cluster.vsim.gui ./software/build/TESTNAME
-# Headless
+# GUI mode
+./sim/bin/cachepool_cluster.vsim.gui  ./software/build/TESTNAME
+
+# Headless mode
 ./sim/bin/cachepool_cluster.vsim      ./software/build/TESTNAME
 ```
 
