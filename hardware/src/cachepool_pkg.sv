@@ -15,8 +15,9 @@ package cachepool_pkg;
   `include "axi/typedef.svh"
   `include "reqrsp_interface/assign.svh"
   `include "reqrsp_interface/typedef.svh"
+  `include "tcdm_interface/assign.svh"
+  `include "tcdm_interface/typedef.svh"
 
-  localparam int unsigned NumTiles = `ifdef NUM_TILES `NUM_TILES `else 0 `endif;
 
   ///////////
   //  AXI  //
@@ -66,7 +67,9 @@ package cachepool_pkg;
   ////////////////////
 
   localparam int unsigned NumCores        = `ifdef NUM_CORES `NUM_CORES `else 0 `endif;
-  // TODO: read from CFG
+  localparam int unsigned NumTiles = `ifdef NUM_TILES `NUM_TILES `else 0 `endif;
+  localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
+
   localparam int unsigned NumBank         = `ifdef L1D_NUM_BANKS `L1D_NUM_BANKS `else 0 `endif;
   localparam int unsigned TCDMDepth       = 256;
   localparam int unsigned L1Depth         = `ifdef L1D_DEPTH `L1D_DEPTH `else 0 `endif;
@@ -83,6 +86,9 @@ package cachepool_pkg;
   // Currently use fixed values
   localparam int unsigned TCDMStartAddr   = 32'hBFFF_F800;
   localparam int unsigned TCDMSize        = 32'h800;
+
+  // The short address for SPM
+  localparam int unsigned SPMAddrWidth      = $clog2(TCDMSize);
 
   localparam int unsigned PeriStartAddr   = 32'hC000_0000;
 
@@ -189,12 +195,18 @@ package cachepool_pkg;
 
   typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
 
-  typedef logic [$clog2(L1CacheWayEntry)-1:0] cache_ways_entry_ptr_t;
-  typedef logic [$clog2(L1AssoPerCtrl)-1:0]   way_ptr_t;
+  typedef logic [$clog2(L1CacheWayEntry)-1:0]             cache_ways_entry_ptr_t;
+  typedef logic [$clog2(L1AssoPerCtrl)-1:0]               way_ptr_t;
 
   typedef logic [RefillDataWidth-1:0]                     refill_data_t;
   typedef logic [RefillStrbWidth-1:0]                     refill_strb_t;
   typedef logic [$clog2(L1LineWidth/RefillDataWidth)-1:0] burst_len_t;
+  // Narrow TCDM channel (32b) for inter-Tile and intra-Tile connection
+  typedef logic [31:0]                                    narrow_data_t;
+  typedef logic [3 :0]                                    narrow_strb_t;
+  typedef logic [L1AddrWidth-1:0]                         narrow_addr_t;
+  typedef logic [SPMAddrWidth-1:0]                        spm_addr_t;
+
 
   typedef struct packed {
     logic        is_burst;
@@ -256,6 +268,10 @@ package cachepool_pkg;
   } cache_refill_rsp_chan_t;
 
   `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
+
+  // TCDM req/rsp bus => core to L1
+  `TCDM_TYPEDEF_ALL(tcdm, narrow_addr_t, narrow_data_t, narrow_strb_t, tcdm_user_t)
+  `TCDM_TYPEDEF_ALL(spm,  spm_addr_t,    narrow_data_t, narrow_strb_t, tcdm_user_t)
 
   // L2 Memory
   localparam int unsigned NumL2Channel        = `ifdef L2_CHANNEL `L2_CHANNEL `else 0 `endif;
