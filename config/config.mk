@@ -29,6 +29,8 @@ include $(CACHEPOOL_DIR)/config/$(config).mk
 # Number of tiles
 num_tiles ?= 1
 
+num_remote_ports_per_tile ?= 0
+
 # Number of cores
 num_cores ?= 4
 

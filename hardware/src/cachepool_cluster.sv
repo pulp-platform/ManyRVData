@@ -218,12 +218,12 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  axi_mst_cache_req_t  [NumTiles*NumTileWideAxi  -1 :0] axi_tile_req;
-  axi_mst_cache_resp_t [NumTiles*NumTileWideAxi  -1 :0] axi_tile_rsp;
-  axi_slv_cache_req_t  [NumTiles*NumClusterSlv-1 :0] wide_axi_slv_req;
-  axi_slv_cache_resp_t [NumTiles*NumClusterSlv-1 :0] wide_axi_slv_rsp;
-  axi_narrow_req_t     [NumTiles-1 :0]                  axi_out_req;
-  axi_narrow_resp_t    [NumTiles-1 :0]                  axi_out_resp;
+  axi_mst_cache_req_t  [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_req;
+  axi_mst_cache_resp_t [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_rsp;
+  axi_slv_cache_req_t  [NumTiles*NumClusterSlv-1 :0]      wide_axi_slv_req;
+  axi_slv_cache_resp_t [NumTiles*NumClusterSlv-1 :0]      wide_axi_slv_rsp;
+  axi_narrow_req_t     [NumTiles-1 :0]                    axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1 :0]                    axi_out_resp;
 
   // 2. BootROM
   reg_cache_req_t bootrom_reg_req;
@@ -409,8 +409,8 @@ module cachepool_cluster
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
       .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
-      .axi_wide_req_o           ( axi_tile_req [t*NumTileWideAxi+:NumTileWideAxi]   ),
-      .axi_wide_rsp_i           ( axi_tile_rsp [t*NumTileWideAxi+:NumTileWideAxi]   )
+      .axi_wide_req_o           ( axi_tile_req [t]   ),
+      .axi_wide_rsp_i           ( axi_tile_rsp [t]   )
     );
 
     axi_to_reqrsp #(
@@ -427,8 +427,8 @@ module cachepool_cluster
       .clk_i        (clk_i                                  ),
       .rst_ni       (rst_ni                                 ),
       .busy_o       (                                       ),
-      .axi_req_i    (axi_tile_req [t*NumTileWideAxi+TileMem]),
-      .axi_rsp_o    (axi_tile_rsp [t*NumTileWideAxi+TileMem]),
+      .axi_req_i    (axi_tile_req [t][TileMem]),
+      .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
       .reqrsp_req_o (cache_core_req[t]                      ),
       .reqrsp_rsp_i (cache_core_rsp[t]                      )
     );
@@ -641,8 +641,8 @@ module cachepool_cluster
     .clk_i      (clk_i                    ),
     .rst_ni     (rst_ni                   ),
     .testmode_i (1'b0                     ),
-    .axi_req_i  (axi_tile_req[TileBootROM]),
-    .axi_rsp_o  (axi_tile_rsp[TileBootROM]),
+    .axi_req_i  (axi_tile_req[0][TileBootROM]),
+    .axi_rsp_o  (axi_tile_rsp[0][TileBootROM]),
     .reg_req_o  (bootrom_reg_req          ),
     .reg_rsp_i  (bootrom_reg_rsp          )
   );

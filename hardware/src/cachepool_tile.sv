@@ -168,8 +168,7 @@ module cachepool_tile
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
-  // The short address for SPM
-  localparam int unsigned SPMAddrWidth      = $clog2(TCDMSize);
+
   // Enlarge the address width for Spatz due to cache
   localparam int unsigned TCDMAddrWidth     = 32;
   localparam int unsigned BanksPerSuperBank = AxiDataWidth / DataWidth;
@@ -263,7 +262,6 @@ module cachepool_tile
 
   typedef logic [TCDMMemAddrWidth-1:0]  tcdm_mem_addr_t;
   typedef logic [TCDMAddrWidth-1:0]     tcdm_addr_t;
-  typedef logic [SPMAddrWidth-1:0]      spm_addr_t;
 
   typedef logic [$clog2(L1NumSet)-1:0] tcdm_bank_addr_t;
 
@@ -284,10 +282,6 @@ module cachepool_tile
 
   `MEM_TYPEDEF_ALL(mem, tcdm_mem_addr_t, data_t, strb_t, tcdm_user_t)
   `MEM_TYPEDEF_ALL(mem_dma, tcdm_mem_addr_t, data_dma_t, strb_dma_t, logic)
-
-  `TCDM_TYPEDEF_ALL(tcdm, tcdm_addr_t, data_t, strb_t, tcdm_user_t)
-  `TCDM_TYPEDEF_ALL(tcdm_dma, tcdm_addr_t, data_dma_t, strb_dma_t, logic)
-  `TCDM_TYPEDEF_ALL(spm, spm_addr_t, data_t, strb_t, tcdm_user_t)
 
   `REG_BUS_TYPEDEF_ALL(reg, addr_t, data_t, strb_t)
   `REG_BUS_TYPEDEF_ALL(reg_dma, addr_t, data_dma_t, strb_dma_t)
@@ -594,6 +588,13 @@ module cachepool_tile
     end
   end
 
+  // Connecting the remote ports
+  // if (NumRemotePort > 0) begin
+  //   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
+
+  //   end
+  // end
+
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
   logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
@@ -601,8 +602,10 @@ module cachepool_tile
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
     tcdm_cache_interco #(
-      .NumCore               (NrCores           ),
+      .NumTiles              (NumTiles          ),
+      .NumCores              (NrCores           ),
       .NumCache              (NumL1CacheCtrl    ),
+      .NumRemotePort         (NumRemotePortTile ),
       .AddrWidth             (TCDMAddrWidth     ),
       .tcdm_req_t            (tcdm_req_t        ),
       .tcdm_rsp_t            (tcdm_rsp_t        ),
@@ -611,6 +614,7 @@ module cachepool_tile
     ) i_cache_xbar (
       .clk_i            (clk_i                  ),
       .rst_ni           (rst_ni                 ),
+      .tile_id_i        (1'b0                   ),
       .dynamic_offset_i (dynamic_offset         ),
       .core_req_i       (cache_req        [j]   ),
       .core_rsp_ready_i (cache_pready     [j]   ),
