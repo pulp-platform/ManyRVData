@@ -146,8 +146,8 @@ module cachepool_tile
     output axi_narrow_req_t                         axi_out_req_o,
     input  axi_narrow_resp_t                        axi_out_resp_i,
     /// AXI Cache Refill ports
-    output cache_trans_req_t  [NumL1CacheCtrl-1:0]  cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CacheCtrl-1:0]  cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CtrlTile-1:0]  cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]  cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
     output axi_out_req_t      [NumTileWideAxi-1:0]  axi_wide_req_o,
     input  axi_out_resp_t     [NumTileWideAxi-1:0]  axi_wide_rsp_i,
@@ -256,7 +256,7 @@ module cachepool_tile
   typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
   typedef logic [WideIdWidthIn-1:0]     id_dma_mst_t;
   typedef logic [WideIdWidthOut-1:0]    id_dma_slv_t;
-  typedef logic [WideIdWidthIn-$clog2(NumL1CacheCtrl)-1:0] id_dcache_mst_t;
+  typedef logic [WideIdWidthIn-$clog2(NumL1CtrlTile)-1:0] id_dcache_mst_t;
   typedef logic [NarrowUserWidth-1:0]   user_t;
   typedef logic [AxiUserWidth-1:0]      user_dma_t;
 
@@ -424,46 +424,46 @@ module cachepool_tile
   tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req;
   tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp;
 
-  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_req, cache_xbar_req;
-  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_rsp, cache_xbar_rsp;
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
 
-  tcdm_req_t  [NumL1CacheCtrl-1:0] cache_amo_req;
-  tcdm_rsp_t  [NumL1CacheCtrl-1:0] cache_amo_rsp;
+  tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
+  tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
 
 
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
-  tcdm_addr_t [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_addr;
-  tcdm_user_t [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_meta;
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_write;
-  data_t      [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_data;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
+  tcdm_addr_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_addr;
+  tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_meta;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_write;
+  data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_data;
 
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_valid;
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_ready;
-  logic       [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_write;
-  data_t      [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_data;
-  tcdm_user_t [NumL1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_meta;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_valid;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_ready;
+  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_write;
+  data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_data;
+  tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_meta;
 
-  logic            [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_req;
-  logic            [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_we;
-  tcdm_bank_addr_t [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_addr;
-  tag_data_t       [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_wdata;
-  logic            [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_be;
-  tag_data_t       [NumL1CacheCtrl-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_rdata;
+  logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_req;
+  logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_we;
+  tcdm_bank_addr_t [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_addr;
+  tag_data_t       [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_wdata;
+  logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_be;
+  tag_data_t       [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_rdata;
 
-  logic            [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_req;
-  logic            [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_we;
-  tcdm_bank_addr_t [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_addr;
-  data_t           [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
-  logic            [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_be;
-  data_t           [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
-  logic            [NumL1CacheCtrl-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_req;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_we;
+  tcdm_bank_addr_t [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_addr;
+  data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_be;
+  data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
 
   logic                       l1d_insn_valid;
-  logic [NumL1CacheCtrl-1:0]  l1d_insn_ready;
+  logic [NumL1CtrlTile-1:0]  l1d_insn_ready;
   logic [1:0]                 l1d_insn;
   tcdm_bank_addr_t            cfg_spm_size;
-  logic [NumL1CacheCtrl-1:0]  l1d_busy;
+  logic [NumL1CtrlTile-1:0]  l1d_busy;
 
   // High if a port access an illegal SPM region (mapped to cache)
   // logic [NrTCDMPortsCores-1:0] spm_error;
@@ -557,8 +557,8 @@ module cachepool_tile
 
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
-  logic  [NrTCDMPortsPerCore-1:0][NumL1CacheCtrl-1:0] cache_pready, cache_xbar_pready;
-  logic  [NumL1CacheCtrl-1:0] cache_amo_pready;
+  logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
+  logic  [NumL1CtrlTile-1:0] cache_amo_pready;
 
   // TODO: remove this module
   // where to deal with cache flushing protection?
@@ -581,7 +581,7 @@ module cachepool_tile
   end
 
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
-    for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin
+    for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin
       assign cache_req   [j][cb] = unmerge_req   [cb*NrTCDMPortsPerCore+j];
       assign cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
       assign unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
@@ -604,7 +604,7 @@ module cachepool_tile
     tcdm_cache_interco #(
       .NumTiles              (NumTiles          ),
       .NumCores              (NrCores           ),
-      .NumCache              (NumL1CacheCtrl    ),
+      .NumCache              (NumL1CtrlTile    ),
       .NumRemotePort         (NumRemotePortTile ),
       .AddrWidth             (TCDMAddrWidth     ),
       .tcdm_req_t            (tcdm_req_t        ),
@@ -625,7 +625,7 @@ module cachepool_tile
     );
   end
 
-  for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin : gen_cache_connect
+  for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin : gen_cache_connect
     // Only Snitch will send out amo requests
     // Ports from Spatz can bypass this module
 
@@ -715,20 +715,20 @@ module cachepool_tile
   end
 
   // For address scrambling
-  localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  localparam NumSelBits = $clog2(NumL1CtrlTile);
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
   assign bitmask_lo = (1 << dynamic_offset) - 1;
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
   assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
 
-  cache_refill_req_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_req;
-  burst_req_t             [NumL1CacheCtrl-1 : 0] cache_refill_burst;
-  logic                   [NumL1CacheCtrl-1 : 0] cache_refill_req_valid, cache_refill_req_ready;
-  cache_refill_rsp_chan_t [NumL1CacheCtrl-1 : 0] cache_refill_rsp;
-  logic                   [NumL1CacheCtrl-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
+  cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
+  burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
+  logic                   [NumL1CtrlTile-1 : 0] cache_refill_req_valid, cache_refill_req_ready;
+  cache_refill_rsp_chan_t [NumL1CtrlTile-1 : 0] cache_refill_rsp;
+  logic                   [NumL1CtrlTile-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
 
-  for (genvar cb = 0; cb < NumL1CacheCtrl; cb++) begin: gen_l1_cache_ctrl
+  for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin: gen_l1_cache_ctrl
     cachepool_cache_ctrl #(
       // Core
       .NumPorts         (NrTCDMPortsPerCore ),
@@ -1219,7 +1219,7 @@ module cachepool_tile
   spatz_cluster_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
-    .NumCacheCtrl  (NumL1CacheCtrl  ),
+    .NumCacheCtrl  (NumL1CtrlTile  ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
     .tcdm_events_t (tcdm_events_t   ),

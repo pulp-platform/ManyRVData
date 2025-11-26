@@ -43,7 +43,7 @@ l1d_size ?= 256
 l1d_bank_factor ?= 1
 
 # L1 coalecsing window
-l1d_coal_window ?= 2
+l1d_coal_window ?= 1
 
 # L1 data cache number of ways per
 l1d_num_way ?= 4
