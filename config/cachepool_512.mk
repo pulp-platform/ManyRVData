@@ -48,7 +48,7 @@ l1d_coal_window ?= 2
 # L1 data cache number of ways per
 l1d_num_way ?= 4
 
-# L1 data cache size per tile (KiB)
+# L1 data cache size **per tile** (KiB)
 l1d_tile_size ?= 256
 
 # L1 data cache tag width (TODO: should be calcualted)

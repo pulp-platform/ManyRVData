@@ -8,7 +8,7 @@ package cachepool_pkg;
   import fpnew_pkg::*;
 
   /*********************
-   *  TILE PARAMETERS  *
+   *  COMMON INCLUDES  *
    *********************/
 
   `include "axi/assign.svh"
@@ -33,7 +33,7 @@ package cachepool_pkg;
   localparam int unsigned SpatzAxiIdInWidth       = 6;
   localparam int unsigned SpatzAxiIdOutWidth      = 7;
 
-  // FIXED AxiIdOutWidth
+  // Fixed AXI ID width for IWC
   // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
   localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
 
@@ -62,15 +62,14 @@ package cachepool_pkg;
 
   `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_data_t, axi_strb_t, axi_user_t)
 
-  ////////////////////
-  //  Spatz Cluster //
-  ////////////////////
+
+  //////////////////
+  //  CLUSTER HW  //
+  //////////////////
 
   localparam int unsigned NumCores        = `ifdef NUM_CORES `NUM_CORES `else 0 `endif;
-  localparam int unsigned NumTiles = `ifdef NUM_TILES `NUM_TILES `else 0 `endif;
-  localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
+  localparam int unsigned NumTiles        = `ifdef NUM_TILES `NUM_TILES `else 0 `endif;
 
-  localparam int unsigned NumBank         = `ifdef L1D_NUM_BANKS `L1D_NUM_BANKS `else 0 `endif;
   localparam int unsigned TCDMDepth       = 256;
   localparam int unsigned L1Depth         = `ifdef L1D_DEPTH `L1D_DEPTH `else 0 `endif;
 
@@ -82,13 +81,13 @@ package cachepool_pkg;
   localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets      = 4;
 
-  // Be careful on unsigned long int passed in from configuration
-  // Currently use fixed values
+  // Be careful on unsigned long int passed in from configuration.
+  // Currently use fixed values.
   localparam int unsigned TCDMStartAddr   = 32'hBFFF_F800;
   localparam int unsigned TCDMSize        = 32'h800;
 
   // The short address for SPM
-  localparam int unsigned SPMAddrWidth      = $clog2(TCDMSize);
+  localparam int unsigned SPMAddrWidth    = $clog2(TCDMSize);
 
   localparam int unsigned PeriStartAddr   = 32'hC000_0000;
 
@@ -97,6 +96,7 @@ package cachepool_pkg;
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC001_0000;
 
+  // PMA configuration (cached regions)
   function automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] get_cached_regions();
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
     cached_regions = '{default: '0};
@@ -106,16 +106,29 @@ package cachepool_pkg;
 
   localparam snitch_pma_pkg::snitch_pma_t SnitchPMACfg = '{
       NrCachedRegionRules: 1,
-      CachedRegion: get_cached_regions(),
-      default: 0
+      CachedRegion:        get_cached_regions(),
+      default:             0
   };
 
+
+  /*********************
+   *   TILE SETTINGS   *
+   *********************/
+
+  // How many remote ports for each tile? Currently needs to be 0 or 1.
+  localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
+
+  // How many cores within a tile? This is used to select the ports within a tile.
+  localparam int unsigned NumCoresTile    = `ifdef NUM_CORES_PER_TILE `NUM_CORES_PER_TILE `else 0 `endif;
+  localparam int unsigned LogNumCoresTile = $clog2(NumCoresTile);
+
+
   /////////////////
-  //  Spatz Core //
+  //  SPATZ CORE //
   /////////////////
 
-  localparam int unsigned NFpu          = `ifdef SPATZ_NUM_FPU `SPATZ_NUM_FPU `else 0 `endif;
-  localparam int unsigned NIpu          = `ifdef SPATZ_NUM_IPU `SPATZ_NUM_IPU `else 1 `endif;
+  localparam int unsigned NFpu = `ifdef SPATZ_NUM_FPU `SPATZ_NUM_FPU `else 0 `endif;
+  localparam int unsigned NIpu = `ifdef SPATZ_NUM_IPU `SPATZ_NUM_IPU `else 1 `endif;
 
   localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
   localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
@@ -145,48 +158,52 @@ package cachepool_pkg;
 
   localparam fpu_implementation_t FPUImplementation [NumCores] = '{default: FPUImplementation_Core};
 
+
   ////////////////////
-  //  CachePool L1  //
+  //  CACHEPOOL L1  //
   ////////////////////
 
   // Stack: 128*32/8 = 512 Byte per core
   localparam int unsigned SpmStackDepth       = `ifdef STACK_HW_DEPTH `STACK_HW_DEPTH `else 0 `endif;
   localparam int unsigned SpmStackSize        = `ifdef STACK_HW_SIZE `STACK_HW_SIZE `else 0 `endif;
 
-  // Total Stack Size in Byte (Shared in main memory + SpmStack)
+  // Total Stack Size in Byte (shared in main memory + SpmStack)
   localparam int unsigned TotStackDepth       = `ifdef STACK_TOT_DEPTH `STACK_TOT_DEPTH `else 0 `endif;
   localparam int unsigned TotStackSize        = `ifdef STACK_TOT_SIZE `STACK_TOT_SIZE `else 0 `endif;
 
   // Address width of cache
   localparam int unsigned L1AddrWidth         = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
-  // Cache lane width
+  // Cache line width
   localparam int unsigned L1LineWidth         = `ifdef L1D_CACHELINE_WIDTH `L1D_CACHELINE_WIDTH `else 0 `endif;
-  // Coalecser window
+  // Coalescer window
   localparam int unsigned L1CoalFactor        = `ifdef L1D_COAL_WINDOW `L1D_COAL_WINDOW `else 0 `endif;
-  // Number of cache controller (now is fixde to NrCores (if we change it, we need to change the controller axi output id width too)
-  localparam int unsigned NumL1CacheCtrl      = `ifdef NUM_CORES_PER_TILE `NUM_CORES_PER_TILE `else 0 `endif;
+  // Number of cache controllers (now is fixed to NrCores; if we change it, we need to change the controller AXI output ID width too)
+  localparam int unsigned NumL1CacheCtrl      = NumCores;
+  // Number of cache controllers per Tile
+  localparam int unsigned NumL1CtrlTile       = NumL1CacheCtrl / NumTiles;
   // Number of ways per cache controller
   localparam int unsigned L1AssoPerCtrl       = `ifdef L1D_NUM_WAY `L1D_NUM_WAY `else 0 `endif;
-  // Pesudo dual bank
+  // Pseudo dual bank
   localparam int unsigned L1BankFactor        = 2;
-  // DataWidth of Tag bank
+  // Data width of tag bank
   localparam int unsigned L1TagDataWidth      = `ifdef L1D_TAG_DATA_WIDTH `L1D_TAG_DATA_WIDTH `else 0 `endif;
-
+  // Number of L1 Banks per Tile
+  localparam int unsigned NumBank             = `ifdef L1D_NUM_BANKS `L1D_NUM_BANKS `else 0 `endif;
   // Number of data banks assigned to each cache controller
   localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;
   // Number of tag banks assigned to each cache controller
   localparam int unsigned NumTagBankPerCtrl   = L1AssoPerCtrl * L1BankFactor;
-  // Number of entrys of L1 Cache (total number across multiple cache controllers)
+  // Number of entries of L1 Cache (total number across multiple cache controllers)
   localparam int unsigned L1NumEntry          = NumBank * L1Depth * SpatzDataWidth / L1LineWidth;
   // Number of cache entries each cache way has
-  localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1AssoPerCtrl / NumL1CacheCtrl;
+  localparam int unsigned L1CacheWayEntry     = L1NumEntry / L1AssoPerCtrl / NumL1CtrlTile;
   // Number of entries per cache controller
-  localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CacheCtrl;
+  localparam int unsigned L1NumEntryPerCtrl   = L1NumEntry / NumL1CtrlTile;
   // Number of cache sets each cache way has
   localparam int unsigned L1NumSet            = L1CacheWayEntry / L1BankFactor;
 
   localparam int unsigned CoreIDWidth         = cf_math_pkg::idx_width(NumCores);
-  localparam int unsigned BankIDWidth         = cf_math_pkg::idx_width(NumL1CacheCtrl);
+  localparam int unsigned BankIDWidth         = cf_math_pkg::idx_width(NumL1CtrlTile);
 
   localparam int unsigned RefillDataWidth     = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
@@ -201,12 +218,11 @@ package cachepool_pkg;
   typedef logic [RefillDataWidth-1:0]                     refill_data_t;
   typedef logic [RefillStrbWidth-1:0]                     refill_strb_t;
   typedef logic [$clog2(L1LineWidth/RefillDataWidth)-1:0] burst_len_t;
-  // Narrow TCDM channel (32b) for inter-Tile and intra-Tile connection
+  // Narrow TCDM channel (32b) for inter-tile and intra-tile connection
   typedef logic [31:0]                                    narrow_data_t;
   typedef logic [3 :0]                                    narrow_strb_t;
   typedef logic [L1AddrWidth-1:0]                         narrow_addr_t;
   typedef logic [SPMAddrWidth-1:0]                        spm_addr_t;
-
 
   typedef struct packed {
     logic        is_burst;
@@ -214,9 +230,9 @@ package cachepool_pkg;
   } burst_req_t;
 
   typedef struct packed {
-      logic                  for_write_pend;
-      cache_ways_entry_ptr_t depth;
-      way_ptr_t              way;
+    logic                  for_write_pend;
+    cache_ways_entry_ptr_t depth;
+    way_ptr_t              way;
   } cache_info_t;
 
   typedef struct packed {
@@ -232,23 +248,28 @@ package cachepool_pkg;
     burst_req_t             burst;
   } refill_user_t;
 
+
+  //////////////////////////////
+  //  TILE / CLUSTER TOPOLOGY //
+  //////////////////////////////
+
   // Do we need to keep DMA here?
-  localparam int unsigned NumTileWideAxi      = 2;
+  localparam int unsigned NumTileWideAxi = 2;
   typedef enum integer {
-    TileBootROM       = 0,
-    TileMem           = 1
+    TileBootROM = 0,
+    TileMem     = 1
   } tile_wide_e;
 
-  localparam int unsigned NumTileNarrowAxi    = 1;
+  localparam int unsigned NumTileNarrowAxi = 1;
   typedef enum integer {
-    TilePeriph        = 0
+    TilePeriph  = 0
   } tile_narrow_e;
 
   typedef enum integer {
-    L2Channel0         = 0,
-    L2Channel1         = 1,
-    L2Channel2         = 2,
-    L2Channel3         = 3
+    L2Channel0  = 0,
+    L2Channel1  = 1,
+    L2Channel2  = 2,
+    L2Channel3  = 3
   } cluster_slv_e;
 
   // Cache refill bus
@@ -273,25 +294,30 @@ package cachepool_pkg;
   `TCDM_TYPEDEF_ALL(tcdm, narrow_addr_t, narrow_data_t, narrow_strb_t, tcdm_user_t)
   `TCDM_TYPEDEF_ALL(spm,  spm_addr_t,    narrow_data_t, narrow_strb_t, tcdm_user_t)
 
+
+  //////////////////
+  //   L2 / DRAM  //
+  //////////////////
+
   // L2 Memory
-  localparam int unsigned NumL2Channel        = `ifdef L2_CHANNEL `L2_CHANNEL `else 0 `endif;
-  localparam int unsigned L2BankWidth         = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
-  localparam int unsigned L2BankBeWidth       = L2BankWidth / 8;
-  parameter               DramType            = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
-  parameter  int unsigned DramBase            = 32'h8000_0000;
+  localparam int unsigned NumL2Channel   = `ifdef L2_CHANNEL `L2_CHANNEL `else 0 `endif;
+  localparam int unsigned L2BankWidth    = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
+  localparam int unsigned L2BankBeWidth  = L2BankWidth / 8;
+  parameter               DramType       = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
+  parameter  int unsigned DramBase       = 32'h8000_0000;
 
   // TODO: multi-tile support
   // One more from the Snitch core
-  localparam int unsigned NumClusterMst    = 1 + NumL1CacheCtrl;
+  localparam int unsigned NumClusterMst  = 1 + NumL1CtrlTile;
   // One more for UART?
-  localparam int unsigned NumClusterSlv    = NumL2Channel;
+  localparam int unsigned NumClusterSlv  = NumL2Channel;
 
-  `REQRSP_TYPEDEF_ALL (l2,          axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
+  `REQRSP_TYPEDEF_ALL (l2, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
 
   // DRAM Configuration
-  localparam int unsigned DramAddr        = 32'h8000_0000;
-  localparam int unsigned DramSize        = 32'h4000_0000; // 1GB
-  localparam int unsigned DramPerChSize   = DramSize / NumL2Channel;
+  localparam int unsigned DramAddr       = 32'h8000_0000;
+  localparam int unsigned DramSize       = 32'h4000_0000; // 1GB
+  localparam int unsigned DramPerChSize  = DramSize / NumL2Channel;
 
   // DRAM Interleaving Functions
   typedef struct packed {
@@ -319,7 +345,7 @@ package cachepool_pkg;
     // IMPORTANT: This function will not work if size is smaller than `L2BankBeWidth * Interleave`
     automatic axi_addr_t res;
     if ((L2BankBeWidth * Interleave) < DramPerChSize) begin
-      // input address needs to move the dram_id bits to correct location for interleaving
+      // Input address needs to move the dram_id bits to correct location for interleaving
       // [Reminder][InterChange][Scramble][Constant] => [Reminder][Scramble][InterChange][Constant]
       // log2(32'h0100_0000) = 24
       // 32'h0100_0000 has 24b trailing zeros => in total 24b offset
@@ -349,7 +375,7 @@ package cachepool_pkg;
     // Revert the scrambled address back
     automatic axi_addr_t res;
     if ((L2BankBeWidth * Interleave) < DramPerChSize) begin
-      // input address needs to move the dram_id bits to correct location for interleaving
+      // Input address needs to move the dram_id bits to correct location for interleaving
       // [Reminder][Scramble][InterChange][Constant] => [Reminder][InterChange][Scramble][Constant]
       // log2(32'h0100_0000) = 24
       localparam int unsigned SizeOffsetBits  = $clog2(DramPerChSize);
