@@ -35,6 +35,8 @@ sources:
   # Level 2
   - hardware/src/cachepool_tile.sv
   # Level 3
+  - hardware/src/cachepool_group.sv
+
   - hardware/src/cachepool_cluster.sv
   # Level 4
   - hardware/tb/cachepool_cluster_wrapper.sv
