@@ -237,8 +237,8 @@ module cachepool_cluster
   assign error_o = |error;
   assign eoc_o   = |eoc;
 
-  cache_trans_req_t      [NumL1CacheCtrl-1:0] cache_refill_req;
-  cache_trans_rsp_t      [NumL1CacheCtrl-1:0] cache_refill_rsp;
+  cache_trans_req_t      [NumL1CacheCtrl-1         :0] cache_refill_req;
+  cache_trans_rsp_t      [NumL1CacheCtrl-1         :0] cache_refill_rsp;
 
   cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
   cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
@@ -247,34 +247,34 @@ module cachepool_cluster
   cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
   logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
 
-  l2_req_t               [NumClusterSlv-1 :0] l2_req;
-  l2_rsp_t               [NumClusterSlv-1 :0] l2_rsp;
+  l2_req_t               [NumClusterSlv-1          :0] l2_req;
+  l2_rsp_t               [NumClusterSlv-1          :0] l2_rsp;
 
-  cache_trans_req_chan_t [NumClusterSlv-1 :0] l2_req_chan;
-  cache_trans_rsp_chan_t [NumClusterSlv-1 :0] l2_rsp_chan;
-  logic                  [NumClusterSlv-1 :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready  ;
+  cache_trans_req_chan_t [NumClusterSlv-1          :0] l2_req_chan;
+  cache_trans_rsp_chan_t [NumClusterSlv-1          :0] l2_rsp_chan;
+  logic                  [NumClusterSlv-1          :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
 
-  typedef logic [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
+  typedef logic   [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
   // one more bit for out-of-range alert
-  typedef logic [$clog2(NumClusterSlv)           :0] tile_sel_err_t;
-  typedef logic [$clog2(NumClusterSlv)-1         :0] tile_sel_t;
+  typedef logic   [$clog2(NumClusterSlv)           :0] tile_sel_err_t;
+  typedef logic   [$clog2(NumClusterSlv)-1         :0] tile_sel_t;
 
   // Which l2 we want to select for each req
-  tile_sel_err_t [NumTiles*NumClusterMst-1 :0]       tile_sel_err;
-  tile_sel_t     [NumTiles*NumClusterMst-1 :0]       tile_sel;
+  tile_sel_err_t  [NumTiles*NumClusterMst-1        :0] tile_sel_err;
+  tile_sel_t      [NumTiles*NumClusterMst-1        :0] tile_sel;
   // Which tile we selected for each req
-  l2_sel_t   [NumClusterSlv-1:0]                     tile_selected;
+  l2_sel_t        [NumClusterSlv-1                 :0] tile_selected;
   // which tile we want to select for each rsp
-  l2_sel_t   [NumClusterSlv-1:0]                     l2_sel;
+  l2_sel_t        [NumClusterSlv-1                 :0] l2_sel;
   // What is the priority for response wiring?
   // Here we want to make sure the responses from one burst
   // continues until done
   // If the rsp is a burst with blen != 0, then we will keep
   // the rr same, until got a burst rsp with blen == 0
-  tile_sel_t [NumTiles*NumClusterMst-1 :0]           l2_rsp_rr;
+  tile_sel_t      [NumTiles*NumClusterMst-1        :0] l2_rsp_rr;
 
-  logic      [NumTiles*NumClusterMst-1:0] rr_lock_d, rr_lock_q;
-  tile_sel_t [NumTiles*NumClusterMst-1:0] l2_prio_d, l2_prio_q;
+  logic           [NumTiles*NumClusterMst-1        :0] rr_lock_d, rr_lock_q;
+  tile_sel_t      [NumTiles*NumClusterMst-1        :0] l2_prio_d, l2_prio_q;
 
   if (Burst_Enable) begin
     `FF(rr_lock_q, rr_lock_d, 1'b0)
@@ -348,8 +348,93 @@ module cachepool_cluster
     assign l2_rsp_rr = '0;
   end
 
+  if (NumTiles > 1) begin : gen_group
+    cachepool_group #(
+      .AxiAddrWidth             ( AxiAddrWidth             ),
+      .AxiDataWidth             ( AxiDataWidth             ),
+      .AxiIdWidthIn             ( AxiIdWidthIn             ),
+      .AxiIdWidthOut            ( WideIdWidthIn            ),
+      .AxiUserWidth             ( AxiUserWidth             ),
+      .BootAddr                 ( BootAddr                 ),
+      .UartAddr                 ( UartAddr                 ),
+      .ClusterPeriphSize        ( ClusterPeriphSize        ),
+      .NrCores                  ( NrCores                  ),
+      .TCDMDepth                ( TCDMDepth                ),
+      .NrBanks                  ( NrBanks                  ),
+      .ICacheLineWidth          ( ICacheLineWidth          ),
+      .ICacheLineCount          ( ICacheLineCount          ),
+      .ICacheSets               ( ICacheSets               ),
+      .FPUImplementation        ( FPUImplementation        ),
+      .NumSpatzFPUs             ( NumSpatzFPUs             ),
+      .NumSpatzIPUs             ( NumSpatzIPUs             ),
+      .SnitchPMACfg             ( SnitchPMACfg             ),
+      .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+      .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+      .axi_in_req_t             ( axi_in_req_t             ),
+      .axi_in_resp_t            ( axi_in_resp_t            ),
+      .axi_narrow_req_t         ( axi_narrow_req_t         ),
+      .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+      .axi_out_req_t            ( axi_mst_cache_req_t      ),
+      .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+      .Xdma                     ( Xdma                     ),
+      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
+      .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
+      .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+      .RegisterCoreReq          ( RegisterCoreReq          ),
+      .RegisterCoreRsp          ( RegisterCoreRsp          ),
+      .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+      .RegisterExt              ( RegisterExt              ),
+      .XbarLatency              ( XbarLatency              ),
+      .MaxMstTrans              ( MaxMstTrans              ),
+      .MaxSlvTrans              ( MaxSlvTrans              )
+    ) i_group (
+      .clk_i                    ( clk_i                    ),
+      .rst_ni                   ( rst_ni                   ),
+      .eoc_o                    ( eoc                      ),
+      .impl_i                   ( impl_i                   ),
+      .error_o                  ( error                    ),
+      .debug_req_i              ( debug_req_i              ),
+      .meip_i                   ( meip_i                   ),
+      .mtip_i                   ( mtip_i                   ),
+      .msip_i                   ( msip_i                   ),
+      .hart_base_id_i           ( hart_base_id_i           ),
+      .cluster_base_addr_i      ( cluster_base_addr_i      ),
+      .tile_probe_o             ( cluster_probe_o          ),
+      .axi_in_req_i             ( axi_in_req_i             ),
+      .axi_in_resp_o            ( axi_in_resp_o            ),
+      .axi_narrow_req_o         ( axi_out_req              ),
+      .axi_narrow_rsp_i         ( axi_out_resp             ),
+      // Cache Refill Ports
+      .cache_refill_req_o       ( cache_refill_req         ),
+      .cache_refill_rsp_i       ( cache_refill_rsp         ),
+      .axi_wide_req_o           ( axi_tile_req             ),
+      .axi_wide_rsp_i           ( axi_tile_rsp             )
+    );
 
-  for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
+    for (genvar t = 0; t < NumTiles; t ++) begin : gen_axi_converter
+      axi_to_reqrsp #(
+        .axi_req_t    (axi_mst_cache_req_t        ),
+        .axi_rsp_t    (axi_mst_cache_resp_t       ),
+        .AddrWidth    (AxiAddrWidth               ),
+        .DataWidth    (AxiDataWidth               ),
+        .UserWidth    ($bits(refill_user_t)       ),
+        .IdWidth      (AxiIdWidthIn               ),
+        .BufDepth     (NumSpatzOutstandingLoads[0]),
+        .reqrsp_req_t (cache_trans_req_t          ),
+        .reqrsp_rsp_t (cache_trans_rsp_t          )
+      ) i_axi2reqrsp  (
+        .clk_i        (clk_i                                  ),
+        .rst_ni       (rst_ni                                 ),
+        .busy_o       (                                       ),
+        .axi_req_i    (axi_tile_req [t][TileMem]),
+        .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
+        .reqrsp_req_o (cache_core_req[t]                      ),
+        .reqrsp_rsp_i (cache_core_rsp[t]                      )
+      );
+    end
+
+  end else begin : gen_tile
     cachepool_tile #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
       .AxiDataWidth             ( AxiDataWidth             ),
@@ -392,25 +477,25 @@ module cachepool_cluster
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc[t]                   ),
+      .eoc_o                    ( eoc                      ),
       .impl_i                   ( impl_i                   ),
-      .error_o                  ( error[t]                 ),
+      .error_o                  ( error                    ),
       .debug_req_i              ( debug_req_i              ),
       .meip_i                   ( meip_i                   ),
       .mtip_i                   ( mtip_i                   ),
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .tile_probe_o             ( cluster_probe_o[t]       ),
-      .axi_in_req_i             ( axi_in_req_i [t]         ),
-      .axi_in_resp_o            ( axi_in_resp_o[t]         ),
-      .axi_out_req_o            ( axi_out_req[t]           ),
-      .axi_out_resp_i           ( axi_out_resp[t]          ),
+      .tile_probe_o             ( cluster_probe_o          ),
+      .axi_in_req_i             ( axi_in_req_i [0]         ),
+      .axi_in_resp_o            ( axi_in_resp_o[0]         ),
+      .axi_out_req_o            ( axi_out_req  [0]         ),
+      .axi_out_resp_i           ( axi_out_resp [0]         ),
       // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]),
-      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]),
-      .axi_wide_req_o           ( axi_tile_req [t]   ),
-      .axi_wide_rsp_i           ( axi_tile_rsp [t]   )
+      .cache_refill_req_o       ( cache_refill_req         ),
+      .cache_refill_rsp_i       ( cache_refill_rsp         ),
+      .axi_wide_req_o           ( axi_tile_req[0]          ),
+      .axi_wide_rsp_i           ( axi_tile_rsp[0]          )
     );
 
     axi_to_reqrsp #(
@@ -427,12 +512,98 @@ module cachepool_cluster
       .clk_i        (clk_i                                  ),
       .rst_ni       (rst_ni                                 ),
       .busy_o       (                                       ),
-      .axi_req_i    (axi_tile_req [t][TileMem]),
-      .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
-      .reqrsp_req_o (cache_core_req[t]                      ),
-      .reqrsp_rsp_i (cache_core_rsp[t]                      )
+      .axi_req_i    (axi_tile_req [0][TileMem]),
+      .axi_rsp_o    (axi_tile_rsp [0][TileMem]),
+      .reqrsp_req_o (cache_core_req[0]                      ),
+      .reqrsp_rsp_i (cache_core_rsp[0]                      )
     );
   end
+
+
+  // for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
+  //   cachepool_tile #(
+  //     .AxiAddrWidth             ( AxiAddrWidth             ),
+  //     .AxiDataWidth             ( AxiDataWidth             ),
+  //     .AxiIdWidthIn             ( AxiIdWidthIn             ),
+  //     .AxiIdWidthOut            ( WideIdWidthIn            ),
+  //     .AxiUserWidth             ( AxiUserWidth             ),
+  //     .BootAddr                 ( BootAddr                 ),
+  //     .UartAddr                 ( UartAddr                 ),
+  //     .ClusterPeriphSize        ( ClusterPeriphSize        ),
+  //     .NrCores                  ( NrCores                  ),
+  //     .TCDMDepth                ( TCDMDepth                ),
+  //     .NrBanks                  ( NrBanks                  ),
+  //     .ICacheLineWidth          ( ICacheLineWidth          ),
+  //     .ICacheLineCount          ( ICacheLineCount          ),
+  //     .ICacheSets               ( ICacheSets               ),
+  //     .FPUImplementation        ( FPUImplementation        ),
+  //     .NumSpatzFPUs             ( NumSpatzFPUs             ),
+  //     .NumSpatzIPUs             ( NumSpatzIPUs             ),
+  //     .SnitchPMACfg             ( SnitchPMACfg             ),
+  //     .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+  //     .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+  //     .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+  //     .axi_in_req_t             ( axi_in_req_t             ),
+  //     .axi_in_resp_t            ( axi_in_resp_t            ),
+  //     .axi_narrow_req_t         ( axi_narrow_req_t         ),
+  //     .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+  //     .axi_out_req_t            ( axi_mst_cache_req_t      ),
+  //     .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+  //     .Xdma                     ( Xdma                     ),
+  //     .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
+  //     .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
+  //     .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+  //     .RegisterCoreReq          ( RegisterCoreReq          ),
+  //     .RegisterCoreRsp          ( RegisterCoreRsp          ),
+  //     .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+  //     .RegisterExt              ( RegisterExt              ),
+  //     .XbarLatency              ( XbarLatency              ),
+  //     .MaxMstTrans              ( MaxMstTrans              ),
+  //     .MaxSlvTrans              ( MaxSlvTrans              )
+  //   ) i_tile (
+  //     .clk_i                    ( clk_i                    ),
+  //     .rst_ni                   ( rst_ni                   ),
+  //     .eoc_o                    ( eoc[t]                   ),
+  //     .impl_i                   ( impl_i                   ),
+  //     .error_o                  ( error[t]                 ),
+  //     .debug_req_i              ( debug_req_i              ),
+  //     .meip_i                   ( meip_i                   ),
+  //     .mtip_i                   ( mtip_i                   ),
+  //     .msip_i                   ( msip_i                   ),
+  //     .hart_base_id_i           ( hart_base_id_i           ),
+  //     .cluster_base_addr_i      ( cluster_base_addr_i      ),
+  //     .tile_probe_o             ( cluster_probe_o[t]       ),
+  //     .axi_in_req_i             ( axi_in_req_i [t]         ),
+  //     .axi_in_resp_o            ( axi_in_resp_o[t]         ),
+  //     .axi_out_req_o            ( axi_out_req[t]           ),
+  //     .axi_out_resp_i           ( axi_out_resp[t]          ),
+  //     // Cache Refill Ports
+  //     .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]),
+  //     .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]),
+  //     .axi_wide_req_o           ( axi_tile_req [t]   ),
+  //     .axi_wide_rsp_i           ( axi_tile_rsp [t]   )
+  //   );
+
+  //   axi_to_reqrsp #(
+  //     .axi_req_t    (axi_mst_cache_req_t        ),
+  //     .axi_rsp_t    (axi_mst_cache_resp_t       ),
+  //     .AddrWidth    (AxiAddrWidth               ),
+  //     .DataWidth    (AxiDataWidth               ),
+  //     .UserWidth    ($bits(refill_user_t)       ),
+  //     .IdWidth      (AxiIdWidthIn               ),
+  //     .BufDepth     (NumSpatzOutstandingLoads[0]),
+  //     .reqrsp_req_t (cache_trans_req_t          ),
+  //     .reqrsp_rsp_t (cache_trans_rsp_t          )
+  //   ) i_axi2reqrsp  (
+  //     .clk_i        (clk_i                                  ),
+  //     .rst_ni       (rst_ni                                 ),
+  //     .busy_o       (                                       ),
+  //     .axi_req_i    (axi_tile_req [t][TileMem]),
+  //     .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
+  //     .reqrsp_req_o (cache_core_req[t]                      ),
+  //     .reqrsp_rsp_i (cache_core_rsp[t]                      )
+  //   );
+  // end
 
   for (genvar t = 0; t < NumTiles; t++) begin
     // Cache Bypass requests

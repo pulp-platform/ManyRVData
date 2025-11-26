@@ -29,9 +29,9 @@
 
     // Spatz parameters
     vlen: 512,
-    n_fpu: 0,
+    n_fpu: 4,
     n_ipu: 4,
-    spatz_fpu: false,
+    spatz_fpu: true,
     norvd: true,
 
     // Timing parameters (fixed defaults; tweak in template if needed)

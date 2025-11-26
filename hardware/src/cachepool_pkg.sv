@@ -115,6 +115,9 @@ package cachepool_pkg;
    *   TILE SETTINGS   *
    *********************/
 
+  // How many cores for each tile?
+  localparam int unsigned NumCoresTIle      = NumCores / NumTiles;
+
   // How many remote ports for each tile? Currently needs to be 0 or 1.
   localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
 
@@ -157,7 +160,6 @@ package cachepool_pkg;
   };
 
   localparam fpu_implementation_t FPUImplementation [NumCores] = '{default: FPUImplementation_Core};
-
 
   ////////////////////
   //  CACHEPOOL L1  //
