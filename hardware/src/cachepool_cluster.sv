@@ -145,9 +145,9 @@ module cachepool_cluster
     /// AXI Narrow out-port (UART)
     output axi_narrow_req_t                       axi_narrow_req_o,
     input  axi_narrow_resp_t                      axi_narrow_resp_i,
-    /// AXI Core cluster out-port to core.
-    output axi_out_req_t  [NumClusterSlv-1:0]  axi_out_req_o,
-    input  axi_out_resp_t [NumClusterSlv-1:0]  axi_out_resp_i,
+    /// AXI Core cluster out-port to main memory.
+    output axi_out_req_t  [NumClusterSlv-1:0]     axi_out_req_o,
+    input  axi_out_resp_t [NumClusterSlv-1:0]     axi_out_resp_i,
     /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
     input  impl_in_t      [NrSramCfg-1:0]         impl_i,
     /// Indicate the program execution is error
@@ -237,8 +237,8 @@ module cachepool_cluster
   assign error_o = |error;
   assign eoc_o   = |eoc;
 
-  cache_trans_req_t      [NumTiles*NumL1CacheCtrl-1:0] cache_refill_req;
-  cache_trans_rsp_t      [NumTiles*NumL1CacheCtrl-1:0] cache_refill_rsp;
+  cache_trans_req_t      [NumL1CacheCtrl-1:0] cache_refill_req;
+  cache_trans_rsp_t      [NumL1CacheCtrl-1:0] cache_refill_rsp;
 
   cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
   cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
@@ -407,8 +407,8 @@ module cachepool_cluster
       .axi_out_req_o            ( axi_out_req[t]           ),
       .axi_out_resp_i           ( axi_out_resp[t]          ),
       // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
-      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CacheCtrl+:NumL1CacheCtrl]),
+      .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]),
+      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]),
       .axi_wide_req_o           ( axi_tile_req [t]   ),
       .axi_wide_rsp_i           ( axi_tile_rsp [t]   )
     );
@@ -448,7 +448,7 @@ module cachepool_cluster
       tile_rsp_ready[t*NumTiles]      = cache_core_req[t].p_ready;
 
       // Normal Cache requests
-      for (int p = 0; p < NumL1CacheCtrl; p++) begin
+      for (int p = 0; p < NumL1CtrlTile; p++) begin
         tile_req_chan [t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].q;
         // Scramble address
         tile_req_chan [t*NumTiles+p+1].addr    = scrambleAddr(cache_refill_req[t*NumTiles+p].q.addr);
