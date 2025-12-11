@@ -61,7 +61,7 @@ module cachepool_cluster
     parameter snitch_pma_t                                   SnitchPMACfg                       = '{default: 0},
     /// # Core-global parameters
     /// FPU configuration.
-    parameter fpu_implementation_t                           FPUImplementation        [NrCores] = '{default: fpu_implementation_t'(0)},
+    parameter fpu_implementation_t                           FPUImplementation                  = '0,
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
@@ -69,11 +69,11 @@ module cachepool_cluster
     parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// # Per-core parameters
     /// Per-core integer outstanding loads
-    parameter int                     unsigned               NumIntOutstandingLoads   [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumIntOutstandingLoads             = 0,
     /// Per-core integer outstanding memory operations (load and stores)
-    parameter int                     unsigned               NumIntOutstandingMem     [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumIntOutstandingMem               = 0,
     /// Per-core Spatz outstanding loads
-    parameter int                     unsigned               NumSpatzOutstandingLoads [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumSpatzOutstandingLoads           = 0,
     /// ## Timing Tuning Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                            RegisterOffloadRsp                 = 1'b0,
@@ -138,10 +138,10 @@ module cachepool_cluster
     input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
     /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
     /// to the overall system that the cluster is executing something.
-    output logic          [NumTiles-1:0]          cluster_probe_o,
+    output logic                                  cluster_probe_o,
     /// AXI Core cluster in-port.
-    input  axi_in_req_t   [NumTiles-1:0]          axi_in_req_i,
-    output axi_in_resp_t  [NumTiles-1:0]          axi_in_resp_o,
+    input  axi_in_req_t                           axi_in_req_i,
+    output axi_in_resp_t                          axi_in_resp_o,
     /// AXI Narrow out-port (UART)
     output axi_narrow_req_t                       axi_narrow_req_o,
     input  axi_narrow_resp_t                      axi_narrow_resp_i,
@@ -220,8 +220,8 @@ module cachepool_cluster
   // 1. AXI
   axi_mst_cache_req_t  [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_req;
   axi_mst_cache_resp_t [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_rsp;
-  axi_slv_cache_req_t  [NumTiles*NumClusterSlv-1 :0]      wide_axi_slv_req;
-  axi_slv_cache_resp_t [NumTiles*NumClusterSlv-1 :0]      wide_axi_slv_rsp;
+  axi_slv_cache_req_t  [NumClusterSlv-1 :0]               wide_axi_slv_req;
+  axi_slv_cache_resp_t [NumClusterSlv-1 :0]               wide_axi_slv_rsp;
   axi_narrow_req_t     [NumTiles-1 :0]                    axi_out_req;
   axi_narrow_resp_t    [NumTiles-1 :0]                    axi_out_resp;
 
@@ -232,10 +232,6 @@ module cachepool_cluster
   // ---------------
   // CachePool Tile
   // ---------------
-
-  logic [NumTiles-1:0] error, eoc;
-  assign error_o = |error;
-  assign eoc_o   = |eoc;
 
   cache_trans_req_t      [NumL1CacheCtrl-1         :0] cache_refill_req;
   cache_trans_rsp_t      [NumL1CacheCtrl-1         :0] cache_refill_rsp;
@@ -348,6 +344,9 @@ module cachepool_cluster
     assign l2_rsp_rr = '0;
   end
 
+  logic [NumTiles-1: 0] group_probe;
+  assign cluster_probe_o = |group_probe;
+
   if (NumTiles > 1) begin : gen_group
     cachepool_group #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
@@ -391,18 +390,18 @@ module cachepool_cluster
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc                      ),
+      .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
-      .error_o                  ( error                    ),
+      .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
       .meip_i                   ( meip_i                   ),
       .mtip_i                   ( mtip_i                   ),
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .tile_probe_o             ( cluster_probe_o          ),
+      .group_probe_o            ( group_probe              ),
       .axi_in_req_i             ( axi_in_req_i             ),
-      .axi_in_resp_o            ( axi_in_resp_o            ),
+      .axi_in_rsp_o             ( axi_in_resp_o            ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
       // Cache Refill Ports
@@ -420,7 +419,7 @@ module cachepool_cluster
         .DataWidth    (AxiDataWidth               ),
         .UserWidth    ($bits(refill_user_t)       ),
         .IdWidth      (AxiIdWidthIn               ),
-        .BufDepth     (NumSpatzOutstandingLoads[0]),
+        .BufDepth     (NumSpatzOutstandingLoads   ),
         .reqrsp_req_t (cache_trans_req_t          ),
         .reqrsp_rsp_t (cache_trans_rsp_t          )
       ) i_axi2reqrsp  (
@@ -477,20 +476,26 @@ module cachepool_cluster
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc                      ),
+      .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
-      .error_o                  ( error                    ),
+      .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
       .meip_i                   ( meip_i                   ),
       .mtip_i                   ( mtip_i                   ),
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .tile_probe_o             ( cluster_probe_o          ),
-      .axi_in_req_i             ( axi_in_req_i [0]         ),
-      .axi_in_resp_o            ( axi_in_resp_o[0]         ),
+      .tile_probe_o             ( group_probe              ),
+      .axi_in_req_i             ( axi_in_req_i          ),
+      .axi_in_resp_o            ( axi_in_resp_o         ),
       .axi_out_req_o            ( axi_out_req  [0]         ),
       .axi_out_resp_i           ( axi_out_resp [0]         ),
+      // Remote Ports (not used)
+      .remote_req_o             (                          ),
+      .remote_req_dst_o         (                          ),
+      .remote_rsp_i             ( '0                       ),
+      .remote_req_i             ( '0                       ),
+      .remote_rsp_o             (                          ),
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req         ),
       .cache_refill_rsp_i       ( cache_refill_rsp         ),
@@ -505,7 +510,7 @@ module cachepool_cluster
       .DataWidth    (AxiDataWidth               ),
       .UserWidth    ($bits(refill_user_t)       ),
       .IdWidth      (AxiIdWidthIn               ),
-      .BufDepth     (NumSpatzOutstandingLoads[0]),
+      .BufDepth     (NumSpatzOutstandingLoads   ),
       .reqrsp_req_t (cache_trans_req_t          ),
       .reqrsp_rsp_t (cache_trans_rsp_t          )
     ) i_axi2reqrsp  (
@@ -520,118 +525,35 @@ module cachepool_cluster
   end
 
 
-  // for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
-  //   cachepool_tile #(
-  //     .AxiAddrWidth             ( AxiAddrWidth             ),
-  //     .AxiDataWidth             ( AxiDataWidth             ),
-  //     .AxiIdWidthIn             ( AxiIdWidthIn             ),
-  //     .AxiIdWidthOut            ( WideIdWidthIn            ),
-  //     .AxiUserWidth             ( AxiUserWidth             ),
-  //     .BootAddr                 ( BootAddr                 ),
-  //     .UartAddr                 ( UartAddr                 ),
-  //     .ClusterPeriphSize        ( ClusterPeriphSize        ),
-  //     .NrCores                  ( NrCores                  ),
-  //     .TCDMDepth                ( TCDMDepth                ),
-  //     .NrBanks                  ( NrBanks                  ),
-  //     .ICacheLineWidth          ( ICacheLineWidth          ),
-  //     .ICacheLineCount          ( ICacheLineCount          ),
-  //     .ICacheSets               ( ICacheSets               ),
-  //     .FPUImplementation        ( FPUImplementation        ),
-  //     .NumSpatzFPUs             ( NumSpatzFPUs             ),
-  //     .NumSpatzIPUs             ( NumSpatzIPUs             ),
-  //     .SnitchPMACfg             ( SnitchPMACfg             ),
-  //     .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
-  //     .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
-  //     .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-  //     .axi_in_req_t             ( axi_in_req_t             ),
-  //     .axi_in_resp_t            ( axi_in_resp_t            ),
-  //     .axi_narrow_req_t         ( axi_narrow_req_t         ),
-  //     .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
-  //     .axi_out_req_t            ( axi_mst_cache_req_t      ),
-  //     .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-  //     .Xdma                     ( Xdma                     ),
-  //     .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-  //     .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
-  //     .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
-  //     .RegisterCoreReq          ( RegisterCoreReq          ),
-  //     .RegisterCoreRsp          ( RegisterCoreRsp          ),
-  //     .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
-  //     .RegisterExt              ( RegisterExt              ),
-  //     .XbarLatency              ( XbarLatency              ),
-  //     .MaxMstTrans              ( MaxMstTrans              ),
-  //     .MaxSlvTrans              ( MaxSlvTrans              )
-  //   ) i_tile (
-  //     .clk_i                    ( clk_i                    ),
-  //     .rst_ni                   ( rst_ni                   ),
-  //     .eoc_o                    ( eoc[t]                   ),
-  //     .impl_i                   ( impl_i                   ),
-  //     .error_o                  ( error[t]                 ),
-  //     .debug_req_i              ( debug_req_i              ),
-  //     .meip_i                   ( meip_i                   ),
-  //     .mtip_i                   ( mtip_i                   ),
-  //     .msip_i                   ( msip_i                   ),
-  //     .hart_base_id_i           ( hart_base_id_i           ),
-  //     .cluster_base_addr_i      ( cluster_base_addr_i      ),
-  //     .tile_probe_o             ( cluster_probe_o[t]       ),
-  //     .axi_in_req_i             ( axi_in_req_i [t]         ),
-  //     .axi_in_resp_o            ( axi_in_resp_o[t]         ),
-  //     .axi_out_req_o            ( axi_out_req[t]           ),
-  //     .axi_out_resp_i           ( axi_out_resp[t]          ),
-  //     // Cache Refill Ports
-  //     .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]),
-  //     .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]),
-  //     .axi_wide_req_o           ( axi_tile_req [t]   ),
-  //     .axi_wide_rsp_i           ( axi_tile_rsp [t]   )
-  //   );
-
-  //   axi_to_reqrsp #(
-  //     .axi_req_t    (axi_mst_cache_req_t        ),
-  //     .axi_rsp_t    (axi_mst_cache_resp_t       ),
-  //     .AddrWidth    (AxiAddrWidth               ),
-  //     .DataWidth    (AxiDataWidth               ),
-  //     .UserWidth    ($bits(refill_user_t)       ),
-  //     .IdWidth      (AxiIdWidthIn               ),
-  //     .BufDepth     (NumSpatzOutstandingLoads[0]),
-  //     .reqrsp_req_t (cache_trans_req_t          ),
-  //     .reqrsp_rsp_t (cache_trans_rsp_t          )
-  //   ) i_axi2reqrsp  (
-  //     .clk_i        (clk_i                                  ),
-  //     .rst_ni       (rst_ni                                 ),
-  //     .busy_o       (                                       ),
-  //     .axi_req_i    (axi_tile_req [t][TileMem]),
-  //     .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
-  //     .reqrsp_req_o (cache_core_req[t]                      ),
-  //     .reqrsp_rsp_i (cache_core_rsp[t]                      )
-  //   );
-  // end
-
-  for (genvar t = 0; t < NumTiles; t++) begin
-    // Cache Bypass requests
-    always_comb begin
-      tile_req_chan [t*NumTiles]      = cache_core_req[t].q;
+  // for (genvar t = 0; t < NumTiles; t++) begin
+  // Cache Bypass requests
+  always_comb begin
+    for (int t = 0; t < NumTiles; t++) begin
+      tile_req_chan[t]       = cache_core_req[t].q;
       // Scrmable address
-      tile_req_chan [t*NumTiles].addr = scrambleAddr(cache_core_req[t].q.addr);
-      tile_req_valid[t*NumTiles]      = cache_core_req[t].q_valid;
-      cache_core_rsp[t].q_ready       = tile_req_ready[t*NumTiles];
+      tile_req_chan[t].addr = scrambleAddr(cache_core_req[t].q.addr);
+      tile_req_valid[t]      = cache_core_req[t].q_valid;
+      cache_core_rsp[t].q_ready       = tile_req_ready[t];
 
-      cache_core_rsp[t].p             = tile_rsp_chan [t*NumTiles];
-      cache_core_rsp[t].p_valid       = tile_rsp_valid[t*NumTiles];
-      tile_rsp_ready[t*NumTiles]      = cache_core_req[t].p_ready;
+      cache_core_rsp[t].p             = tile_rsp_chan ;
+      cache_core_rsp[t].p_valid       = tile_rsp_valid;
+      tile_rsp_ready[t]      = cache_core_req[t].p_ready;
+    end
 
-      // Normal Cache requests
-      for (int p = 0; p < NumL1CtrlTile; p++) begin
-        tile_req_chan [t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].q;
-        // Scramble address
-        tile_req_chan [t*NumTiles+p+1].addr    = scrambleAddr(cache_refill_req[t*NumTiles+p].q.addr);
-        tile_req_valid[t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].q_valid;
-        cache_refill_rsp[t*NumTiles+p].q_ready = tile_req_ready[t*NumTiles+p+1];
+    // Normal Cache requests
+    for (int p = 0; p < NumL1CtrlTile*NumTiles; p++) begin
+      tile_req_chan [p+NumTiles]         = cache_refill_req[p].q;
+      // Scramble address
+      tile_req_chan [p+NumTiles].addr    = scrambleAddr(cache_refill_req[p].q.addr);
+      tile_req_valid[p+NumTiles]         = cache_refill_req[p].q_valid;
+      cache_refill_rsp[p].q_ready = tile_req_ready[p+NumTiles];
 
-        cache_refill_rsp[t*NumTiles+p].p       = tile_rsp_chan [t*NumTiles+p+1];
-        cache_refill_rsp[t*NumTiles+p].p_valid = tile_rsp_valid[t*NumTiles+p+1];
-        tile_rsp_ready[t*NumTiles+p+1]         = cache_refill_req[t*NumTiles+p].p_ready;
-      end
+      cache_refill_rsp[p].p       = tile_rsp_chan [p+NumTiles];
+      cache_refill_rsp[p].p_valid = tile_rsp_valid[p+NumTiles];
+      tile_rsp_ready[p+NumTiles]         = cache_refill_req[p].p_ready;
     end
   end
+  // end
 
   typedef struct packed {
     int unsigned idx;
@@ -740,7 +662,7 @@ module cachepool_cluster
 
   for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_output_axi
     reqrsp_to_axi #(
-      .MaxTrans           (NumSpatzOutstandingLoads[0]),
+      .MaxTrans           (NumSpatzOutstandingLoads   ),
       .ID                 ('0                         ),
       .EnBurst            (1                          ),
       .ShuffleId          (1                          ),
@@ -796,6 +718,15 @@ module cachepool_cluster
 
   // TODO: Add MUX for multi-Tile
   // BootROM
+  // axi_mux #(
+
+  // ) i_axi_bootrom_mux (
+
+  // )
+
+  if (NumTiles > 1)
+    assign axi_tile_rsp[1][TileBootROM] = '0;
+
   axi_to_reg #(
     .ADDR_WIDTH         (AxiAddrWidth        ),
     .DATA_WIDTH         (AxiDataWidth        ),
