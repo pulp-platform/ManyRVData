@@ -61,7 +61,7 @@ module cachepool_tile
     parameter snitch_pma_t                                   SnitchPMACfg                       = '{default: 0},
     /// # Core-global parameters
     /// FPU configuration.
-    parameter fpu_implementation_t                           FPUImplementation        [NrCores] = '{default: fpu_implementation_t'(0)},
+    parameter fpu_implementation_t                           FPUImplementation                  = '0,
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
@@ -69,11 +69,11 @@ module cachepool_tile
     parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// # Per-core parameters
     /// Per-core integer outstanding loads
-    parameter int                     unsigned               NumIntOutstandingLoads   [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumIntOutstandingLoads             = '0,
     /// Per-core integer outstanding memory operations (load and stores)
-    parameter int                     unsigned               NumIntOutstandingMem     [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumIntOutstandingMem               = '0,
     /// Per-core Spatz outstanding loads
-    parameter int                     unsigned               NumSpatzOutstandingLoads [NrCores] = '{default: '0},
+    parameter int                     unsigned               NumSpatzOutstandingLoads           = '0,
     /// ## Timing Tuning Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                            RegisterOffloadRsp                 = 1'b0,
@@ -145,12 +145,19 @@ module cachepool_tile
     /// AXI Narrow out-port (UART)
     output axi_narrow_req_t                         axi_out_req_o,
     input  axi_narrow_resp_t                        axi_out_resp_i,
-    /// AXI Cache Refill ports
-    output cache_trans_req_t  [NumL1CtrlTile-1:0]  cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]  cache_refill_rsp_i,
+    /// Cache Refill ports
+    output cache_trans_req_t  [NumL1CtrlTile-1:0]   cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]   cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
     output axi_out_req_t      [NumTileWideAxi-1:0]  axi_wide_req_o,
     input  axi_out_resp_t     [NumTileWideAxi-1:0]  axi_wide_rsp_i,
+    /// Remote Tile access ports (to remote tiles)
+    output tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_o,
+    output remote_tile_sel_t  [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_dst_o,
+    input  tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_i,
+    /// Remote Tile access ports (from remote tiles)
+    input  tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_i,
+    output tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_o,
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t          [NrSramCfg-1:0]       impl_i,
     /// Indicate the program execution is error
@@ -184,7 +191,6 @@ module cachepool_tile
     return n;
   endfunction
 
-  localparam int unsigned NrTCDMPortsPerCore          = get_tcdm_ports(0);
   localparam int unsigned NrTCDMPortsCores            = get_tcdm_port_offs(NrCores);
   localparam int unsigned NumTCDMIn                   = NrTCDMPortsCores + 1;
   localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
@@ -250,15 +256,14 @@ module cachepool_tile
   typedef logic [NarrowDataWidth-1:0]   data_t;
   typedef logic [NarrowDataWidth/8-1:0] strb_t;
   typedef logic [L1TagDataWidth-1:0]    tag_data_t;
-  typedef logic [AxiDataWidth-1:0]      data_dma_t;
-  typedef logic [AxiDataWidth/8-1:0]    strb_dma_t;
+  typedef logic [AxiDataWidth-1:0]      data_wide_t;
+  typedef logic [AxiDataWidth/8-1:0]    strb_wide_t;
   typedef logic [NarrowIdWidthIn-1:0]   id_mst_t;
   typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
-  typedef logic [WideIdWidthIn-1:0]     id_dma_mst_t;
-  typedef logic [WideIdWidthOut-1:0]    id_dma_slv_t;
-  typedef logic [WideIdWidthIn-$clog2(NumL1CtrlTile)-1:0] id_dcache_mst_t;
+  typedef logic [WideIdWidthIn-1:0]     id_wide_mst_t;
+  typedef logic [WideIdWidthOut-1:0]    id_wide_slv_t;
   typedef logic [NarrowUserWidth-1:0]   user_t;
-  typedef logic [AxiUserWidth-1:0]      user_dma_t;
+  typedef logic [AxiUserWidth-1:0]      user_wide_t;
 
   typedef logic [TCDMMemAddrWidth-1:0]  tcdm_mem_addr_t;
   typedef logic [TCDMAddrWidth-1:0]     tcdm_addr_t;
@@ -274,17 +279,14 @@ module cachepool_tile
   // Regbus peripherals.
   `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)
   `AXI_TYPEDEF_ALL(axi_slv, addr_t, id_slv_t, data_t, strb_t, user_t)
-  `AXI_TYPEDEF_ALL(axi_mst_dma, addr_t, id_dma_mst_t, data_dma_t, strb_dma_t, user_dma_t)
-  `AXI_TYPEDEF_ALL(axi_slv_dma, addr_t, id_dma_slv_t, data_dma_t, strb_dma_t, user_dma_t)
-  `AXI_TYPEDEF_ALL(axi_dcache, addr_t, id_dcache_mst_t, data_dma_t, strb_dma_t, user_dma_t)
+  `AXI_TYPEDEF_ALL(axi_mst_tile_wide, addr_t, id_wide_mst_t, data_wide_t, strb_wide_t, user_wide_t)
+  `AXI_TYPEDEF_ALL(axi_slv_tile_wide, addr_t, id_wide_slv_t, data_wide_t, strb_wide_t, user_wide_t)
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
   `MEM_TYPEDEF_ALL(mem, tcdm_mem_addr_t, data_t, strb_t, tcdm_user_t)
-  `MEM_TYPEDEF_ALL(mem_dma, tcdm_mem_addr_t, data_dma_t, strb_dma_t, logic)
 
   `REG_BUS_TYPEDEF_ALL(reg, addr_t, data_t, strb_t)
-  `REG_BUS_TYPEDEF_ALL(reg_dma, addr_t, data_dma_t, strb_dma_t)
 
   // Event counter increments for the TCDM.
   typedef struct packed {
@@ -394,10 +396,10 @@ module cachepool_tile
   axi_mst_resp_t [NrNarrowMasters-1:0] narrow_axi_mst_rsp;
 
   // DMA AXI buses
-  axi_mst_dma_req_t  [NrWideMasters-1:0] wide_axi_mst_req;
-  axi_mst_dma_resp_t [NrWideMasters-1:0] wide_axi_mst_rsp;
-  axi_slv_dma_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
-  axi_slv_dma_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
+  axi_mst_tile_wide_req_t  [NrWideMasters-1:0] wide_axi_mst_req;
+  axi_mst_tile_wide_resp_t [NrWideMasters-1:0] wide_axi_mst_rsp;
+  axi_slv_tile_wide_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
+  axi_slv_tile_wide_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
 
   // 3. Memory Subsystem (Interconnect)
   tcdm_req_t [NrTCDMPortsCores-1:0] tcdm_req;
@@ -528,19 +530,19 @@ module cachepool_tile
   axi_xbar #(
     .Cfg           (DmaXbarCfg           ),
     .ATOPs         (0                    ),
-    .slv_aw_chan_t (axi_mst_dma_aw_chan_t),
-    .mst_aw_chan_t (axi_slv_dma_aw_chan_t),
-    .w_chan_t      (axi_mst_dma_w_chan_t ),
-    .slv_b_chan_t  (axi_mst_dma_b_chan_t ),
-    .mst_b_chan_t  (axi_slv_dma_b_chan_t ),
-    .slv_ar_chan_t (axi_mst_dma_ar_chan_t),
-    .mst_ar_chan_t (axi_slv_dma_ar_chan_t),
-    .slv_r_chan_t  (axi_mst_dma_r_chan_t ),
-    .mst_r_chan_t  (axi_slv_dma_r_chan_t ),
-    .slv_req_t     (axi_mst_dma_req_t    ),
-    .slv_resp_t    (axi_mst_dma_resp_t   ),
-    .mst_req_t     (axi_slv_dma_req_t    ),
-    .mst_resp_t    (axi_slv_dma_resp_t   ),
+    .slv_aw_chan_t (axi_mst_tile_wide_aw_chan_t),
+    .mst_aw_chan_t (axi_slv_tile_wide_aw_chan_t),
+    .w_chan_t      (axi_mst_tile_wide_w_chan_t ),
+    .slv_b_chan_t  (axi_mst_tile_wide_b_chan_t ),
+    .mst_b_chan_t  (axi_slv_tile_wide_b_chan_t ),
+    .slv_ar_chan_t (axi_mst_tile_wide_ar_chan_t),
+    .mst_ar_chan_t (axi_slv_tile_wide_ar_chan_t),
+    .slv_r_chan_t  (axi_mst_tile_wide_r_chan_t ),
+    .mst_r_chan_t  (axi_slv_tile_wide_r_chan_t ),
+    .slv_req_t     (axi_mst_tile_wide_req_t    ),
+    .slv_resp_t    (axi_mst_tile_wide_resp_t   ),
+    .mst_req_t     (axi_slv_tile_wide_req_t    ),
+    .mst_resp_t    (axi_slv_tile_wide_resp_t   ),
     .rule_t        (xbar_rule_t          )
   ) i_axi_wide_xbar (
     .clk_i                 (clk_i                  ),
@@ -586,6 +588,11 @@ module cachepool_tile
       assign cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
       assign unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
     end
+
+    // for (genvar rt = 0; rt < NumRemotePortTile; rt++) begin
+    //   assign cache_req[j][rt+NumL1CtrlTile] = remote_req_i[j*NrTCDMPortsPerCore+rt];
+    //   assign remote_rsp_o[j*NrTCDMPortsPerCore+rt] = cache_rsp [j][rt+NumL1CtrlTile];
+    // end
   end
 
   // Connecting the remote ports
@@ -598,6 +605,8 @@ module cachepool_tile
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
   logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
+
+  logic [NrTCDMPortsPerCore-1:0] remote_pready;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
@@ -616,12 +625,12 @@ module cachepool_tile
       .rst_ni           (rst_ni                 ),
       .tile_id_i        (1'b0                   ),
       .dynamic_offset_i (dynamic_offset         ),
-      .core_req_i       (cache_req        [j]   ),
-      .core_rsp_ready_i (cache_pready     [j]   ),
-      .core_rsp_o       (cache_rsp        [j]   ),
-      .mem_req_o        (cache_xbar_req   [j]   ),
-      .mem_rsp_ready_o  (cache_xbar_pready[j]   ),
-      .mem_rsp_i        (cache_xbar_rsp   [j]   )
+      .core_req_i       ({remote_req_i[j], cache_req        [j]}),
+      .core_rsp_ready_i ({1'b1,            cache_pready     [j]}),
+      .core_rsp_o       ({remote_rsp_o[j], cache_rsp        [j]}),
+      .mem_req_o        ({remote_req_o[j], cache_xbar_req   [j]}),
+      .mem_rsp_ready_o  ({remote_pready[j],cache_xbar_pready[j]}),
+      .mem_rsp_i        ({remote_rsp_i[j], cache_xbar_rsp   [j]})
     );
   end
 
@@ -657,11 +666,11 @@ module cachepool_tile
           .T      ( tcdm_req_chan_t ),
           .Bypass ( 1'b0            )
         ) i_spill_reg_cache_req (
-          .clk_i                            ,
-          .rst_ni  ( rst_ni                ),
-          .valid_i ( cache_amo_req[cb].q_valid ),
-          .ready_o ( cache_amo_rsp[cb].q_ready ),
-          .data_i  ( cache_amo_req[cb].q       ),
+          .clk_i                                   ,
+          .rst_ni  ( rst_ni                       ),
+          .valid_i ( cache_amo_req[cb].q_valid    ),
+          .ready_o ( cache_amo_rsp[cb].q_ready    ),
+          .data_i  ( cache_amo_req[cb].q          ),
           .valid_o ( cache_req_reg.q_valid        ),
           .ready_i ( cache_rsp_reg.q_ready        ),
           .data_o  ( cache_req_reg.q              )
@@ -966,10 +975,10 @@ module cachepool_tile
       .tcdm_req_chan_t         (tcdm_req_chan_t            ),
       .tcdm_rsp_t              (tcdm_rsp_t                 ),
       .tcdm_rsp_chan_t         (tcdm_rsp_chan_t            ),
-      .axi_req_t               (axi_mst_dma_req_t          ),
-      .axi_ar_chan_t           (axi_mst_dma_ar_chan_t      ),
-      .axi_aw_chan_t           (axi_mst_dma_aw_chan_t      ),
-      .axi_rsp_t               (axi_mst_dma_resp_t         ),
+      .axi_req_t               (axi_mst_tile_wide_req_t          ),
+      .axi_ar_chan_t           (axi_mst_tile_wide_ar_chan_t      ),
+      .axi_aw_chan_t           (axi_mst_tile_wide_aw_chan_t      ),
+      .axi_rsp_t               (axi_mst_tile_wide_resp_t         ),
       .hive_req_t              (hive_req_t                 ),
       .hive_rsp_t              (hive_rsp_t                 ),
       .acc_issue_req_t         (acc_issue_req_t            ),
@@ -983,10 +992,10 @@ module cachepool_tile
       .XF8                     (1'b1                       ),
       .XF8ALT                  (1'b0                       ),
       .IsoCrossing             (1'b0                       ),
-      .NumIntOutstandingLoads  (NumIntOutstandingLoads  [i]),
-      .NumIntOutstandingMem    (NumIntOutstandingMem    [i]),
-      .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads[i]),
-      .FPUImplementation       (FPUImplementation       [i]),
+      .NumIntOutstandingLoads  (NumIntOutstandingLoads     ),
+      .NumIntOutstandingMem    (NumIntOutstandingMem       ),
+      .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads   ),
+      .FPUImplementation       (FPUImplementation          ),
       .SpmStackDepth           (SpmStackDepth              ),
       .RegisterOffloadRsp      (RegisterOffloadRsp         ),
       .RegisterCoreReq         (RegisterCoreReq            ),
@@ -1058,8 +1067,8 @@ module cachepool_tile
     .EARLY_LATCH        ( 0                                                  ),
     .L0_EARLY_TAG_WIDTH ( snitch_pkg::PAGE_SHIFT - $clog2(ICacheLineWidth/8) ),
     .ISO_CROSSING       ( 1'b0                                               ),
-    .axi_req_t          ( axi_mst_dma_req_t                                  ),
-    .axi_rsp_t          ( axi_mst_dma_resp_t                                 ),
+    .axi_req_t          ( axi_mst_tile_wide_req_t                                  ),
+    .axi_rsp_t          ( axi_mst_tile_wide_resp_t                                 ),
     .sram_cfg_data_t    ( impl_in_t                                          ),
     .sram_cfg_tag_t     ( impl_in_t                                          )
   ) i_snitch_icache (
@@ -1260,9 +1269,9 @@ module cachepool_tile
   assign narrow_axi_slv_rsp[UART] = axi_out_resp_i;
 
   // Upsize the narrow SoC connection
-  `AXI_TYPEDEF_ALL(axi_mst_dma_narrow, addr_t, id_dma_mst_t, data_t, strb_t, user_t)
-  axi_mst_dma_narrow_req_t  narrow_axi_slv_req_soc;
-  axi_mst_dma_narrow_resp_t narrow_axi_slv_resp_soc;
+  `AXI_TYPEDEF_ALL(axi_mst_core_narrow, addr_t, id_wide_mst_t, data_t, strb_t, user_t)
+  axi_mst_core_narrow_req_t  narrow_axi_slv_req_soc;
+  axi_mst_core_narrow_resp_t narrow_axi_slv_resp_soc;
 
   axi_iw_converter #(
     .AxiAddrWidth          (AxiAddrWidth             ),
@@ -1277,8 +1286,8 @@ module cachepool_tile
     .AxiMstPortMaxTxnsPerId(1                        ),
     .slv_req_t             (axi_slv_req_t            ),
     .slv_resp_t            (axi_slv_resp_t           ),
-    .mst_req_t             (axi_mst_dma_narrow_req_t ),
-    .mst_resp_t            (axi_mst_dma_narrow_resp_t)
+    .mst_req_t             (axi_mst_core_narrow_req_t ),
+    .mst_resp_t            (axi_mst_core_narrow_resp_t)
   ) i_soc_port_iw_convert (
     .clk_i      (clk_i                   ),
     .rst_ni     (rst_ni                  ),
@@ -1296,17 +1305,17 @@ module cachepool_tile
     .AxiMaxReads        (2                          ),
     .AxiSlvPortDataWidth(NarrowDataWidth            ),
     .AxiMstPortDataWidth(AxiDataWidth               ),
-    .ar_chan_t          (axi_mst_dma_ar_chan_t      ),
-    .aw_chan_t          (axi_mst_dma_aw_chan_t      ),
-    .b_chan_t           (axi_mst_dma_b_chan_t       ),
-    .slv_r_chan_t       (axi_mst_dma_narrow_r_chan_t),
-    .slv_w_chan_t       (axi_mst_dma_narrow_b_chan_t),
-    .axi_slv_req_t      (axi_mst_dma_narrow_req_t   ),
-    .axi_slv_resp_t     (axi_mst_dma_narrow_resp_t  ),
-    .mst_r_chan_t       (axi_mst_dma_r_chan_t       ),
-    .mst_w_chan_t       (axi_mst_dma_w_chan_t       ),
-    .axi_mst_req_t      (axi_mst_dma_req_t          ),
-    .axi_mst_resp_t     (axi_mst_dma_resp_t         )
+    .ar_chan_t          (axi_mst_tile_wide_ar_chan_t),
+    .aw_chan_t          (axi_mst_tile_wide_aw_chan_t),
+    .b_chan_t           (axi_mst_tile_wide_b_chan_t ),
+    .slv_r_chan_t       (axi_mst_core_narrow_r_chan_t),
+    .slv_w_chan_t       (axi_mst_core_narrow_b_chan_t),
+    .axi_slv_req_t      (axi_mst_core_narrow_req_t   ),
+    .axi_slv_resp_t     (axi_mst_core_narrow_resp_t  ),
+    .mst_r_chan_t       (axi_mst_tile_wide_r_chan_t ),
+    .mst_w_chan_t       (axi_mst_tile_wide_w_chan_t ),
+    .axi_mst_req_t      (axi_mst_tile_wide_req_t    ),
+    .axi_mst_resp_t     (axi_mst_tile_wide_resp_t   )
   ) i_soc_port_dw_upsize (
     .clk_i      (clk_i                        ),
     .rst_ni     (rst_ni                       ),

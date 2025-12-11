@@ -206,10 +206,10 @@ module tcdm_cache_interco #(
   // These are the address we will keep from original
   assign bitmask_lo = (1 << dynamic_offset_i) - 1;
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and remove the NumOutSelBits bits
-  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - NumOutSelBits)) - 1) << dynamic_offset_i;
+  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - $clog2(NumCache))) - 1) << dynamic_offset_i;
 
 
-  for (genvar port = 0; port < NumCache; port++) begin : gen_cache_io
+  for (genvar port = 0; port < NumCache + NumRemotePort; port++) begin : gen_cache_io
     always_comb begin
       mem_req_o[port] = '{
         q:        mem_req[port],
@@ -219,7 +219,7 @@ module tcdm_cache_interco #(
 
       // remove the middle bits
       mem_req_o[port].q.addr = (mem_req[port].addr & bitmask_lo) |
-                              ((mem_req[port].addr >> NumOutSelBits) & bitmask_up);
+                              ((mem_req[port].addr >> $clog2(NumCache)) & bitmask_up);
 
     end
 

@@ -19,14 +19,14 @@ module cachepool_cluster_wrapper
   parameter int unsigned AxiInIdWidth  = SpatzAxiIdInWidth,
   parameter int unsigned AxiOutIdWidth = SpatzAxiIdOutWidth,
 
-  parameter type axi_in_resp_t = spatz_axi_in_resp_t,
-  parameter type axi_in_req_t  = spatz_axi_in_req_t,
+  parameter type axi_in_resp_t         = spatz_axi_in_resp_t,
+  parameter type axi_in_req_t          = spatz_axi_in_req_t,
 
-  parameter type axi_out_resp_t = spatz_axi_out_resp_t,
-  parameter type axi_out_req_t  = spatz_axi_out_req_t,
+  parameter type axi_out_resp_t        = spatz_axi_out_resp_t,
+  parameter type axi_out_req_t         = spatz_axi_out_req_t,
 
-  parameter type axi_narrow_req_t  = spatz_axi_narrow_req_t,
-  parameter type axi_narrow_resp_t = spatz_axi_narrow_resp_t
+  parameter type axi_narrow_req_t      = spatz_axi_narrow_req_t,
+  parameter type axi_narrow_resp_t     = spatz_axi_narrow_resp_t
 )(
   input  logic                                 clk_i,
   input  logic                                 rst_ni,
@@ -66,7 +66,7 @@ module cachepool_cluster_wrapper
     .ICacheLineWidth          (ICacheLineWidth          ),
     .ICacheLineCount          (ICacheLineCount          ),
     .ICacheSets               (ICacheSets               ),
-    .FPUImplementation        (FPUImplementation        ),
+    .FPUImplementation        (FPUImplementation_Core   ),
     .NumSpatzFPUs             (NFpu                     ),
     .NumSpatzIPUs             (NIpu                     ),
     .SnitchPMACfg             (SnitchPMACfg             ),
@@ -77,8 +77,8 @@ module cachepool_cluster_wrapper
     .axi_in_resp_t            (axi_in_resp_t            ),
     .axi_narrow_req_t         (axi_narrow_req_t         ),
     .axi_narrow_resp_t        (axi_narrow_resp_t        ),
-    .axi_out_req_t            (axi_out_req_t  ),
-    .axi_out_resp_t           (axi_out_resp_t ),
+    .axi_out_req_t            (axi_out_req_t            ),
+    .axi_out_resp_t           (axi_out_resp_t           ),
     .Xdma                     (4'h0                     ),
     .DMAAxiReqFifoDepth       (3                        ),
     .DMAReqFifoDepth          (3                        ),
