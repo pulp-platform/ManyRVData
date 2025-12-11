@@ -23,6 +23,15 @@ package cachepool_pkg;
   //  AXI  //
   ///////////
 
+  // At tile level, we only has three sources: SoCIn, Cores (muxed to one), ICache
+  // Therefore, in theory only two bits are required for each Tile
+
+  localparam int unsigned TileAxiIdWidth          = 3;
+  // For better out-of-order behavior, each tile needs a distinguished ID => Additional log2(NumTiles) bits
+  localparam int unsigned GroupAxiIdWidth         = $clog2(NumTiles);
+
+  localparam int unsigned ClusterAxiIdWidth       = TileAxiIdWidth + GroupAxiIdWidth + 3;
+
   // AXI Data Width
   localparam int unsigned SpatzAxiDataWidth       = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned SpatzAxiStrbWidth       = SpatzAxiDataWidth / 8;
@@ -30,37 +39,63 @@ package cachepool_pkg;
   // AXI Address Width
   localparam int unsigned SpatzAxiAddrWidth       = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
   // AXI ID Width
-  localparam int unsigned SpatzAxiIdInWidth       = 6;
-  localparam int unsigned SpatzAxiIdOutWidth      = 7;
+  // localparam int unsigned SpatzAxiIdInWidth       = 6;
+  // localparam int unsigned SpatzAxiIdOutWidth      = 7;
+
+  // legacy naming
+  localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
+  localparam int unsigned SpatzAxiIdOutWidth      = ClusterAxiIdWidth + 1;
 
   // Fixed AXI ID width for IWC
   // Add 3 because of cache controller (second-level xbar, 4 cache, 1 old port)
-  localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
+  // localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
+  localparam int unsigned IwcAxiIdOutWidth        = SpatzAxiIdOutWidth + 1;
 
   // AXI User Width
   localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif;
 
-  typedef logic [SpatzAxiDataWidth-1:0]  axi_data_t;
-  typedef logic [SpatzAxiStrbWidth-1:0]  axi_strb_t;
-  typedef logic [SpatzAxiAddrWidth-1:0]  axi_addr_t;
+  typedef logic [SpatzAxiDataWidth-1:0]         axi_wide_data_t;
+  typedef logic [SpatzAxiStrbWidth-1:0]         axi_wide_strb_t;
+  typedef logic [SpatzAxiNarrowDataWidth-1:0]   axi_narrow_data_t;
+  typedef logic [SpatzAxiNarrowDataWidth/8-1:0] axi_narrow_strb_t;
+  typedef logic [SpatzAxiAddrWidth-1:0]         axi_addr_t;
   typedef logic [SpatzAxiIdInWidth-1:0]  axi_id_in_t;
   typedef logic [SpatzAxiIdOutWidth-1:0] axi_id_out_t;
   typedef logic [SpatzAxiUserWidth-1:0]  axi_user_t;
+
+  // typedef logic [ClusterAxiIdWidth-1:0]  axi_id_in_t;
+  // typedef logic [SpatzAxiIdOutWidth-1:0]  axi_id_out_t;
+
+  // typedef logic [L1TagDataWidth-1:0]    tag_data_t;
+  // typedef logic [AxiDataWidth-1:0]      data_dma_t;
+  // typedef logic [AxiDataWidth/8-1:0]    strb_dma_t;
+  // typedef logic [NarrowIdWidthIn-1:0]   id_mst_t;
+  // typedef logic [NarrowIdWidthOut-1:0]  id_slv_t;
+  // typedef logic [WideIdWidthIn-1:0]     id_dma_mst_t;
+  // typedef logic [WideIdWidthOut-1:0]    id_dma_slv_t;
+  // typedef logic [WideIdWidthIn-$clog2(NumL1CtrlTile)-1:0] id_dcache_mst_t;
+
+
+  // `AXI_TYPEDEF_ALL(axi_mst, axi_addr_t, id_mst_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  // `AXI_TYPEDEF_ALL(axi_slv, axi_addr_t, id_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  // `AXI_TYPEDEF_ALL(axi_mst_tile_wide, axi_addr_t, id_dma_mst_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
+  // `AXI_TYPEDEF_ALL(axi_slv_tile_wide, axi_addr_t, id_dma_slv_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
 
   // --------
   // Typedefs
   // --------
 
   typedef logic [6:0]  id_slv_t;
+  // typedef logic [ClusterAxiIdWidth-1:0]  id_slv_t;
 
   // Regbus peripherals.
-  `AXI_TYPEDEF_ALL(spatz_axi_narrow, axi_addr_t, id_slv_t, logic [SpatzAxiNarrowDataWidth-1:0], logic [(SpatzAxiNarrowDataWidth/8)-1:0], axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_in, axi_addr_t, axi_id_in_t, logic [SpatzAxiNarrowDataWidth-1:0], logic [(SpatzAxiNarrowDataWidth/8)-1:0], axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_out, axi_addr_t, axi_id_out_t, axi_data_t, axi_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_narrow,  axi_addr_t, id_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_in,      axi_addr_t, axi_id_in_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
 
   typedef logic [IwcAxiIdOutWidth-1:0] axi_id_out_iwc_t;
 
-  `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_data_t, axi_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
 
 
   //////////////////
@@ -116,14 +151,18 @@ package cachepool_pkg;
    *********************/
 
   // How many cores for each tile?
-  localparam int unsigned NumCoresTIle      = NumCores / NumTiles;
+  localparam int unsigned NumCoresTile      = NumCores / NumTiles;
 
   // How many remote ports for each tile? Currently needs to be 0 or 1.
-  localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
+  // localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
+  localparam int unsigned NumRemotePortTile = 1;
+  typedef logic [$clog2(NumTiles)-1 :0] remote_tile_sel_t;
 
   // How many cores within a tile? This is used to select the ports within a tile.
-  localparam int unsigned NumCoresTile    = `ifdef NUM_CORES_PER_TILE `NUM_CORES_PER_TILE `else 0 `endif;
   localparam int unsigned LogNumCoresTile = $clog2(NumCoresTile);
+
+
+  localparam int unsigned NrTCDMPortsPerCore = 5;
 
 
   /////////////////
@@ -133,9 +172,9 @@ package cachepool_pkg;
   localparam int unsigned NFpu = `ifdef SPATZ_NUM_FPU `SPATZ_NUM_FPU `else 0 `endif;
   localparam int unsigned NIpu = `ifdef SPATZ_NUM_IPU `SPATZ_NUM_IPU `else 1 `endif;
 
-  localparam int unsigned NumIntOutstandingLoads   [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
-  localparam int unsigned NumIntOutstandingMem     [NumCores] = '{default: `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif};
-  localparam int unsigned NumSpatzOutstandingLoads [NumCores] = '{default: `ifdef SPATZ_MAX_TRANS `SPATZ_MAX_TRANS `else 0 `endif};
+  localparam int unsigned NumIntOutstandingLoads   = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
+  localparam int unsigned NumIntOutstandingMem     = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
+  localparam int unsigned NumSpatzOutstandingLoads = `ifdef SPATZ_MAX_TRANS `SPATZ_MAX_TRANS `else 0 `endif;
 
   localparam int unsigned NumAxiMaxTrans                      = 32;
 
@@ -159,7 +198,6 @@ package cachepool_pkg;
     PipeConfig:  BEFORE
   };
 
-  localparam fpu_implementation_t FPUImplementation [NumCores] = '{default: FPUImplementation_Core};
 
   ////////////////////
   //  CACHEPOOL L1  //
@@ -212,7 +250,7 @@ package cachepool_pkg;
 
   localparam int unsigned Burst_Enable        = (L1LineWidth > RefillDataWidth);
 
-  typedef logic [$clog2(NumSpatzOutstandingLoads[0])-1:0] reqid_t;
+  typedef logic [$clog2(NumSpatzOutstandingLoads)-1:0]    reqid_t;
 
   typedef logic [$clog2(L1CacheWayEntry)-1:0]             cache_ways_entry_ptr_t;
   typedef logic [$clog2(L1AssoPerCtrl)-1:0]               way_ptr_t;
@@ -290,7 +328,7 @@ package cachepool_pkg;
     cache_info_t    info;
   } cache_refill_rsp_chan_t;
 
-  `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
+  `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_wide_data_t, axi_wide_strb_t, refill_user_t)
 
   // TCDM req/rsp bus => core to L1
   `TCDM_TYPEDEF_ALL(tcdm, narrow_addr_t, narrow_data_t, narrow_strb_t, tcdm_user_t)
@@ -314,7 +352,7 @@ package cachepool_pkg;
   // One more for UART?
   localparam int unsigned NumClusterSlv  = NumL2Channel;
 
-  `REQRSP_TYPEDEF_ALL (l2, axi_addr_t, axi_data_t, axi_strb_t, refill_user_t)
+  `REQRSP_TYPEDEF_ALL (l2, axi_addr_t, axi_wide_data_t, axi_wide_strb_t, refill_user_t)
 
   // DRAM Configuration
   localparam int unsigned DramAddr       = 32'h8000_0000;

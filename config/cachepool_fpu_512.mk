@@ -20,6 +20,8 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
+num_remote_ports_per_tile ?= 1
+
 
 ######################
 ##  CachePool Tile  ##
