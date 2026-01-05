@@ -16,6 +16,8 @@ add wave -noupdate -group Cluster -group xbar -group req_xbar ${cluster_path}/i_
 add wave -noupdate -group Cluster -group xbar -group rsp_xbar ${cluster_path}/i_cluster_xbar/i_rsp_xbar/*
 add wave -noupdate -group Cluster -group xbar ${cluster_path}/i_cluster_xbar/*
 
+add wave -noupdate -group Cluster -group CSR ${cluster_path}/i_cachepool_cluster_peripheral/*
+
 add wave -noupdate -group Cluster -group Internal ${cluster_path}/*
 
 add wave -noupdate -group Group ${group_path}/*

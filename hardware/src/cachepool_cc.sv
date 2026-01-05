@@ -55,8 +55,8 @@ module cachepool_cc
     parameter type                                         acc_issue_req_t          = logic,
     parameter type                                         acc_issue_rsp_t          = logic,
     parameter type                                         acc_rsp_t                = logic,
-    parameter type                                         dma_events_t             = logic,
-    parameter type                                         dma_perf_t               = logic,
+    // parameter type                                         dma_events_t             = logic,
+    // parameter type                                         dma_perf_t               = logic,
     /// FPU configuration.
     parameter fpu_implementation_t                         FPUImplementation        = fpu_implementation_t'(0),
     /// Boot address of core.

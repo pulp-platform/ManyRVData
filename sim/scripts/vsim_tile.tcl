@@ -8,7 +8,7 @@ onerror {resume}
 set tile_path $2
 
 # Add waves for tcdm_mapper and csrs
-add wave -noupdate -group tile[$1] -group CSR ${tile_path}/i_tile/i_snitch_cluster_peripheral/*
+add wave -noupdate -group tile[$1] -group Barrier ${tile_path}/i_tile/i_snitch_barrier/*
 # add wave -noupdate -group tile[$1] -group axi2reqrsp ${tile_path}/i_axi2reqrsp/*
 # Add waves for xbars
 add wave -noupdate -group tile[$1] -group narrow_xbar ${tile_path}/i_tile/i_axi_narrow_xbar/*
