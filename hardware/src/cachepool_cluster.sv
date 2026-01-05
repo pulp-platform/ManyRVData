@@ -222,8 +222,8 @@ module cachepool_cluster
   axi_mst_cache_resp_t [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_rsp;
   axi_slv_cache_req_t  [NumClusterSlv-1 :0]               wide_axi_slv_req;
   axi_slv_cache_resp_t [NumClusterSlv-1 :0]               wide_axi_slv_rsp;
-  axi_narrow_req_t     [NumTiles-1 :0]                    axi_out_req;
-  axi_narrow_resp_t    [NumTiles-1 :0]                    axi_out_resp;
+  axi_narrow_req_t     [NumTiles-1:0][1:0]                axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1:0][1:0]                axi_out_resp;
 
   // 2. BootROM
   reg_cache_req_t bootrom_reg_req;
@@ -344,8 +344,18 @@ module cachepool_cluster
     assign l2_rsp_rr = '0;
   end
 
-  logic [NumTiles-1: 0] group_probe;
-  assign cluster_probe_o = |group_probe;
+  // logic [NumTiles-1: 0] group_probe;
+  // assign cluster_probe_o = |group_probe;
+
+
+  icache_events_t    [NrCores-1:0]         icache_events;
+  logic                                    icache_prefetch_enable;
+  logic              [NrCores-1:0]         cl_interrupt;
+  logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
+  logic              [1:0]                 l1d_insn;
+  logic                                    l1d_insn_valid;
+  logic              [NumL1CacheCtrl-1:0]  l1d_insn_ready;
+  logic              [NumL1CacheCtrl-1:0]  l1d_busy;
 
   if (NumTiles > 1) begin : gen_group
     cachepool_group #(
@@ -390,7 +400,7 @@ module cachepool_cluster
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc_o                    ),
+      // .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
       .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
@@ -476,7 +486,7 @@ module cachepool_cluster
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc_o                    ),
+      // .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
       .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
@@ -485,9 +495,9 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .tile_probe_o             ( group_probe              ),
-      .axi_in_req_i             ( axi_in_req_i          ),
-      .axi_in_resp_o            ( axi_in_resp_o         ),
+      // .tile_probe_o             ( group_probe              ),
+      // .axi_in_req_i             ( axi_in_req_i          ),
+      // .axi_in_resp_o            ( axi_in_resp_o         ),
       .axi_out_req_o            ( axi_out_req  [0]         ),
       .axi_out_resp_i           ( axi_out_resp [0]         ),
       // Remote Ports (not used)
@@ -500,7 +510,16 @@ module cachepool_cluster
       .cache_refill_req_o       ( cache_refill_req         ),
       .cache_refill_rsp_i       ( cache_refill_rsp         ),
       .axi_wide_req_o           ( axi_tile_req[0]          ),
-      .axi_wide_rsp_i           ( axi_tile_rsp[0]          )
+      .axi_wide_rsp_i           ( axi_tile_rsp[0]          ),
+      // Peripherals
+      .icache_events_o          (icache_events             ),
+      .icache_prefetch_enable_i (icache_prefetch_enable    ),
+      .cl_interrupt_i           (cl_interrupt              ),
+      .dynamic_offset_i         (dynamic_offset            ),
+      .l1d_insn_i               (l1d_insn                  ),
+      .l1d_insn_valid_i         (l1d_insn_valid            ),
+      .l1d_insn_ready_o         (l1d_insn_ready            ),
+      .l1d_busy_i               (l1d_busy                  )
     );
 
     axi_to_reqrsp #(
@@ -685,8 +704,8 @@ module cachepool_cluster
     );
   end
 
-  assign axi_narrow_req_o = axi_out_req[0];
-  assign axi_out_resp[0] = axi_narrow_resp_i;
+  assign axi_narrow_req_o = axi_out_req[0][0];
+  assign axi_out_resp[0][0] = axi_narrow_resp_i;
 
   // -------------
   // DMA Subsystem
@@ -759,5 +778,134 @@ module cachepool_cluster
   `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
 
   assign bootrom_reg_rsp.error = 1'b0;
+
+
+  // CSR/Peripherals
+
+  `REG_BUS_TYPEDEF_ALL(reg, narrow_addr_t, narrow_data_t, narrow_strb_t)
+
+  reg_req_t reg_req;
+  reg_rsp_t reg_rsp;
+
+  axi_csr_slv_req_t  axi_csr_req;
+  axi_csr_slv_resp_t axi_csr_rsp;
+
+  axi_mux #(
+    .SlvAxiIDWidth ( ClusterAxiIdWidth           ),
+    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t          ), // AW Channel Type, slave ports
+    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t          ), // AW Channel Type, master port
+    .w_chan_t      ( axi_csr_slv_w_chan_t           ), //  W Channel Type, all ports
+    .slv_b_chan_t  ( axi_csr_mst_b_chan_t           ), //  B Channel Type, slave ports
+    .mst_b_chan_t  ( axi_csr_slv_b_chan_t           ), //  B Channel Type, master port
+    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t          ), // AR Channel Type, slave ports
+    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t          ), // AR Channel Type, master port
+    .slv_r_chan_t  ( axi_csr_mst_r_chan_t           ), //  R Channel Type, slave ports
+    .mst_r_chan_t  ( axi_csr_slv_r_chan_t           ), //  R Channel Type, master port
+    .slv_req_t     ( axi_csr_mst_req_t              ),
+    .slv_resp_t    ( axi_csr_mst_resp_t             ),
+    .mst_req_t     ( axi_csr_slv_req_t              ),
+    .mst_resp_t    ( axi_csr_slv_resp_t             ),
+    .NoSlvPorts    ( NumTiles + 1                   ), // Number of Masters for the module
+    .FallThrough   ( 0 ),
+    .SpillAw       ( XbarLatency[4]     ),
+    .SpillW        ( XbarLatency[3]     ),
+    .SpillB        ( XbarLatency[2]     ),
+    .SpillAr       ( XbarLatency[1]     ),
+    .SpillR        ( XbarLatency[0]     ),
+    .MaxWTrans     ( 2                              )
+  ) i_axi_csr_mux (
+    .clk_i       ( clk_i      ),   // Clock
+    .rst_ni      ( rst_ni     ),  // Asynchronous reset active low
+    .test_i      ('0),  // Test Mode enable
+    .slv_reqs_i  ( {axi_in_req_i,  axi_out_req [0][1]}  ),
+    .slv_resps_o ( {axi_in_resp_o, axi_out_resp[0][1]}  ),
+    .mst_req_o   ( axi_csr_req  ),
+    .mst_resp_i  ( axi_csr_rsp  )
+  );
+
+  axi_to_reg #(
+    .ADDR_WIDTH         (AxiAddrWidth     ),
+    .DATA_WIDTH         (SpatzAxiNarrowDataWidth  ),
+    .AXI_MAX_WRITE_TXNS (1                ),
+    .AXI_MAX_READ_TXNS  (1                ),
+    .DECOUPLE_W         (0                ),
+    .ID_WIDTH           (CsrAxiSlvIdWidth ),
+    .USER_WIDTH         (SpatzAxiUserWidth  ),
+    .axi_req_t          (axi_csr_slv_req_t    ),
+    .axi_rsp_t          (axi_csr_slv_resp_t   ),
+    .reg_req_t          (reg_req_t        ),
+    .reg_rsp_t          (reg_rsp_t        )
+  ) i_csr_axi_to_reg (
+    .clk_i      (clk_i                    ),
+    .rst_ni     (rst_ni                   ),
+    .testmode_i (1'b0                     ),
+    .axi_req_i  (axi_csr_req              ),
+    .axi_rsp_o  (axi_csr_rsp              ),
+    .reg_req_o  (reg_req                  ),
+    .reg_rsp_i  (reg_rsp                  )
+  );
+
+
+  // Event counter increments for the TCDM.
+  typedef struct packed {
+    /// Number requests going in
+    logic [$clog2(5):0] inc_accessed;
+    /// Number of requests stalled due to congestion
+    logic [$clog2(5):0] inc_congested;
+  } tcdm_events_t;
+
+  // Event counter increments for DMA.
+  typedef struct packed {
+    logic aw_stall, ar_stall, r_stall, w_stall,
+    buf_w_stall, buf_r_stall;
+    logic aw_valid, aw_ready, aw_done, aw_bw;
+    logic ar_valid, ar_ready, ar_done, ar_bw;
+    logic r_valid, r_ready, r_done, r_bw;
+    logic w_valid, w_ready, w_done, w_bw;
+    logic b_valid, b_ready, b_done;
+    logic dma_busy;
+    axi_pkg::len_t aw_len, ar_len;
+    axi_pkg::size_t aw_size, ar_size;
+    logic [$clog2(SpatzAxiNarrowDataWidth/8):0] num_bytes_written;
+  } dma_events_t;
+
+  localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
+  narrow_addr_t tcdm_start_address, tcdm_end_address;
+  assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
+  assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
+
+  spatz_cluster_peripheral #(
+    .AddrWidth     (AxiAddrWidth    ),
+    .SPMWidth      ($clog2(L1NumSet)),
+    .NumCacheCtrl  (NumL1CtrlTile  ),
+    .reg_req_t     (reg_req_t       ),
+    .reg_rsp_t     (reg_rsp_t       ),
+    .tcdm_events_t (tcdm_events_t   ),
+    .dma_events_t  (dma_events_t    ),
+    .NrCores       (NrCores         )
+  ) i_cachepool_cluster_peripheral (
+    .clk_i                    (clk_i                 ),
+    .rst_ni                   (rst_ni                ),
+    .eoc_o                    (eoc_o                 ),
+    .reg_req_i                (reg_req               ),
+    .reg_rsp_o                (reg_rsp               ),
+    /// The TCDM always starts at the cluster base.
+    .tcdm_start_address_i     (tcdm_start_address    ),
+    .tcdm_end_address_i       (tcdm_end_address      ),
+    .icache_prefetch_enable_o (icache_prefetch_enable),
+    .cl_clint_o               (cl_interrupt          ),
+    .cluster_hart_base_id_i   (hart_base_id_i        ),
+    .core_events_i            ('0                    ),
+    .tcdm_events_i            ('0                    ),
+    .dma_events_i             ('0                    ),
+    .icache_events_i          (icache_events         ),
+    .cluster_probe_o          (cluster_probe_o       ),
+    .dynamic_offset_o         (dynamic_offset        ),
+    .l1d_spm_size_o           (                      ),
+    .l1d_insn_o               (l1d_insn              ),
+    .l1d_insn_valid_o         (l1d_insn_valid        ),
+    .l1d_insn_ready_i         (l1d_insn_ready        ),
+    .l1d_busy_o               (l1d_busy              )
+  );
 
 endmodule
