@@ -16,6 +16,10 @@ variables:
   python: 'python3'
   python3: 'python3'
 
+default:
+  tags:
+    - dolent
+
 stages:
   - build
   # - sim-vsim
@@ -32,6 +36,7 @@ cache:
     expire_in: 1 day
 
 cc-preflight:
+  extends: .base
   stage: build
   script:
     - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
