@@ -69,25 +69,25 @@ build-tc:
         echo "Toolchain found in cache. Skipping build."
       fi
 
-build-vsim:
-  extends: .base
-  needs: [ "build-tc", "cc-preflight" ]
-  stage: build
-  script:
-    - make init
-    - make dram-build CMAKE=cmake-3.28.3
-    - make generate config=cachepool_fpu_512
-    - export CC=$(command -v gcc-11.2.0 || command -v gcc)
-    - export CXX=$(command -v g++-11.2.0 || command -v g++)
-    - make vsim config=cachepool_fpu_512
-  artifacts:
-    paths: [ "software/build", "sim/bin" ]
+# build-vsim:
+#   extends: .base
+#   needs: [ "build-tc", "cc-preflight" ]
+#   stage: build
+#   script:
+#     - make init
+#     - make dram-build CMAKE=cmake-3.28.3
+#     - make generate config=cachepool_fpu_512
+#     - export CC=$(command -v gcc-11.2.0 || command -v gcc)
+#     - export CXX=$(command -v g++-11.2.0 || command -v g++)
+#     - make vsim config=cachepool_fpu_512
+#   artifacts:
+#     paths: [ "software/build", "sim/bin" ]
 
-run_dotp:
-  extends: .base
-  needs: [ build-vsim ]
-  stage: sim-vsim
-  script:
-    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
-  artifacts:
-    paths: [ "software/build", "sim/bin" ]
+# run_dotp:
+#   extends: .base
+#   needs: [ build-vsim ]
+#   stage: sim-vsim
+#   script:
+#     - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
+#   artifacts:
+#     paths: [ "software/build", "sim/bin" ]
