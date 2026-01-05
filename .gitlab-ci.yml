@@ -71,7 +71,7 @@ build-tc:
 
 build-vsim:
   extends: .base
-  needs: [ build-tc cc-preflight ]
+  needs: [ "build-tc", "cc-preflight" ]
   stage: build
   script:
     - make init
