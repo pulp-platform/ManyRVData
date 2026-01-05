@@ -23,21 +23,31 @@ package cachepool_pkg;
   //  AXI  //
   ///////////
 
-  // At tile level, we only has three sources: SoCIn, Cores (muxed to one), ICache
-  // Therefore, in theory only two bits are required for each Tile
+  // AXI requires different types after xbar/mux
+  // We try to put all AXI related parameters and types at interface in this place for easier management
 
-  localparam int unsigned TileAxiIdWidth          = 3;
-  // For better out-of-order behavior, each tile needs a distinguished ID => Additional log2(NumTiles) bits
-  localparam int unsigned GroupAxiIdWidth         = $clog2(NumTiles);
-
-  localparam int unsigned ClusterAxiIdWidth       = TileAxiIdWidth + GroupAxiIdWidth + 3;
-
+  /***** Basic Types and Width *****/
   // AXI Data Width
   localparam int unsigned SpatzAxiDataWidth       = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned SpatzAxiStrbWidth       = SpatzAxiDataWidth / 8;
   localparam int unsigned SpatzAxiNarrowDataWidth = `ifdef DATA_WIDTH `DATA_WIDTH `else 0 `endif;
+  localparam int unsigned SpatzAxiNarrowStrbWidth = SpatzAxiNarrowDataWidth / 8;
   // AXI Address Width
   localparam int unsigned SpatzAxiAddrWidth       = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
+  // AXI User Width
+  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif;
+
+
+  // localparam int unsigned TileAxiIdWidth          = 3;
+  // // For better out-of-order behavior, each tile needs a distinguished ID => Additional log2(NumTiles) bits
+
+  localparam int unsigned TileAxiIdWidth          = 3;
+  localparam int unsigned GroupAxiIdWidth         = TileAxiIdWidth + $clog2(NumTiles);
+
+  // localparam int unsigned GroupAxiIdWidth         = $clog2(NumTiles);
+
+  localparam int unsigned ClusterAxiIdWidth       = GroupAxiIdWidth + 3;
+
   // AXI ID Width
   // localparam int unsigned SpatzAxiIdInWidth       = 6;
   // localparam int unsigned SpatzAxiIdOutWidth      = 7;
@@ -51,17 +61,62 @@ package cachepool_pkg;
   // localparam int unsigned IwcAxiIdOutWidth        = 3 + $clog2(4) + 3;
   localparam int unsigned IwcAxiIdOutWidth        = SpatzAxiIdOutWidth + 1;
 
-  // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif;
+  localparam int unsigned CsrAxiMstIdWidth        = ClusterAxiIdWidth;
+  localparam int unsigned CsrAxiSlvIdWidth        = ClusterAxiIdWidth + 1;
+
+
 
   typedef logic [SpatzAxiDataWidth-1:0]         axi_wide_data_t;
   typedef logic [SpatzAxiStrbWidth-1:0]         axi_wide_strb_t;
   typedef logic [SpatzAxiNarrowDataWidth-1:0]   axi_narrow_data_t;
-  typedef logic [SpatzAxiNarrowDataWidth/8-1:0] axi_narrow_strb_t;
+  typedef logic [SpatzAxiNarrowStrbWidth-1:0]   axi_narrow_strb_t;
   typedef logic [SpatzAxiAddrWidth-1:0]         axi_addr_t;
-  typedef logic [SpatzAxiIdInWidth-1:0]  axi_id_in_t;
-  typedef logic [SpatzAxiIdOutWidth-1:0] axi_id_out_t;
-  typedef logic [SpatzAxiUserWidth-1:0]  axi_user_t;
+  typedef logic [SpatzAxiUserWidth-1:0]         axi_user_t;
+
+  typedef logic [SpatzAxiIdInWidth-1:0]         axi_id_in_t;
+  typedef logic [SpatzAxiIdOutWidth-1:0]        axi_id_out_t;
+
+  typedef logic [CsrAxiMstIdWidth-1:0]          axi_id_csr_mst_t;
+  typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
+
+
+  /***** Tile *****/
+  // We have three sets of axi ports for each tile
+  // 1. Wide   output bus for BootRom & L2 (from ICache)
+  // 2. Narrow output bus for UART
+  // 3. Narrow input  bus for SoC control
+
+  // localparam int unsigned TileAxiIdWidth          = 3;
+  // localparam int unsigned GroupAxiIdWidth         = TileAxiIdWidth + $clog2(NumTiles);
+
+  ///// Path 1: Wide bus
+
+
+
+
+  /***** Group *****/
+
+
+
+
+  /***** Cluster *****/
+
+  `AXI_TYPEDEF_ALL(axi_csr_mst, axi_addr_t, axi_id_csr_mst_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_csr_slv, axi_addr_t, axi_id_csr_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+
+
+
+
+  /***** TB *****/
+
+
+  // At tile level, we only has three sources: SoCIn, Cores (muxed to one), ICache
+  // Therefore, in theory only two bits are required for each Tile
+
+
+
+
+
 
   // typedef logic [ClusterAxiIdWidth-1:0]  axi_id_in_t;
   // typedef logic [SpatzAxiIdOutWidth-1:0]  axi_id_out_t;
@@ -85,7 +140,7 @@ package cachepool_pkg;
   // Typedefs
   // --------
 
-  typedef logic [6:0]  id_slv_t;
+  typedef logic [5:0]  id_slv_t;
   // typedef logic [ClusterAxiIdWidth-1:0]  id_slv_t;
 
   // Regbus peripherals.
