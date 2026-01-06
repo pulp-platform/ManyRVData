@@ -24,6 +24,7 @@ module cachepool_group
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
+  import snitch_icache_pkg::icache_events_t;
   #(
     /// Width of physical address.
     parameter int                     unsigned               AxiAddrWidth                       = 48,
@@ -116,7 +117,7 @@ module cachepool_group
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           debug_req_i,
     /// End of Computing indicator to notify the host/tb
-    output logic                                  eoc_o,
+    // output logic                                  eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           meip_i,
@@ -137,22 +138,32 @@ module cachepool_group
     input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
     /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
     /// to the overall system that the cluster is executing something.
-    output logic          [NumTiles-1:0]          group_probe_o,
-    /// AXI Core cluster in-port.
-    input  axi_in_req_t             axi_in_req_i,
-    output axi_in_resp_t            axi_in_rsp_o,
-    /// AXI Narrow out-port (UART)
-    output axi_narrow_req_t   [NumTiles-1:0]                 axi_narrow_req_o,
-    input  axi_narrow_resp_t  [NumTiles-1:0]                 axi_narrow_rsp_i,
+    // output logic          [NumTiles-1:0]          group_probe_o,
+    // /// AXI Core cluster in-port.
+    // input  axi_in_req_t                                       axi_in_req_i,
+    // output axi_in_resp_t                                      axi_in_rsp_o,
+    /// AXI Narrow out-port (UART/Peripheral)
+    output axi_narrow_req_t   [GroupNarrowAxiPorts-1:0]           axi_narrow_req_o,
+    input  axi_narrow_resp_t  [GroupNarrowAxiPorts-1:0]           axi_narrow_rsp_i,
     /// Wide AXI ports to cluster level
-    output axi_out_req_t      [NumTiles*NumTileWideAxi-1:0]  axi_wide_req_o,
-    input  axi_out_resp_t     [NumTiles*NumTileWideAxi-1:0]  axi_wide_rsp_i,
+    output axi_out_req_t      [GroupWideAxiPorts-1:0]             axi_wide_req_o,
+    input  axi_out_resp_t     [GroupWideAxiPorts-1:0]             axi_wide_rsp_i,
 
     /// Cache refill ports
-    output cache_trans_req_t  [NumL1CacheCtrl-1:0]  cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CacheCtrl-1:0]  cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CacheCtrl-1:0]                cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CacheCtrl-1:0]                cache_refill_rsp_i,
 
-    /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
+    /// Peripheral signals
+    output icache_events_t    [NrCores-1:0]         icache_events_o,
+    input  logic                                    icache_prefetch_enable_i,
+    input  logic              [NrCores-1:0]         cl_interrupt_i,
+    input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
+    input  logic              [1:0]                 l1d_insn_i,
+    input  logic                                    l1d_insn_valid_i,
+    output logic              [NumL1CacheCtrl-1:0]  l1d_insn_ready_o,
+    input  logic              [NumL1CacheCtrl-1:0]  l1d_busy_i,
+
+    /// SRAM Configuration
     input  impl_in_t      [NrSramCfg-1:0]         impl_i,
     /// Indicate the program execution is error
     output logic                                  error_o
@@ -208,8 +219,9 @@ module cachepool_group
   axi_in_resp_t [NumTiles-1:0] axi_in_rsp;
 
   // TODO: How to wire control signal here? Broadcast?
-  assign axi_in_rsp_o  = axi_in_rsp[0];
-  assign axi_in_req[0] = axi_in_req_i;
+  // In theory, the SoC control is only used to access peripherals
+  // assign axi_in_rsp_o  = axi_in_rsp[0];
+  // assign axi_in_req[0] = axi_in_req_i;
 
 
 
@@ -300,37 +312,41 @@ module cachepool_group
       .MaxMstTrans              ( MaxMstTrans              ),
       .MaxSlvTrans              ( MaxSlvTrans              )
     ) i_tile (
-      .clk_i                    ( clk_i                    ),
-      .rst_ni                   ( rst_ni                   ),
-      .eoc_o                    ( eoc[t]                   ),
-      .impl_i                   ( impl_i                   ),
-      .error_o                  ( error[t]                 ),
+      .clk_i                    ( clk_i                                               ),
+      .rst_ni                   ( rst_ni                                              ),
+      .impl_i                   ( impl_i                                              ),
+      .error_o                  ( error[t]                                            ),
       // TODO: remove hardcode
-      .debug_req_i              ( debug_req_i[t+:4]     ),
-      .meip_i                   ( meip_i[t+:4]          ),
-      .mtip_i                   ( mtip_i[t+:4]          ),
-      .msip_i                   ( msip_i[t+:4]          ),
-      .hart_base_id_i           ( hart_base_id_i           ),
-      .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .tile_probe_o             ( group_probe_o[t]         ),
-      // SoC in for control
-      .axi_in_req_i             ( axi_in_req[t]              ),
-      .axi_in_resp_o            ( axi_in_rsp[t]            ),
+      .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]    ),
+      .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]    ),
+      .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]    ),
+      .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]    ),
+      .hart_base_id_i           ( hart_base_id_i                                      ),
+      .cluster_base_addr_i      ( cluster_base_addr_i                                 ),
       // AXI out for UART
-      .axi_out_req_o            ( axi_narrow_req_o[t]      ),
-      .axi_out_resp_i           ( axi_narrow_rsp_i[t]      ),
+      .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
+      .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       // Remote Access Ports
-      .remote_req_o             ( tile_remote_out_req[t]   ),
-      .remote_req_dst_o         ( remote_out_sel_tile[t]   ),
-      .remote_rsp_i             ( tile_remote_out_rsp[t]   ),
-      .remote_req_i             ( tile_remote_in_req [t]   ),
-      .remote_rsp_o             ( tile_remote_in_rsp [t]   ),
+      .remote_req_o             ( tile_remote_out_req[t]                              ),
+      .remote_req_dst_o         ( remote_out_sel_tile[t]                              ),
+      .remote_rsp_i             ( tile_remote_out_rsp[t]                              ),
+      .remote_req_i             ( tile_remote_in_req [t]                              ),
+      .remote_rsp_o             ( tile_remote_in_rsp [t]                              ),
       // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req[t]),
-      .cache_refill_rsp_i       ( cache_refill_rsp[t]),
+      .cache_refill_req_o       ( cache_refill_req  [t]                               ),
+      .cache_refill_rsp_i       ( cache_refill_rsp  [t]                               ),
       // BootROM / Core-side Cache Bypass
-      .axi_wide_req_o           ( axi_wide_req_o    [t*NumTileWideAxi+:NumTileWideAxi]),
-      .axi_wide_rsp_i           ( axi_wide_rsp_i    [t*NumTileWideAxi+:NumTileWideAxi])
+      .axi_wide_req_o           ( axi_wide_req_o    [t*TileWideAxiPorts+:TileWideAxiPorts]),
+      .axi_wide_rsp_i           ( axi_wide_rsp_i    [t*TileWideAxiPorts+:TileWideAxiPorts]),
+      // Peripherals
+      .icache_events_o          ( /* unused */                                        ),
+      .icache_prefetch_enable_i ( icache_prefetch_enable_i                            ),
+      .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]    ),
+      .dynamic_offset_i         ( dynamic_offset_i                                    ),
+      .l1d_insn_i               ( l1d_insn_i                                          ),
+      .l1d_insn_valid_i         ( l1d_insn_valid_i                                    ),
+      .l1d_insn_ready_o         ( l1d_insn_ready_o  [t*NumL1CtrlTile+:NumL1CtrlTile]  ),
+      .l1d_busy_i               ( l1d_busy_i        [t*NumL1CtrlTile+:NumL1CtrlTile]  )
     );
   end
 
@@ -355,7 +371,7 @@ module cachepool_group
     ) i_tile_remote_xbar (
       .clk_i            (clk_i                      ),
       .rst_ni           (rst_ni                     ),
-      .slv_req_i        (tile_remote_out_req_chan [p]   ),
+      .slv_req_i        (tile_remote_out_req_chan [p]  ),
       .slv_req_valid_i  (tile_remote_out_req_valid[p]  ),
       .slv_req_ready_o  (tile_remote_out_req_ready[p]  ),
       .slv_rsp_o        (tile_remote_out_rsp_chan [p]  ),

@@ -146,8 +146,8 @@ module cachepool_cluster
     output axi_narrow_req_t                       axi_narrow_req_o,
     input  axi_narrow_resp_t                      axi_narrow_resp_i,
     /// AXI Core cluster out-port to main memory.
-    output axi_out_req_t  [NumClusterSlv-1:0]     axi_out_req_o,
-    input  axi_out_resp_t [NumClusterSlv-1:0]     axi_out_resp_i,
+    output axi_out_req_t  [ClusterWideOutAxiPorts-1:0]     axi_out_req_o,
+    input  axi_out_resp_t [ClusterWideOutAxiPorts-1:0]     axi_out_resp_i,
     /// SRAM Configuration: L1D Data + L1D Tag + L1D FIFO + L1I Data + L1I Tag
     input  impl_in_t      [NrSramCfg-1:0]         impl_i,
     /// Indicate the program execution is error
@@ -177,7 +177,7 @@ module cachepool_cluster
   // Cache XBar configuration struct
   localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
     NoSlvPorts        : NumClusterMst*NumTiles,
-    NoMstPorts        : NumClusterSlv,
+    NoMstPorts        : ClusterWideOutAxiPorts,
     MaxMstTrans       : MaxMstTrans,
     MaxSlvTrans       : MaxSlvTrans,
     FallThrough       : 1'b0,
@@ -187,7 +187,7 @@ module cachepool_cluster
     UniqueIds         : 1'b0,
     AxiAddrWidth      : AxiAddrWidth,
     AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : NumClusterSlv - 1,
+    NoAddrRules       : ClusterWideOutAxiPorts - 1,
     default           : '0
   };
 
@@ -218,16 +218,16 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  axi_mst_cache_req_t  [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_req;
-  axi_mst_cache_resp_t [NumTiles-1:0][NumTileWideAxi-1:0] axi_tile_rsp;
-  axi_slv_cache_req_t  [NumClusterSlv-1 :0]               wide_axi_slv_req;
-  axi_slv_cache_resp_t [NumClusterSlv-1 :0]               wide_axi_slv_rsp;
+  axi_mst_cache_req_t  [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_req;
+  axi_mst_cache_resp_t [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_rsp;
+  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1 :0]               wide_axi_slv_req;
+  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1 :0]               wide_axi_slv_rsp;
   axi_narrow_req_t     [NumTiles-1:0][1:0]                axi_out_req;
   axi_narrow_resp_t    [NumTiles-1:0][1:0]                axi_out_resp;
 
   // 2. BootROM
-  reg_cache_req_t bootrom_reg_req;
-  reg_cache_rsp_t bootrom_reg_rsp;
+  reg_cache_req_t [NumTiles-1:0] bootrom_reg_req;
+  reg_cache_rsp_t [NumTiles-1:0] bootrom_reg_rsp;
 
   // ---------------
   // CachePool Tile
@@ -243,25 +243,25 @@ module cachepool_cluster
   cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
   logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
 
-  l2_req_t               [NumClusterSlv-1          :0] l2_req;
-  l2_rsp_t               [NumClusterSlv-1          :0] l2_rsp;
+  l2_req_t               [ClusterWideOutAxiPorts-1          :0] l2_req;
+  l2_rsp_t               [ClusterWideOutAxiPorts-1          :0] l2_rsp;
 
-  cache_trans_req_chan_t [NumClusterSlv-1          :0] l2_req_chan;
-  cache_trans_rsp_chan_t [NumClusterSlv-1          :0] l2_rsp_chan;
-  logic                  [NumClusterSlv-1          :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
+  cache_trans_req_chan_t [ClusterWideOutAxiPorts-1          :0] l2_req_chan;
+  cache_trans_rsp_chan_t [ClusterWideOutAxiPorts-1          :0] l2_rsp_chan;
+  logic                  [ClusterWideOutAxiPorts-1          :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
 
   typedef logic   [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
   // one more bit for out-of-range alert
-  typedef logic   [$clog2(NumClusterSlv)           :0] tile_sel_err_t;
-  typedef logic   [$clog2(NumClusterSlv)-1         :0] tile_sel_t;
+  typedef logic   [$clog2(ClusterWideOutAxiPorts)           :0] tile_sel_err_t;
+  typedef logic   [$clog2(ClusterWideOutAxiPorts)-1         :0] tile_sel_t;
 
   // Which l2 we want to select for each req
   tile_sel_err_t  [NumTiles*NumClusterMst-1        :0] tile_sel_err;
   tile_sel_t      [NumTiles*NumClusterMst-1        :0] tile_sel;
   // Which tile we selected for each req
-  l2_sel_t        [NumClusterSlv-1                 :0] tile_selected;
+  l2_sel_t        [ClusterWideOutAxiPorts-1                 :0] tile_selected;
   // which tile we want to select for each rsp
-  l2_sel_t        [NumClusterSlv-1                 :0] l2_sel;
+  l2_sel_t        [ClusterWideOutAxiPorts-1                 :0] l2_sel;
   // What is the priority for response wiring?
   // Here we want to make sure the responses from one burst
   // continues until done
@@ -278,8 +278,8 @@ module cachepool_cluster
 
     for (genvar port = 0; port < NumTiles*NumClusterMst; port ++) begin : gen_rsp_rr
       tile_sel_t l2_rr;
-      logic [NumClusterSlv-1:0] arb_valid;
-      for (genvar i = 0; i < NumClusterSlv; i ++) begin
+      logic [ClusterWideOutAxiPorts-1:0] arb_valid;
+      for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
         // Used to check the round-robin selection
         assign arb_valid[i] = (l2_rsp_chan[i].user.bank_id == port) & l2_rsp_valid[i];
       end
@@ -317,7 +317,7 @@ module cachepool_cluster
       // We use the rr_arb_tree to get the round-robin selection
       // No data is needed here, only need the handshaking
       rr_arb_tree #(
-        .NumIn     ( NumClusterSlv    ),
+        .NumIn     ( ClusterWideOutAxiPorts    ),
         .DataType  ( logic     ),
         .ExtPrio   ( 1'b0      ),
         .AxiVldRdy ( 1'b1      ),
@@ -400,7 +400,6 @@ module cachepool_cluster
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      // .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
       .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
@@ -409,37 +408,45 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .group_probe_o            ( group_probe              ),
-      .axi_in_req_i             ( axi_in_req_i             ),
-      .axi_in_rsp_o             ( axi_in_resp_o            ),
+      // .axi_in_req_i             ( axi_in_req_i             ),
+      // .axi_in_rsp_o             ( axi_in_resp_o            ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
+      .axi_wide_req_o           ( axi_tile_req             ),
+      .axi_wide_rsp_i           ( axi_tile_rsp             ),
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req         ),
       .cache_refill_rsp_i       ( cache_refill_rsp         ),
-      .axi_wide_req_o           ( axi_tile_req             ),
-      .axi_wide_rsp_i           ( axi_tile_rsp             )
+      // Peripherals
+      .icache_events_o          ( icache_events             ),
+      .icache_prefetch_enable_i ( icache_prefetch_enable    ),
+      .cl_interrupt_i           ( cl_interrupt              ),
+      .dynamic_offset_i         ( dynamic_offset            ),
+      .l1d_insn_i               ( l1d_insn                  ),
+      .l1d_insn_valid_i         ( l1d_insn_valid            ),
+      .l1d_insn_ready_o         ( l1d_insn_ready            ),
+      .l1d_busy_i               ( l1d_busy                  )
     );
 
     for (genvar t = 0; t < NumTiles; t ++) begin : gen_axi_converter
       axi_to_reqrsp #(
-        .axi_req_t    (axi_mst_cache_req_t        ),
-        .axi_rsp_t    (axi_mst_cache_resp_t       ),
-        .AddrWidth    (AxiAddrWidth               ),
-        .DataWidth    (AxiDataWidth               ),
-        .UserWidth    ($bits(refill_user_t)       ),
-        .IdWidth      (AxiIdWidthIn               ),
-        .BufDepth     (NumSpatzOutstandingLoads   ),
-        .reqrsp_req_t (cache_trans_req_t          ),
-        .reqrsp_rsp_t (cache_trans_rsp_t          )
+        .axi_req_t    ( axi_mst_cache_req_t        ),
+        .axi_rsp_t    ( axi_mst_cache_resp_t       ),
+        .AddrWidth    ( AxiAddrWidth               ),
+        .DataWidth    ( AxiDataWidth               ),
+        .UserWidth    ( $bits(refill_user_t)       ),
+        .IdWidth      ( AxiIdWidthIn               ),
+        .BufDepth     ( NumSpatzOutstandingLoads   ),
+        .reqrsp_req_t ( cache_trans_req_t          ),
+        .reqrsp_rsp_t ( cache_trans_rsp_t          )
       ) i_axi2reqrsp  (
-        .clk_i        (clk_i                                  ),
-        .rst_ni       (rst_ni                                 ),
-        .busy_o       (                                       ),
-        .axi_req_i    (axi_tile_req [t][TileMem]),
-        .axi_rsp_o    (axi_tile_rsp [t][TileMem]),
-        .reqrsp_req_o (cache_core_req[t]                      ),
-        .reqrsp_rsp_i (cache_core_rsp[t]                      )
+        .clk_i        ( clk_i                      ),
+        .rst_ni       ( rst_ni                     ),
+        .busy_o       (                            ),
+        .axi_req_i    ( axi_tile_req [t][TileMem]  ),
+        .axi_rsp_o    ( axi_tile_rsp [t][TileMem]  ),
+        .reqrsp_req_o ( cache_core_req[t]          ),
+        .reqrsp_rsp_i ( cache_core_rsp[t]          )
       );
     end
 
@@ -512,34 +519,34 @@ module cachepool_cluster
       .axi_wide_req_o           ( axi_tile_req[0]          ),
       .axi_wide_rsp_i           ( axi_tile_rsp[0]          ),
       // Peripherals
-      .icache_events_o          (icache_events             ),
-      .icache_prefetch_enable_i (icache_prefetch_enable    ),
-      .cl_interrupt_i           (cl_interrupt              ),
-      .dynamic_offset_i         (dynamic_offset            ),
-      .l1d_insn_i               (l1d_insn                  ),
-      .l1d_insn_valid_i         (l1d_insn_valid            ),
-      .l1d_insn_ready_o         (l1d_insn_ready            ),
-      .l1d_busy_i               (l1d_busy                  )
+      .icache_events_o          ( icache_events             ),
+      .icache_prefetch_enable_i ( icache_prefetch_enable    ),
+      .cl_interrupt_i           ( cl_interrupt              ),
+      .dynamic_offset_i         ( dynamic_offset            ),
+      .l1d_insn_i               ( l1d_insn                  ),
+      .l1d_insn_valid_i         ( l1d_insn_valid            ),
+      .l1d_insn_ready_o         ( l1d_insn_ready            ),
+      .l1d_busy_i               ( l1d_busy                  )
     );
 
     axi_to_reqrsp #(
-      .axi_req_t    (axi_mst_cache_req_t        ),
-      .axi_rsp_t    (axi_mst_cache_resp_t       ),
-      .AddrWidth    (AxiAddrWidth               ),
-      .DataWidth    (AxiDataWidth               ),
-      .UserWidth    ($bits(refill_user_t)       ),
-      .IdWidth      (AxiIdWidthIn               ),
-      .BufDepth     (NumSpatzOutstandingLoads   ),
-      .reqrsp_req_t (cache_trans_req_t          ),
-      .reqrsp_rsp_t (cache_trans_rsp_t          )
+      .axi_req_t    ( axi_mst_cache_req_t        ),
+      .axi_rsp_t    ( axi_mst_cache_resp_t       ),
+      .AddrWidth    ( AxiAddrWidth               ),
+      .DataWidth    ( AxiDataWidth               ),
+      .UserWidth    ( $bits(refill_user_t)       ),
+      .IdWidth      ( AxiIdWidthIn               ),
+      .BufDepth     ( NumSpatzOutstandingLoads   ),
+      .reqrsp_req_t ( cache_trans_req_t          ),
+      .reqrsp_rsp_t ( cache_trans_rsp_t          )
     ) i_axi2reqrsp  (
-      .clk_i        (clk_i                                  ),
-      .rst_ni       (rst_ni                                 ),
-      .busy_o       (                                       ),
-      .axi_req_i    (axi_tile_req [0][TileMem]),
-      .axi_rsp_o    (axi_tile_rsp [0][TileMem]),
-      .reqrsp_req_o (cache_core_req[0]                      ),
-      .reqrsp_rsp_i (cache_core_rsp[0]                      )
+      .clk_i        ( clk_i                      ),
+      .rst_ni       ( rst_ni                     ),
+      .busy_o       (                            ),
+      .axi_req_i    ( axi_tile_req [0][TileMem]  ),
+      .axi_rsp_o    ( axi_tile_rsp [0][TileMem]  ),
+      .reqrsp_req_o ( cache_core_req[0]          ),
+      .reqrsp_rsp_i ( cache_core_rsp[0]          )
     );
   end
 
@@ -580,9 +587,9 @@ module cachepool_cluster
     logic [AxiAddrWidth-1:0] mask;
   } reqrsp_rule_t;
 
-  reqrsp_rule_t [NumClusterSlv-1:0] xbar_rule;
+  reqrsp_rule_t [ClusterWideOutAxiPorts-1:0] xbar_rule;
 
-  for (genvar i = 0; i < NumClusterSlv; i ++) begin
+  for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
     assign xbar_rule[i] = '{
       idx  : i,
       base : DramAddr + DramPerChSize * i,
@@ -590,13 +597,13 @@ module cachepool_cluster
     };
   end
 
-  logic [$clog2(NumClusterSlv):0] default_idx;
-  assign default_idx = NumClusterSlv;
+  logic [$clog2(ClusterWideOutAxiPorts):0] default_idx;
+  assign default_idx = ClusterWideOutAxiPorts;
 
   for (genvar inp = 0; inp < NumClusterMst*NumTiles; inp ++) begin : gen_xbar_sel
     addr_decode_napot #(
-      .NoIndices (NumClusterSlv+1   ),
-      .NoRules   (NumClusterSlv     ),
+      .NoIndices (ClusterWideOutAxiPorts+1   ),
+      .NoRules   (ClusterWideOutAxiPorts     ),
       .addr_t    (axi_addr_t        ),
       .rule_t    (reqrsp_rule_t     )
     ) i_snitch_decode_napot (
@@ -609,12 +616,12 @@ module cachepool_cluster
       .default_idx_i    (default_idx            )
     );
 
-    assign tile_sel[inp] = tile_sel_err[inp][$clog2(NumClusterSlv)-1:0];
+    assign tile_sel[inp] = tile_sel_err[inp][$clog2(ClusterWideOutAxiPorts)-1:0];
 
 `ifndef TARGET_SYNTHESIS
     // Alert the system that we have illegal memory access
     IllegalMemAccess : assert property(
-      @(posedge clk_i) disable iff (!rst_ni) (tile_req_valid[inp] |-> !tile_sel_err[inp][$clog2(NumClusterSlv)]))
+      @(posedge clk_i) disable iff (!rst_ni) (tile_req_valid[inp] |-> !tile_sel_err[inp][$clog2(ClusterWideOutAxiPorts)]))
       else $error("Visited illegal address: time=%0t, port=%0d, addr=0x%08h", $time, inp, tile_req_chan[inp].addr);
       // else $fatal (1, "Visited address is not mapped");
 `endif
@@ -622,7 +629,7 @@ module cachepool_cluster
 
   reqrsp_xbar #(
     .NumInp           (NumClusterMst*NumTiles ),
-    .NumOut           (NumClusterSlv          ),
+    .NumOut           (ClusterWideOutAxiPorts ),
     .PipeReg          (1'b1                   ),
     .ExtReqPrio       (1'b0                   ),
     .ExtRspPrio       (Burst_Enable           ),
@@ -650,7 +657,7 @@ module cachepool_cluster
     .mst_sel_i        (l2_sel           )
   );
 
-  for (genvar ch = 0; ch < NumClusterSlv; ch++) begin
+  for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin
     // To L2 Channels
     always_comb begin
       l2_req[ch].q       = '{
@@ -679,7 +686,7 @@ module cachepool_cluster
     end
   end
 
-  for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_output_axi
+  for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch ++) begin : gen_output_axi
     reqrsp_to_axi #(
       .MaxTrans           (NumSpatzOutstandingLoads   ),
       .ID                 ('0                         ),
@@ -704,14 +711,12 @@ module cachepool_cluster
     );
   end
 
-  assign axi_narrow_req_o = axi_out_req[0][0];
-  assign axi_out_resp[0][0] = axi_narrow_resp_i;
 
   // -------------
-  // DMA Subsystem
+  // To Main Memory
   // -------------
   // Optionally decouple the external wide AXI master port.
-  for (genvar port = 0; port < NumClusterSlv; port ++) begin : gen_axi_out_cut
+  for (genvar port = 0; port < ClusterWideOutAxiPorts; port ++) begin : gen_axi_out_cut
     axi_cut #(
       .Bypass     (0                          ),
       .aw_chan_t  (axi_slv_cache_aw_chan_t    ),
@@ -735,52 +740,49 @@ module cachepool_cluster
   // Slaves
   // ---------
 
-  // TODO: Add MUX for multi-Tile
-  // BootROM
-  // axi_mux #(
+  /***** UART ****/
+  // TODO: Mux for uart
+  assign axi_narrow_req_o = axi_out_req[0][ClusterUart];
+  assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
 
-  // ) i_axi_bootrom_mux (
+  /***** BootROM ****/
+  for (genvar t = 0; t < NumTiles; t++) begin : gen_bootrom
+    axi_to_reg #(
+      .ADDR_WIDTH         (AxiAddrWidth        ),
+      .DATA_WIDTH         (AxiDataWidth        ),
+      .AXI_MAX_WRITE_TXNS (1                   ),
+      .AXI_MAX_READ_TXNS  (1                   ),
+      .DECOUPLE_W         (0                   ),
+      .ID_WIDTH           (WideIdWidthIn       ),
+      .USER_WIDTH         (AxiUserWidth        ),
+      .axi_req_t          (axi_mst_cache_req_t ),
+      .axi_rsp_t          (axi_mst_cache_resp_t),
+      .reg_req_t          (reg_cache_req_t     ),
+      .reg_rsp_t          (reg_cache_rsp_t     )
+    ) i_axi_to_reg_bootrom (
+      .clk_i      (clk_i                        ),
+      .rst_ni     (rst_ni                       ),
+      .testmode_i (1'b0                         ),
+      .axi_req_i  (axi_tile_req[t][TileBootROM] ),
+      .axi_rsp_o  (axi_tile_rsp[t][TileBootROM] ),
+      .reg_req_o  (bootrom_reg_req[t]           ),
+      .reg_rsp_i  (bootrom_reg_rsp[t]           )
+    );
 
-  // )
+    bootrom i_bootrom (
+      .clk_i  (clk_i                            ),
+      .req_i  (bootrom_reg_req[t].valid         ),
+      .addr_i (addr_t'(bootrom_reg_req[t].addr) ),
+      .rdata_o(bootrom_reg_rsp[t].rdata         )
+    );
 
-  if (NumTiles > 1)
-    assign axi_tile_rsp[1][TileBootROM] = '0;
+    `FF(bootrom_reg_rsp[t].ready, bootrom_reg_req[t].valid, 1'b0)
 
-  axi_to_reg #(
-    .ADDR_WIDTH         (AxiAddrWidth        ),
-    .DATA_WIDTH         (AxiDataWidth        ),
-    .AXI_MAX_WRITE_TXNS (1                   ),
-    .AXI_MAX_READ_TXNS  (1                   ),
-    .DECOUPLE_W         (0                   ),
-    .ID_WIDTH           (WideIdWidthIn       ),
-    .USER_WIDTH         (AxiUserWidth        ),
-    .axi_req_t          (axi_mst_cache_req_t ),
-    .axi_rsp_t          (axi_mst_cache_resp_t),
-    .reg_req_t          (reg_cache_req_t     ),
-    .reg_rsp_t          (reg_cache_rsp_t     )
-  ) i_axi_to_reg_bootrom (
-    .clk_i      (clk_i                    ),
-    .rst_ni     (rst_ni                   ),
-    .testmode_i (1'b0                     ),
-    .axi_req_i  (axi_tile_req[0][TileBootROM]),
-    .axi_rsp_o  (axi_tile_rsp[0][TileBootROM]),
-    .reg_req_o  (bootrom_reg_req          ),
-    .reg_rsp_i  (bootrom_reg_rsp          )
-  );
-
-  bootrom i_bootrom (
-    .clk_i  (clk_i                        ),
-    .req_i  (bootrom_reg_req.valid        ),
-    .addr_i (addr_t'(bootrom_reg_req.addr)),
-    .rdata_o(bootrom_reg_rsp.rdata        )
-  );
-
-  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
-
-  assign bootrom_reg_rsp.error = 1'b0;
+    assign bootrom_reg_rsp[t].error = 1'b0;
+  end
 
 
-  // CSR/Peripherals
+  /***** CSR/Peripherals *****/
 
   `REG_BUS_TYPEDEF_ALL(reg, narrow_addr_t, narrow_data_t, narrow_strb_t)
 
@@ -790,35 +792,45 @@ module cachepool_cluster
   axi_csr_slv_req_t  axi_csr_req;
   axi_csr_slv_resp_t axi_csr_rsp;
 
+  axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req;
+  axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp;
+
+
+  for (genvar t = 0; t < NumTiles; t++) begin
+    assign axi_core_csr_req[t] = axi_out_req [t][ClusterPeriph];
+    assign axi_out_resp [t][ClusterPeriph] = axi_core_csr_rsp[t];
+  end
+
+
   axi_mux #(
-    .SlvAxiIDWidth ( ClusterAxiIdWidth           ),
-    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t          ), // AW Channel Type, slave ports
-    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t          ), // AW Channel Type, master port
-    .w_chan_t      ( axi_csr_slv_w_chan_t           ), //  W Channel Type, all ports
-    .slv_b_chan_t  ( axi_csr_mst_b_chan_t           ), //  B Channel Type, slave ports
-    .mst_b_chan_t  ( axi_csr_slv_b_chan_t           ), //  B Channel Type, master port
-    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t          ), // AR Channel Type, slave ports
-    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t          ), // AR Channel Type, master port
-    .slv_r_chan_t  ( axi_csr_mst_r_chan_t           ), //  R Channel Type, slave ports
-    .mst_r_chan_t  ( axi_csr_slv_r_chan_t           ), //  R Channel Type, master port
-    .slv_req_t     ( axi_csr_mst_req_t              ),
-    .slv_resp_t    ( axi_csr_mst_resp_t             ),
-    .mst_req_t     ( axi_csr_slv_req_t              ),
-    .mst_resp_t    ( axi_csr_slv_resp_t             ),
-    .NoSlvPorts    ( NumTiles + 1                   ), // Number of Masters for the module
-    .FallThrough   ( 0 ),
-    .SpillAw       ( XbarLatency[4]     ),
-    .SpillW        ( XbarLatency[3]     ),
-    .SpillB        ( XbarLatency[2]     ),
-    .SpillAr       ( XbarLatency[1]     ),
-    .SpillR        ( XbarLatency[0]     ),
-    .MaxWTrans     ( 2                              )
+    .SlvAxiIDWidth ( ClusterAxiIdWidth      ),
+    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ), // AW Channel Type, slave ports
+    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ), // AW Channel Type, master port
+    .w_chan_t      ( axi_csr_slv_w_chan_t   ), //  W Channel Type, all ports
+    .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ), //  B Channel Type, slave ports
+    .mst_b_chan_t  ( axi_csr_slv_b_chan_t   ), //  B Channel Type, master port
+    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ), // AR Channel Type, slave ports
+    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t  ), // AR Channel Type, master port
+    .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ), //  R Channel Type, slave ports
+    .mst_r_chan_t  ( axi_csr_slv_r_chan_t   ), //  R Channel Type, master port
+    .slv_req_t     ( axi_csr_mst_req_t      ),
+    .slv_resp_t    ( axi_csr_mst_resp_t     ),
+    .mst_req_t     ( axi_csr_slv_req_t      ),
+    .mst_resp_t    ( axi_csr_slv_resp_t     ),
+    .NoSlvPorts    ( NumTiles + 1           ), // Number of Masters for the module
+    .FallThrough   ( 0                      ),
+    .SpillAw       ( XbarLatency[4]         ),
+    .SpillW        ( XbarLatency[3]         ),
+    .SpillB        ( XbarLatency[2]         ),
+    .SpillAr       ( XbarLatency[1]         ),
+    .SpillR        ( XbarLatency[0]         ),
+    .MaxWTrans     ( 2                      )
   ) i_axi_csr_mux (
-    .clk_i       ( clk_i      ),   // Clock
-    .rst_ni      ( rst_ni     ),  // Asynchronous reset active low
-    .test_i      ('0),  // Test Mode enable
-    .slv_reqs_i  ( {axi_in_req_i,  axi_out_req [0][1]}  ),
-    .slv_resps_o ( {axi_in_resp_o, axi_out_resp[0][1]}  ),
+    .clk_i       ( clk_i        ),   // Clock
+    .rst_ni      ( rst_ni       ),  // Asynchronous reset active low
+    .test_i      ('0            ),  // Test Mode enable
+    .slv_reqs_i  ( {axi_in_req_i,  axi_core_csr_req}  ),
+    .slv_resps_o ( {axi_in_resp_o, axi_core_csr_rsp}  ),
     .mst_req_o   ( axi_csr_req  ),
     .mst_resp_i  ( axi_csr_rsp  )
   );
@@ -877,7 +889,7 @@ module cachepool_cluster
   spatz_cluster_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
-    .NumCacheCtrl  (NumL1CtrlTile  ),
+    .NumCacheCtrl  (NumL1CacheCtrl  ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
     .tcdm_events_t (tcdm_events_t   ),
