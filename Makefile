@@ -277,6 +277,7 @@ vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
 .PHONY: clean
 clean: clean.sw clean.vsim
+	rm -rf $(HJSON_OUT)
 
 ########
 # Lint #

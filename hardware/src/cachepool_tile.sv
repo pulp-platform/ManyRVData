@@ -144,14 +144,14 @@ module cachepool_tile
     // input  axi_in_req_t                             axi_in_req_i,
     // output axi_in_resp_t                            axi_in_resp_o,
     /// AXI Narrow out-port (UART/Peripheral)
-    output axi_narrow_req_t   [1:0]                     axi_out_req_o,
-    input  axi_narrow_resp_t  [1:0]                     axi_out_resp_i,
+    output axi_narrow_req_t   [1:0]                 axi_out_req_o,
+    input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
     /// Cache Refill ports
     output cache_trans_req_t  [NumL1CtrlTile-1:0]   cache_refill_req_o,
     input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]   cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
-    output axi_out_req_t      [NumTileWideAxi-1:0]  axi_wide_req_o,
-    input  axi_out_resp_t     [NumTileWideAxi-1:0]  axi_wide_rsp_i,
+    output axi_out_req_t      [TileNarrowAxiPorts-1:0]  axi_wide_req_o,
+    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]  axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
     output tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_o,
     output remote_tile_sel_t  [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_dst_o,
