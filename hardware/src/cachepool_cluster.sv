@@ -344,10 +344,6 @@ module cachepool_cluster
     assign l2_rsp_rr = '0;
   end
 
-  // logic [NumTiles-1: 0] group_probe;
-  // assign cluster_probe_o = |group_probe;
-
-
   icache_events_t    [NrCores-1:0]         icache_events;
   logic                                    icache_prefetch_enable;
   logic              [NrCores-1:0]         cl_interrupt;
@@ -425,7 +421,9 @@ module cachepool_cluster
       .l1d_insn_ready_o         ( l1d_insn_ready            ),
       .l1d_busy_i               ( l1d_busy                  )
     );
-
+    // TODO: 2 axi ports converted lost correct assignments
+    // 1. tile id?
+    // 2. mux then convert?
     for (genvar t = 0; t < NumTiles; t ++) begin : gen_axi_converter
       axi_to_reqrsp #(
         .axi_req_t    ( axi_mst_cache_req_t        ),
@@ -545,36 +543,44 @@ module cachepool_cluster
     );
   end
 
-
-  // for (genvar t = 0; t < NumTiles; t++) begin
-  // Cache Bypass requests
+  // Additional one port for iCache connection
+  localparam int unsigned ReqrspPortsTile = NumL1CtrlTile + 1;
   always_comb begin
     for (int t = 0; t < NumTiles; t++) begin
-      tile_req_chan[t]       = cache_core_req[t].q;
-      // Scrmable address
-      tile_req_chan[t].addr = scrambleAddr(cache_core_req[t].q.addr);
-      tile_req_valid[t]      = cache_core_req[t].q_valid;
-      cache_core_rsp[t].q_ready       = tile_req_ready[t];
+      for (int p = 0; p < ReqrspPortsTile; p++) begin
+        automatic int unsigned xbar_idx   = t*ReqrspPortsTile + p;
+        automatic int unsigned refill_idx = t*NumL1CtrlTile   + p-1;
 
-      cache_core_rsp[t].p             = tile_rsp_chan ;
-      cache_core_rsp[t].p_valid       = tile_rsp_valid;
-      tile_rsp_ready[t]      = cache_core_req[t].p_ready;
-    end
+        if (p == 0) begin
+          // connect_icache_path
+          tile_req_chan   [xbar_idx]           = cache_core_req  [t].q;
+          // Scrmable address
+          tile_req_chan   [xbar_idx].addr      = scrambleAddr(cache_core_req[t].q.addr);
+          tile_req_valid  [xbar_idx]           = cache_core_req  [t].q_valid;
+          cache_core_rsp  [t].q_ready          = tile_req_ready  [xbar_idx];
 
-    // Normal Cache requests
-    for (int p = 0; p < NumL1CtrlTile*NumTiles; p++) begin
-      tile_req_chan [p+NumTiles]         = cache_refill_req[p].q;
-      // Scramble address
-      tile_req_chan [p+NumTiles].addr    = scrambleAddr(cache_refill_req[p].q.addr);
-      tile_req_valid[p+NumTiles]         = cache_refill_req[p].q_valid;
-      cache_refill_rsp[p].q_ready = tile_req_ready[p+NumTiles];
+          cache_core_rsp  [t].p                = tile_rsp_chan   [xbar_idx];
+          cache_core_rsp  [t].p_valid          = tile_rsp_valid  [xbar_idx];
+          tile_rsp_ready  [xbar_idx]           = cache_core_req  [t].p_ready;
+          // Tile ID assignment
+          tile_req_chan   [xbar_idx].user.tile_id = t;
+        end else begin
+          // connect_refill_path
+          tile_req_chan   [xbar_idx]           = cache_refill_req[refill_idx].q;
+          // Scramble address
+          tile_req_chan   [xbar_idx].addr      = scrambleAddr(cache_refill_req[refill_idx].q.addr);
+          tile_req_valid  [xbar_idx]           = cache_refill_req[refill_idx].q_valid;
+          cache_refill_rsp[refill_idx].q_ready = tile_req_ready  [xbar_idx];
 
-      cache_refill_rsp[p].p       = tile_rsp_chan [p+NumTiles];
-      cache_refill_rsp[p].p_valid = tile_rsp_valid[p+NumTiles];
-      tile_rsp_ready[p+NumTiles]         = cache_refill_req[p].p_ready;
+          cache_refill_rsp[refill_idx].p       = tile_rsp_chan   [xbar_idx];
+          cache_refill_rsp[refill_idx].p_valid = tile_rsp_valid  [xbar_idx];
+          tile_rsp_ready  [xbar_idx]           = cache_refill_req[refill_idx].p_ready;
+          // Tile ID assignment
+          tile_req_chan   [xbar_idx].user.tile_id = t;
+        end
+      end
     end
   end
-  // end
 
   typedef struct packed {
     int unsigned idx;
@@ -677,7 +683,7 @@ module cachepool_cluster
       l2_rsp_chan [ch].user = l2_rsp[ch].p.user;
       l2_rsp_valid[ch]   = l2_rsp[ch].p_valid;
       l2_req[ch].p_ready = l2_rsp_ready[ch];
-      l2_sel[ch]         = l2_rsp[ch].p.user.bank_id;
+      l2_sel[ch]         = {l2_rsp[ch].p.user.tile_id, l2_rsp[ch].p.user.bank_id};
     end
   end
 
@@ -739,6 +745,8 @@ module cachepool_cluster
   // TODO: Mux for uart
   assign axi_narrow_req_o = axi_out_req[0][ClusterUart];
   assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
+  // Tie off tile 1 for now
+  assign axi_out_resp[1][ClusterUart] = '0;
 
   /***** BootROM ****/
   for (genvar t = 0; t < NumTiles; t++) begin : gen_bootrom
