@@ -94,22 +94,22 @@ module cachepool_cluster_wrapper
     .clk_i                    ,
     .rst_ni                   ,
     .eoc_o                    (eoc_o                    ),
-    .impl_i                   ( '0 ),
-    .error_o                  (),
-    .debug_req_i              ({NumCores{debug_req_i}}),
-    .meip_i                   ({NumCores{meip_i}}),
-    .mtip_i                   ({NumCores{mtip_i}}),
-    .msip_i                   ({NumCores{msip_i}}),
-    .hart_base_id_i           (10'h0),
-    .cluster_base_addr_i      (TCDMStartAddr),
-    .cluster_probe_o          (cluster_probe_o),
+    .impl_i                   ('0                       ),
+    .error_o                  (                         ),
+    .debug_req_i              ({NumCores{debug_req_i}}  ),
+    .meip_i                   ({NumCores{meip_i}}       ),
+    .mtip_i                   ({NumCores{mtip_i}}       ),
+    .msip_i                   ({NumCores{msip_i}}       ),
+    .hart_base_id_i           (10'h0                    ),
+    .cluster_base_addr_i      (TCDMStartAddr            ),
+    .cluster_probe_o          (cluster_probe_o          ),
     .axi_in_req_i             ,
     .axi_in_resp_o            ,
     .axi_narrow_req_o         ,
     .axi_narrow_resp_i        ,
     // AXI Master Port
-    .axi_out_req_o            ( axi_out_req_o  ),
-    .axi_out_resp_i           ( axi_out_resp_i )
+    .axi_out_req_o            ( axi_out_req_o           ),
+    .axi_out_resp_i           ( axi_out_resp_i          )
   );
 
   // AXI utilization monitor

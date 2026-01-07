@@ -408,8 +408,6 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      // .axi_in_req_i             ( axi_in_req_i             ),
-      // .axi_in_rsp_o             ( axi_in_resp_o            ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
       .axi_wide_req_o           ( axi_tile_req             ),
@@ -502,9 +500,6 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      // .tile_probe_o             ( group_probe              ),
-      // .axi_in_req_i             ( axi_in_req_i          ),
-      // .axi_in_resp_o            ( axi_in_resp_o         ),
       .axi_out_req_o            ( axi_out_req  [0]         ),
       .axi_out_resp_i           ( axi_out_resp [0]         ),
       // Remote Ports (not used)
@@ -803,7 +798,7 @@ module cachepool_cluster
 
 
   axi_mux #(
-    .SlvAxiIDWidth ( ClusterAxiIdWidth      ),
+    .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
     .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ), // AW Channel Type, slave ports
     .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ), // AW Channel Type, master port
     .w_chan_t      ( axi_csr_slv_w_chan_t   ), //  W Channel Type, all ports
@@ -836,17 +831,17 @@ module cachepool_cluster
   );
 
   axi_to_reg #(
-    .ADDR_WIDTH         (AxiAddrWidth     ),
+    .ADDR_WIDTH         (AxiAddrWidth             ),
     .DATA_WIDTH         (SpatzAxiNarrowDataWidth  ),
-    .AXI_MAX_WRITE_TXNS (1                ),
-    .AXI_MAX_READ_TXNS  (1                ),
-    .DECOUPLE_W         (0                ),
-    .ID_WIDTH           (CsrAxiSlvIdWidth ),
-    .USER_WIDTH         (SpatzAxiUserWidth  ),
-    .axi_req_t          (axi_csr_slv_req_t    ),
-    .axi_rsp_t          (axi_csr_slv_resp_t   ),
-    .reg_req_t          (reg_req_t        ),
-    .reg_rsp_t          (reg_rsp_t        )
+    .AXI_MAX_WRITE_TXNS (1                        ),
+    .AXI_MAX_READ_TXNS  (1                        ),
+    .DECOUPLE_W         (0                        ),
+    .ID_WIDTH           (CsrAxiSlvIdWidth         ),
+    .USER_WIDTH         (SpatzAxiUserWidth        ),
+    .axi_req_t          (axi_csr_slv_req_t        ),
+    .axi_rsp_t          (axi_csr_slv_resp_t       ),
+    .reg_req_t          (reg_req_t                ),
+    .reg_rsp_t          (reg_rsp_t                )
   ) i_csr_axi_to_reg (
     .clk_i      (clk_i                    ),
     .rst_ni     (rst_ni                   ),
