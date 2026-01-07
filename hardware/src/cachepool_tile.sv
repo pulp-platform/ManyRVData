@@ -137,12 +137,6 @@ module cachepool_tile
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  logic              [AxiAddrWidth-1:0]    cluster_base_addr_i,
-    /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
-    /// to the overall system that the cluster is executing something.
-    // output logic                                    tile_probe_o,
-    /// AXI Core cluster in-port.
-    // input  axi_in_req_t                             axi_in_req_i,
-    // output axi_in_resp_t                            axi_in_resp_o,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [1:0]                 axi_out_req_o,
     input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
@@ -1057,8 +1051,8 @@ module cachepool_tile
     .EARLY_LATCH        ( 0                                                  ),
     .L0_EARLY_TAG_WIDTH ( snitch_pkg::PAGE_SHIFT - $clog2(ICacheLineWidth/8) ),
     .ISO_CROSSING       ( 1'b0                                               ),
-    .axi_req_t          ( axi_mst_tile_wide_req_t                                  ),
-    .axi_rsp_t          ( axi_mst_tile_wide_resp_t                                 ),
+    .axi_req_t          ( axi_mst_tile_wide_req_t                            ),
+    .axi_rsp_t          ( axi_mst_tile_wide_resp_t                           ),
     .sram_cfg_data_t    ( impl_in_t                                          ),
     .sram_cfg_tag_t     ( impl_in_t                                          )
   ) i_snitch_icache (
