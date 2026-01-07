@@ -116,8 +116,6 @@ module cachepool_group
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           debug_req_i,
-    /// End of Computing indicator to notify the host/tb
-    // output logic                                  eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           meip_i,
@@ -136,12 +134,6 @@ module cachepool_group
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
-    /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
-    /// to the overall system that the cluster is executing something.
-    // output logic          [NumTiles-1:0]          group_probe_o,
-    // /// AXI Core cluster in-port.
-    // input  axi_in_req_t                                       axi_in_req_i,
-    // output axi_in_resp_t                                      axi_in_rsp_o,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [GroupNarrowAxiPorts-1:0]           axi_narrow_req_o,
     input  axi_narrow_resp_t  [GroupNarrowAxiPorts-1:0]           axi_narrow_rsp_i,
@@ -218,35 +210,20 @@ module cachepool_group
   axi_in_req_t  [NumTiles-1:0] axi_in_req;
   axi_in_resp_t [NumTiles-1:0] axi_in_rsp;
 
-  // TODO: How to wire control signal here? Broadcast?
-  // In theory, the SoC control is only used to access peripherals
-  // assign axi_in_rsp_o  = axi_in_rsp[0];
-  // assign axi_in_req[0] = axi_in_req_i;
-
-
 
   // ---------------
   // CachePool Tile
   // ---------------
 
-  logic [NumTiles-1:0] error, eoc;
+  logic [NumTiles-1:0] error;
   assign error_o = |error;
-  assign eoc_o   = |eoc;
-
-  cache_trans_req_t      [NumTiles-1:0][NumL1CtrlTile-1:0] cache_refill_req;
-  cache_trans_rsp_t      [NumTiles-1:0][NumL1CtrlTile-1:0] cache_refill_rsp;
 
   cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
   cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
 
-  cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
-  cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
-  logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
-
-
-  assign cache_refill_req_o = cache_refill_req[0];
-  assign cache_refill_rsp = {'0, cache_refill_rsp_i};
-
+  // cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
+  // cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
+  // logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
 
 
   // Tile remote access signals
@@ -264,6 +241,29 @@ module cachepool_group
   logic           [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_req_valid,  tile_remote_in_req_ready;
   tcdm_rsp_chan_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_chan;
   logic           [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
+
+  for (genvar t = 0; t < NumTiles; t++) begin
+    for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin
+      assign tile_remote_out_req_chan [p][t] = tile_remote_out_req[t][p].q;
+      assign tile_remote_out_req_valid[p][t] = tile_remote_out_req[t][p].q_valid;
+      // No p ready
+      assign tile_remote_out_rsp_ready[p][t] = 1'b1;
+      // assign tile_remote_out_rsp_ready[p][t] = tile_remote_out_req[t][p].p_ready;
+
+      assign tile_remote_out_rsp[t][p].p       = tile_remote_out_rsp_chan [p][t];
+      assign tile_remote_out_rsp[t][p].p_valid = tile_remote_out_rsp_valid[p][t];
+      assign tile_remote_out_rsp[t][p].q_ready = tile_remote_out_req_ready[p][t];
+
+
+      assign tile_remote_in_req[t][p].q       = tile_remote_in_req_chan [p][t];
+      assign tile_remote_in_req[t][p].q_valid = tile_remote_in_req_valid[p][t];
+      // assign tile_remote_in_req[t][p].p_ready = tile_remote_in_rsp_ready[p][t];
+
+      assign tile_remote_in_rsp_chan [p][t] = tile_remote_in_rsp[t][p].p;
+      assign tile_remote_in_rsp_valid[p][t] = tile_remote_in_rsp[t][p].p_valid;
+      assign tile_remote_in_req_ready[p][t] = tile_remote_in_rsp[t][p].q_ready;
+    end
+  end
 
   // Symmetric xbar, in/out select types are the same
   remote_tile_sel_t [NumTiles-1:0][NrTCDMPortsPerCore-1:0] remote_out_sel_tile, remote_in_sel_tile;
@@ -333,8 +333,8 @@ module cachepool_group
       .remote_req_i             ( tile_remote_in_req [t]                              ),
       .remote_rsp_o             ( tile_remote_in_rsp [t]                              ),
       // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req  [t]                               ),
-      .cache_refill_rsp_i       ( cache_refill_rsp  [t]                               ),
+      .cache_refill_req_o       ( cache_refill_req_o[t*NumL1CtrlTile+:NumL1CtrlTile]  ),
+      .cache_refill_rsp_i       ( cache_refill_rsp_i[t*NumL1CtrlTile+:NumL1CtrlTile]  ),
       // BootROM / Core-side Cache Bypass
       .axi_wide_req_o           ( axi_wide_req_o    [t*TileWideAxiPorts+:TileWideAxiPorts]),
       .axi_wide_rsp_i           ( axi_wide_rsp_i    [t*TileWideAxiPorts+:TileWideAxiPorts]),
@@ -349,9 +349,6 @@ module cachepool_group
       .l1d_busy_i               ( l1d_busy_i        [t*NumL1CtrlTile+:NumL1CtrlTile]  )
     );
   end
-
-  assign tile_remote_in_req  = '0;
-  assign tile_remote_out_rsp = '0;
 
   // ------------
   // Remote XBar
@@ -389,7 +386,6 @@ module cachepool_group
       .mst_rr_i         ('0                         ),
       .mst_sel_i        (remote_in_sel_xbar       [p]  )
     );
-
   end
 
 

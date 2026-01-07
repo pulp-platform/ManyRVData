@@ -6,6 +6,7 @@
 
 package cachepool_pkg;
   import fpnew_pkg::*;
+  import cf_math_pkg::idx_width;
 
   /*********************
    *  COMMON INCLUDES  *
@@ -130,8 +131,11 @@ package cachepool_pkg;
   // Number of cache sets each cache way has
   localparam int unsigned L1NumSet            = L1CacheWayEntry / L1BankFactor;
 
-  localparam int unsigned CoreIDWidth         = cf_math_pkg::idx_width(NumCores);
-  localparam int unsigned BankIDWidth         = cf_math_pkg::idx_width(NumL1CtrlTile);
+  // Core id width within a tile => tile ID will be calculated separatly
+  localparam int unsigned CoreIDWidth         = idx_width(NumCoresTile);
+  localparam int unsigned TileIDWidth         = idx_width(NumTiles);
+  // Each bank inside a tile needs an unique id, plus one reserved for icache
+  localparam int unsigned BankIDWidth         = idx_width(NumL1CtrlTile + 1);
 
   localparam int unsigned RefillDataWidth     = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
@@ -168,8 +172,6 @@ package cachepool_pkg;
   localparam int unsigned TileAxiIdWidth          = 3;
   localparam int unsigned GroupAxiIdWidth         = TileAxiIdWidth + $clog2(NumTiles);
   localparam int unsigned ClusterAxiIdWidth       = GroupAxiIdWidth + ClusterRouteIdWidth;
-
-
 
   // legacy naming
   localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
@@ -325,7 +327,8 @@ package cachepool_pkg;
   } tcdm_user_t;
 
   typedef struct packed {
-    logic [BankIDWidth:0]   bank_id;
+    logic [BankIDWidth-1:0] bank_id;
+    logic [TileIDWidth-1:0] tile_id;
     cache_info_t            info;
     burst_req_t             burst;
   } refill_user_t;
