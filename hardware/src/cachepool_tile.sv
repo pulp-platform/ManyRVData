@@ -216,8 +216,8 @@ module cachepool_tile
 
   // Core Request, Instruction cache
   localparam int unsigned NrWideMasters  = 2;
-  localparam int unsigned WideIdWidthOut = 4;
-  localparam int unsigned WideIdWidthIn  = 3;
+  localparam int unsigned WideIdWidthOut = AxiIdWidthOut;
+  localparam int unsigned WideIdWidthIn  = AxiIdWidthOut - $clog2(NrWideMasters);
   // Wide X-BAR configuration: Core Request, ICache
   localparam int unsigned NrWideSlaves   = 2;
 
@@ -397,13 +397,6 @@ module cachepool_tile
   reqrsp_req_t [NrCores-1:0] core_req, filtered_core_req;
   reqrsp_rsp_t [NrCores-1:0] core_rsp, filtered_core_rsp;
 
-  // 5. Peripheral Subsystem
-  reg_req_t reg_req;
-  reg_rsp_t reg_rsp;
-
-  // 7. Misc. Wires.
-  logic               icache_prefetch_enable;
-  logic [NrCores-1:0] cl_interrupt;
 
   // 8. L1 D$
   tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req;
@@ -807,6 +800,7 @@ module cachepool_tile
 
       // ID 0 reserved for bypass cache
       cache_refill_req_o[cb].q.user = '{
+        // The first bit is reserved for iCache identifier
         bank_id : cb + 1,
         info    : cache_refill_req[cb].info,
         burst   : cache_refill_burst[cb],
