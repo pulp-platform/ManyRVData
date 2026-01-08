@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <l1cache.h>
+#include <benchmark.h>
 #include "printf.h"
 #ifdef DATAHEADER
 #include DATAHEADER
@@ -81,6 +82,17 @@ static void init_pattern(uint8_t *buf, size_t bytes) {
   }
 }
 
+static unsigned long long cycle_to_ns(size_t cycle) {
+  return (unsigned long long)cycle * 2ULL + 10ULL;
+}
+
+static void trace_inst(const char *name, const char *inst, const void *addr,
+                        size_t cycle) {
+  unsigned long long ns = cycle_to_ns(cycle);
+  printf("[TRACE] %s: %s @ 0x%08x cycle %u ns %llu\n", name, inst,
+         (unsigned int)(uintptr_t)addr, (unsigned int)cycle, ns);
+}
+
 static int check_store_and_load(const char *name, uint8_t *base,
                                 uint32_t offset, uint32_t size,
                                 uint32_t value) {
@@ -99,20 +111,32 @@ static int check_store_and_load(const char *name, uint8_t *base,
 
   uint32_t orig = (uint32_t)load_w(base);
 
+  const uint8_t *addr = base + offset;
+  const char *store_name = "s?";
+  size_t store_cycle = 0;
+
   switch (size) {
     case 1:
-      store_b(base + offset, (uint8_t)value);
+      store_name = "sb";
+      store_cycle = benchmark_get_cycle();
+      store_b((void *)addr, (uint8_t)value);
       break;
     case 2:
-      store_h(base + offset, (uint16_t)value);
+      store_name = "sh";
+      store_cycle = benchmark_get_cycle();
+      store_h((void *)addr, (uint16_t)value);
       break;
     case 4:
-      store_w(base + offset, (uint32_t)value);
+      store_name = "sw";
+      store_cycle = benchmark_get_cycle();
+      store_w((void *)addr, (uint32_t)value);
       break;
     default:
       printf("[FAIL] %s: invalid size %u\n", name, size);
       return 1;
   }
+
+  trace_inst(name, store_name, addr, store_cycle);
 
   uint32_t after = (uint32_t)load_w(base);
   uint32_t expected = orig;
@@ -133,21 +157,27 @@ static int check_store_and_load(const char *name, uint8_t *base,
   int32_t load_got = 0;
   int32_t load_exp = 0;
   const char *load_name = "l?";
+  size_t load_cycle = 0;
   int load_ok = 0;
 
   if (size == 1) {
     load_name = "lb";
-    load_got = load_b(base + offset);
+    load_cycle = benchmark_get_cycle();
+    load_got = load_b(addr);
     load_exp = (int8_t)value;
   } else if (size == 2) {
     load_name = "lh";
-    load_got = load_h(base + offset);
+    load_cycle = benchmark_get_cycle();
+    load_got = load_h(addr);
     load_exp = (int16_t)value;
   } else if (size == 4) {
     load_name = "lw";
-    load_got = load_w(base + offset);
+    load_cycle = benchmark_get_cycle();
+    load_got = load_w(addr);
     load_exp = (int32_t)value;
   }
+
+  trace_inst(name, load_name, addr, load_cycle);
 
   load_ok = (load_got == load_exp);
   if (!load_ok) {
