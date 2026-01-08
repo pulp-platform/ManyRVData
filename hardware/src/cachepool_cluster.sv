@@ -683,7 +683,10 @@ module cachepool_cluster
       l2_rsp_chan [ch].user = l2_rsp[ch].p.user;
       l2_rsp_valid[ch]   = l2_rsp[ch].p_valid;
       l2_req[ch].p_ready = l2_rsp_ready[ch];
-      l2_sel[ch]         = {l2_rsp[ch].p.user.tile_id, l2_rsp[ch].p.user.bank_id};
+      // calculate the port from the tile id and bank id
+      // bank_id == 0   --- bypass
+      // bank_id == 1-4 --- cache bank 0-3
+      l2_sel[ch]         = l2_rsp[ch].p.user.tile_id * NumClusterMst + l2_rsp[ch].p.user.bank_id;
     end
   end
 
