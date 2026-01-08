@@ -321,7 +321,7 @@ module cachepool_group
       .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]    ),
       .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]    ),
       .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]    ),
-      .hart_base_id_i           ( hart_base_id_i                                      ),
+      .hart_base_id_i           ( hart_base_id_i + t * NumCoresTile                   ),
       .cluster_base_addr_i      ( cluster_base_addr_i                                 ),
       // AXI out for UART
       .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
