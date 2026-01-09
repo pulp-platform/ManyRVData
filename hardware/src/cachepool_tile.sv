@@ -437,25 +437,7 @@ module cachepool_tile
   data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
 
-  // logic                       l1d_insn_valid;
-  // logic [NumL1CtrlTile-1:0]  l1d_insn_ready;
-  // logic [1:0]                 l1d_insn;
   tcdm_bank_addr_t            cfg_spm_size;
-  // logic [NumL1CtrlTile-1:0]  l1d_busy;
-
-  // High if a port access an illegal SPM region (mapped to cache)
-  // logic [NrTCDMPortsCores-1:0] spm_error;
-
-
-  // 9. SRAM Configuration
-  // impl_in_t [L1NumWrapper-1:0][L1BankPerWP-1:0] impl_l1d_data;
-  // impl_in_t [L1NumTagBank-1:0]                  impl_l1d_tag;
-  // impl_in_t [1:0]                               impl_l1d_fifo;
-
-  // impl_in_t [ICacheSets-1:0] impl_l1i_data;
-  // impl_in_t [ICacheSets-1:0] impl_l1i_tag;
-
-  // assign {impl_l1d_data, impl_l1d_tag, impl_l1d_fifo, impl_l1i_data, impl_l1i_tag} = impl_i;
 
   // TODO: Connect to stack overflow error
   assign error_o = 1'b0;
@@ -469,29 +451,8 @@ module cachepool_tile
   assign axi_wide_req_o[TileMem] = wide_axi_slv_req[SoCDMAOut];
   assign wide_axi_slv_rsp[SoCDMAOut] = axi_wide_rsp_i[TileMem];
 
-
-  // axi_cut #(
-  //   .Bypass     (!RegisterExt     ),
-  //   .aw_chan_t  (axi_mst_aw_chan_t),
-  //   .w_chan_t   (axi_mst_w_chan_t ),
-  //   .b_chan_t   (axi_mst_b_chan_t ),
-  //   .ar_chan_t  (axi_mst_ar_chan_t),
-  //   .r_chan_t   (axi_mst_r_chan_t ),
-  //   .axi_req_t  (axi_mst_req_t    ),
-  //   .axi_resp_t (axi_mst_resp_t   )
-  // ) i_cut_ext_narrow_in (
-  //   .clk_i      (clk_i                       ),
-  //   .rst_ni     (rst_ni                      ),
-  //   .slv_req_i  (axi_in_req_i                ),
-  //   .slv_resp_o (axi_in_resp_o               ),
-  //   .mst_req_o  (narrow_axi_mst_req[SoCDMAIn]),
-  //   .mst_resp_i (narrow_axi_mst_rsp[SoCDMAIn])
-  // );
-
   logic       [WideXbarCfg.NoSlvPorts-1:0][$clog2(WideXbarCfg.NoMstPorts)-1:0] dma_xbar_default_port;
   xbar_rule_t [WideXbarCfg.NoAddrRules-1:0]                                   dma_xbar_rule;
-
-  // Diyou: DMA Xbar move to cluster level
 
   assign dma_xbar_default_port = '{default: SoCDMAOut};
   assign dma_xbar_rule         = '{
@@ -504,8 +465,8 @@ module cachepool_tile
 
   localparam bit [WideXbarCfg.NoSlvPorts-1:0] DMAEnableDefaultMstPort = '1;
   axi_xbar #(
-    .Cfg           (WideXbarCfg           ),
-    .ATOPs         (0                    ),
+    .Cfg           (WideXbarCfg                ),
+    .ATOPs         (0                          ),
     .slv_aw_chan_t (axi_mst_tile_wide_aw_chan_t),
     .mst_aw_chan_t (axi_slv_tile_wide_aw_chan_t),
     .w_chan_t      (axi_mst_tile_wide_w_chan_t ),
@@ -537,9 +498,6 @@ module cachepool_tile
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
   logic  [NumL1CtrlTile-1:0] cache_amo_pready;
-
-  // TODO: remove this module
-  // where to deal with cache flushing protection?
 
   always_comb begin : cache_flush_protection
     for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
@@ -874,9 +832,6 @@ module cachepool_tile
       );
 
       assign l1_data_bank_gnt[cb][j+:NumWordPerLine] = {NumWordPerLine{1'b1}};
-      // assign l1_data_bank_gnt[cb][j+1] = 1'b1;
-      // assign l1_data_bank_gnt[cb][j+2] = 1'b1;
-      // assign l1_data_bank_gnt[cb][j+3] = 1'b1;
     end
 
     // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
@@ -953,17 +908,15 @@ module cachepool_tile
       .tcdm_req_chan_t         (tcdm_req_chan_t            ),
       .tcdm_rsp_t              (tcdm_rsp_t                 ),
       .tcdm_rsp_chan_t         (tcdm_rsp_chan_t            ),
-      .axi_req_t               (axi_mst_tile_wide_req_t          ),
-      .axi_ar_chan_t           (axi_mst_tile_wide_ar_chan_t      ),
-      .axi_aw_chan_t           (axi_mst_tile_wide_aw_chan_t      ),
-      .axi_rsp_t               (axi_mst_tile_wide_resp_t         ),
+      .axi_req_t               (axi_mst_tile_wide_req_t    ),
+      .axi_ar_chan_t           (axi_mst_tile_wide_ar_chan_t),
+      .axi_aw_chan_t           (axi_mst_tile_wide_aw_chan_t),
+      .axi_rsp_t               (axi_mst_tile_wide_resp_t   ),
       .hive_req_t              (hive_req_t                 ),
       .hive_rsp_t              (hive_rsp_t                 ),
       .acc_issue_req_t         (acc_issue_req_t            ),
       .acc_issue_rsp_t         (acc_issue_rsp_t            ),
       .acc_rsp_t               (acc_rsp_t                  ),
-      // .dma_events_t            (dma_events_t               ),
-      // .dma_perf_t              (axi_dma_pkg::dma_perf_t    ),
       .XDivSqrt                (1'b0                       ),
       .XF16                    (1'b1                       ),
       .XF16ALT                 (1'b0                       ),
@@ -1072,12 +1025,15 @@ module cachepool_tile
   // --------
   // Cores SoC
   // --------
-  spatz_barrier #(
+
+  // First-level barrier for CachePool system
+  cachepool_tile_barrier #(
     .AddrWidth (AxiAddrWidth ),
     .NrPorts   (NrCores      ),
     .dreq_t    (reqrsp_req_t ),
-    .drsp_t    (reqrsp_rsp_t )
-  ) i_snitch_barrier (
+    .drsp_t    (reqrsp_rsp_t ),
+    .user_t    (tcdm_user_t  )
+  ) i_cachepool_tile_barrier (
     .clk_i                          (clk_i                       ),
     .rst_ni                         (rst_ni                      ),
     .in_req_i                       (core_req                    ),
@@ -1247,29 +1203,6 @@ module cachepool_tile
     .mst_req_o  (wide_axi_mst_req[CoreReqWide]),
     .mst_resp_i (wide_axi_mst_rsp[CoreReqWide])
   );
-
-  // --------------------
-  // TCDM event counters
-  // --------------------
-  // logic [NrTCDMPortsCores-1:0] flat_acc, flat_con;
-  // for (genvar i = 0; i < NrTCDMPortsCores; i++) begin : gen_event_counter
-  //   `FFARN(flat_acc[i], tcdm_req[i].q_valid, '0, clk_i, rst_ni)
-  //   `FFARN(flat_con[i], tcdm_req[i].q_valid & ~tcdm_rsp[i].q_ready, '0, clk_i, rst_ni)
-  // end
-
-  // popcount #(
-  //   .INPUT_WIDTH ( NrTCDMPortsCores )
-  // ) i_popcount_req (
-  //   .data_i     ( flat_acc                 ),
-  //   .popcount_o ( tcdm_events.inc_accessed )
-  // );
-
-  // popcount #(
-  //   .INPUT_WIDTH ( NrTCDMPortsCores )
-  // ) i_popcount_con (
-  //   .data_i     ( flat_con                  ),
-  //   .popcount_o ( tcdm_events.inc_congested )
-  // );
 
   // -------------
   // Sanity Checks

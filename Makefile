@@ -180,8 +180,6 @@ VLOG_FLAGS += -64
 
 VLOG_DEFS = -DCACHEPOOL
 
-
-
 # Cluster configuration
 VLOG_DEFS += -DNUM_TILES=$(num_tiles)
 VLOG_DEFS += -DNumRemotePortTile=$(num_remote_ports_per_tile)

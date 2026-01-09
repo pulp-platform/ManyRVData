@@ -243,25 +243,25 @@ module cachepool_cluster
   cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
   logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
 
-  l2_req_t               [ClusterWideOutAxiPorts-1          :0] l2_req;
-  l2_rsp_t               [ClusterWideOutAxiPorts-1          :0] l2_rsp;
+  l2_req_t               [ClusterWideOutAxiPorts-1 :0] l2_req;
+  l2_rsp_t               [ClusterWideOutAxiPorts-1 :0] l2_rsp;
 
-  cache_trans_req_chan_t [ClusterWideOutAxiPorts-1          :0] l2_req_chan;
-  cache_trans_rsp_chan_t [ClusterWideOutAxiPorts-1          :0] l2_rsp_chan;
-  logic                  [ClusterWideOutAxiPorts-1          :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
+  cache_trans_req_chan_t [ClusterWideOutAxiPorts-1 :0] l2_req_chan;
+  cache_trans_rsp_chan_t [ClusterWideOutAxiPorts-1 :0] l2_rsp_chan;
+  logic                  [ClusterWideOutAxiPorts-1 :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
 
   typedef logic   [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
   // one more bit for out-of-range alert
-  typedef logic   [$clog2(ClusterWideOutAxiPorts)           :0] tile_sel_err_t;
-  typedef logic   [$clog2(ClusterWideOutAxiPorts)-1         :0] tile_sel_t;
+  typedef logic   [$clog2(ClusterWideOutAxiPorts)  :0] tile_sel_err_t;
+  typedef logic   [$clog2(ClusterWideOutAxiPorts)-1:0] tile_sel_t;
 
   // Which l2 we want to select for each req
   tile_sel_err_t  [NumTiles*NumClusterMst-1        :0] tile_sel_err;
   tile_sel_t      [NumTiles*NumClusterMst-1        :0] tile_sel;
   // Which tile we selected for each req
-  l2_sel_t        [ClusterWideOutAxiPorts-1                 :0] tile_selected;
+  l2_sel_t        [ClusterWideOutAxiPorts-1        :0] tile_selected;
   // which tile we want to select for each rsp
-  l2_sel_t        [ClusterWideOutAxiPorts-1                 :0] l2_sel;
+  l2_sel_t        [ClusterWideOutAxiPorts-1        :0] l2_sel;
   // What is the priority for response wiring?
   // Here we want to make sure the responses from one burst
   // continues until done
@@ -489,7 +489,6 @@ module cachepool_cluster
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
-      // .eoc_o                    ( eoc_o                    ),
       .impl_i                   ( impl_i                   ),
       .error_o                  ( error_o                  ),
       .debug_req_i              ( debug_req_i              ),
@@ -798,14 +797,43 @@ module cachepool_cluster
   axi_csr_slv_req_t  axi_csr_req;
   axi_csr_slv_resp_t axi_csr_rsp;
 
-  axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req;
-  axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp;
+  axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req, axi_barrier_req;
+  axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp, axi_barrier_rsp;
 
 
   for (genvar t = 0; t < NumTiles; t++) begin
-    assign axi_core_csr_req[t] = axi_out_req [t][ClusterPeriph];
-    assign axi_out_resp [t][ClusterPeriph] = axi_core_csr_rsp[t];
+    assign axi_barrier_req[t] = axi_out_req [t][ClusterPeriph];
+    assign axi_out_resp [t][ClusterPeriph] = axi_barrier_rsp[t];
   end
+
+  // Calculate the peripheral base address
+  localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
+  addr_t tcdm_start_address, tcdm_end_address;
+  assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
+  assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
+
+
+  logic [NumTiles-1:0] use_barrier;
+  // TODO: Connect to CSR
+  assign use_barrier = {NumTiles{1'b1}};
+
+  cachepool_cluster_barrier #(
+    .AddrWidth    (AxiAddrWidth       ),
+    .NrPorts      (NumTiles           ),
+    .axi_req_t    (axi_narrow_req_t   ),
+    .axi_rsp_t    (axi_narrow_resp_t  ),
+    .axi_id_t     (axi_id_in_t        ),
+    .axi_user_t   (axi_user_t         )
+  ) i_cachepool_cluster_barrier (
+    .clk_i                          ( clk_i             ),
+    .rst_ni                         ( rst_ni            ),
+    .axi_slv_req_i                  ( axi_barrier_req   ),
+    .axi_slv_rsp_o                  ( axi_barrier_rsp   ),
+    .axi_mst_req_o                  ( axi_core_csr_req  ),
+    .axi_mst_rsp_i                  ( axi_core_csr_rsp  ),
+    .barrier_i                      ( use_barrier       ),
+    .cluster_periph_start_address_i ( tcdm_end_address  )
+  );
 
 
   axi_mux #(
@@ -886,11 +914,6 @@ module cachepool_cluster
     axi_pkg::size_t aw_size, ar_size;
     logic [$clog2(SpatzAxiNarrowDataWidth/8):0] num_bytes_written;
   } dma_events_t;
-
-  localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
-  narrow_addr_t tcdm_start_address, tcdm_end_address;
-  assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
-  assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
 
   spatz_cluster_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),

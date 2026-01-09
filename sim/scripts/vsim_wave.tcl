@@ -8,20 +8,16 @@ quietly WaveActivateNextPane {} 0
 set cluster_path    /tb_cachepool/i_cluster_wrapper/i_cluster
 set group_path      ${cluster_path}/gen_group/i_group
 
-
 # Add the cluster probe
 add wave /tb_cachepool/cluster_probe
 
-add wave -noupdate -group Cluster -group xbar -group req_xbar ${cluster_path}/i_cluster_xbar/i_req_xbar/*
-add wave -noupdate -group Cluster -group xbar -group rsp_xbar ${cluster_path}/i_cluster_xbar/i_rsp_xbar/*
-add wave -noupdate -group Cluster -group xbar ${cluster_path}/i_cluster_xbar/*
+# Cluster
+do sim/scripts/vsim_cluster.tcl ${cluster_path}
 
-add wave -noupdate -group Cluster -group CSR ${cluster_path}/i_cachepool_cluster_peripheral/*
-
-add wave -noupdate -group Cluster -group Internal ${cluster_path}/*
-
+# Group
 add wave -noupdate -group Group ${group_path}/*
 
+# Tile and Core
 for {set tile 0}  {$tile < 2} {incr tile} {
     set tile_path ${group_path}/gen_tiles[$tile]
 
@@ -33,7 +29,6 @@ for {set tile 0}  {$tile < 2} {incr tile} {
     }
 
     for {set ch 0}  {$ch < 4} {incr ch} {
-        # add wave -noupdate -group DramSys$ch -group upsizer tb_cachepool/gen_dram[$ch]/i_axi_dram_sim/i_axi_dw_converter/*
         add wave -noupdate -group DramSys$ch /tb_cachepool/gen_dram[$ch]/i_axi_dram_sim/*
     }
 }

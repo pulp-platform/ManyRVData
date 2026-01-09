@@ -44,6 +44,13 @@ ifeq ($(USE_DRAMSYS),1)
   VSIM_FLAGS  += -sv_lib $(DRAMSYS_LIB_PATH)/libDRAMSys_Simulator
 endif
 
+ifeq ($(num_tiles), 1)
+	WAVE_FILE := ${SIM_DIR}/scripts/vsim_wave_single_tile.tcl
+else
+	WAVE_FILE := ${SIM_DIR}/scripts/vsim_wave.tcl
+endif
+
+
 # ----------
 # FESVR shim
 # ----------
@@ -99,7 +106,7 @@ define QUESTASIM
 	@chmod +x $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@echo "#!/bin/bash" > $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
-	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "log -r /*; source ${SIM_DIR}/scripts/vsim_wave.tcl; run -a" -work ${WORK_DIR} -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" $1 +permissive-off ++$$1 +PRELOAD=$$1' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
+	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "log -r /*; source ${WAVE_FILE}; run -a" -work ${WORK_DIR} -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" $1 +permissive-off ++$$1 +PRELOAD=$$1' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 	@chmod +x $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 endef
 
