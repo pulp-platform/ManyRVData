@@ -415,6 +415,7 @@ module cachepool_tile
   tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_meta;
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_write;
   data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_data;
+  strb_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_strb;
 
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_valid;
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_ready;
@@ -433,7 +434,7 @@ module cachepool_tile
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_we;
   tcdm_bank_addr_t [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_addr;
   data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
-  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_be;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0][DataWidth/8-1:0] l1_data_bank_be;
   data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
 
@@ -630,6 +631,7 @@ module cachepool_tile
         assign cache_req_meta [cb][j] = cache_req_reg.q.user;
         assign cache_req_write[cb][j] = cache_req_reg.q.write;
         assign cache_req_data [cb][j] = cache_req_reg.q.data;
+        assign cache_req_strb [cb][j] = cache_req_reg.q.strb;
 
         assign cache_rsp_reg.p_valid = cache_rsp_valid[cb][j];
         assign cache_rsp_reg.q_ready = cache_req_ready[cb][j];
@@ -646,6 +648,7 @@ module cachepool_tile
         assign cache_req_meta [cb][j] = cache_xbar_req   [j][cb].q.user;
         assign cache_req_write[cb][j] = cache_xbar_req   [j][cb].q.write;
         assign cache_req_data [cb][j] = cache_xbar_req   [j][cb].q.data;
+        assign cache_req_strb [cb][j] = cache_xbar_req   [j][cb].q.strb;
 
         assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
         assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
@@ -661,6 +664,21 @@ module cachepool_tile
   // For address scrambling
   localparam NumSelBits = $clog2(NumL1CtrlTile);
   localparam NumWordPerLine = L1LineWidth / DataWidth;
+  localparam int unsigned WordBytes = DataWidth / 8;
+  initial begin
+    $display("Cache Configuration:");
+    $display("  NumCtrl        : %0d", NumL1CtrlTile);
+    $display("  LineWidth      : %0d", L1LineWidth);
+    $display("  NumWordPerLine : %0d", NumWordPerLine);
+    $display("  NumSet         : %0d", L1NumSet);
+    $display("  AssoPerCtrl    : %0d", L1AssoPerCtrl);
+    $display("  BankFactor     : %0d", L1BankFactor);
+    $display("  NumTagBankPerCtrl : %0d", NumTagBankPerCtrl);
+    $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
+    $display("  CoalFactor     : %0d", L1CoalFactor);
+    $display("  RefillDataWidth: %0d", RefillDataWidth);
+    $display("  DynamicOffset  : %0d", dynamic_offset);
+  end
   logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
   assign bitmask_lo = (1 << dynamic_offset) - 1;
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
@@ -679,6 +697,7 @@ module cachepool_tile
       .CoalExtFactor    (L1CoalFactor       ),
       .AddrWidth        (L1AddrWidth        ),
       .WordWidth        (DataWidth          ),
+      .ByteWidth        (8                  ),
       .TagWidth         (L1TagDataWidth     ),
       // Cache
       .NumCacheEntry    (L1NumEntryPerCtrl  ),
@@ -712,6 +731,7 @@ module cachepool_tile
       .core_req_meta_i       (cache_req_meta [cb]            ),
       .core_req_write_i      (cache_req_write[cb]            ),
       .core_req_wdata_i      (cache_req_data [cb]            ),
+      .core_req_wstrb_i      (cache_req_strb [cb]            ),
       // Response
       .core_resp_valid_o     (cache_rsp_valid[cb]            ),
       .core_resp_ready_i     (cache_rsp_ready[cb]            ),
@@ -810,11 +830,18 @@ module cachepool_tile
     end
 
     // TODO: Should we use a single large bank or multiple narrow ones?
-    for (genvar j = 0; j < NumDataBankPerCtrl; j = j+NumWordPerLine) begin : gen_l1_data_banks
+    for (genvar bank = 0; bank < NumDataBankPerCtrl/NumWordPerLine; bank++) begin : gen_l1_data_banks
+      localparam int unsigned BaseIdx = bank * NumWordPerLine;
+      logic [NumWordPerLine*WordBytes-1:0] bank_be;
+
+      for (genvar w = 0; w < NumWordPerLine; w++) begin : gen_bank_be
+        assign bank_be[w*WordBytes +: WordBytes] = l1_data_bank_be[cb][BaseIdx + w];
+      end
+
       tc_sram_impl #(
         .NumWords   (L1CacheWayEntry/L1BankFactor),
         .DataWidth  (L1LineWidth),
-        .ByteWidth  (DataWidth  ),
+        .ByteWidth  (8          ),
         .NumPorts   (1          ),
         .Latency    (1          ),
         .SimInit    ("zeros"    )
@@ -823,15 +850,15 @@ module cachepool_tile
         .rst_ni (rst_ni                      ),
         .impl_i ('0                          ),
         .impl_o (/* unsed */                 ),
-        .req_i  ( l1_data_bank_req  [cb][j]  ),
-        .we_i   ( l1_data_bank_we   [cb][j]  ),
-        .addr_i ( l1_data_bank_addr [cb][j]  ),
-        .wdata_i( l1_data_bank_wdata[cb][j+:NumWordPerLine]),
-        .be_i   ( l1_data_bank_be   [cb][j+:NumWordPerLine]),
-        .rdata_o( l1_data_bank_rdata[cb][j+:NumWordPerLine])
+        .req_i  ( l1_data_bank_req  [cb][BaseIdx]  ),
+        .we_i   ( l1_data_bank_we   [cb][BaseIdx]  ),
+        .addr_i ( l1_data_bank_addr [cb][BaseIdx]  ),
+        .wdata_i( l1_data_bank_wdata[cb][BaseIdx+:NumWordPerLine]),
+        .be_i   ( bank_be ),
+        .rdata_o( l1_data_bank_rdata[cb][BaseIdx+:NumWordPerLine])
       );
 
-      assign l1_data_bank_gnt[cb][j+:NumWordPerLine] = {NumWordPerLine{1'b1}};
+      assign l1_data_bank_gnt[cb][BaseIdx+:NumWordPerLine] = {NumWordPerLine{1'b1}};
     end
 
     // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
