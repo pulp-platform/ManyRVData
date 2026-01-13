@@ -15,7 +15,8 @@ add wave /tb_cachepool/cluster_probe
 do sim/scripts/vsim_cluster.tcl ${cluster_path}
 
 # Group
-add wave -noupdate -group Group ${group_path}/*
+# add wave -noupdate -group Group ${group_path}/*
+do sim/scripts/vsim_group.tcl ${group_path} 5
 
 # Tile and Core
 for {set tile 0}  {$tile < 2} {incr tile} {

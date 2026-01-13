@@ -321,6 +321,7 @@ package cachepool_pkg;
 
   typedef struct packed {
     logic [CoreIDWidth-1:0] core_id;
+    logic [TileIDWidth-1:0] tile_id;
     logic                   is_amo;
     reqid_t                 req_id;
     logic                   is_fpu;

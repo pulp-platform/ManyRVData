@@ -207,10 +207,6 @@ module cachepool_group
 
   `SNITCH_VM_TYPEDEF(AxiAddrWidth)
 
-  axi_in_req_t  [NumTiles-1:0] axi_in_req;
-  axi_in_resp_t [NumTiles-1:0] axi_in_rsp;
-
-
   // ---------------
   // CachePool Tile
   // ---------------
@@ -218,8 +214,8 @@ module cachepool_group
   logic [NumTiles-1:0] error;
   assign error_o = |error;
 
-  cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
-  cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
+  cache_trans_req_t      [NumTiles-1 :0] cache_core_req;
+  cache_trans_rsp_t      [NumTiles-1 :0] cache_core_rsp;
 
   // cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
   // cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
@@ -242,6 +238,10 @@ module cachepool_group
   tcdm_rsp_chan_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_chan;
   logic           [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
 
+  // Symmetric xbar, in/out select types are the same
+  remote_tile_sel_t [NumTiles-1:0][NrTCDMPortsPerCore-1:0] remote_out_sel_tile, remote_in_sel_tile;
+  remote_tile_sel_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
+
   for (genvar t = 0; t < NumTiles; t++) begin
     for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin
       assign tile_remote_out_req_chan [p][t] = tile_remote_out_req[t][p].q;
@@ -262,16 +262,17 @@ module cachepool_group
       assign tile_remote_in_rsp_chan [p][t] = tile_remote_in_rsp[t][p].p;
       assign tile_remote_in_rsp_valid[p][t] = tile_remote_in_rsp[t][p].p_valid;
       assign tile_remote_in_req_ready[p][t] = tile_remote_in_rsp[t][p].q_ready;
+
+      // Selection signals
+      assign remote_out_sel_xbar[p][t] = remote_out_sel_tile[t][p];
+      assign remote_in_sel_xbar [p][t] = tile_remote_in_rsp_chan[p][t].user.tile_id;
     end
   end
 
-  // Symmetric xbar, in/out select types are the same
-  remote_tile_sel_t [NumTiles-1:0][NrTCDMPortsPerCore-1:0] remote_out_sel_tile, remote_in_sel_tile;
-  remote_tile_sel_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
-
-
-
   for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
+    logic [9:0] hart_base_id;
+    assign hart_base_id = hart_base_id_i + t * NumCoresTile;
+
     cachepool_tile #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
       .AxiDataWidth             ( AxiDataWidth             ),
@@ -301,6 +302,7 @@ module cachepool_group
       .axi_out_req_t            ( axi_mst_cache_req_t      ),
       .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
       .Xdma                     ( Xdma                     ),
+      .TileIDWidth              ( TileIDWidth              ),
       .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
       .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
       .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
@@ -321,8 +323,9 @@ module cachepool_group
       .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]    ),
       .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]    ),
       .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]    ),
-      .hart_base_id_i           ( hart_base_id_i + t * NumCoresTile                   ),
+      .hart_base_id_i           ( hart_base_id                                        ),
       .cluster_base_addr_i      ( cluster_base_addr_i                                 ),
+      .tile_id_i                ( t                                                   ),
       // AXI out for UART
       .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),

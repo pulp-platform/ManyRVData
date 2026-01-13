@@ -68,6 +68,8 @@ module cachepool_tile
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
     /// Per-core enabling of the custom `Xdma` ISA extensions.
     parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
+    /// Tile ID Width
+    parameter int                     unsigned               TileIDWidth                        = 0,
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int                     unsigned               NumIntOutstandingLoads             = '0,
@@ -137,6 +139,8 @@ module cachepool_tile
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  logic              [AxiAddrWidth-1:0]    cluster_base_addr_i,
+    /// Tile ID, internal ID, the base is always 0, in theory should not change during use
+    input  logic              [TileIDWidth-1:0]     tile_id_i,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [1:0]                 axi_out_req_o,
     input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
@@ -519,9 +523,13 @@ module cachepool_tile
 
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
     for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin
-      assign cache_req   [j][cb] = unmerge_req   [cb*NrTCDMPortsPerCore+j];
-      assign cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
-      assign unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
+      always_comb begin
+        cache_req   [j][cb] = unmerge_req   [cb*NrTCDMPortsPerCore+j];
+        cache_req   [j][cb].q.user.tile_id = tile_id_i;
+        cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
+        unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
+      end
+
     end
 
     // for (genvar rt = 0; rt < NumRemotePortTile; rt++) begin
@@ -549,9 +557,11 @@ module cachepool_tile
     tcdm_cache_interco #(
       .NumTiles              (NumTiles          ),
       .NumCores              (NrCores           ),
-      .NumCache              (NumL1CtrlTile    ),
+      .NumCache              (NumL1CtrlTile     ),
+      .NumTotCache           (NumL1CacheCtrl    ),
       .NumRemotePort         (NumRemotePortTile ),
       .AddrWidth             (TCDMAddrWidth     ),
+      .TileIDWidth           (TileIDWidth       ),
       .tcdm_req_t            (tcdm_req_t        ),
       .tcdm_rsp_t            (tcdm_rsp_t        ),
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
@@ -559,11 +569,12 @@ module cachepool_tile
     ) i_cache_xbar (
       .clk_i            (clk_i                  ),
       .rst_ni           (rst_ni                 ),
-      .tile_id_i        (1'b0                   ),
+      .tile_id_i        (tile_id_i              ),
       .dynamic_offset_i (dynamic_offset         ),
       .core_req_i       ({remote_req_i[j], cache_req        [j]}),
       .core_rsp_ready_i ({1'b1,            cache_pready     [j]}),
       .core_rsp_o       ({remote_rsp_o[j], cache_rsp        [j]}),
+      .tile_sel_o       (remote_req_dst_o[j]                    ),
       .mem_req_o        ({remote_req_o[j], cache_xbar_req   [j]}),
       .mem_rsp_ready_o  ({remote_pready[j],cache_xbar_pready[j]}),
       .mem_rsp_i        ({remote_rsp_i[j], cache_xbar_rsp   [j]})
@@ -662,7 +673,7 @@ module cachepool_tile
   end
 
   // For address scrambling
-  localparam NumSelBits = $clog2(NumL1CtrlTile);
+  localparam NumSelBits = $clog2(NumL1CacheCtrl);
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   localparam int unsigned WordBytes = DataWidth / 8;
   initial begin
@@ -763,6 +774,8 @@ module cachepool_tile
       .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
     );
 
+    logic [$clog2(NumL1CacheCtrl)-1:0] tot_bank_id;
+
     always_comb begin : bank_addr_scramble
       // TODO: use info and cb to calculate ID correctly
       cache_refill_req_o[cb].q = '{
@@ -802,8 +815,12 @@ module cachepool_tile
       // Shift the upper part to its location
       cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << NumSelBits);
       // Add back the removed cache bank ID
-      cache_refill_req_o[cb].q.addr |= (cb << dynamic_offset);
-
+      // tid + cb => recover the full address
+      tot_bank_id = cb;
+      if (NumL1CacheCtrl > NumL1CtrlTile) begin
+        tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
+      end
+      cache_refill_req_o[cb].q.addr |= (tot_bank_id << dynamic_offset);
     end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
@@ -1101,7 +1118,6 @@ module cachepool_tile
     .AxiUserWidth (NarrowUserWidth    ),
     .UserWidth    ($bits(tcdm_user_t) ),
     .ID           ( 1 ),
-    // .WriteRspEn   ( 1'b0 ),
     .reqrsp_req_t (reqrsp_req_t       ),
     .reqrsp_rsp_t (reqrsp_rsp_t       ),
     .axi_req_t    (axi_mst_req_t      ),
