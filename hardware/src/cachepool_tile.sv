@@ -830,7 +830,8 @@ module cachepool_tile
     end
 
     // TODO: Should we use a single large bank or multiple narrow ones?
-    for (genvar bank = 0; bank < NumDataBankPerCtrl/NumWordPerLine; bank++) begin : gen_l1_data_banks
+    for (genvar bank = 0; bank < (NumDataBankPerCtrl/NumWordPerLine);
+         bank++) begin : gen_l1_data_banks
       localparam int unsigned BaseIdx = bank * NumWordPerLine;
       logic [NumWordPerLine*WordBytes-1:0] bank_be;
 
