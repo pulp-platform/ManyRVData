@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
+# Refuse to be sourced to avoid killing the interactive shell on errors/interrupts.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "Error: do not source this script; run it as ./run_all.sh" >&2
+  return 1
+fi
+
 set -e
+
+cleanup() {
+  echo
+  echo "[INFO] Interrupted; stopping batch run."
+}
+trap 'cleanup; exit 130' INT TERM
 
 # Load user configs
 source ./configs.sh
