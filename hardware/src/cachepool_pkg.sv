@@ -278,7 +278,7 @@ package cachepool_pkg;
   //////////////////
   //  TILE TYPES  //
   //////////////////
-  typedef logic [$clog2(NumTiles)-1:0]          remote_tile_sel_t;
+  typedef logic [TileIDWidth-1:0]               remote_tile_sel_t;
 
   // Naming the port for easier connection
   typedef enum integer {
