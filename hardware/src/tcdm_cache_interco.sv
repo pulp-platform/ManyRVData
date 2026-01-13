@@ -15,6 +15,8 @@ module tcdm_cache_interco #(
   parameter int unsigned NumRemotePort        = 32'd0,
   /// Number of outputs from the interconnect (Cache per Tile) (`> 0`).
   parameter int unsigned NumCache             = 32'd0,
+  /// Number of total cache (used for address scramble).
+  parameter int unsigned NumTotCache          = 32'd0,
   /// Offset bits based on cacheline: 512b => 6 bits
   parameter int unsigned AddrWidth            = 32'd32,
   /// Tile ID Width, used for checking tile id ('> 0')
@@ -49,6 +51,8 @@ module tcdm_cache_interco #(
   /// Resposne port.
   output tcdm_rsp_t   [NumCores+NumRemotePort-1:0] core_rsp_o,
   /// Memory Side
+  /// Which remote tile visiting?
+  output tile_id_t             [NumRemotePort-1:0] tile_sel_o,
   /// Request.
   output tcdm_req_t   [NumCache+NumRemotePort-1:0] mem_req_o,
   /// Response ready out
@@ -77,8 +81,6 @@ module tcdm_cache_interco #(
   // core select which cache bank to go
   core_sel_t [NumCores+NumRemotePort-1 :0] core_req_sel;
   mem_sel_t  [NumCache+NumRemotePort-1 :0] mem_rsp_sel;
-  // tile id bits (is the destination outside of current tile?)
-  tile_id_t  [NumCores+NumRemotePort-1 :0] bank_sel;
   // Select if local or remote
   logic      [NumCores+NumRemotePort-1 :0] local_sel;
 
@@ -147,14 +149,20 @@ module tcdm_cache_interco #(
 
       // Determine which bank is targeting at
       core_req_sel[port] = local_sel[port] ?
-                           core_req[port].addr[dynamic_offset_i+:CacheBankBits] : (1'b1 << NumOutSelBits);
+                           core_req[port].addr[dynamic_offset_i+:CacheBankBits] : NumCache;
     end
   end
 
   // forward response to the sender core
   // TODO: Add remote identifier bits here
   for (genvar port = 0; port < NumCache+NumRemotePort;  port++) begin : gen_rsp_sel
-    assign mem_rsp_sel[port] = mem_rsp[port].user.core_id;
+    always_comb begin
+      mem_rsp_sel[port] = mem_rsp[port].user.core_id;
+      if (mem_rsp[port].user.tile_id != tile_id_i) begin
+        // go to the remote interco
+        mem_rsp_sel[port] = NumCores;
+      end
+    end
   end
 
 
@@ -205,9 +213,8 @@ module tcdm_cache_interco #(
   logic [AddrWidth-1:0] bitmask_up, bitmask_lo;
   // These are the address we will keep from original
   assign bitmask_lo = (1 << dynamic_offset_i) - 1;
-  // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and remove the NumOutSelBits bits
-  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - $clog2(NumCache))) - 1) << dynamic_offset_i;
-
+  // We will keep AddrWidth - Offset - log2(TotCacheBanks) bits in the upper half, and remove the NumOutSelBits bits
+  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - $clog2(NumTotCache))) - 1) << dynamic_offset_i;
 
   for (genvar port = 0; port < NumCache + NumRemotePort; port++) begin : gen_cache_io
     always_comb begin
@@ -217,10 +224,14 @@ module tcdm_cache_interco #(
         default:  '0
       };
 
-      // remove the middle bits
-      mem_req_o[port].q.addr = (mem_req[port].addr & bitmask_lo) |
-                              ((mem_req[port].addr >> $clog2(NumCache)) & bitmask_up);
-
+      if (port < NumCache) begin
+        // Only scramble address for request going to local banks
+        // remove the middle bits
+        mem_req_o[port].q.addr = (mem_req[port].addr & bitmask_lo) |
+                                ((mem_req[port].addr >> $clog2(NumTotCache)) & bitmask_up);
+      end else begin
+        tile_sel_o[port-NumCache] = mem_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth];
+      end
     end
 
     assign mem_rsp[port]          = mem_rsp_i[port].p;

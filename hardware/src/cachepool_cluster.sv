@@ -272,7 +272,15 @@ module cachepool_cluster
   logic           [NumTiles*NumClusterMst-1        :0] rr_lock_d, rr_lock_q;
   tile_sel_t      [NumTiles*NumClusterMst-1        :0] l2_prio_d, l2_prio_q;
 
-  if (Burst_Enable) begin
+
+  l2_sel_t [ClusterWideOutAxiPorts-1:0]  port_id;
+
+  for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
+    assign port_id[i] = l2_rsp[i].p.user.tile_id * NumClusterMst + l2_rsp[i].p.user.bank_id;
+  end
+
+
+  if (Burst_Enable) begin : gen_burst_ext_sel
     `FF(rr_lock_q, rr_lock_d, 1'b0)
     `FF(l2_prio_q, l2_prio_d, 1'b0)
 
@@ -281,7 +289,7 @@ module cachepool_cluster
       logic [ClusterWideOutAxiPorts-1:0] arb_valid;
       for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
         // Used to check the round-robin selection
-        assign arb_valid[i] = (l2_rsp_chan[i].user.bank_id == port) & l2_rsp_valid[i];
+        assign arb_valid[i] = (port_id[i] == port) & l2_rsp_valid[i];
       end
 
       always_comb begin
@@ -302,6 +310,7 @@ module cachepool_cluster
         l2_rsp_rr[port] = l2_prio_d[port];
 
         // Lock judgement
+        // Should it work on the l2_rsp instead of tile_rsp?
         if (tile_rsp_chan[port].user.burst.is_burst & |arb_valid) begin
           // We got a burst response
           if (tile_rsp_chan[port].user.burst.burst_len == 0) begin
@@ -466,6 +475,7 @@ module cachepool_cluster
       .NumSpatzFPUs             ( NumSpatzFPUs             ),
       .NumSpatzIPUs             ( NumSpatzIPUs             ),
       .SnitchPMACfg             ( SnitchPMACfg             ),
+      .TileIDWidth              ( 1                        ),
       .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
       .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
       .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
@@ -497,6 +507,7 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
+      .tile_id_i                ( '0                       ),
       .axi_out_req_o            ( axi_out_req  [0]         ),
       .axi_out_resp_i           ( axi_out_resp [0]         ),
       // Remote Ports (not used)
