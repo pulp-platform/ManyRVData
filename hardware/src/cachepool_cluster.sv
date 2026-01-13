@@ -758,8 +758,10 @@ module cachepool_cluster
   // TODO: Mux for uart
   assign axi_narrow_req_o = axi_out_req[0][ClusterUart];
   assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
-  // Tie off tile 1 for now
-  assign axi_out_resp[1][ClusterUart] = '0;
+  // Tie off other tiles for now
+  for (genvar tile = 1; tile < NumTiles; tile++) begin
+    assign axi_out_resp[tile][ClusterUart] = '0;
+  end
 
   /***** BootROM ****/
   for (genvar t = 0; t < NumTiles; t++) begin : gen_bootrom

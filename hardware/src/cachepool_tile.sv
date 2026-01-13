@@ -140,7 +140,7 @@ module cachepool_tile
     /// it. This signal is pseudo-static.
     input  logic              [AxiAddrWidth-1:0]    cluster_base_addr_i,
     /// Tile ID, internal ID, the base is always 0, in theory should not change during use
-    input  logic              [TileIDWidth-1:0]     tile_id_i,
+    input  remote_tile_sel_t                        tile_id_i,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [1:0]                 axi_out_req_o,
     input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
@@ -775,6 +775,13 @@ module cachepool_tile
     );
 
     logic [$clog2(NumL1CacheCtrl)-1:0] tot_bank_id;
+    // Add back the removed cache bank ID
+    // tid + cb => recover the full address
+    assign tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
+    if (NumL1CacheCtrl > NumL1CtrlTile) begin
+      assign tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
+    end
+
 
     always_comb begin : bank_addr_scramble
       // TODO: use info and cb to calculate ID correctly
@@ -814,12 +821,7 @@ module cachepool_tile
       cache_refill_req_o[cb].q.addr  =   cache_refill_req[cb].addr & bitmask_lo;
       // Shift the upper part to its location
       cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << NumSelBits);
-      // Add back the removed cache bank ID
-      // tid + cb => recover the full address
-      tot_bank_id = cb;
-      if (NumL1CacheCtrl > NumL1CtrlTile) begin
-        tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
-      end
+
       cache_refill_req_o[cb].q.addr |= (tot_bank_id << dynamic_offset);
     end
 
