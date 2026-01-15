@@ -73,8 +73,8 @@ module tb_cachepool;
   spatz_axi_in_req_t   axi_to_cluster_req;
   spatz_axi_in_resp_t  axi_to_cluster_resp;
 
-  spatz_axi_narrow_req_t   axi_uart_req;
-  spatz_axi_narrow_resp_t  axi_uart_rsp;
+  axi_uart_req_t   axi_uart_req;
+  axi_uart_resp_t  axi_uart_rsp;
 
   // DRAM Scrambled request
   spatz_axi_out_req_t  [NumL2Channel-1:0] axi_dram_req;
@@ -227,8 +227,8 @@ module tb_cachepool;
   **********/
 
   axi_uart #(
-    .axi_req_t (spatz_axi_narrow_req_t ),
-    .axi_resp_t(spatz_axi_narrow_resp_t)
+    .axi_req_t (axi_uart_req_t ),
+    .axi_resp_t(axi_uart_resp_t)
   ) i_axi_uart (
     .clk_i     (clk               ),
     .rst_ni    (rst_n             ),

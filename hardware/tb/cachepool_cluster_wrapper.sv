@@ -27,6 +27,7 @@ module cachepool_cluster_wrapper
 
   parameter type axi_narrow_req_t      = spatz_axi_narrow_req_t,
   parameter type axi_narrow_resp_t     = spatz_axi_narrow_resp_t
+
 )(
   input  logic                                 clk_i,
   input  logic                                 rst_ni,
@@ -40,8 +41,8 @@ module cachepool_cluster_wrapper
   input  axi_in_req_t                          axi_in_req_i,
   output axi_in_resp_t                         axi_in_resp_o,
   /// AXI Narrow out-port (UART)
-  output axi_narrow_req_t                      axi_narrow_req_o,
-  input  axi_narrow_resp_t                     axi_narrow_resp_i,
+  output axi_uart_req_t                        axi_narrow_req_o,
+  input  axi_uart_resp_t                       axi_narrow_resp_i,
   output axi_out_req_t  [NumClusterSlv-1:0]    axi_out_req_o,
   input  axi_out_resp_t [NumClusterSlv-1:0]    axi_out_resp_i
 );
