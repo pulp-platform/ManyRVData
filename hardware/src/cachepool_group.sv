@@ -226,6 +226,7 @@ module cachepool_group
   // In/Out relative to the tile (out--leave a tile; in--enter a tile)
   tcdm_req_t      [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_out_req;
   tcdm_rsp_t      [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_out_rsp;
+  logic           [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_in_ready, tile_remote_out_ready;
   tcdm_req_chan_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_req_chan;
   logic           [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
   tcdm_rsp_chan_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_rsp_chan;
@@ -246,9 +247,9 @@ module cachepool_group
     for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin
       assign tile_remote_out_req_chan [p][t] = tile_remote_out_req[t][p].q;
       assign tile_remote_out_req_valid[p][t] = tile_remote_out_req[t][p].q_valid;
-      // No p ready
-      assign tile_remote_out_rsp_ready[p][t] = 1'b1;
-      // assign tile_remote_out_rsp_ready[p][t] = tile_remote_out_req[t][p].p_ready;
+
+      // assign tile_remote_out_rsp_ready[p][t] = 1'b1;
+      assign tile_remote_out_rsp_ready[p][t] = tile_remote_in_ready[t][p];
 
       assign tile_remote_out_rsp[t][p].p       = tile_remote_out_rsp_chan [p][t];
       assign tile_remote_out_rsp[t][p].p_valid = tile_remote_out_rsp_valid[p][t];
@@ -257,7 +258,7 @@ module cachepool_group
 
       assign tile_remote_in_req[t][p].q       = tile_remote_in_req_chan [p][t];
       assign tile_remote_in_req[t][p].q_valid = tile_remote_in_req_valid[p][t];
-      // assign tile_remote_in_req[t][p].p_ready = tile_remote_in_rsp_ready[p][t];
+      assign tile_remote_out_ready[t][p]      = tile_remote_in_rsp_ready[p][t];
 
       assign tile_remote_in_rsp_chan [p][t] = tile_remote_in_rsp[t][p].p;
       assign tile_remote_in_rsp_valid[p][t] = tile_remote_in_rsp[t][p].p_valid;
@@ -333,8 +334,10 @@ module cachepool_group
       .remote_req_o             ( tile_remote_out_req[t]                              ),
       .remote_req_dst_o         ( remote_out_sel_tile[t]                              ),
       .remote_rsp_i             ( tile_remote_out_rsp[t]                              ),
+      .remote_rsp_ready_i       ( tile_remote_out_ready[t]                            ),
       .remote_req_i             ( tile_remote_in_req [t]                              ),
       .remote_rsp_o             ( tile_remote_in_rsp [t]                              ),
+      .remote_rsp_ready_o       ( tile_remote_in_ready[t]                             ),
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req_o[t*NumL1CtrlTile+:NumL1CtrlTile]  ),
       .cache_refill_rsp_i       ( cache_refill_rsp_i[t*NumL1CtrlTile+:NumL1CtrlTile]  ),
@@ -364,6 +367,7 @@ module cachepool_group
       .NumInp           (NumTiles                   ),
       .NumOut           (NumTiles                   ),
       .PipeReg          (1'b1                       ),
+      .RspReg           (1'b1                       ),
       .ExtReqPrio       (1'b0                       ),
       .ExtRspPrio       (1'b0                       ),
       .tcdm_req_chan_t  (tcdm_req_chan_t            ),

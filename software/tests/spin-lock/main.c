@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This tiny test let each core add its core_id into a same memory location
+// Can be used to verify the spin-lock and global shared memory access
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 #include <benchmark.h>
@@ -36,7 +38,7 @@ int main() {
   spin_lock (&lock, 20);
 
   // Each core print its core id
-  printf("Core%d:hello\n", cid);
+  // printf("Core%d:hello\n", cid);
 
   // Add cid to the result
   result += cid;
@@ -48,7 +50,8 @@ int main() {
 
   if (cid == 0) {
     uint32_t res_hex = (uint32_t) result;
-    printf("result: %x\n", res_hex);
+    uint32_t res_gold = (0 + num_cores - 1) * num_cores / 2;
+    printf("result: %u; gold: %u\n", res_hex, res_gold);
   }
 
   // Wait for core 0 to finish displaying results

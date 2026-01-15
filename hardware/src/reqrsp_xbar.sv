@@ -13,6 +13,8 @@ module reqrsp_xbar #(
   parameter int unsigned NumOut               = 32'd0,
   /// Generate Register
   parameter int unsigned PipeReg              = 1'b1,
+  /// Rsp path Register
+  parameter int unsigned RspReg               = 1'b0,
   /// Do we need to provide external priority for Xbar?
   parameter int unsigned ExtReqPrio           = 1'b0,
   parameter int unsigned ExtRspPrio           = 1'b0,
@@ -174,20 +176,35 @@ module reqrsp_xbar #(
       assign core_req[port] = postreg_data.payload;
       assign slv_sel[port] = postreg_data.select;
 
-      fall_through_register #(
-        .T         (tcdm_rsp_chan_t           )
-      ) i_tcdm_rsp_reg (
-        .clk_i     (clk_i                     ),
-        .rst_ni    (rst_ni                    ),
-        .clr_i     (1'b0                      ),
-        .testmode_i(1'b0                      ),
-        .data_i    (core_rsp[port]            ),
-        .valid_i   (core_rsp_valid[port]      ),
-        .ready_o   (core_rsp_ready[port]      ),
-        .data_o    (slv_rsp_o[port]           ),
-        .valid_o   (slv_rsp_valid_o[port]     ),
-        .ready_i   (slv_rsp_ready_i[port]     )
-      );
+      if (RspReg) begin : gen_rsp_reg
+        spill_register #(
+          .T         (tcdm_rsp_chan_t       )
+        ) i_tcdm_rsp_reg (
+          .clk_i     (clk_i                 ),
+          .rst_ni    (rst_ni                ),
+          .data_i    (core_rsp[port]        ),
+          .valid_i   (core_rsp_valid[port]  ),
+          .ready_o   (core_rsp_ready[port]  ),
+          .data_o    (slv_rsp_o[port]       ),
+          .valid_o   (slv_rsp_valid_o[port] ),
+          .ready_i   (slv_rsp_ready_i[port] )
+        );
+      end else begin : gen_rsp_bypass
+        fall_through_register #(
+          .T         (tcdm_rsp_chan_t           )
+        ) i_tcdm_rsp_reg (
+          .clk_i     (clk_i                     ),
+          .rst_ni    (rst_ni                    ),
+          .clr_i     (1'b0                      ),
+          .testmode_i(1'b0                      ),
+          .data_i    (core_rsp[port]            ),
+          .valid_i   (core_rsp_valid[port]      ),
+          .ready_o   (core_rsp_ready[port]      ),
+          .data_o    (slv_rsp_o[port]           ),
+          .valid_o   (slv_rsp_valid_o[port]     ),
+          .ready_i   (slv_rsp_ready_i[port]     )
+        );
+      end
     end else begin : bypass_reg
       assign core_req[port]        = slv_req_i[port];
       assign core_req_valid[port]  = slv_req_valid_i[port];

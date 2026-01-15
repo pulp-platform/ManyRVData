@@ -23,11 +23,13 @@
 #include DATAHEADER
 #include "kernel/idotp.c"
 
+// #define DEBUG
+
 int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
   const uint32_t cid = snrt_cluster_core_idx();
 
-  const int measure_iter = 3;
+  const int measure_iter = 2;
 
   // Byte-level interleaving for DRAM
   // Default setting is 1024b (128 Byte)
@@ -111,6 +113,10 @@ int main() {
       for (uint32_t i = 1; i < num_cores; ++i)
         acc += result[i];
       result[0] = acc;
+
+#ifdef DEBUG
+      printf("results:%u\n", result[0]);
+#endif
     }
 
   }
@@ -139,6 +145,10 @@ int main() {
     if (result[0] != dotp_result_golden*measure_iter) {
       printf("Check Failed!\n");
     }
+#ifdef DEBUG
+    printf("gold results:%d\n", dotp_result_golden);
+    printf("calc results:%d\n", result[0]);
+#endif
   }
 
   // Wait for core 0 to display the results
