@@ -143,8 +143,8 @@ module cachepool_cluster
     input  axi_in_req_t                           axi_in_req_i,
     output axi_in_resp_t                          axi_in_resp_o,
     /// AXI Narrow out-port (UART)
-    output axi_narrow_req_t                       axi_narrow_req_o,
-    input  axi_narrow_resp_t                      axi_narrow_resp_i,
+    output axi_uart_req_t                         axi_narrow_req_o,
+    input  axi_uart_resp_t                        axi_narrow_resp_i,
     /// AXI Core cluster out-port to main memory.
     output axi_out_req_t  [ClusterWideOutAxiPorts-1:0]     axi_out_req_o,
     input  axi_out_resp_t [ClusterWideOutAxiPorts-1:0]     axi_out_resp_i,
@@ -755,12 +755,50 @@ module cachepool_cluster
   // ---------
 
   /***** UART ****/
-  // TODO: Mux for uart
-  assign axi_narrow_req_o = axi_out_req[0][ClusterUart];
-  assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
-  // Tie off other tiles for now
-  for (genvar tile = 1; tile < NumTiles; tile++) begin
-    assign axi_out_resp[tile][ClusterUart] = '0;
+  axi_narrow_req_t   [NumTiles-1:0] axi_uart_mux_req;
+  axi_narrow_resp_t  [NumTiles-1:0] axi_uart_mux_rsp;
+
+  if (NumTiles > 1) begin : gen_uart_mux
+    for (genvar tile = 0; tile < NumTiles; tile++) begin
+      assign axi_uart_mux_req[tile] =  axi_out_req[tile][ClusterUart];
+      assign axi_out_resp[tile][ClusterUart] = axi_uart_mux_rsp[tile];
+    end
+
+    axi_mux #(
+      .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
+      .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ), // AW Channel Type, slave ports
+      .mst_aw_chan_t ( axi_uart_aw_chan_t     ), // AW Channel Type, master port
+      .w_chan_t      ( axi_uart_w_chan_t      ), //  W Channel Type, all ports
+      .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ), //  B Channel Type, slave ports
+      .mst_b_chan_t  ( axi_uart_b_chan_t      ), //  B Channel Type, master port
+      .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ), // AR Channel Type, slave ports
+      .mst_ar_chan_t ( axi_uart_ar_chan_t     ), // AR Channel Type, master port
+      .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ), //  R Channel Type, slave ports
+      .mst_r_chan_t  ( axi_uart_r_chan_t      ), //  R Channel Type, master port
+      .slv_req_t     ( axi_csr_mst_req_t      ),
+      .slv_resp_t    ( axi_csr_mst_resp_t     ),
+      .mst_req_t     ( axi_uart_req_t         ),
+      .mst_resp_t    ( axi_uart_resp_t        ),
+      .NoSlvPorts    ( NumTiles               ), // Number of Masters for the module
+      .FallThrough   ( 0                      ),
+      .SpillAw       ( XbarLatency[4]         ),
+      .SpillW        ( XbarLatency[3]         ),
+      .SpillB        ( XbarLatency[2]         ),
+      .SpillAr       ( XbarLatency[1]         ),
+      .SpillR        ( XbarLatency[0]         ),
+      .MaxWTrans     ( 2                      )
+    ) i_axi_uart_mux (
+      .clk_i         ( clk_i                  ),  // Clock
+      .rst_ni        ( rst_ni                 ),  // Asynchronous reset active low
+      .test_i        ( '0                     ),  // Test Mode enable
+      .slv_reqs_i    ( axi_uart_mux_req       ),
+      .slv_resps_o   ( axi_uart_mux_rsp       ),
+      .mst_req_o     ( axi_narrow_req_o       ),
+      .mst_resp_i    ( axi_narrow_resp_i      )
+    );
+  end else begin : gen_uart_connect
+    assign axi_narrow_req_o = axi_out_req[0][ClusterUart];
+    assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
   end
 
   /***** BootROM ****/
@@ -952,7 +990,7 @@ module cachepool_cluster
     .core_events_i            ('0                    ),
     .tcdm_events_i            ('0                    ),
     .dma_events_i             ('0                    ),
-    .icache_events_i          (icache_events         ),
+    .icache_events_i          ('0                    ),
     .cluster_probe_o          (cluster_probe_o       ),
     .dynamic_offset_o         (dynamic_offset        ),
     .l1d_spm_size_o           (                      ),

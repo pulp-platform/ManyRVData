@@ -184,7 +184,10 @@ package cachepool_pkg;
   localparam int unsigned CsrAxiMstIdWidth        = ClusterAxiIdWidth;
   localparam int unsigned CsrAxiSlvIdWidth        = ClusterAxiIdWidth + $clog2(NumTiles+1);
 
+  // Base ID width 6, plus tile mux => adding clog(tile)
   localparam int unsigned SpatzAxiNarrowIdWidth   = 6 + $clog2(NumTiles);
+  // UART ID width, with an extra xbar
+  localparam int unsigned SpatzAxiUartIdWidth     = SpatzAxiNarrowIdWidth + $clog2(NumTiles);
 
   /***** Tile Ports *****/
   // We have three sets of AXI ports for each tile:
@@ -269,6 +272,8 @@ package cachepool_pkg;
   typedef logic [SpatzAxiNarrowIdWidth-1:0]     axi_narrow_id_t;
   // legacy name; TODO: remove
   typedef logic [SpatzAxiNarrowIdWidth-1:0]     id_slv_t;
+
+  typedef logic [SpatzAxiUartIdWidth-1:0]       axi_uart_id_t;
 
   typedef logic [CsrAxiMstIdWidth-1:0]          axi_id_csr_mst_t;
   typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
@@ -393,42 +398,14 @@ package cachepool_pkg;
   `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,     axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
 
-  `AXI_TYPEDEF_ALL(axi_csr_mst, axi_addr_t, axi_id_csr_mst_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(axi_csr_slv, axi_addr_t, axi_id_csr_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_uart,          axi_addr_t, axi_uart_id_t,    axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_csr_mst,       axi_addr_t, axi_id_csr_mst_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_csr_slv,       axi_addr_t, axi_id_csr_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 
   /**************************************************************
    *  FUNCTIONS
    *  Order: Core -> Tile -> Group -> Cluster -> TB/L2
    **************************************************************/
-
-  //////////////////
-  //  AXI FUNCS   //
-  //////////////////
-  // function automatic axi_id_in_t make_cluster_id(
-  //     input remote_tile_sel_t                 tile_idx,
-  //     input logic [TileLocalIdWidth-1:0]      tile_local,
-  //     input logic [ClusterRouteIdWidth-1:0]   route
-  // );
-  //   axi_id_in_t id;
-  //   id = '0;
-  //   id[TileLocalIdWidth-1:0] = tile_local;
-  //   id[TileLocalIdWidth + TileIndexIdWidth - 1 : TileLocalIdWidth] = tile_idx;
-  //   id[ClusterAxiIdWidth-1 : GroupAxiIdWidth] = route;
-  //   return id;
-  // endfunction
-
-  // function automatic remote_tile_sel_t get_tile_idx_from_cluster_id(input axi_id_in_t id);
-  //   return id[TileLocalIdWidth + TileIndexIdWidth - 1 : TileLocalIdWidth];
-  // endfunction
-
-  // function automatic logic [TileLocalIdWidth-1:0] get_tile_local_from_cluster_id(input axi_id_in_t id);
-  //   return id[TileLocalIdWidth-1:0];
-  // endfunction
-
-  // function automatic logic [ClusterRouteIdWidth-1:0] get_route_from_cluster_id(input axi_id_in_t id);
-  //   return id[ClusterAxiIdWidth-1 : GroupAxiIdWidth];
-  // endfunction
-
 
   ///////////////////
   //  CORE FUNCS   //
