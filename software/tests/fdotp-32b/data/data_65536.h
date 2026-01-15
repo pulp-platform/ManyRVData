@@ -21,6 +21,7 @@ static float dotp_B_dram [65536] __attribute__((section(".data"))) = {0.88840794
 static float dotp_result __attribute__((section(".data"))) = {-239.60137939453125};
 
 
-float result [4] __attribute__((section(".data"))) = {0};
+// Global memory location to hold reduction results for each core
+float result [64] __attribute__((section(".data"))) = {0};
 
 

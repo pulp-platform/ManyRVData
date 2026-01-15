@@ -88,8 +88,9 @@ def emit_dotp_layer(name="dotp", **kwargs):
             + array_to_cstr(result)
             + ";\n\n\n"
         )
+        layer_str += '// Global memory location to hold reduction results for each core\n'
         layer_str += (
-            f'{dtype} result [4] __attribute__((section(".data"))) = {{0}}'
+            f'{dtype} result [64] __attribute__((section(".data"))) = {{0}}'
             + ";\n\n\n"
         )
     else:

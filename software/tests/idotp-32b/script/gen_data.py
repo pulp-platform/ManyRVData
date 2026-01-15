@@ -48,7 +48,7 @@ def emit_dotp_layer(name="dotp", **kwargs) -> str:
         f'static {etype} {name}_result_golden __attribute__((section(".data"))) = '
         + str(int(result)) + ";\n\n"
     )
-    layer_str += f"{etype} result[4] __attribute__((section(\".data\"))) = {{0}};\n\n"
+    layer_str += f"{etype} result[64] __attribute__((section(\".data\"))) = {{0}};\n\n"
     return layer_str
 
 def emit_header_file(**kwargs):
@@ -84,7 +84,7 @@ def main():
     prec = int(param["prec"])  # 8/16/32/64
 
     # Fixed safe range
-    lo, hi = -100, 100
+    lo, hi = -50, 50
     A = rand_int_signed((M,), lo, hi)
     B = rand_int_signed((M,), lo, hi)
     result = dotp_wrap_same_width(A, B, prec)

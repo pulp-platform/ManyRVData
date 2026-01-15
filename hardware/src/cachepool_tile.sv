@@ -154,9 +154,11 @@ module cachepool_tile
     output tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_o,
     output remote_tile_sel_t  [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_dst_o,
     input  tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_i,
+    input  logic              [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
     input  tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_i,
     output tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_o,
+    output logic              [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_ready_o,
     /// Peripheral signals
     output icache_events_t    [NrCores-1:0]         icache_events_o,
     input  logic                                    icache_prefetch_enable_i,
@@ -550,7 +552,10 @@ module cachepool_tile
   logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
   assign dynamic_offset = dynamic_offset_i;
 
-  logic [NrTCDMPortsPerCore-1:0] remote_pready;
+  // todo: multiple remote ports
+  logic [NrTCDMPortsPerCore-1:0] remote_out_pready, remote_in_pready;
+  assign remote_rsp_ready_o = remote_out_pready;
+  assign remote_in_pready = remote_rsp_ready_i;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
@@ -571,13 +576,13 @@ module cachepool_tile
       .rst_ni           (rst_ni                 ),
       .tile_id_i        (tile_id_i              ),
       .dynamic_offset_i (dynamic_offset         ),
-      .core_req_i       ({remote_req_i[j], cache_req        [j]}),
-      .core_rsp_ready_i ({1'b1,            cache_pready     [j]}),
-      .core_rsp_o       ({remote_rsp_o[j], cache_rsp        [j]}),
-      .tile_sel_o       (remote_req_dst_o[j]                    ),
-      .mem_req_o        ({remote_req_o[j], cache_xbar_req   [j]}),
-      .mem_rsp_ready_o  ({remote_pready[j],cache_xbar_pready[j]}),
-      .mem_rsp_i        ({remote_rsp_i[j], cache_xbar_rsp   [j]})
+      .core_req_i       ({remote_req_i[j],      cache_req        [j]}),
+      .core_rsp_ready_i ({remote_in_pready[j],  cache_pready     [j]}),
+      .core_rsp_o       ({remote_rsp_o[j],      cache_rsp        [j]}),
+      .tile_sel_o       (remote_req_dst_o[j]                         ),
+      .mem_req_o        ({remote_req_o[j],      cache_xbar_req   [j]}),
+      .mem_rsp_ready_o  ({remote_out_pready[j], cache_xbar_pready[j]}),
+      .mem_rsp_i        ({remote_rsp_i[j],      cache_xbar_rsp   [j]})
     );
   end
 
