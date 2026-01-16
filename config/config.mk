@@ -104,14 +104,9 @@ snitch_max_trans ?= 16
 #########################
 ##  AXI configuration  ##
 #########################
-# --- AXI user width derived from L1D cacheline width ---
-# supported widths only
-ifneq ($(filter $(l1d_cacheline_width),128 256 512),$(l1d_cacheline_width))
-  $(error l1d_cacheline_width must be one of {128,256,512} (got $(l1d_cacheline_width)))
-endif
 
 ifeq ($(l1d_cacheline_width),512)
-  axi_user_width := 18
+  axi_user_width := 17
 else ifeq ($(l1d_cacheline_width),256)
   axi_user_width := 19
 else ifeq ($(l1d_cacheline_width),128)

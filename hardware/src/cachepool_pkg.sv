@@ -157,7 +157,7 @@ package cachepool_pkg;
   // AXI Address Width
   localparam int unsigned SpatzAxiAddrWidth       = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
   // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif;
+  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif + $clog2(NumTiles);
 
   // -----------------------
   // AXI ID field structure

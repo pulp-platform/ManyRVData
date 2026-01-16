@@ -30,7 +30,7 @@ spinlock_t lock;
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
   const unsigned int cid = snrt_cluster_core_idx();
-  
+
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
@@ -38,7 +38,7 @@ int main() {
   spin_lock (&lock, 20);
 
   // Each core print its core id
-  // printf("Core%d:hello\n", cid);
+  printf("Core%d:hello\n", cid);
 
   // Add cid to the result
   result += cid;
