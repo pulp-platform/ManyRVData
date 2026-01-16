@@ -19,7 +19,7 @@ do sim/scripts/vsim_cluster.tcl ${cluster_path}
 do sim/scripts/vsim_group.tcl ${group_path} 5
 
 # Tile and Core
-for {set tile 0}  {$tile < 2} {incr tile} {
+for {set tile 0}  {$tile < 4} {incr tile} {
     set tile_path ${group_path}/gen_tiles[$tile]
 
     do sim/scripts/vsim_tile.tcl $tile ${tile_path}
