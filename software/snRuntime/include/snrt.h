@@ -80,6 +80,8 @@ extern uint32_t snrt_global_dm_core_num();
 extern uint32_t snrt_cluster_core_base_hartid();
 extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
+extern uint32_t snrt_cluster_tile_idx();
+extern uint32_t snrt_cluster_tile_num();
 extern uint32_t snrt_cluster_compute_core_idx();
 extern uint32_t snrt_cluster_compute_core_num();
 extern uint32_t snrt_cluster_dm_core_idx();

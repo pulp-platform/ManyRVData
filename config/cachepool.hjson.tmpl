@@ -53,6 +53,8 @@
       register_offload_rsp: true
     },
 
+    nr_tiles: ${num_tiles},
+
     // Repeat the compute core template N times (driven by ${num_cores})
     cores: [
       ${cores_array}

@@ -23,6 +23,7 @@ struct snrt_cluster_bootdata {
     uint32_t tcdm_offset;
     uint64_t global_mem_start;
     uint64_t global_mem_end;
+    uint32_t tile_count;
 };
 
 // Rudimentary string buffer for putc calls.
