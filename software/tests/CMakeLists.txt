@@ -86,6 +86,8 @@ set(SNITCH_TEST_PREFIX cachepool-)
 add_spatz_test_zeroParam(spin-lock spin-lock/main.c)
 add_spatz_test_zeroParam(mcs-lock mcs-lock/main.c)
 add_spatz_test_zeroParam(byte-enable byte-enable/main.c)
+add_spatz_test_zeroParam(cache-test-scalar cache-test-scalar/main.c)
+add_spatz_test_zeroParam(cache-test-vector cache-test-vector/main.c)
 
 # add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
