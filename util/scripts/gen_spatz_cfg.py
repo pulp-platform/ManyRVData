@@ -33,6 +33,7 @@ def main():
 
     # Build dynamic values that depend on others
     num_cores = int(os.environ.get("num_cores", "4"))
+    num_tiles = int(os.environ.get("num_tiles", "1"))
     cores_array = ",".join(['{ $ref: "#/compute_core_template" }'] * num_cores)
 
     # Convert spatz_fpu_en -> spatz_fpu_bool for HJSON
@@ -53,6 +54,7 @@ def main():
         "dram_len":    str(dram_len),
         "uncached_addr": str(uncached_addr),
         "uncached_len":  str(uncached_len),
+        "num_tiles":    str(num_tiles)
     }
 
     # Copy through any other env vars used in template

@@ -9,10 +9,10 @@
 #########################
 
 # Number of tiles
-num_tiles ?= 1
+num_tiles ?= 4
 
 # Number of cores
-num_cores ?= 4
+num_cores ?= 16
 
 # Core datawidth
 data_width ?= 32

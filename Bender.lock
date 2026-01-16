@@ -97,7 +97,7 @@ packages:
     - common_cells
     - tech_cells_generic
   spatz:
-    revision: b60f7aee5e3be31facf566955aadbd5b6eac5da3
+    revision: 707ac676015eebceb30e1e09ef75bff1a06220a8
     version: null
     source:
       Git: https://github.com/pulp-platform/spatz.git

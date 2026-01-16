@@ -9,6 +9,23 @@
 __thread struct snrt_team *_snrt_team_current;
 __thread uint32_t _snrt_core_idx;
 
+// Bootdata layout (append-only extension). Must match BootROM bootdata layout.
+struct snrt_cluster_bootdata {
+    uint32_t boot_addr;
+    uint32_t core_count;
+    uint32_t hartid_base;
+    uint32_t tcdm_start;
+    uint32_t tcdm_size;
+    uint32_t tcdm_offset;
+    uint64_t global_mem_start;
+    uint64_t global_mem_end;
+    uint32_t tile_count;   // appended field
+};
+
+static inline const struct snrt_cluster_bootdata *_snrt_bootdata(void) {
+    return (const struct snrt_cluster_bootdata *)_snrt_team_current->root->bootdata;
+}
+
 const uint32_t _snrt_team_size __attribute__((section(".rodata"))) =
     sizeof(struct snrt_team_root);
 
@@ -39,6 +56,17 @@ uint32_t snrt_global_core_num() {
 uint32_t snrt_cluster_idx() { return _snrt_team_current->root->cluster_idx; }
 
 uint32_t snrt_cluster_num() { return _snrt_team_current->root->cluster_num; }
+
+uint32_t snrt_cluster_tile_num() {
+    uint32_t n = _snrt_bootdata()->tile_count;
+    return n ? n : 1;
+}
+
+uint32_t snrt_cluster_tile_idx() {
+    uint32_t tiles = snrt_cluster_tile_num();
+    uint32_t cpt   = snrt_cluster_core_num() / tiles;
+    return snrt_cluster_core_idx() / cpt;
+}
 
 uint32_t snrt_cluster_core_idx() { return _snrt_core_idx; }
 
