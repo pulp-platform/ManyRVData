@@ -107,7 +107,10 @@ module cachepool_cluster
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
-    parameter int                     unsigned               NrSramCfg                          = 1
+    parameter int                     unsigned               NrSramCfg                          = 1,
+    /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
+    parameter bit                                            UseFoldedDataBanks               = 1'b1,
+    parameter int                     unsigned               FoldWayGroup                     = 0
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -485,7 +488,9 @@ module cachepool_cluster
       .RegisterExt              ( RegisterExt              ),
       .XbarLatency              ( XbarLatency              ),
       .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              )
+      .MaxSlvTrans              ( MaxSlvTrans              ),
+      .UseFoldedDataBanks       ( UseFoldedDataBanks       ),
+      .FoldWayGroup             ( FoldWayGroup             )
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),

@@ -108,7 +108,10 @@ module cachepool_tile
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
-    parameter int                     unsigned               NrSramCfg                          = 1
+    parameter int                     unsigned               NrSramCfg                          = 1,
+    /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
+    parameter bit                                            UseFoldedDataBanks               = 1'b1,
+    parameter int                     unsigned               FoldWayGroup                     = 0
   ) (
     /// System clock.
     input  logic                                    clk_i,
@@ -665,6 +668,19 @@ module cachepool_tile
   localparam NumSelBits = $clog2(NumL1CtrlTile);
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   localparam int unsigned WordBytes = DataWidth / 8;
+  localparam bit          UseSkewedFolded = UseFoldedDataBanks && (L1AssoPerCtrl > 1);
+  localparam int unsigned DefaultFoldWayGroup = (L1AssoPerCtrl >= 4) ? 4 : 2;
+  localparam int unsigned EffectiveFoldWayGroup = UseSkewedFolded ?
+      ((FoldWayGroup == 0) ? DefaultFoldWayGroup : FoldWayGroup) :
+      L1AssoPerCtrl;
+  localparam int unsigned NumWayGroups = L1AssoPerCtrl / EffectiveFoldWayGroup;
+  localparam int unsigned PartSplit = UseSkewedFolded ? EffectiveFoldWayGroup : 1;
+  localparam int unsigned NumDataBankPerWay = NumDataBankPerCtrl / L1AssoPerCtrl;
+  localparam int unsigned WordsPerPart = NumWordPerLine / PartSplit;
+  localparam int unsigned NumDataBankPerWayGrouped = NumDataBankPerWay / WordsPerPart;
+  localparam int unsigned BankDataWidth = DataWidth * WordsPerPart;
+  localparam int unsigned BankByteCount = BankDataWidth / 8;
+  localparam int unsigned FoldedDataDepth = (L1CacheWayEntry / L1BankFactor) * PartSplit;
   initial begin
     $display("Cache Configuration:");
     $display("  NumCtrl        : %0d", NumL1CtrlTile);
@@ -673,6 +689,8 @@ module cachepool_tile
     $display("  NumSet         : %0d", L1NumSet);
     $display("  AssoPerCtrl    : %0d", L1AssoPerCtrl);
     $display("  BankFactor     : %0d", L1BankFactor);
+    $display("  PartSplit      : %0d", PartSplit);
+    $display("  BankDataWidth  : %0d", BankDataWidth);
     $display("  NumTagBankPerCtrl : %0d", NumTagBankPerCtrl);
     $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
     $display("  CoalFactor     : %0d", L1CoalFactor);
@@ -703,6 +721,7 @@ module cachepool_tile
       .NumCacheEntry    (L1NumEntryPerCtrl  ),
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
+      .DataPartSplit    (PartSplit          ),
       .BankFactor       (L1BankFactor       ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
@@ -829,62 +848,141 @@ module cachepool_tile
       );
     end
 
-    // TODO: Should we use a single large bank or multiple narrow ones?
-    for (genvar bank = 0; bank < (NumDataBankPerCtrl/NumWordPerLine);
-         bank++) begin : gen_l1_data_banks
-      localparam int unsigned BaseIdx = bank * NumWordPerLine;
-      logic [NumWordPerLine*WordBytes-1:0] bank_be;
+    if (UseSkewedFolded) begin : gen_folded_data_banks
+      // Skewed folded banks: keep W*B macros, narrow width, deeper depth, and skew (way, part) -> column.
+      typedef logic [$clog2(FoldedDataDepth)-1:0] folded_bank_addr_t;
 
-      for (genvar w = 0; w < NumWordPerLine; w++) begin : gen_bank_be
-        assign bank_be[w*WordBytes +: WordBytes] = l1_data_bank_be[cb][BaseIdx + w];
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0]            bank_req;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0]            bank_we;
+      folded_bank_addr_t   [L1AssoPerCtrl-1:0][L1BankFactor-1:0]            bank_addr;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][BankDataWidth-1:0] bank_wdata;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][BankByteCount-1:0] bank_be;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][BankDataWidth-1:0] bank_rdata;
+
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_req;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_we;
+      folded_bank_addr_t   [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_addr;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankDataWidth-1:0] part_wdata;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankByteCount-1:0] part_be;
+
+      for (genvar group = 0; group < NumWayGroups; group++) begin : gen_skew_groups
+        for (genvar way = 0; way < EffectiveFoldWayGroup; way++) begin : gen_skew_ways
+          localparam int unsigned WayIdx = group * EffectiveFoldWayGroup + way;
+          for (genvar part = 0; part < PartSplit; part++) begin : gen_skew_parts
+            localparam int unsigned ColIdx = group * EffectiveFoldWayGroup + ((way + part) % EffectiveFoldWayGroup);
+            for (genvar bank_sel = 0; bank_sel < L1BankFactor; bank_sel++) begin : gen_skew_banks
+              localparam int unsigned BankBase = bank_sel * NumWordPerLine + part * WordsPerPart;
+              assign part_req[ColIdx][bank_sel][part] =
+                  |l1_data_bank_req[cb][WayIdx * NumDataBankPerWay + BankBase +: WordsPerPart];
+              assign part_we[ColIdx][bank_sel][part] =
+                  |l1_data_bank_we [cb][WayIdx * NumDataBankPerWay + BankBase +: WordsPerPart];
+              assign part_addr[ColIdx][bank_sel][part] =
+                  folded_bank_addr_t'((l1_data_bank_addr[cb][WayIdx * NumDataBankPerWay + BankBase] * PartSplit) + part);
+
+              for (genvar w = 0; w < WordsPerPart; w++) begin : gen_part_words
+                localparam int unsigned FlatIdx = WayIdx * NumDataBankPerWay + BankBase + w;
+                assign part_wdata[ColIdx][bank_sel][part][w*DataWidth +: DataWidth] =
+                    l1_data_bank_wdata[cb][FlatIdx];
+                assign part_be[ColIdx][bank_sel][part][w*(DataWidth/8) +: (DataWidth/8)] =
+                    l1_data_bank_be[cb][FlatIdx];
+                assign l1_data_bank_rdata[cb][FlatIdx] =
+                    bank_rdata[ColIdx][bank_sel][w*DataWidth +: DataWidth];
+                assign l1_data_bank_gnt[cb][FlatIdx] = 1'b1;
+              end
+            end
+          end
+        end
       end
 
-      tc_sram_impl #(
-        .NumWords   (L1CacheWayEntry/L1BankFactor),
-        .DataWidth  (L1LineWidth),
-        .ByteWidth  (8          ),
-        .NumPorts   (1          ),
-        .Latency    (1          ),
-        .SimInit    ("zeros"    )
-      ) i_data_bank (
-        .clk_i  (clk_i                       ),
-        .rst_ni (rst_ni                      ),
-        .impl_i ('0                          ),
-        .impl_o (/* unsed */                 ),
-        .req_i  ( l1_data_bank_req  [cb][BaseIdx]  ),
-        .we_i   ( l1_data_bank_we   [cb][BaseIdx]  ),
-        .addr_i ( l1_data_bank_addr [cb][BaseIdx]  ),
-        .wdata_i( l1_data_bank_wdata[cb][BaseIdx+:NumWordPerLine]),
-        .be_i   ( bank_be ),
-        .rdata_o( l1_data_bank_rdata[cb][BaseIdx+:NumWordPerLine])
-      );
+      always_comb begin : select_skewed_part
+        for (int col = 0; col < L1AssoPerCtrl; col++) begin
+          for (int bank_sel = 0; bank_sel < L1BankFactor; bank_sel++) begin
+            bank_req[col][bank_sel] = 1'b0;
+            bank_we[col][bank_sel] = 1'b0;
+            bank_addr[col][bank_sel] = '0;
+            bank_wdata[col][bank_sel] = '0;
+            bank_be[col][bank_sel] = '0;
+            for (int part = 0; part < PartSplit; part++) begin
+              if (part_req[col][bank_sel][part]) begin
+                bank_req[col][bank_sel] = 1'b1;
+                bank_we[col][bank_sel] = part_we[col][bank_sel][part];
+                bank_addr[col][bank_sel] = part_addr[col][bank_sel][part];
+                bank_wdata[col][bank_sel] = part_wdata[col][bank_sel][part];
+                bank_be[col][bank_sel] = part_be[col][bank_sel][part];
+              end
+            end
+          end
+        end
+      end
 
-      assign l1_data_bank_gnt[cb][BaseIdx+:NumWordPerLine] = {NumWordPerLine{1'b1}};
+      for (genvar col = 0; col < L1AssoPerCtrl; col++) begin : gen_skew_cols
+        for (genvar bank_sel = 0; bank_sel < L1BankFactor; bank_sel++) begin : gen_skew_col_banks
+          tc_sram_impl #(
+            .NumWords  (FoldedDataDepth),
+            .DataWidth (BankDataWidth),
+            .ByteWidth (8),
+            .NumPorts  (1),
+            .Latency   (1),
+            .SimInit   ("zeros")
+          ) i_data_bank (
+            .clk_i  (clk_i      ),
+            .rst_ni (rst_ni     ),
+            .impl_i ('0         ),
+            .impl_o (/* unused */),
+            .req_i  (bank_req[col][bank_sel]),
+            .we_i   (bank_we[col][bank_sel]),
+            .addr_i (bank_addr[col][bank_sel]),
+            .wdata_i(bank_wdata[col][bank_sel]),
+            .be_i   (bank_be[col][bank_sel]),
+            .rdata_o(bank_rdata[col][bank_sel])
+          );
+        end
+      end
+    end else begin : gen_unfolded_data_banks
+      // Unfolded banks: each SRAM stores a full cacheline per way/bank factor.
+      for (genvar bank = 0; bank < NumDataBankPerWayGrouped; bank++) begin : gen_l1_data_banks
+        for (genvar way = 0; way < L1AssoPerCtrl; way++) begin : gen_way_banks
+          logic                  bank_req;
+          logic                  bank_we;
+          tcdm_bank_addr_t       bank_addr;
+          logic [BankDataWidth-1:0] bank_wdata;
+          logic [BankByteCount-1:0] bank_be;
+          logic [BankDataWidth-1:0] bank_rdata;
+
+          assign bank_req = |l1_data_bank_req[cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
+          assign bank_we  = |l1_data_bank_we [cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
+          assign bank_addr = l1_data_bank_addr[cb][way*NumDataBankPerWay + bank*WordsPerPart];
+
+          for (genvar g = 0; g < WordsPerPart; g++) begin : gen_group_words
+            localparam int unsigned FlatIdx = way * NumDataBankPerWay + bank * WordsPerPart + g;
+            assign bank_wdata[g*DataWidth +: DataWidth] = l1_data_bank_wdata[cb][FlatIdx];
+            assign bank_be[g*(DataWidth/8) +: (DataWidth/8)] = l1_data_bank_be[cb][FlatIdx];
+            assign l1_data_bank_rdata[cb][FlatIdx] = bank_rdata[g*DataWidth +: DataWidth];
+            assign l1_data_bank_gnt[cb][FlatIdx] = 1'b1;
+          end
+
+          tc_sram_impl #(
+            .NumWords  (L1CacheWayEntry/L1BankFactor),
+            .DataWidth (BankDataWidth),
+            .ByteWidth (8),
+            .NumPorts  (1),
+            .Latency   (1),
+            .SimInit   ("zeros")
+          ) i_data_bank (
+            .clk_i  (clk_i      ),
+            .rst_ni (rst_ni     ),
+            .impl_i ('0         ),
+            .impl_o (/* unused */),
+            .req_i  (bank_req   ),
+            .we_i   (bank_we    ),
+            .addr_i (bank_addr  ),
+            .wdata_i(bank_wdata ),
+            .be_i   (bank_be    ),
+            .rdata_o(bank_rdata )
+          );
+        end
+      end
     end
-
-    // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
-    //   tc_sram_impl #(
-    //     .NumWords   (L1CacheWayEntry/L1BankFactor),
-    //     .DataWidth  (DataWidth),
-    //     .ByteWidth  (DataWidth),
-    //     .NumPorts   (1),
-    //     .Latency    (1),
-    //     .SimInit    ("zeros")
-    //   ) i_data_bank (
-    //     .clk_i  (clk_i                    ),
-    //     .rst_ni (rst_ni                   ),
-    //     .impl_i ('0                       ),
-    //     .impl_o (/* unsed */              ),
-    //     .req_i  (l1_data_bank_req  [cb][j]),
-    //     .we_i   (l1_data_bank_we   [cb][j]),
-    //     .addr_i (l1_data_bank_addr [cb][j]),
-    //     .wdata_i(l1_data_bank_wdata[cb][j]),
-    //     .be_i   (l1_data_bank_be   [cb][j]),
-    //     .rdata_o(l1_data_bank_rdata[cb][j])
-    //   );
-
-    //   assign l1_data_bank_gnt[cb][j] = 1'b1;
-    // end
   end
 
   hive_req_t [NrCores-1:0] hive_req;
@@ -1238,6 +1336,9 @@ module cachepool_tile
   // Sanity check the parameters. Not every configuration makes sense.
   `ASSERT_INIT(CheckSuperBankSanity, NrBanks >= BanksPerSuperBank);
   `ASSERT_INIT(CheckSuperBankFactor, (NrBanks % BanksPerSuperBank) == 0);
+  `ASSERT_INIT(CheckFoldWayGroup, (EffectiveFoldWayGroup > 0) &&
+    ((L1AssoPerCtrl % EffectiveFoldWayGroup) == 0));
+  `ASSERT_INIT(CheckLineSplit, (NumWordPerLine % PartSplit) == 0);
   // Check that the cluster base address aligns to the TCDMSize.
   `ASSERT(ClusterBaseAddrAlign, ((TCDMSize - 1) & cluster_base_addr_i) == 0)
   // Make sure we only have one DMA in the system.

@@ -18,6 +18,8 @@ module cachepool_cluster_wrapper
   parameter int unsigned AxiUserWidth  = SpatzAxiUserWidth,
   parameter int unsigned AxiInIdWidth  = SpatzAxiIdInWidth,
   parameter int unsigned AxiOutIdWidth = SpatzAxiIdOutWidth,
+  parameter bit          UseFoldedDataBanks = 1'b1,
+  parameter int unsigned FoldWayGroup = 0,
 
   parameter type axi_in_resp_t         = spatz_axi_in_resp_t,
   parameter type axi_in_req_t          = spatz_axi_in_req_t,
@@ -89,7 +91,9 @@ module cachepool_cluster_wrapper
     .RegisterExt              (1                        ),
     .XbarLatency              (axi_pkg::CUT_ALL_PORTS   ),
     .MaxMstTrans              (NumAxiMaxTrans           ),
-    .MaxSlvTrans              (NumAxiMaxTrans           )
+    .MaxSlvTrans              (NumAxiMaxTrans           ),
+    .UseFoldedDataBanks       (UseFoldedDataBanks       ),
+    .FoldWayGroup             (FoldWayGroup             )
   ) i_cluster (
     .clk_i                    ,
     .rst_ni                   ,
