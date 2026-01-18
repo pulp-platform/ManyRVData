@@ -897,19 +897,38 @@ module cachepool_tile
       always_comb begin : select_skewed_part
         for (int col = 0; col < L1AssoPerCtrl; col++) begin
           for (int bank_sel = 0; bank_sel < L1BankFactor; bank_sel++) begin
+            automatic logic sel_found;
+            automatic int unsigned sel_part_idx;
+
             bank_req[col][bank_sel] = 1'b0;
             bank_we[col][bank_sel] = 1'b0;
             bank_addr[col][bank_sel] = '0;
             bank_wdata[col][bank_sel] = '0;
             bank_be[col][bank_sel] = '0;
+
+            sel_found = 1'b0;
+            sel_part_idx = 0;
             for (int part = 0; part < PartSplit; part++) begin
-              if (part_req[col][bank_sel][part]) begin
-                bank_req[col][bank_sel] = 1'b1;
-                bank_we[col][bank_sel] = part_we[col][bank_sel][part];
-                bank_addr[col][bank_sel] = part_addr[col][bank_sel][part];
-                bank_wdata[col][bank_sel] = part_wdata[col][bank_sel][part];
-                bank_be[col][bank_sel] = part_be[col][bank_sel][part];
+              if (part_we[col][bank_sel][part] && !sel_found) begin
+                sel_found = 1'b1;
+                sel_part_idx = part;
               end
+            end
+            if (!sel_found) begin
+              for (int part = 0; part < PartSplit; part++) begin
+                if (part_req[col][bank_sel][part] && !sel_found) begin
+                  sel_found = 1'b1;
+                  sel_part_idx = part;
+                end
+              end
+            end
+
+            if (sel_found) begin
+              bank_req[col][bank_sel] = 1'b1;
+              bank_we[col][bank_sel] = part_we[col][bank_sel][sel_part_idx];
+              bank_addr[col][bank_sel] = part_addr[col][bank_sel][sel_part_idx];
+              bank_wdata[col][bank_sel] = part_wdata[col][bank_sel][sel_part_idx];
+              bank_be[col][bank_sel] = part_be[col][bank_sel][sel_part_idx];
             end
           end
         end
