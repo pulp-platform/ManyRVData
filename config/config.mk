@@ -108,9 +108,9 @@ snitch_max_trans ?= 16
 ifeq ($(l1d_cacheline_width),512)
   axi_user_width := 17
 else ifeq ($(l1d_cacheline_width),256)
-  axi_user_width := 19
+  axi_user_width := 18
 else ifeq ($(l1d_cacheline_width),128)
-  axi_user_width := 22
+  axi_user_width := 21
 endif
 
 #####################
