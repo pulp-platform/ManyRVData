@@ -25,35 +25,59 @@
 
 int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
+  const uint32_t num_tiles = snrt_cluster_tile_num();
   const uint32_t cid = snrt_cluster_core_idx();
+  const uint32_t tid = snrt_cluster_tile_idx();
+  // core id within a tile (0-3)
+  const uint32_t cid_tile = cid - tid * num_tiles;
+
+  const uint32_t num_cores_per_tile = num_cores / num_tiles;
 
   const int measure_iter = 3;
 
-  // Byte-level interleaving for DRAM
-  // Default setting is 1024b (128 Byte)
-  // This is used to ensure we can utilze all four channels to DRAM
-  const uint32_t Interleave   = 512;
-  const uint32_t max_vlen     = 512;
-  // Calculate the best lmul setting for current configuration
-  const uint32_t lmul         = Interleave * 8 / max_vlen;
-
-
-  // Each round we can calculate Interleave/4 32b-elements
-  const uint32_t elem_per_round = Interleave * num_cores / 4;
-  // how many rounds do we need to finish executing?
-  const uint32_t rounds = (dotp_l.M > elem_per_round) ? ((dotp_l.M + elem_per_round - 1) / elem_per_round) : 1;
-
-  const uint32_t dim = elem_per_round / num_cores;
-
-  uint32_t offset = 31 - __builtin_clz(dim * sizeof(float));
-
+  // Here we target to reduce the remote access.
+  // We want to keep the data fully interleaved on L1
+  // Therefore, give a small value to it go with the default minimum
+  // => interleave with cacheline width
   if (cid == 0) {
     // Set xbar policy
-    l1d_xbar_config(offset);
+    l1d_xbar_config(1);
     // Initialize the cache
     l1d_init(0);
+  }
 
-    printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
+  // hardcode for now the cacheline width and number of cache per tile
+  // TODO: correctly pass in the info from hardware configuration
+  const uint32_t cacheline          = 512;
+  const uint32_t num_cache_per_tile = 4;
+
+  // This is the max length each core can work contiunously without break (in bits)
+  const uint32_t data_len_per_tile  = cacheline * num_cache_per_tile;
+  // This is the max length each core can work contiunously without break (in elem)
+  const uint32_t dim                = data_len_per_tile / 32;
+  // This is the distance each core within a tile needs to jump after one iteration (in elem)
+  // Also the dimension each core will work on in one large iteration
+  const uint32_t tile_offset        = num_tiles * dim;
+  // This is the distance each core needs to jump after one iteration (in elem)
+  const uint32_t offset             = tile_offset * num_cores_per_tile;
+  // Max hardware vlen the core support
+  const uint32_t max_vlen           = 512;
+  // Which lmul settins we can use for the kernel?
+  const uint32_t lmul               = data_len_per_tile / max_vlen;
+  // This is the number of large iterations need for execution
+  const uint32_t rounds             = dotp_l.M / offset;
+
+  if (cid == 0) {
+    if (rounds < 1) {
+      // Means we have way too less problem size, not fit for this algorithm
+      printf ("FATAL: Number of elements too small!\n");
+    } else {
+      printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
+    }
+
+    if (lmul > 8) {
+      printf ("FATAL: Not yet support for long case!\n");
+    }
   }
 
   snrt_cluster_hw_barrier();
@@ -62,9 +86,10 @@ int main() {
   uint32_t timer = (uint32_t)-1;
   uint32_t timer_tmp, timer_iter1;
 
+  // Calculate the starting points for each core
+  float *a_int = dotp_A_dram + cid_tile * tile_offset + tid * dim;
+  float *b_int = dotp_B_dram + cid_tile * tile_offset + tid * dim;
 
-  float *a_int = dotp_A_dram + dim * cid;
-  float *b_int = dotp_B_dram + dim * cid;
 
   for (int iter = 0; iter < measure_iter; iter ++) {
     // Start dump
@@ -80,13 +105,13 @@ int main() {
     float acc;
 
     if (lmul >= 8)
-      acc = fdotp_v32b_lmul8(a_int, b_int, elem_per_round, dim, rounds);
+      acc = fdotp_v32b_lmul8(a_int, b_int, offset, dim, rounds);
     else if (lmul >= 4)
-      acc = fdotp_v32b_lmul4(a_int, b_int, elem_per_round, dim, rounds);
+      acc = fdotp_v32b_lmul4(a_int, b_int, offset, dim, rounds);
     else if (lmul >= 2)
-      acc = fdotp_v32b_lmul2(a_int, b_int, elem_per_round, dim, rounds);
+      acc = fdotp_v32b_lmul2(a_int, b_int, offset, dim, rounds);
     else if (lmul >= 1)
-      acc = fdotp_v32b_lmul1(a_int, b_int, elem_per_round, dim, rounds);
+      acc = fdotp_v32b_lmul1(a_int, b_int, offset, dim, rounds);
     else
       return 0;
 
