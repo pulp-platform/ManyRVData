@@ -263,6 +263,9 @@ module cachepool_group
     logic [9:0] hart_base_id;
     assign hart_base_id = hart_base_id_i + t * NumCoresTile;
 
+    logic [TileIDWidth-1:0] tile_id;
+    assign tile_id = t;
+
     cachepool_tile #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
       .AxiDataWidth             ( AxiDataWidth             ),
@@ -315,7 +318,7 @@ module cachepool_group
       .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
       .hart_base_id_i           ( hart_base_id                                                ),
       .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
-      .tile_id_i                ( t                                                           ),
+      .tile_id_i                ( tile_id                                                     ),
       // AXI out for UART
       .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
