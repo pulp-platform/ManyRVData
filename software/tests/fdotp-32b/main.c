@@ -25,9 +25,7 @@
 
 int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
-  const uint32_t num_tiles = snrt_cluster_tile_num();
   const uint32_t cid = snrt_cluster_core_idx();
-  const uint32_t tid = snrt_cluster_tile_idx();
 
   const uint32_t measure_iter = 3;
 
