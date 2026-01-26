@@ -85,17 +85,22 @@ build-vsim:
     - |
       mkdir -p "$CI_PROJECT_DIR/.ci/bin"
       cat > "$CI_PROJECT_DIR/.ci/bin/g++" <<'EOF'
-      #!/usr/bin/env bash
-      exec /usr/ela/local/sepp-linux/bin/g++-11.2.0 "$@"
+      ./
+      exec /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++ "$@"
       EOF
       chmod +x "$CI_PROJECT_DIR/.ci/bin/g++"
       cat > "$CI_PROJECT_DIR/.ci/bin/gcc" <<'EOF'
-      #!/usr/bin/env bash
-      exec /usr/ela/local/sepp-linux/bin/gcc-11.2.0 "$@"
+      source /home/dishen/.bashrc
+      conda activate /home/dishen/.conda/envs/mempool
+      exec /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc "$@"
       EOF
       chmod +x "$CI_PROJECT_DIR/.ci/bin/gcc"
-      export PATH="$CI_PROJECT_DIR/.ci/bin:$PATH"
-      which g++ && g++ --version
+      # override what Makefile uses
+      export CXX="$CI_PROJECT_DIR/.ci/bin/g++"
+      export CC="$CI_PROJECT_DIR/.ci/bin/gcc"
+      echo "CXX=$CXX"; echo "CC=$CC"
+      realpath -P "$CXX"
+      realpath -P "$CC"
     - make quick-tool
     - make init
     - make dram-build
