@@ -82,11 +82,28 @@ build-vsim:
   script:
     - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
     - export CXX="$(command -v g++-11.2.0 || command -v g++)"
+    - |
+      mkdir -p "$CI_PROJECT_DIR/.ci/bin"
+      cat > "$CI_PROJECT_DIR/.ci/bin/g++" <<'EOF'
+      #!/usr/bin/env bash
+      exec /usr/ela/local/sepp-linux/bin/g++-11.2.0 "$@"
+      EOF
+      chmod +x "$CI_PROJECT_DIR/.ci/bin/g++"
+      cat > "$CI_PROJECT_DIR/.ci/bin/gcc" <<'EOF'
+      #!/usr/bin/env bash
+      exec /usr/ela/local/sepp-linux/bin/gcc-11.2.0 "$@"
+      EOF
+      chmod +x "$CI_PROJECT_DIR/.ci/bin/gcc"
+      export PATH="$CI_PROJECT_DIR/.ci/bin:$PATH"
+      which g++ && g++ --version
     - make quick-tool
     - make init
     - make dram-build
     - make generate config=cachepool_fpu_512
     - make vsim config=cachepool_fpu_512
+    - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
+    - export CXX="$(command -v g++-11.2.0 || command -v g++)"
+    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
   artifacts:
     paths: [ "software/build", "sim/bin" ]
 
