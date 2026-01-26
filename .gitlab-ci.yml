@@ -10,113 +10,40 @@ variables:
   APPS: "tests"
   PATH: '/home/gitlabci/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:/home/gitlabci/.local/bin'
   OBJCACHE: ''
-  CC: 'gcc-11.2.0'
-  CXX: 'g++-11.2.0'
+  CC:  '/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc'
+  CXX: '/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++'
   CMAKE: 'cmake-3.28.3'
   python: 'python3'
   python3: 'python3'
 
 default:
-  tags:
-    - dolent
+  tags: [dolent]
 
 stages:
   - build
-  - sim-vsim
-
-# cache:
-#   paths:
-#     - install/
-#   key: "$CI_COMMIT_REF_SLUG-toolchain-v1" # Recommended key structure
-#   policy: pull-push
 
 .base:
   artifacts:
     when: always
     expire_in: 1 day
 
-cc-preflight:
-  extends: .base
-  stage: build
-  script:
-    - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
-    - export CXX="$(command -v g++-11.2.0 || command -v g++)"
-    - echo "CC=$CC"
-    - echo "CXX=$CXX"
-    - $CC --version
-    - $CXX --version
-    - |
-      cat > /tmp/cc_test.c <<'EOF'
-      #include <stdio.h>
-      int main(){ puts("cc_ok"); return 0; }
-      EOF
-      $CC /tmp/cc_test.c -o /tmp/cc_test
-      /tmp/cc_test
-
-build-tmp:
-  extends: .base
-  stage: build
-  script:
-    - echo "CI WIP, no check available now"
-
-build-tc:
-  extends: .base
-  stage: build
-  timeout: 3h
-  script:
-    - make quick-tool
-    # - |
-    #   if [ ! -d "install/llvm" ]; then
-    #     echo "Toolchain not found in cache. Building dependencies..."
-    #     make bender
-    #     make toolchain
-    #     echo "Toolchain built. Will be cached."
-    #   else
-    #     echo "Toolchain found in cache. Skipping build."
-    #   fi
-
 build-vsim:
   extends: .base
-  needs: [ "build-tc", "cc-preflight" ]
   stage: build
   script:
-    - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
-    - export CXX="$(command -v g++-11.2.0 || command -v g++)"
-    - |
-      mkdir -p "$CI_PROJECT_DIR/.ci/bin"
-      cat > "$CI_PROJECT_DIR/.ci/bin/g++" <<'EOF'
-      ./
-      exec /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++ "$@"
-      EOF
-      chmod +x "$CI_PROJECT_DIR/.ci/bin/g++"
-      cat > "$CI_PROJECT_DIR/.ci/bin/gcc" <<'EOF'
-      source /home/dishen/.bashrc
-      conda activate /home/dishen/.conda/envs/mempool
-      exec /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc "$@"
-      EOF
-      chmod +x "$CI_PROJECT_DIR/.ci/bin/gcc"
-      # override what Makefile uses
-      export CXX="$CI_PROJECT_DIR/.ci/bin/g++"
-      export CC="$CI_PROJECT_DIR/.ci/bin/gcc"
-      echo "CXX=$CXX"; echo "CC=$CC"
-      realpath -P "$CXX"
-      realpath -P "$CC"
+    - echo "Using CC=$CC"
+    - echo "Using CXX=$CXX"
+    - test -x "$CC"
+    - test -x "$CXX"
     - make quick-tool
     - make init
     - make dram-build
-    - make generate config=cachepool_fpu_512
-    - make vsim config=cachepool_fpu_512
-    - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
-    - export CXX="$(command -v g++-11.2.0 || command -v g++)"
-    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
-  artifacts:
-    paths: [ "software/build", "sim/bin" ]
+    - cd util/auto-benchmark
+    - chmod +x ./run_ci.sh
+    - ./run_ci.sh
 
-run_dotp:
-  extends: .base
-  needs: [ "build-vsim" ]
-  stage: sim-vsim
-  script:
-    - ./sim/bin/cachepool_cluster.vsim ./software/build/CachePoolTests/test-cachepool-fdotp-32b_M1024
   artifacts:
-    paths: [ "software/build", "sim/bin" ]
+    paths:
+      - software/build
+      - sim/bin
+      - util/auto-benchmark/logs
