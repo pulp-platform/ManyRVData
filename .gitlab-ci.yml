@@ -24,11 +24,11 @@ stages:
   - build
   - sim-vsim
 
-cache:
-  paths:
-    - install/
-  key: "$CI_COMMIT_REF_SLUG-toolchain-v1" # Recommended key structure
-  policy: pull-push
+# cache:
+#   paths:
+#     - install/
+#   key: "$CI_COMMIT_REF_SLUG-toolchain-v1" # Recommended key structure
+#   policy: pull-push
 
 .base:
   artifacts:
@@ -64,15 +64,16 @@ build-tc:
   stage: build
   timeout: 3h
   script:
-    - |
-      if [ ! -d "install/llvm" ]; then
-        echo "Toolchain not found in cache. Building dependencies..."
-        make bender
-        make toolchain
-        echo "Toolchain built. Will be cached."
-      else
-        echo "Toolchain found in cache. Skipping build."
-      fi
+    - make quick-tool
+    # - |
+    #   if [ ! -d "install/llvm" ]; then
+    #     echo "Toolchain not found in cache. Building dependencies..."
+    #     make bender
+    #     make toolchain
+    #     echo "Toolchain built. Will be cached."
+    #   else
+    #     echo "Toolchain found in cache. Skipping build."
+    #   fi
 
 build-vsim:
   extends: .base
