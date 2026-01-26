@@ -82,6 +82,7 @@ build-vsim:
   script:
     - export CC="$(command -v gcc-11.2.0 || command -v gcc)"
     - export CXX="$(command -v g++-11.2.0 || command -v g++)"
+    - make quick-tool
     - make init
     - make dram-build
     - make generate config=cachepool_fpu_512
