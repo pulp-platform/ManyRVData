@@ -30,6 +30,7 @@ stages:
 build-vsim:
   extends: .base
   stage: build
+  timeout: 3h
   script:
     - echo "Using CC=$CC"
     - echo "Using CXX=$CXX"
@@ -44,6 +45,4 @@ build-vsim:
 
   artifacts:
     paths:
-      - software/build
-      - sim/bin
       - util/auto-benchmark/logs
