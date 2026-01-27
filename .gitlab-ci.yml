@@ -30,7 +30,7 @@ stages:
 build-vsim:
   extends: .base
   stage: build
-  timeout: 3h
+  timeout: 5h
   script:
     - echo "Using CC=$CC"
     - echo "Using CXX=$CXX"
