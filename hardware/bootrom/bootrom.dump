@@ -16,7 +16,7 @@ Disassembly of section .text:
     1020:	00c5a383          	lw	t2,12(a1)
     1024:	0105ae03          	lw	t3,16(a1)
     1028:	01c383b3          	add	t2,t2,t3
-    102c:	06038393          	addi	t2,t2,96
+    102c:	04038393          	addi	t2,t2,64
     1030:	00038393          	mv	t2,t2
     1034:	0003a383          	lw	t2,0(t2)
     1038:	00038067          	jr	t2
