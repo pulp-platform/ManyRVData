@@ -29,7 +29,7 @@ LOG_DIR		:= logs/$(TIMESTAMP)
 # Build hardware+software for a config
 build-%:
 	@echo "==== Building for $* ===="
-	@make -c $(ROOT_PATH) clean generate vsim config=$*
+	@make -c $(ROOT_PATH) clean generate vsim config=$* DEBUG=0
 
 # Run one kernel on one config (assumes built)
 run-%-%:
@@ -42,7 +42,7 @@ run-all:
 	@mkdir -p $(LOG_DIR)
 	@for cfg in $(CONFIGS); do \
 		echo "==== Building $$cfg ===="; \
-		make --c $(ROOT_PATH)  s clean generate vsim config=$$cfg; \
+		make --c $(ROOT_PATH)  s clean generate vsim config=$$cfg DEBUG=0; \
 		for k in $(KERNELS); do \
 			echo "---- Running $$cfg / $$k ----"; \
 			mkdir -p $(LOG_DIR); \
@@ -57,7 +57,7 @@ run-all:
 run-one:
 	@[ -n "$(CONFIG)" ] || (echo "Missing CONFIG"; exit 1)
 	@[ -n "$(KERNEL)" ] || (echo "Missing KERNEL"; exit 1)
-	@make -c $(ROOT_PATH) -s clean generate vsim config=$(CONFIG)
+	@make -c $(ROOT_PATH) -s clean generate vsim config=$(CONFIG) DEBUG=0
 	@mkdir -p $(LOG_DIR)
 	@mkdir -p $(LOG_DIR)/$(CONFIG)
 	@$(SIM_CMD) $(SW_PATH)/$(KERNEL) | tee $(LOG_DIR)/$(CONFIG)/$(KERNEL).log

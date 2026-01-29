@@ -56,6 +56,8 @@ WORK_DIR              := ${SIM_DIR}/work
 SIMBIN_DIR            := ${SIM_DIR}/bin
 DPI_PATH              := ${HARDWARE_DIR}/tb/dpi
 DPI_LIB               ?= work-dpi
+# Set to 0 will turn off +acc target for faster simulation
+DEBUG 								?= 1
 
 ## Bender usage (binary comes from toolchain.mk install)
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
@@ -65,6 +67,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
 config             		?= cachepool_512
+
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -163,10 +166,10 @@ VSIM_HOME   = /usr/pack/${QUESTA_VER}/questasim
 FESVR          ?= ${SIM_DIR}/work
 FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
 
-VSIM_FLAGS += -sv_lib $(SIM_DIR)/${DPI_LIB}/cachepool_dpi
-VSIM_FLAGS += -t 1ps
-VSIM_FLAGS += -voptargs=+acc
-VSIM_FLAGS += -suppress vsim-3999
+# VSIM_FLAGS += -sv_lib $(SIM_DIR)/${DPI_LIB}/cachepool_dpi
+# VSIM_FLAGS += -t 1ps
+# VSIM_FLAGS += -voptargs=+acc
+# VSIM_FLAGS += -suppress vsim-3999
 
 VLOG_FLAGS += -svinputport=compat
 VLOG_FLAGS += -override_timescale 1ns/1ps
