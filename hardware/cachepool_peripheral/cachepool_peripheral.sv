@@ -192,55 +192,55 @@ module cachepool_peripheral
   // Probe
   assign cluster_probe_o = reg2hw.spatz_status.q;
 
-  // Continuously assign the perf values.
-  for (genvar i = 0; i < NumPerfCounters; i++) begin : gen_perf_assign
-    assign hw2reg.perf_counter[i].d = perf_counter_q[i];
-  end
+  // // Continuously assign the perf values.
+  // for (genvar i = 0; i < NumPerfCounters; i++) begin : gen_perf_assign
+  //   assign hw2reg.perf_counter[i].d = perf_counter_q[i];
+  // end
 
   // The hardware barrier is external and always reads `0`.
   assign hw2reg.hw_barrier.d = 0;
 
-  always_comb begin
-    perf_counter_d = perf_counter_q;
-    for (int i = 0; i < NumPerfCounters; i++) begin
-      automatic core_events_t sel_core_events;
-      sel_core_events = core_events_i[reg2hw.hart_select[i].q[$clog2(NrCores):0]];
-      // Cycle
-      if (reg2hw.perf_counter_enable[i].cycle.q) begin
-        perf_counter_d[i]++;
-      end
-      // Per-hart performance counter.
-      // Issue FPU
-      else if (reg2hw.perf_counter_enable[i].issue_fpu.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu;
-      end
-      // Issue FPU Sequencer
-      else if (reg2hw.perf_counter_enable[i].issue_fpu_seq.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu_seq;
-      end
-      // Issue Core to FPU
-      else if (reg2hw.perf_counter_enable[i].issue_core_to_fpu.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_core_to_fpu;
-      end
-      // Retired instructions
-      else if (reg2hw.perf_counter_enable[i].retired_instr.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_instr;
-      end
-      // Retired load instructions
-      else if (reg2hw.perf_counter_enable[i].retired_load.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_load;
-      end
-      // Retired base instructions
-      else if (reg2hw.perf_counter_enable[i].retired_i.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_i;
-      end
-      // Retired offloaded instructions
-      else if (reg2hw.perf_counter_enable[i].retired_acc.q) begin
-        perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_acc;
-      end
-    end
-  end
+  // always_comb begin
+  //   perf_counter_d = perf_counter_q;
+  //   for (int i = 0; i < NumPerfCounters; i++) begin
+  //     automatic core_events_t sel_core_events;
+  //     sel_core_events = core_events_i[reg2hw.hart_select[i].q[$clog2(NrCores):0]];
+  //     // Cycle
+  //     if (reg2hw.perf_counter_enable[i].cycle.q) begin
+  //       perf_counter_d[i]++;
+  //     end
+  //     // Per-hart performance counter.
+  //     // Issue FPU
+  //     else if (reg2hw.perf_counter_enable[i].issue_fpu.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu;
+  //     end
+  //     // Issue FPU Sequencer
+  //     else if (reg2hw.perf_counter_enable[i].issue_fpu_seq.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu_seq;
+  //     end
+  //     // Issue Core to FPU
+  //     else if (reg2hw.perf_counter_enable[i].issue_core_to_fpu.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_core_to_fpu;
+  //     end
+  //     // Retired instructions
+  //     else if (reg2hw.perf_counter_enable[i].retired_instr.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_instr;
+  //     end
+  //     // Retired load instructions
+  //     else if (reg2hw.perf_counter_enable[i].retired_load.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_load;
+  //     end
+  //     // Retired base instructions
+  //     else if (reg2hw.perf_counter_enable[i].retired_i.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_i;
+  //     end
+  //     // Retired offloaded instructions
+  //     else if (reg2hw.perf_counter_enable[i].retired_acc.q) begin
+  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_acc;
+  //     end
+  //   end
+  // end
 
-  `FF(perf_counter_q, perf_counter_d, '0, clk_i, rst_ni)
+  // `FF(perf_counter_q, perf_counter_d, '0, clk_i, rst_ni)
 
 endmodule
