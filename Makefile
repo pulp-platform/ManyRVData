@@ -126,7 +126,6 @@ init:
 .PHONY: quick-tool
 quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
-# 	ln -sf /usr/scratch2/calanda/diyou/toolchain/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 # Build bootrom and spatz (depends on opcodes repo being present)
 .PHONY: generate
@@ -140,6 +139,77 @@ ifneq ($(CACHE_PATH),)
 else
 	@echo "insitu-cache path unavailable (bender not installed yet?)"
 endif
+
+# Paths
+
+# Paths
+BOOTROM_DIR := $(HARDWARE_DIR)/bootrom
+SCRIPTS_DIR := $(CACHEPOOL_DIR)/util/scripts
+TPL_DIR     := $(SPATZ_DIR)/hw/system/spatz_cluster/test
+
+.PHONY: bootrom
+bootrom: $(BOOTROM_DIR)/bootrom.sv
+
+# STEP 1: Generate the C++ bootdata file from HJSON
+$(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata_bootrom.cc.tpl -o $@
+
+# Rule for bootdata.cc
+$(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
+
+# STEP 2: Compile to ELF, then create Disassembly and Raw Binary
+$(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
+	# Compile and Link
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
+		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
+		-T$(BOOTROM_DIR)/bootrom.ld \
+		$(BOOTROM_DIR)/bootrom.S \
+		$(BOOTROM_DIR)/bootdata_bootrom.cc \
+		-I$(SPATZ_DIR)/hw/ip/snitch_test/src \
+		-I$(SOFTWARE_DIR)/snRuntime/include \
+		-o $(BOOTROM_DIR)/bootrom.elf
+	# Generate human-readable disassembly
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
+	# Extract raw binary for the ROM generator
+	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
+
+# STEP 3: Convert the binary into a SystemVerilog ROM module
+$(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
+	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \
+		$< -c $(HJSON_OUT) --output $@
+
+# BOOTROM_DIR := $(HARDWARE_DIR)/bootrom
+# SCRIPTS_DIR := $(CACHEPOOL_DIR)/util/scripts
+
+# # Rule for bootdata_bootrom.cc
+$(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata_bootrom.cc.tpl -o $@
+
+
+
+# # Update the ELF rule to depend on BOTH if necessary
+# $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
+#   $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
+# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
+# 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
+# 		-T$(BOOTROM_DIR)/bootrom.ld \
+# 		$(BOOTROM_DIR)/bootrom.S \
+# 		$(BOOTROM_DIR)/bootdata_bootrom.cc \
+# 		-I$(SPATZ_DIR)/hw/ip/snitch_test/src \
+# 		-I$(SOFTWARE_DIR)/snRuntime/include \
+# 		-o $(BOOTROM_DIR)/bootrom.elf
+# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
+# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
+
+# .PHONY: bootrom
+# bootrom: $(BOOTROM_DIR)/bootrom.sv
+
+# # 3. Final hardware ROM generation
+# $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
+# 	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \
+# 		$< -c $(HJSON_OUT) --output $@
 
 ###########
 # DramSys #
@@ -278,7 +348,11 @@ vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
 .PHONY: clean
 clean: clean.sw clean.vsim
-	rm -rf $(HJSON_OUT)
+	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
+											$(BOOTROM_DIR)/bootdata_bootrom.cc \
+											$(BOOTROM_DIR)/bootrom.sv \
+											$(BOOTROM_DIR)/bootrom.dump \
+											$(BOOTROM_DIR)/bootrom.elf
 
 ########
 # Lint #

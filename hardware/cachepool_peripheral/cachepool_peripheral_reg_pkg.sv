@@ -110,213 +110,213 @@ package cachepool_peripheral_reg_pkg;
     struct packed {
       logic        q;
     } icache_stall;
-  } spatz_cluster_peripheral_reg2hw_perf_counter_enable_mreg_t;
+  } cachepool_peripheral_reg2hw_perf_counter_enable_mreg_t;
 
   typedef struct packed {
     logic [9:0] q;
-  } spatz_cluster_peripheral_reg2hw_hart_select_mreg_t;
+  } cachepool_peripheral_reg2hw_hart_select_mreg_t;
 
   typedef struct packed {
     logic [47:0] q;
     logic        qe;
-  } spatz_cluster_peripheral_reg2hw_perf_counter_mreg_t;
+  } cachepool_peripheral_reg2hw_perf_counter_mreg_t;
 
   typedef struct packed {
     logic [31:0] q;
     logic        qe;
-  } spatz_cluster_peripheral_reg2hw_cl_clint_set_reg_t;
+  } cachepool_peripheral_reg2hw_cl_clint_set_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
     logic        qe;
-  } spatz_cluster_peripheral_reg2hw_cl_clint_clear_reg_t;
+  } cachepool_peripheral_reg2hw_cl_clint_clear_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
-  } spatz_cluster_peripheral_reg2hw_hw_barrier_reg_t;
+  } cachepool_peripheral_reg2hw_hw_barrier_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_icache_prefetch_enable_reg_t;
+  } cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_spatz_status_reg_t;
+  } cachepool_peripheral_reg2hw_spatz_status_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
-  } spatz_cluster_peripheral_reg2hw_spatz_cycle_reg_t;
+  } cachepool_peripheral_reg2hw_spatz_cycle_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
-  } spatz_cluster_peripheral_reg2hw_cluster_boot_control_reg_t;
+  } cachepool_peripheral_reg2hw_cluster_boot_control_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_cluster_eoc_exit_reg_t;
+  } cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t;
 
   typedef struct packed {
     logic [9:0] q;
-  } spatz_cluster_peripheral_reg2hw_cfg_l1d_spm_reg_t;
+  } cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t;
 
   typedef struct packed {
     logic [1:0]  q;
-  } spatz_cluster_peripheral_reg2hw_cfg_l1d_insn_reg_t;
+  } cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_l1d_spm_commit_reg_t;
+  } cachepool_peripheral_reg2hw_l1d_spm_commit_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_l1d_insn_commit_reg_t;
+  } cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t;
 
   typedef struct packed {
     logic [4:0]  q;
-  } spatz_cluster_peripheral_reg2hw_xbar_offset_reg_t;
+  } cachepool_peripheral_reg2hw_xbar_offset_reg_t;
 
   typedef struct packed {
     logic        q;
-  } spatz_cluster_peripheral_reg2hw_xbar_offset_commit_reg_t;
+  } cachepool_peripheral_reg2hw_xbar_offset_commit_reg_t;
 
   typedef struct packed {
     logic [47:0] d;
-  } spatz_cluster_peripheral_hw2reg_perf_counter_mreg_t;
+  } cachepool_peripheral_hw2reg_perf_counter_mreg_t;
 
   typedef struct packed {
     logic [31:0] d;
-  } spatz_cluster_peripheral_hw2reg_hw_barrier_reg_t;
+  } cachepool_peripheral_hw2reg_hw_barrier_reg_t;
 
   typedef struct packed {
     logic        d;
     logic        de;
-  } spatz_cluster_peripheral_hw2reg_l1d_spm_commit_reg_t;
+  } cachepool_peripheral_hw2reg_l1d_spm_commit_reg_t;
 
   typedef struct packed {
     logic        d;
     logic        de;
-  } spatz_cluster_peripheral_hw2reg_l1d_insn_commit_reg_t;
+  } cachepool_peripheral_hw2reg_l1d_insn_commit_reg_t;
 
   typedef struct packed {
     logic        d;
-  } spatz_cluster_peripheral_hw2reg_l1d_flush_status_reg_t;
+  } cachepool_peripheral_hw2reg_l1d_flush_status_reg_t;
 
   typedef struct packed {
     logic        d;
     logic        de;
-  } spatz_cluster_peripheral_hw2reg_xbar_offset_commit_reg_t;
+  } cachepool_peripheral_hw2reg_xbar_offset_commit_reg_t;
 
   // Register -> HW type
   typedef struct packed {
-    spatz_cluster_peripheral_reg2hw_perf_counter_enable_mreg_t [1:0] perf_counter_enable; // [364:303]
-    spatz_cluster_peripheral_reg2hw_hart_select_mreg_t [1:0] hart_select; // [302:283]
-    spatz_cluster_peripheral_reg2hw_perf_counter_mreg_t [1:0] perf_counter; // [282:185]
-    spatz_cluster_peripheral_reg2hw_cl_clint_set_reg_t cl_clint_set; // [184:152]
-    spatz_cluster_peripheral_reg2hw_cl_clint_clear_reg_t cl_clint_clear; // [151:119]
-    spatz_cluster_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [118:87]
-    spatz_cluster_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [86:86]
-    spatz_cluster_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [85:85]
-    spatz_cluster_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [84:53]
-    spatz_cluster_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [52:21]
-    spatz_cluster_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [20:20]
-    spatz_cluster_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [19:10]
-    spatz_cluster_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [9:8]
-    spatz_cluster_peripheral_reg2hw_l1d_spm_commit_reg_t l1d_spm_commit; // [7:7]
-    spatz_cluster_peripheral_reg2hw_l1d_insn_commit_reg_t l1d_insn_commit; // [6:6]
-    spatz_cluster_peripheral_reg2hw_xbar_offset_reg_t xbar_offset; // [5:1]
-    spatz_cluster_peripheral_reg2hw_xbar_offset_commit_reg_t xbar_offset_commit; // [0:0]
-  } spatz_cluster_peripheral_reg2hw_t;
+    cachepool_peripheral_reg2hw_perf_counter_enable_mreg_t [1:0] perf_counter_enable; // [364:303]
+    cachepool_peripheral_reg2hw_hart_select_mreg_t [1:0] hart_select; // [302:283]
+    cachepool_peripheral_reg2hw_perf_counter_mreg_t [1:0] perf_counter; // [282:185]
+    cachepool_peripheral_reg2hw_cl_clint_set_reg_t cl_clint_set; // [184:152]
+    cachepool_peripheral_reg2hw_cl_clint_clear_reg_t cl_clint_clear; // [151:119]
+    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [118:87]
+    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [86:86]
+    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [85:85]
+    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [84:53]
+    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [52:21]
+    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [20:20]
+    cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [19:10]
+    cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [9:8]
+    cachepool_peripheral_reg2hw_l1d_spm_commit_reg_t l1d_spm_commit; // [7:7]
+    cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t l1d_insn_commit; // [6:6]
+    cachepool_peripheral_reg2hw_xbar_offset_reg_t xbar_offset; // [5:1]
+    cachepool_peripheral_reg2hw_xbar_offset_commit_reg_t xbar_offset_commit; // [0:0]
+  } cachepool_peripheral_reg2hw_t;
 
   // HW -> register type
   typedef struct packed {
-    spatz_cluster_peripheral_hw2reg_perf_counter_mreg_t [1:0] perf_counter; // [134:39]
-    spatz_cluster_peripheral_hw2reg_hw_barrier_reg_t hw_barrier; // [38:7]
-    spatz_cluster_peripheral_hw2reg_l1d_spm_commit_reg_t l1d_spm_commit; // [6:5]
-    spatz_cluster_peripheral_hw2reg_l1d_insn_commit_reg_t l1d_insn_commit; // [4:3]
-    spatz_cluster_peripheral_hw2reg_l1d_flush_status_reg_t l1d_flush_status; // [2:2]
-    spatz_cluster_peripheral_hw2reg_xbar_offset_commit_reg_t xbar_offset_commit; // [1:0]
-  } spatz_cluster_peripheral_hw2reg_t;
+    cachepool_peripheral_hw2reg_perf_counter_mreg_t [1:0] perf_counter; // [134:39]
+    cachepool_peripheral_hw2reg_hw_barrier_reg_t hw_barrier; // [38:7]
+    cachepool_peripheral_hw2reg_l1d_spm_commit_reg_t l1d_spm_commit; // [6:5]
+    cachepool_peripheral_hw2reg_l1d_insn_commit_reg_t l1d_insn_commit; // [4:3]
+    cachepool_peripheral_hw2reg_l1d_flush_status_reg_t l1d_flush_status; // [2:2]
+    cachepool_peripheral_hw2reg_xbar_offset_commit_reg_t xbar_offset_commit; // [1:0]
+  } cachepool_peripheral_hw2reg_t;
 
   // Register offsets
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_0_OFFSET = 8'h 0;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_1_OFFSET = 8'h 8;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_0_OFFSET = 8'h 10;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_1_OFFSET = 8'h 18;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_0_OFFSET = 8'h 20;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_1_OFFSET = 8'h 28;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET_OFFSET = 8'h 30;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_CLEAR_OFFSET = 8'h 38;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET = 8'h 40;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 8'h 48;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_OFFSET = 8'h 50;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_SPATZ_CYCLE_OFFSET = 8'h 58;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 8'h 60;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 8'h 68;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_SPM_OFFSET = 8'h 70;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN_OFFSET = 8'h 78;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 8'h 80;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 8'h 88;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 8'h 90;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_OFFSET = 8'h 98;
-  parameter logic [BlockAw-1:0] SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 8'h a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_0_OFFSET = 8'h 0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_1_OFFSET = 8'h 8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HART_SELECT_0_OFFSET = 8'h 10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HART_SELECT_1_OFFSET = 8'h 18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_0_OFFSET = 8'h 20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_1_OFFSET = 8'h 28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CL_CLINT_SET_OFFSET = 8'h 30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_OFFSET = 8'h 38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET = 8'h 40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 8'h 48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET = 8'h 50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET = 8'h 58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 8'h 60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 8'h 68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET = 8'h 70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET = 8'h 78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 8'h 80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 8'h 88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 8'h 90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET = 8'h 98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 8'h a0;
 
   // Reset values for hwext registers and their fields
-  parameter logic [47:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_0_RESVAL = 48'h 0;
-  parameter logic [47:0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_1_RESVAL = 48'h 0;
-  parameter logic [31:0] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET_RESVAL = 32'h 0;
-  parameter logic [31:0] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_CLEAR_RESVAL = 32'h 0;
-  parameter logic [31:0] SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_RESVAL = 32'h 0;
-  parameter logic [0:0] SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS_RESVAL = 1'h 0;
-  parameter logic [0:0] SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_RESVAL = 1'h 0;
+  parameter logic [47:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_0_RESVAL = 48'h 0;
+  parameter logic [47:0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_1_RESVAL = 48'h 0;
+  parameter logic [31:0] CACHEPOOL_PERIPHERAL_CL_CLINT_SET_RESVAL = 32'h 0;
+  parameter logic [31:0] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_RESVAL = 32'h 0;
+  parameter logic [31:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_RESVAL = 32'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_RESVAL = 1'h 0;
 
   // Register index
   typedef enum int {
-    SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_0,
-    SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_1,
-    SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_0,
-    SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_1,
-    SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_0,
-    SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_1,
-    SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET,
-    SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_CLEAR,
-    SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER,
-    SPATZ_CLUSTER_PERIPHERAL_ICACHE_PREFETCH_ENABLE,
-    SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS,
-    SPATZ_CLUSTER_PERIPHERAL_SPATZ_CYCLE,
-    SPATZ_CLUSTER_PERIPHERAL_CLUSTER_BOOT_CONTROL,
-    SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT,
-    SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_SPM,
-    SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN,
-    SPATZ_CLUSTER_PERIPHERAL_L1D_SPM_COMMIT,
-    SPATZ_CLUSTER_PERIPHERAL_L1D_INSN_COMMIT,
-    SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS,
-    SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET,
-    SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_COMMIT
-  } spatz_cluster_peripheral_id_e;
+    CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_0,
+    CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_1,
+    CACHEPOOL_PERIPHERAL_HART_SELECT_0,
+    CACHEPOOL_PERIPHERAL_HART_SELECT_1,
+    CACHEPOOL_PERIPHERAL_PERF_COUNTER_0,
+    CACHEPOOL_PERIPHERAL_PERF_COUNTER_1,
+    CACHEPOOL_PERIPHERAL_CL_CLINT_SET,
+    CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR,
+    CACHEPOOL_PERIPHERAL_HW_BARRIER,
+    CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE,
+    CACHEPOOL_PERIPHERAL_SPATZ_STATUS,
+    CACHEPOOL_PERIPHERAL_SPATZ_CYCLE,
+    CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL,
+    CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT,
+    CACHEPOOL_PERIPHERAL_CFG_L1D_SPM,
+    CACHEPOOL_PERIPHERAL_CFG_L1D_INSN,
+    CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT,
+    CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT,
+    CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS,
+    CACHEPOOL_PERIPHERAL_XBAR_OFFSET,
+    CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
+  } cachepool_peripheral_id_e;
 
   // Register width information to check illegal writes
-  parameter logic [3:0] SPATZ_CLUSTER_PERIPHERAL_PERMIT [21] = '{
-    4'b 1111, // index[ 0] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_0
-    4'b 1111, // index[ 1] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_1
-    4'b 0011, // index[ 2] SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_0
-    4'b 0011, // index[ 3] SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_1
-    4'b 1111, // index[ 4] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_0
-    4'b 1111, // index[ 5] SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_1
-    4'b 1111, // index[ 6] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET
-    4'b 1111, // index[ 7] SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_CLEAR
-    4'b 1111, // index[ 8] SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER
-    4'b 0001, // index[ 9] SPATZ_CLUSTER_PERIPHERAL_ICACHE_PREFETCH_ENABLE
-    4'b 0001, // index[10] SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS
-    4'b 1111, // index[11] SPATZ_CLUSTER_PERIPHERAL_SPATZ_CYCLE
-    4'b 1111, // index[12] SPATZ_CLUSTER_PERIPHERAL_CLUSTER_BOOT_CONTROL
-    4'b 0001, // index[13] SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT
-    4'b 0011, // index[14] SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_SPM
-    4'b 0001, // index[15] SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN
-    4'b 0001, // index[16] SPATZ_CLUSTER_PERIPHERAL_L1D_SPM_COMMIT
-    4'b 0001, // index[17] SPATZ_CLUSTER_PERIPHERAL_L1D_INSN_COMMIT
-    4'b 0001, // index[18] SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS
-    4'b 0001, // index[19] SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET
-    4'b 0001  // index[20] SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_COMMIT
+  parameter logic [3:0] CACHEPOOL_PERIPHERAL_PERMIT [21] = '{
+    4'b 1111, // index[ 0] CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_0
+    4'b 1111, // index[ 1] CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_1
+    4'b 0011, // index[ 2] CACHEPOOL_PERIPHERAL_HART_SELECT_0
+    4'b 0011, // index[ 3] CACHEPOOL_PERIPHERAL_HART_SELECT_1
+    4'b 1111, // index[ 4] CACHEPOOL_PERIPHERAL_PERF_COUNTER_0
+    4'b 1111, // index[ 5] CACHEPOOL_PERIPHERAL_PERF_COUNTER_1
+    4'b 1111, // index[ 6] CACHEPOOL_PERIPHERAL_CL_CLINT_SET
+    4'b 1111, // index[ 7] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR
+    4'b 1111, // index[ 8] CACHEPOOL_PERIPHERAL_HW_BARRIER
+    4'b 0001, // index[ 9] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE
+    4'b 0001, // index[10] CACHEPOOL_PERIPHERAL_SPATZ_STATUS
+    4'b 1111, // index[11] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE
+    4'b 1111, // index[12] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL
+    4'b 0001, // index[13] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT
+    4'b 0011, // index[14] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM
+    4'b 0001, // index[15] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN
+    4'b 0001, // index[16] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT
+    4'b 0001, // index[17] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT
+    4'b 0001, // index[18] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS
+    4'b 0001, // index[19] CACHEPOOL_PERIPHERAL_XBAR_OFFSET
+    4'b 0001  // index[20] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
   };
 
 endpackage

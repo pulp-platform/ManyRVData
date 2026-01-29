@@ -58,7 +58,7 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
     team->cluster_mem.start = (uint64_t)spm_start;
     team->cluster_mem.end = (uint64_t)spm_start + bootdata->tcdm_size;
     team->barrier_reg_ptr = (uint32_t)spm_start + bootdata->tcdm_size +
-                            SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_REG_OFFSET;
+                            CACHEPOOL_PERIPHERAL_HW_BARRIER_REG_OFFSET;
 
     // Initialize cluster barrier
     team->cluster_barrier.barrier = 0;
@@ -76,14 +76,14 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
     putc_buffer[snrt_hartid()].hdr.size = 0;
 
     // init peripherals
-    team->peripherals.perf_counters =
-        (uint32_t
-             *)(spm_start + bootdata->tcdm_size +
-                SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_0_REG_OFFSET);
+    // team->peripherals.perf_counters =
+    //     (uint32_t
+    //          *)(spm_start + bootdata->tcdm_size +
+    //             CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_0_REG_OFFSET);
     team->peripherals.wakeup = (uint32_t *)0;  // not supported in RTL anymore
     team->peripherals.cl_clint =
         (uint32_t *)(spm_start + bootdata->tcdm_size +
-                     SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET_REG_OFFSET);
+                     CACHEPOOL_PERIPHERAL_CL_CLINT_SET_REG_OFFSET);
 
     // Init allocator
     snrt_alloc_init(team, sizeof(struct putc_buffer));

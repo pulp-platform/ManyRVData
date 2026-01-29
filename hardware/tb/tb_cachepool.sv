@@ -26,7 +26,7 @@ module tb_cachepool;
    *****************/
 
   import cachepool_pkg::*;
-  import spatz_cluster_peripheral_reg_pkg::*;
+  import cachepool_peripheral_reg_pkg::*;
   import axi_pkg::xbar_cfg_t;
   import axi_pkg::xbar_rule_32_t;
 
@@ -185,7 +185,7 @@ module tb_cachepool;
     // Store the entry point in the Spatz cluster
     to_cluster_req = '{
       q: '{
-        addr   : PeriStartAddr + SPATZ_CLUSTER_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET,
+        addr   : PeriStartAddr + CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET,
         data   : entry_point,
         write  : 1'b1,
         strb   : '1,
