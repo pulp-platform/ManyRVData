@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 #include "team.h"
-#include "spatz_cluster_peripheral.h"
+#include "cachepool_peripheral.h"
 #include "snrt.h"
 
 extern const uint32_t _snrt_cluster_cluster_core_num;
