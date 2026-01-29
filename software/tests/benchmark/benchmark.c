@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "benchmark.h"
 #include "encoding.h"
-#include "spatz_cluster_peripheral.h"
+#include "cachepool_peripheral.h"
 #include "team.h"
 #include "perf_cnt.h"
 

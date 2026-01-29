@@ -31,6 +31,10 @@ sources:
   - hardware/src/spatz_cache_amo.sv
   - hardware/src/cachepool_tile_barrier.sv
   - hardware/src/cachepool_cluster_barrier.sv
+  # Memory-mapped register
+  - hardware/cachepool_peripheral/cachepool_peripheral_reg_pkg.sv
+  - hardware/cachepool_peripheral/cachepool_peripheral_reg_top.sv
+  - hardware/cachepool_peripheral/cachepool_peripheral.sv
   # Level 1
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
