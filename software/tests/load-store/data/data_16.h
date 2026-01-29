@@ -5,7 +5,7 @@
 #include "layer.h"
 
 const gemm_layer gemm_l = {
-	.M = 16,
+	.M = 262144,
 	.N = 16,
 	.K = 16,
 	.TA = 0,
@@ -15,6 +15,6 @@ const gemm_layer gemm_l = {
 };
 
 
-static uint32_t gemm_A_dram [256]  __attribute__((section(".data")))  = { [0 ... 255] = 1 };
-static uint32_t gemm_B_dram [256]  __attribute__((section(".data")))  = { [0 ... 255] = 2 };
-static uint32_t gemm_C_dram [256]  __attribute__((section(".data")))  = { [0 ... 255] = 3 };
+static uint32_t gemm_A_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 1 };
+static uint32_t gemm_B_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 2 };
+static uint32_t gemm_C_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 3 };

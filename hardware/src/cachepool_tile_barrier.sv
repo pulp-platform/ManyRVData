@@ -16,7 +16,7 @@
 // IMPORTANT: spill registers on the path to barrier may bring in unwanted behavior
 module cachepool_tile_barrier
   import snitch_pkg::*;
-  import spatz_cluster_peripheral_reg_pkg::*;
+  import cachepool_peripheral_reg_pkg::*;
 #(
   parameter int unsigned AddrWidth = 0,
   parameter int  NrPorts = 0,
@@ -48,7 +48,7 @@ module cachepool_tile_barrier
   user_t          [NrPorts-1:0] user_d, user_q;
 
   addr_t barrier_addr;
-  assign barrier_addr = cluster_periph_start_address_i + SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET;
+  assign barrier_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET;
 
   logic [NrPorts-1:0] is_barrier, done_barrier;
   logic take_barrier;

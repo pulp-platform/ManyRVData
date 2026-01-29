@@ -1,0 +1,128 @@
+
+/scratch/diyou/cachepool/ci-v2/ManyRVData/hardware/bootrom/bootrom.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00001000 <_start>:
+    1000:	00000317          	auipc	t1,0x0
+    1004:	08032303          	lw	t1,128(t1) # 1080 <_GLOBAL_OFFSET_TABLE_+0x4>
+    1008:	30531073          	csrw	mtvec,t1
+    100c:	f1402573          	csrr	a0,mhartid
+    1010:	00000597          	auipc	a1,0x0
+    1014:	0745a583          	lw	a1,116(a1) # 1084 <_GLOBAL_OFFSET_TABLE_+0x8>
+    1018:	3047d073          	csrwi	mie,15
+    101c:	10500073          	wfi
+    1020:	00c5a383          	lw	t2,12(a1)
+    1024:	0105ae03          	lw	t3,16(a1)
+    1028:	01c383b3          	add	t2,t2,t3
+    102c:	06038393          	addi	t2,t2,96
+    1030:	00038393          	mv	t2,t2
+    1034:	0003a383          	lw	t2,0(t2)
+    1038:	00038067          	jr	t2
+
+0000103c <exception>:
+    103c:	10500073          	wfi
+    1040:	ffdff06f          	j	103c <exception>
+
+Disassembly of section .rodata:
+
+00001048 <BOOTDATA>:
+    1048:	1000                	.2byte	0x1000
+    104a:	0000                	.2byte	0x0
+    104c:	0010                	.2byte	0x10
+    104e:	0000                	.2byte	0x0
+    1050:	0000                	.2byte	0x0
+    1052:	0000                	.2byte	0x0
+    1054:	f800                	.2byte	0xf800
+    1056:	bfff                	.2byte	0xbfff
+    1058:	0800                	.2byte	0x800
+	...
+    1062:	8000                	.2byte	0x8000
+    1064:	0000                	.2byte	0x0
+    1066:	0000                	.2byte	0x0
+    1068:	0000                	.2byte	0x0
+    106a:	a000                	.2byte	0xa000
+    106c:	0000                	.2byte	0x0
+    106e:	0000                	.2byte	0x0
+    1070:	0004                	.2byte	0x4
+    1072:	0000                	.2byte	0x0
+    1074:	0000                	.2byte	0x0
+	...
+
+Disassembly of section .boot_section:
+
+00001078 <entry_addr>:
+    1078:	103c                	.2byte	0x103c
+	...
+
+Disassembly of section .got:
+
+0000107c <_GLOBAL_OFFSET_TABLE_>:
+    107c:	0000                	.2byte	0x0
+    107e:	0000                	.2byte	0x0
+    1080:	103c                	.2byte	0x103c
+    1082:	0000                	.2byte	0x0
+    1084:	1048                	.2byte	0x1048
+	...
+
+Disassembly of section .got.plt:
+
+00001088 <.got.plt>:
+    1088:	ffff                	.2byte	0xffff
+    108a:	ffff                	.2byte	0xffff
+    108c:	0000                	.2byte	0x0
+	...
+
+Disassembly of section .riscv.attributes:
+
+00000000 <.riscv.attributes>:
+   0:	4341                	.2byte	0x4341
+   2:	0000                	.2byte	0x0
+   4:	7200                	.2byte	0x7200
+   6:	7369                	.2byte	0x7369
+   8:	01007663          	bgeu	zero,a6,14 <_start-0xfec>
+   c:	0039                	.2byte	0x39
+   e:	0000                	.2byte	0x0
+  10:	1004                	.2byte	0x1004
+  12:	7205                	.2byte	0x7205
+  14:	3376                	.2byte	0x3376
+  16:	6932                	.2byte	0x6932
+  18:	7032                	.2byte	0x7032
+  1a:	5f31                	.2byte	0x5f31
+  1c:	326d                	.2byte	0x326d
+  1e:	3070                	.2byte	0x3070
+  20:	615f 7032 5f31      	.byte	0x5f, 0x61, 0x32, 0x70, 0x31, 0x5f
+  26:	3266                	.2byte	0x3266
+  28:	3270                	.2byte	0x3270
+  2a:	7a5f 6369 7273      	.byte	0x5f, 0x7a, 0x69, 0x63, 0x73, 0x72
+  30:	7032                	.2byte	0x7032
+  32:	5f30                	.2byte	0x5f30
+  34:	697a                	.2byte	0x697a
+  36:	6566                	.2byte	0x6566
+  38:	636e                	.2byte	0x636e
+  3a:	6965                	.2byte	0x6965
+  3c:	7032                	.2byte	0x7032
+  3e:	0030                	.2byte	0x30
+  40:	0108                	.2byte	0x108
+  42:	0b0a                	.2byte	0xb0a
+
+Disassembly of section .comment:
+
+00000000 <.comment>:
+   0:	3a434347          	.4byte	0x3a434347
+   4:	2820                	.2byte	0x2820
+   6:	736f7263          	bgeu	t5,s6,72a <_start-0x8d6>
+   a:	6f6f7473          	csrrci	s0,0x6f6,30
+   e:	2d6c                	.2byte	0x2d6c
+  10:	474e                	.2byte	0x474e
+  12:	3120                	.2byte	0x3120
+  14:	322e                	.2byte	0x322e
+  16:	2e35                	.2byte	0x2e35
+  18:	2e30                	.2byte	0x2e30
+  1a:	3538                	.2byte	0x3538
+  1c:	365f 6331 6334      	.byte	0x5f, 0x36, 0x31, 0x63, 0x34, 0x63
+  22:	20296163          	bltu	s2,sp,224 <_start-0xddc>
+  26:	2e39                	.2byte	0x2e39
+  28:	2e35                	.2byte	0x2e35
+  2a:	0030                	.2byte	0x30

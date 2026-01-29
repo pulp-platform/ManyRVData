@@ -10,7 +10,7 @@
 /// Can perform partial/full barrier based on tile numbers
 module cachepool_cluster_barrier
   import snitch_pkg::*;
-  import spatz_cluster_peripheral_reg_pkg::*;
+  import cachepool_peripheral_reg_pkg::*;
 #(
   parameter int unsigned AddrWidth  = 0,
   parameter int          NrPorts    = 0,
@@ -56,7 +56,7 @@ module cachepool_cluster_barrier
   info_t [NrPorts-1:0] info_d, info_q;
 
   addr_t barrier_addr;
-  assign barrier_addr = cluster_periph_start_address_i + SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET;
+  assign barrier_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET;
 
   logic [NrPorts-1:0] is_barrier;
   logic take_barrier;

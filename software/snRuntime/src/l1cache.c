@@ -18,7 +18,7 @@ void l1d_xbar_config(uint32_t offset) {
 
   uint32_t *cfg =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
   *cfg = offset;
   l1d_xbar_commit();
 }
@@ -27,21 +27,21 @@ void l1d_xbar_config(uint32_t offset) {
 void l1d_xbar_commit() {
   uint32_t *commit =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET);
   *commit = 1;
 }
 
 void l1d_commit() {
   uint32_t *commit =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET);
   *commit = 1;
 }
 
 void l1d_init(uint32_t size) {
   uint32_t *insn =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
   *insn = 3;
   l1d_commit();
   l1d_wait();
@@ -53,7 +53,7 @@ void l1d_init(uint32_t size) {
 void l1d_flush() {
   uint32_t *insn =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
   *insn = 0;
   l1d_commit();
 }
@@ -61,7 +61,7 @@ void l1d_flush() {
 void l1d_wait() {
   volatile uint32_t *busy =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET);
   // wait until flush finished
   while (*busy) {
 
@@ -77,10 +77,10 @@ void l1d_spm_config (uint32_t size) {
   // set the pointers
   volatile uint32_t *cfg_size =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET);
   volatile uint32_t *commit =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   SPATZ_CLUSTER_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET);
+                   CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET);
   // Make sure dummy region will not be optimized away
   volatile double *dummy;
   // Should be (L1_size - size) * 128
@@ -94,6 +94,6 @@ void l1d_spm_config (uint32_t size) {
 void set_eoc () {
     volatile uint32_t *eoc_reg =
     (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET);
+                CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET);
     *eoc_reg = 1;
 }

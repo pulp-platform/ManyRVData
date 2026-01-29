@@ -17,15 +17,15 @@ module cachepool_peripheral_reg_top #(
   input  reg_req_t reg_req_i,
   output reg_rsp_t reg_rsp_o,
   // To HW
-  output spatz_cluster_peripheral_reg_pkg::spatz_cluster_peripheral_reg2hw_t reg2hw, // Write
-  input  spatz_cluster_peripheral_reg_pkg::spatz_cluster_peripheral_hw2reg_t hw2reg, // Read
+  output cachepool_peripheral_reg_pkg::cachepool_peripheral_reg2hw_t reg2hw, // Write
+  input  cachepool_peripheral_reg_pkg::cachepool_peripheral_hw2reg_t hw2reg, // Read
 
 
   // Config
   input devmode_i // If 1, explicit error return for unmapped register access
 );
 
-  import spatz_cluster_peripheral_reg_pkg::* ;
+  import cachepool_peripheral_reg_pkg::* ;
 
   localparam int DW = 64;
   localparam int DBW = DW/8;                    // Byte Width
@@ -2383,27 +2383,27 @@ module cachepool_peripheral_reg_top #(
   logic [20:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[ 0] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_0_OFFSET);
-    addr_hit[ 1] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_ENABLE_1_OFFSET);
-    addr_hit[ 2] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_0_OFFSET);
-    addr_hit[ 3] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_HART_SELECT_1_OFFSET);
-    addr_hit[ 4] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_0_OFFSET);
-    addr_hit[ 5] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_PERF_COUNTER_1_OFFSET);
-    addr_hit[ 6] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_SET_OFFSET);
-    addr_hit[ 7] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CL_CLINT_CLEAR_OFFSET);
-    addr_hit[ 8] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_HW_BARRIER_OFFSET);
-    addr_hit[ 9] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
-    addr_hit[10] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_SPATZ_STATUS_OFFSET);
-    addr_hit[11] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_SPATZ_CYCLE_OFFSET);
-    addr_hit[12] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
-    addr_hit[13] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
-    addr_hit[14] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_SPM_OFFSET);
-    addr_hit[15] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_CFG_L1D_INSN_OFFSET);
-    addr_hit[16] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
-    addr_hit[17] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
-    addr_hit[18] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
-    addr_hit[19] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[20] = (reg_addr == SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
+    addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_0_OFFSET);
+    addr_hit[ 1] = (reg_addr == CACHEPOOL_PERIPHERAL_PERF_COUNTER_ENABLE_1_OFFSET);
+    addr_hit[ 2] = (reg_addr == CACHEPOOL_PERIPHERAL_HART_SELECT_0_OFFSET);
+    addr_hit[ 3] = (reg_addr == CACHEPOOL_PERIPHERAL_HART_SELECT_1_OFFSET);
+    addr_hit[ 4] = (reg_addr == CACHEPOOL_PERIPHERAL_PERF_COUNTER_0_OFFSET);
+    addr_hit[ 5] = (reg_addr == CACHEPOOL_PERIPHERAL_PERF_COUNTER_1_OFFSET);
+    addr_hit[ 6] = (reg_addr == CACHEPOOL_PERIPHERAL_CL_CLINT_SET_OFFSET);
+    addr_hit[ 7] = (reg_addr == CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_OFFSET);
+    addr_hit[ 8] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
+    addr_hit[ 9] = (reg_addr == CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
+    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET);
+    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET);
+    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
+    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
+    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET);
+    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
+    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
+    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
+    addr_hit[18] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
+    addr_hit[19] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
+    addr_hit[20] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -2411,27 +2411,27 @@ module cachepool_peripheral_reg_top #(
   // Check sub-word write is permitted
   always_comb begin
     wr_err = (reg_we &
-              ((addr_hit[ 0] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 0] & ~reg_be))) |
-               (addr_hit[ 1] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 1] & ~reg_be))) |
-               (addr_hit[ 2] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 2] & ~reg_be))) |
-               (addr_hit[ 3] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 3] & ~reg_be))) |
-               (addr_hit[ 4] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 4] & ~reg_be))) |
-               (addr_hit[ 5] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 5] & ~reg_be))) |
-               (addr_hit[ 6] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 6] & ~reg_be))) |
-               (addr_hit[ 7] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 7] & ~reg_be))) |
-               (addr_hit[ 8] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 8] & ~reg_be))) |
-               (addr_hit[ 9] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[ 9] & ~reg_be))) |
-               (addr_hit[10] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[10] & ~reg_be))) |
-               (addr_hit[11] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[11] & ~reg_be))) |
-               (addr_hit[12] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[12] & ~reg_be))) |
-               (addr_hit[13] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[13] & ~reg_be))) |
-               (addr_hit[14] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[14] & ~reg_be))) |
-               (addr_hit[15] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[15] & ~reg_be))) |
-               (addr_hit[16] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[16] & ~reg_be))) |
-               (addr_hit[17] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[17] & ~reg_be))) |
-               (addr_hit[18] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[18] & ~reg_be))) |
-               (addr_hit[19] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[19] & ~reg_be))) |
-               (addr_hit[20] & (|(SPATZ_CLUSTER_PERIPHERAL_PERMIT[20] & ~reg_be)))));
+              ((addr_hit[ 0] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 0] & ~reg_be))) |
+               (addr_hit[ 1] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 1] & ~reg_be))) |
+               (addr_hit[ 2] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 2] & ~reg_be))) |
+               (addr_hit[ 3] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 3] & ~reg_be))) |
+               (addr_hit[ 4] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 4] & ~reg_be))) |
+               (addr_hit[ 5] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 5] & ~reg_be))) |
+               (addr_hit[ 6] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 6] & ~reg_be))) |
+               (addr_hit[ 7] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 7] & ~reg_be))) |
+               (addr_hit[ 8] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 8] & ~reg_be))) |
+               (addr_hit[ 9] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 9] & ~reg_be))) |
+               (addr_hit[10] & (|(CACHEPOOL_PERIPHERAL_PERMIT[10] & ~reg_be))) |
+               (addr_hit[11] & (|(CACHEPOOL_PERIPHERAL_PERMIT[11] & ~reg_be))) |
+               (addr_hit[12] & (|(CACHEPOOL_PERIPHERAL_PERMIT[12] & ~reg_be))) |
+               (addr_hit[13] & (|(CACHEPOOL_PERIPHERAL_PERMIT[13] & ~reg_be))) |
+               (addr_hit[14] & (|(CACHEPOOL_PERIPHERAL_PERMIT[14] & ~reg_be))) |
+               (addr_hit[15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[15] & ~reg_be))) |
+               (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be))) |
+               (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be))) |
+               (addr_hit[18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[18] & ~reg_be))) |
+               (addr_hit[19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[19] & ~reg_be))) |
+               (addr_hit[20] & (|(CACHEPOOL_PERIPHERAL_PERMIT[20] & ~reg_be)))));
   end
 
   assign perf_counter_enable_0_cycle_0_we = addr_hit[0] & reg_we & !reg_error;
@@ -2845,7 +2845,7 @@ module cachepool_peripheral_reg_top #(
 
 endmodule
 
-module spatz_cluster_peripheral_reg_top_intf
+module cachepool_peripheral_reg_top_intf
 #(
   parameter int AW = 8,
   localparam int DW = 64
@@ -2854,8 +2854,8 @@ module spatz_cluster_peripheral_reg_top_intf
   input logic rst_ni,
   REG_BUS.in  regbus_slave,
   // To HW
-  output spatz_cluster_peripheral_reg_pkg::spatz_cluster_peripheral_reg2hw_t reg2hw, // Write
-  input  spatz_cluster_peripheral_reg_pkg::spatz_cluster_peripheral_hw2reg_t hw2reg, // Read
+  output cachepool_peripheral_reg_pkg::cachepool_peripheral_reg2hw_t reg2hw, // Write
+  input  cachepool_peripheral_reg_pkg::cachepool_peripheral_hw2reg_t hw2reg, // Read
   // Config
   input devmode_i // If 1, explicit error return for unmapped register access
 );
@@ -2879,7 +2879,7 @@ module spatz_cluster_peripheral_reg_top_intf
 
   
 
-  spatz_cluster_peripheral_reg_top #(
+  cachepool_peripheral_reg_top #(
     .reg_req_t(reg_bus_req_t),
     .reg_rsp_t(reg_bus_rsp_t),
     .AW(AW)

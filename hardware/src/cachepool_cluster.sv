@@ -966,7 +966,7 @@ module cachepool_cluster
     logic [$clog2(SpatzAxiNarrowDataWidth/8):0] num_bytes_written;
   } dma_events_t;
 
-  spatz_cluster_peripheral #(
+  cachepool_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
     .NumCacheCtrl  (NumL1CacheCtrl  ),
@@ -987,10 +987,10 @@ module cachepool_cluster
     .icache_prefetch_enable_o (icache_prefetch_enable),
     .cl_clint_o               (cl_interrupt          ),
     .cluster_hart_base_id_i   (hart_base_id_i        ),
-    .core_events_i            ('0                    ),
-    .tcdm_events_i            ('0                    ),
-    .dma_events_i             ('0                    ),
-    .icache_events_i          ('0                    ),
+    // .core_events_i            ('0                    ),
+    // .tcdm_events_i            ('0                    ),
+    // .dma_events_i             ('0                    ),
+    // .icache_events_i          ('0                    ),
     .cluster_probe_o          (cluster_probe_o       ),
     .dynamic_offset_o         (dynamic_offset        ),
     .l1d_spm_size_o           (                      ),
