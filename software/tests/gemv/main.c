@@ -65,7 +65,7 @@ int main() {
     // Set xbar policy
     l1d_xbar_config(offset);
   }
-  
+
   // Reset timer
   unsigned int timer_start, timer_end, timer, timer_iter1;
 
@@ -99,7 +99,7 @@ int main() {
       return -2;
     else if (sizeof(T) == 4)
       gemv_v32b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
-    else 
+    else
       gemv_v16b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
 
     // Wait for all cores to finish
@@ -118,6 +118,9 @@ int main() {
       stop_kernel();
 
       if (i == 0) {
+        l1d_flush();
+        l1d_wait();
+
         timer = timer_temp;
         timer_iter1 = timer;
 
