@@ -130,7 +130,7 @@ quick-tool:
 # Build bootrom and spatz (depends on opcodes repo being present)
 .PHONY: generate
 generate: update_opcodes gen-spatz-cfg
-	$(MAKE) -C $(SPZ_CLS_DIR) generate bootrom SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson
+	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson
 
 .PHONY: cache-init
 cache-init:
@@ -180,36 +180,9 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \
 		$< -c $(HJSON_OUT) --output $@
 
-# BOOTROM_DIR := $(HARDWARE_DIR)/bootrom
-# SCRIPTS_DIR := $(CACHEPOOL_DIR)/util/scripts
-
 # # Rule for bootdata_bootrom.cc
 $(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata_bootrom.cc.tpl -o $@
-
-
-
-# # Update the ELF rule to depend on BOTH if necessary
-# $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-#   $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
-# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
-# 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
-# 		-T$(BOOTROM_DIR)/bootrom.ld \
-# 		$(BOOTROM_DIR)/bootrom.S \
-# 		$(BOOTROM_DIR)/bootdata_bootrom.cc \
-# 		-I$(SPATZ_DIR)/hw/ip/snitch_test/src \
-# 		-I$(SOFTWARE_DIR)/snRuntime/include \
-# 		-o $(BOOTROM_DIR)/bootrom.elf
-# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
-# 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
-
-# .PHONY: bootrom
-# bootrom: $(BOOTROM_DIR)/bootrom.sv
-
-# # 3. Final hardware ROM generation
-# $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
-# 	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \
-# 		$< -c $(HJSON_OUT) --output $@
 
 ###########
 # DramSys #
@@ -235,11 +208,6 @@ VSIM_HOME   = /usr/pack/${QUESTA_VER}/questasim
 # fesvr is built locally into work dir; needs dtc/spike path
 FESVR          ?= ${SIM_DIR}/work
 FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
-
-# VSIM_FLAGS += -sv_lib $(SIM_DIR)/${DPI_LIB}/cachepool_dpi
-# VSIM_FLAGS += -t 1ps
-# VSIM_FLAGS += -voptargs=+acc
-# VSIM_FLAGS += -suppress vsim-3999
 
 VLOG_FLAGS += -svinputport=compat
 VLOG_FLAGS += -override_timescale 1ns/1ps
@@ -318,7 +286,7 @@ clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
 .PHONY: sw
-sw: clean.sw
+sw: generate bootrom clean.sw
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
@@ -332,7 +300,7 @@ sw: clean.sw
 	  -DBUILD_TESTS=ON .. && $(MAKE)
 
 .PHONY: vsim
-vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
+vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
@@ -385,7 +353,8 @@ help:
 	@echo "*init*:       clone the git submodules"
 	@echo "*toolchain*:  build the necessary toolchains (LLVM/GCC/Spike)"
 	@echo "*quick-tool*: *ETH Member Only* soft link to prebuilt toolchains"
-	@echo "*generate*:   generate the Spatz package, bootrom and opcodes"
+	@echo "*generate*:   generate the Spatz package and opcodes"
+	@echo "*bootrom*:    generate the bootrom"
 	@echo "*dram-build*: build DRAMSys for simulation"
 	@echo ""
 	@echo "SW Build:"

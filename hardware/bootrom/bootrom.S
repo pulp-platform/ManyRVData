@@ -28,7 +28,6 @@ _start:
 
   // Find the entry point address
   addi    t2, t2, CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_REG_OFFSET
-  addi    t2, t2, CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_ENTRY_POINT_OFFSET
 
   // Load the entry point
   lw      t2, 0(t2)
