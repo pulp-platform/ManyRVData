@@ -91,6 +91,20 @@ void l1d_spm_config (uint32_t size) {
   *commit   = 1;
 }
 
+// Used to configure the number of private cache banks per tile
+void l1d_part (uint32_t size) {
+  // flush the cache before reconfiguration
+  l1d_flush();
+  l1d_wait();
+  // set the pointers
+  volatile uint32_t *cfg_private =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
+  *cfg_private = size;
+  l1d_commit();
+}
+
+
 void set_eoc () {
     volatile uint32_t *eoc_reg =
     (uint32_t *)(_snrt_team_current->root->cluster_mem.end +

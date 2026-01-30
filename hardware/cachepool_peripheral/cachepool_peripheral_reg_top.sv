@@ -10,7 +10,7 @@
 module cachepool_peripheral_reg_top #(
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
-  parameter int AW = 8
+  parameter int AW = 7
 ) (
   input logic clk_i,
   input logic rst_ni,
@@ -27,7 +27,7 @@ module cachepool_peripheral_reg_top #(
 
   import cachepool_peripheral_reg_pkg::* ;
 
-  localparam int DW = 64;
+  localparam int DW = 32;
   localparam int DBW = DW/8;                    // Byte Width
 
   // register signals
@@ -107,6 +107,9 @@ module cachepool_peripheral_reg_top #(
   logic l1d_insn_commit_we;
   logic l1d_flush_status_qs;
   logic l1d_flush_status_re;
+  logic [3:0] l1d_private_qs;
+  logic [3:0] l1d_private_wd;
+  logic l1d_private_we;
   logic [4:0] xbar_offset_qs;
   logic [4:0] xbar_offset_wd;
   logic xbar_offset_we;
@@ -476,6 +479,33 @@ module cachepool_peripheral_reg_top #(
   );
 
 
+  // R[l1d_private]: V(False)
+
+  prim_subreg #(
+    .DW      (4),
+    .SWACCESS("RW"),
+    .RESVAL  (4'h0)
+  ) u_l1d_private (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (l1d_private_we),
+    .wd     (l1d_private_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.l1d_private.q ),
+
+    // to register interface (read)
+    .qs     (l1d_private_qs)
+  );
+
+
   // R[xbar_offset]: V(False)
 
   prim_subreg #(
@@ -532,7 +562,7 @@ module cachepool_peripheral_reg_top #(
 
 
 
-  logic [16:0] addr_hit;
+  logic [17:0] addr_hit;
   always_comb begin
     addr_hit = '0;
     addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HART_SELECT_0_OFFSET);
@@ -550,8 +580,9 @@ module cachepool_peripheral_reg_top #(
     addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
     addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
     addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
-    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
+    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
+    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
+    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -575,7 +606,8 @@ module cachepool_peripheral_reg_top #(
                (addr_hit[13] & (|(CACHEPOOL_PERIPHERAL_PERMIT[13] & ~reg_be))) |
                (addr_hit[14] & (|(CACHEPOOL_PERIPHERAL_PERMIT[14] & ~reg_be))) |
                (addr_hit[15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[15] & ~reg_be))) |
-               (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be)))));
+               (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be))) |
+               (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be)))));
   end
 
   assign hart_select_0_we = addr_hit[0] & reg_we & !reg_error;
@@ -621,10 +653,13 @@ module cachepool_peripheral_reg_top #(
 
   assign l1d_flush_status_re = addr_hit[14] & reg_re & !reg_error;
 
-  assign xbar_offset_we = addr_hit[15] & reg_we & !reg_error;
+  assign l1d_private_we = addr_hit[15] & reg_we & !reg_error;
+  assign l1d_private_wd = reg_wdata[3:0];
+
+  assign xbar_offset_we = addr_hit[16] & reg_we & !reg_error;
   assign xbar_offset_wd = reg_wdata[4:0];
 
-  assign xbar_offset_commit_we = addr_hit[16] & reg_we & !reg_error;
+  assign xbar_offset_commit_we = addr_hit[17] & reg_we & !reg_error;
   assign xbar_offset_commit_wd = reg_wdata[0];
 
   // Read data return
@@ -692,10 +727,14 @@ module cachepool_peripheral_reg_top #(
       end
 
       addr_hit[15]: begin
-        reg_rdata_next[4:0] = xbar_offset_qs;
+        reg_rdata_next[3:0] = l1d_private_qs;
       end
 
       addr_hit[16]: begin
+        reg_rdata_next[4:0] = xbar_offset_qs;
+      end
+
+      addr_hit[17]: begin
         reg_rdata_next[0] = xbar_offset_commit_qs;
       end
 
@@ -721,8 +760,8 @@ endmodule
 
 module cachepool_peripheral_reg_top_intf
 #(
-  parameter int AW = 8,
-  localparam int DW = 64
+  parameter int AW = 7,
+  localparam int DW = 32
 ) (
   input logic clk_i,
   input logic rst_ni,

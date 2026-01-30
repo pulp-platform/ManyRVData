@@ -38,13 +38,14 @@ module cachepool_peripheral
   output logic [NrCores-1:0]         cl_clint_o,
   output logic                       cluster_probe_o,
   input  logic [9:0]                 cluster_hart_base_id_i,
-  input  core_events_t [NrCores-1:0] core_events_i,
+  // input  core_events_t [NrCores-1:0] core_events_i,
   // input  tcdm_events_t               tcdm_events_i,
   // input  dma_events_t                dma_events_i,
   // input  snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events_i,
   /// For cache xbar dynamic configuration
   output logic [4:0]                 dynamic_offset_o,
   output spm_size_t                  l1d_spm_size_o,
+  output logic [3:0]                 l1d_private_o,
   output logic [1:0]                 l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumCacheCtrl-1:0]    l1d_insn_ready_i,
@@ -102,7 +103,7 @@ module cachepool_peripheral
   logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
   logic [31:0] cl_clint_d, cl_clint_q;
   logic [9:0]  l1d_spm_size_d, l1d_spm_size_q;
-  // logic [1:0]  l1d_insn_d, l1d_insn_q;
+  logic [3:0]  l1d_private_d, l1d_private_q;
   // L1 is running flush/invalidation
   logic [NumCacheCtrl-1:0]       l1d_lock_d, l1d_lock_q;
   logic        l1d_spm_commit, l1d_insn_commit;
@@ -133,17 +134,21 @@ module cachepool_peripheral
   // 10b is enough for 1024 cache lines, we should not need all of them
   assign l1d_spm_size_o = l1d_spm_size_q[SPMWidth-1:0];
 
+  assign       l1d_private_o = l1d_private_q;
+
   // Cache Flush
   always_comb begin : l1d_insn_cfg
     // Flush takes time, we cannot take next insn while flushing
     l1d_insn_o       = '0;
     l1d_insn_valid_o = '0;
     l1d_lock_d       = l1d_lock_q;
+    l1d_private_d    = l1d_private_q;
 
     hw2reg.l1d_insn_commit.d  = 1'b0;
     hw2reg.l1d_insn_commit.de = 1'b0;
 
     if (l1d_insn_commit) begin
+      l1d_private_d  = reg2hw.l1d_private.q;
       // User issues a flush/invalidation
       if (|l1d_lock_q == '0) begin
         // We are ready to accept a flush
@@ -168,6 +173,7 @@ module cachepool_peripheral
     end
   end
 
+  `FF(l1d_private_q, l1d_private_d, '0, clk_i, rst_ni)
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
