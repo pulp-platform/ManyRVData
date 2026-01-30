@@ -69,9 +69,6 @@ module reqrsp_xbar #(
   // Parameters and Signals
   // --------
 
-  // Number of bits used to identify the cache bank
-  localparam int unsigned CacheBankBits  = $clog2(NumInp);
-
   tcdm_req_chan_t [NumInp-1:0] core_req;
   logic           [NumInp-1:0] core_req_valid,  core_req_ready;
 
@@ -232,8 +229,6 @@ module reqrsp_xbar #(
       assign core_rr[port] = slv_rr_i[port];
     end
   end
-
-
 
   // --------
   // IO Assignment

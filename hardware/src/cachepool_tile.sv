@@ -165,6 +165,7 @@ module cachepool_tile
     input  logic              [NrCores-1:0]         cl_interrupt_i,
     input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
     input  logic              [1:0]                 l1d_insn_i,
+    input  logic              [3:0]                 l1d_private_i,
     input  logic                                    l1d_insn_valid_i,
     output logic              [NumL1CtrlTile-1:0]   l1d_insn_ready_o,
     input  logic              [NumL1CtrlTile-1:0]   l1d_busy_i,
@@ -184,6 +185,11 @@ module cachepool_tile
   // ---------
   // Constants
   // ---------
+  // TODO: Should be imported from Memory-mapped Reg
+  logic [2:0] num_private_cache;
+  // half-half
+  assign num_private_cache = l1d_private_i[2:0];
+
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
@@ -572,17 +578,18 @@ module cachepool_tile
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
       .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
-      .clk_i            (clk_i                  ),
-      .rst_ni           (rst_ni                 ),
-      .tile_id_i        (tile_id_i              ),
-      .dynamic_offset_i (dynamic_offset         ),
-      .core_req_i       ({remote_req_i[j],      cache_req        [j]}),
-      .core_rsp_ready_i ({remote_in_pready[j],  cache_pready     [j]}),
-      .core_rsp_o       ({remote_rsp_o[j],      cache_rsp        [j]}),
-      .tile_sel_o       (remote_req_dst_o[j]                         ),
-      .mem_req_o        ({remote_req_o[j],      cache_xbar_req   [j]}),
-      .mem_rsp_ready_o  ({remote_out_pready[j], cache_xbar_pready[j]}),
-      .mem_rsp_i        ({remote_rsp_i[j],      cache_xbar_rsp   [j]})
+      .clk_i                ( clk_i                                       ),
+      .rst_ni               ( rst_ni                                      ),
+      .tile_id_i            ( tile_id_i                                   ),
+      .dynamic_offset_i     ( dynamic_offset                              ),
+      .num_private_cache_i  ( num_private_cache                           ),
+      .core_req_i           ({remote_req_i     [j], cache_req        [j]} ),
+      .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]} ),
+      .core_rsp_o           ({remote_rsp_o     [j], cache_rsp        [j]} ),
+      .tile_sel_o           ( remote_req_dst_o [j]                        ),
+      .mem_req_o            ({remote_req_o     [j], cache_xbar_req   [j]} ),
+      .mem_rsp_ready_o      ({remote_out_pready[j], cache_xbar_pready[j]} ),
+      .mem_rsp_i            ({remote_rsp_i     [j], cache_xbar_rsp   [j]} )
     );
   end
 
@@ -678,7 +685,9 @@ module cachepool_tile
   end
 
   // For address scrambling
-  localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  logic [$clog2(NumL1CacheCtrl)-1:0] num_sel_bits;
+  assign num_sel_bits = (num_private_cache == NumL1CtrlTile) ? $clog2(NumL1CtrlTile) : $clog2(NumL1CacheCtrl);
+  // localparam NumSelBits = $clog2(NumL1CacheCtrl);
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   localparam int unsigned WordBytes = DataWidth / 8;
   initial begin
@@ -698,7 +707,7 @@ module cachepool_tile
   logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
   assign bitmask_lo = (1 << dynamic_offset) - 1;
   // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
-  assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - NumSelBits)) - 1) << (dynamic_offset);
+  assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - num_sel_bits)) - 1) << (dynamic_offset);
 
   cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
   burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
@@ -780,12 +789,22 @@ module cachepool_tile
     );
 
     logic [$clog2(NumL1CacheCtrl)-1:0] tot_bank_id;
+
+    always_comb begin : revert_addr
+      // bank id is needed anyway
+      // TODO: adjust for half-half case
+      tot_bank_id = '0;
+      tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
+      if ((num_private_cache != NumL1CtrlTile) && (NumL1CacheCtrl > NumL1CtrlTile)) begin
+        tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
+      end
+    end
     // Add back the removed cache bank ID
     // tid + cb => recover the full address
-    assign tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
-    if (NumL1CacheCtrl > NumL1CtrlTile) begin
-      assign tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
-    end
+    // assign tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
+    // if (NumL1CacheCtrl > NumL1CtrlTile) begin
+    //   assign tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
+    // end
 
 
     always_comb begin : bank_addr_scramble
@@ -825,7 +844,7 @@ module cachepool_tile
       // Pass the lower bits first
       cache_refill_req_o[cb].q.addr  =   cache_refill_req[cb].addr & bitmask_lo;
       // Shift the upper part to its location
-      cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << NumSelBits);
+      cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << num_sel_bits);
 
       cache_refill_req_o[cb].q.addr |= (tot_bank_id << dynamic_offset);
     end

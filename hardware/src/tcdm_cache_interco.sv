@@ -33,7 +33,8 @@ module tcdm_cache_interco #(
 
   parameter snitch_pkg::topo_e Topology       = snitch_pkg::LogarithmicInterconnect,
   /// Dependency parameter, do not change
-  parameter type         tile_id_t            = logic [TileIDWidth-1:0]
+  parameter type         tile_id_t            = logic [TileIDWidth-1:0],
+  parameter type         addr_t               = logic [AddrWidth-1:0]
 
 ) (
   /// Clock, positive edge triggered.
@@ -44,6 +45,8 @@ module tcdm_cache_interco #(
   input  tile_id_t                                 tile_id_i,
   /// Dynamic address offset for cache bank selection
   input  logic             [$clog2(AddrWidth)-1:0] dynamic_offset_i,
+  /// Number of private cache for each tile, range: [0, NumCache]
+  input  logic                [$clog2(NumCache):0] num_private_cache_i,
   /// Request port.
   input  tcdm_req_t   [NumCores+NumRemotePort-1:0] core_req_i,
   /// Response ready in
@@ -99,7 +102,41 @@ module tcdm_cache_interco #(
   tcdm_rsp_chan_t [NumCache+NumRemotePort-1:0] mem_rsp;
   logic           [NumCache+NumRemotePort-1:0] mem_rsp_valid, mem_rsp_ready;
 
+  // Buffer the signal
+  logic                   [$clog2(NumCache):0] num_private_cache_d, num_private_cache_q;
+  logic                   [$clog2(NumCache):0] num_shared_cache_d,  num_shared_cache_q;
 
+  assign num_private_cache_d = num_private_cache_i;
+  assign num_shared_cache_d  = NumCache - num_private_cache_d;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin : proc_partition_ctrl
+    if(~rst_ni) begin
+      num_private_cache_q <= 0;
+      num_shared_cache_q  <= NumCache;
+    end else begin
+      num_private_cache_q <= num_private_cache_d;
+      num_shared_cache_q  <= num_shared_cache_d;
+    end
+  end
+
+  // TODO: The private/shared tag should be generated based on REG or Compiler
+  // Hardcode it temporarily for testing
+  localparam logic [AddrWidth-1:0]    PrivateAddr = 32'hC000_0000;
+  logic [NumCores+NumRemotePort-1:0]  is_private;
+  logic [NumCache-1:0]                private_bank_mask;
+  logic [$clog2(NumCache)-1:0]        private_addr_mask, shared_addr_mask;
+  for (genvar inp = 0; inp < NumCores+NumRemotePort; inp++) begin
+    // Judge if a request is targetting private/shared partition
+    assign is_private[inp] = (core_req[inp].addr > PrivateAddr);
+  end
+
+  assign private_bank_mask = (num_private_cache_q == 0) ? '0 : ((1 << num_private_cache_q) - 1);
+  // Used to calculate the address taken away for cache
+  assign private_addr_mask = (num_private_cache_q == 0) ? '0 : (num_private_cache_q - 1);
+  assign shared_addr_mask  = (num_shared_cache_q  == 0) ? '0 : (num_shared_cache_q - 1);
+
+
+  // Actual Xbar
   reqrsp_xbar #(
     .NumInp           (NumCores + NumRemotePort ),
     .NumOut           (NumCache + NumRemotePort ),
@@ -134,6 +171,18 @@ module tcdm_cache_interco #(
   // Selection Signals
   // --------
 
+  // TODO: Cache Partitioning:
+  // 1. We need to identify if a transaction is targetting private/shared
+  //    This can be done through a. targetted address; b. tag in the request
+  // 2. If private, use the clog2(#P_BANK) bits to select the bank
+  // 3. If shared and in remote banks, proceed as before
+  // 4. If shared and in local banks, remap it to local banks if needed
+  // 5. Adjust the address reassembling accordingly (needs to be aware of partitioning)
+
+  // To make the local remapping simple, we can start with supporting only
+  // three configurations: all shared, half-half, all private
+
+
   // select the target cache bank based on the `bank` bits
   // Example: 128 KiB total, 4 way, 4 cache banks, 512b cacheline
   // => 128*1024 = 2^17 Byte => 2^(17-6) = 2^11 cachelines
@@ -143,9 +192,13 @@ module tcdm_cache_interco #(
   for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_req_sel
     always_comb begin
       core_req_sel[port] = '0;
-      // Determine if we are targetting to a remote tile
-      local_sel[port] = (NumTiles == 1) ?
-                        1'b1 : (core_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth] == tile_id_i);
+      if (num_private_cache_q == NumCache | NumTiles == 1) begin
+        // All private or only one tile
+        local_sel[port] = 1'b1;
+      end else begin
+        // Determine if we are targetting to a remote tile
+        local_sel[port] = (core_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth] == tile_id_i);
+      end
 
       // Determine which bank is targeting at
       core_req_sel[port] = local_sel[port] ?
@@ -154,7 +207,6 @@ module tcdm_cache_interco #(
   end
 
   // forward response to the sender core
-  // TODO: Add remote identifier bits here
   for (genvar port = 0; port < NumCache+NumRemotePort;  port++) begin : gen_rsp_sel
     always_comb begin
       mem_rsp_sel[port] = mem_rsp[port].user.core_id;
@@ -205,16 +257,58 @@ module tcdm_cache_interco #(
   // IO Assignment
   // --------
 
-  // TODO: Correctly handle the multi-tile case
-  // Plan: We should only do the scrambling at the destination
+  // Parameters & Types
+  localparam int BankBits = $clog2(NumCache);
+  localparam int TileBits = $clog2(NumTotCache/NumCache);
+  addr_t [NumCache-1:0] addr_lo, addr_up, addr_mid;
 
-  // We will also take away the offset bits we used from the full address for scrambling
+  // Logic to determine how many bits to "hole" out of the address
+  // If private_i is Y/2, we only remove (BankBits - 1) bits to preserve
+  // the distinction between the private and shared halves.
+  logic [$clog2(BankBits + TileBits):0] total_bits_to_remove;
+  logic [$clog2(BankBits):0] bank_bits_to_remove;
 
-  logic [AddrWidth-1:0] bitmask_up, bitmask_lo;
-  // These are the address we will keep from original
-  assign bitmask_lo = (1 << dynamic_offset_i) - 1;
-  // We will keep AddrWidth - Offset - log2(TotCacheBanks) bits in the upper half, and remove the NumOutSelBits bits
-  assign bitmask_up = ((1 << (AddrWidth - dynamic_offset_i - $clog2(NumTotCache))) - 1) << dynamic_offset_i;
+  assign bank_bits_to_remove  = (num_private_cache_q == NumCache/2) ? (BankBits - 1) : BankBits;
+  assign total_bits_to_remove = bank_bits_to_remove + TileBits;
+
+  addr_t bitmask_up, bitmask_lo, bitmask_mid;
+  // Generate masks based on the dynamic bit count
+  assign bitmask_lo = (addr_t'(1) << dynamic_offset_i) - 1;
+  // bitmask_mid only exists if private_i == Y/2.
+  // It captures the 1 bit of BankID we want to keep.
+  assign bitmask_mid = (num_private_cache_q == NumCache/2) ? (addr_t'(1) << dynamic_offset_i) : '0;
+  // bitmask_up clears the lower bits AND the bits being "holed"
+  assign bitmask_up = ~((addr_t'(1) << (dynamic_offset_i + BankBits + TileBits)) - 1);
+
+  for (genvar port = 0; port < NumCache; port++) begin : gen_scramble
+    // 1. Determine if this specific port/bank is in the Private or Shared range
+    // Lower num_private_cache_q banks are private.
+    logic is_private;
+    assign is_private = (port < num_private_cache_q);
+
+    // 2. Calculate bits to remove for THIS port
+    // If Private: We only remove BankBits (to avoid indexing overlap).
+    // If Shared:  We remove BankBits + TileBits.
+    logic [$clog2(BankBits + TileBits):0] local_bits_to_remove;
+
+    assign local_bits_to_remove = is_private ? BankBits : (BankBits + TileBits);
+
+    // 3. Address Reconstruction
+    // Note: We use the same bitmask_lo (based on dynamic_offset_i)
+    // But bitmask_up must start ABOVE the specific hole we are making.
+    addr_t local_up_mask;
+    assign local_up_mask = ~((addr_t'(1) << (dynamic_offset_i + local_bits_to_remove)) - 1);
+
+    assign addr_lo[port] = mem_req[port].addr & bitmask_lo;
+
+    // We don't really need addr_mid anymore because 'is_private' handles the
+    // shift logic. If you want to keep a bit for Y/2, that bit is naturally
+    // preserved if local_bits_to_remove is 0.
+
+    assign addr_up[port] = (mem_req[port].addr & local_up_mask) >> local_bits_to_remove;
+
+end
+
 
   for (genvar port = 0; port < NumCache + NumRemotePort; port++) begin : gen_cache_io
     always_comb begin
@@ -226,9 +320,7 @@ module tcdm_cache_interco #(
 
       if (port < NumCache) begin
         // Only scramble address for request going to local banks
-        // remove the middle bits
-        mem_req_o[port].q.addr = (mem_req[port].addr & bitmask_lo) |
-                                ((mem_req[port].addr >> $clog2(NumTotCache)) & bitmask_up);
+        mem_req_o[port].q.addr = addr_lo[port] | addr_up[port];
       end else begin
         tile_sel_o[port-NumCache] = mem_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth];
       end
