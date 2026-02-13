@@ -40,6 +40,9 @@
 #include <stdatomic.h>
 #include "benchmark.h"
 
+DlschInd dlsch_ind __attribute__((section(".data")));
+UeStateRpt ue_status_rpt_content __attribute__((section(".data")));
+
 static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
     const uint8_t *p = (const uint8_t *)a;
     const uint8_t *q = (const uint8_t *)b;
@@ -233,6 +236,9 @@ void ue_status_rpt(const unsigned int core_id)
 {
     // Simulate receiving ACK from UE after certain sent pkgs, and we assume the ACK_SN is rlc_ctx.vtNextAck+2
     if (rlc_ctx.sent_list.sduNum >= 2) {
+        char head = ue_status_rpt_content.stateRpt[0];
+        char head1 = ue_status_rpt_content.stateRpt[1];
+        char head2 = ue_status_rpt_content.stateRpt[2];
         uint32_t vtNextAck = atomic_load_explicit(&rlc_ctx.vtNextAck, memory_order_relaxed);
         int ACK_SN = vtNextAck + 2; // Assume each time ack 2 sent pkgs
         // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -242,6 +248,7 @@ void ue_status_rpt(const unsigned int core_id)
         // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
         for (int i = vtNextAck; i < ACK_SN; i++) {
+            char ack = ue_status_rpt_content.stateRpt[16 + ACK_SN - i];
             Node *sent_node = list_pop_front(&sent_llist_lock_2, &rlc_ctx.sent_list);
             if (sent_node != NULL) {
                 // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -260,6 +267,9 @@ void ue_status_rpt(const unsigned int core_id)
         rlc_ctx.nackcount = 0;
         rlc_ctx.parseindex++;
         atomic_store_explicit(&rlc_ctx.vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
+        for (uint32_t i = 0; i < 16; i++) {
+            rlc_ctx.dlDelayInfo[i] = 300;
+        }
     }
 }
 
@@ -294,24 +304,24 @@ static void rlc_send_pkt(const unsigned int core_id, TestDataStru *testData)
         // atomic_fetch_add_explicit(&rlc_ctx.vtNext,          1,                  memory_order_relaxed);
         rlc_ctx.sendPduNum +=1;
         rlc_ctx.sendPduBytes += node->data_size;
-        rlc_ctx.tbsize += (node->data_size + 10);
+        atomic_fetch_add_explicit(&rlc_ctx.tbsize, (node->data_size + 10), memory_order_relaxed);
+        /* read one cacheline from node mem */
+        RcvPktHeader tmp = *(RcvPktHeader *)node->data;
+        /* write one cacheline to node mem */
+        *((RcvPktHeader *)node->data + 1) = tmp;
         rlc_ctx.pdcpcount++;
-        rlc_ctx.rlcthrp += node->data_size;
-        rlc_ctx.dlPduNum++;
-        rlc_ctx.sduBytes -= node->data_size;
-        rlc_ctx.sduNum--;
+        atomic_fetch_add_explicit(&rlc_ctx.rlcthrp, node->data_size, memory_order_relaxed);
+        atomic_fetch_add_explicit(&rlc_ctx.dlPduNum, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&rlc_ctx.sduBytes, (0 - node->data_size), memory_order_relaxed);
+        atomic_fetch_add_explicit(&rlc_ctx.sduNum, (-1), memory_order_relaxed);
         testData->sduNum = rlc_ctx.sduNum;
         testData->rlcDpbPduCnt = rlc_ctx.pdcpcount;
         testData->sudBytes = rlc_ctx.sduBytes;
         testData->totalPdlLen = rlc_ctx.tbsize;
-        /* write data to node pkt */
-        uint32_t *pt = (uint32_t *)node->data;
-        pt += 12;
-        *pt = 56;
-        pt += 12;
-        *pt = 28;
-        pt++;
-        *pt = 399;
+        /* write one cacheline data to node mem */
+        for (uint32_t i = 0; i < 16; i++) {
+            rlc_ctx.rlcOm[i] = 20;
+        }
         // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
         // DEBUG_PRINTF("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
         //        core_id, (void *)node, node->data, node->tgt, node->data_size,
@@ -336,6 +346,7 @@ static void consumer(const unsigned int core_id) {
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
         TestDataStru dfx = {0};
+        dfx.dlschInd = dlsch_ind;
         rlc_send_pkt(core_id, &dfx);
         uint32_t start_endcycle = benchmark_get_cycle();
         /* calculate delay interval */
@@ -395,19 +406,18 @@ static void producer(const unsigned int core_id) {
         node->data = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].src_addr));
         node->tgt = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr));
         node->data_size = pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length;
+        /* read one cacheline from node mem */
         RcvPktHeader tmp = *(RcvPktHeader *)node->data;
         unsigned int pingflag = rlc_ctx.pingFlag;
-        rlc_ctx.pingFlag = pingflag + 1;
-        rlc_ctx.recvMaxByte += node->data_size;
-        int *pt = (int *)((char *)node->data + sizeof(RcvPktHeader));
-        for (int i=0; i < 7; i++) {
-            unsigned int readdata = *pt;
-            pt++;
-        }
-        rlc_ctx.sduNumCong++;
-        rlc_ctx.sudCongState = 1;
-        pingflag = rlc_ctx.pktdelayEnqueFlag;
-        rlc_ctx.pktdelayEnqueFlag = pingflag + 1;
+        atomic_store_explicit(&rlc_ctx.pingFlag, pingflag, memory_order_relaxed);
+        atomic_store_explicit(&rlc_ctx.recvMaxByte, node->data_size, memory_order_relaxed);
+        (RcvPktHeader *)pt = ((RcvPktHeader *))((char *)node->data + sizeof(RcvPktHeader));
+        /* write one cacheline */
+        tmp = *pt;
+        *(pt + 1) = tmp;
+        atomic_fetch_add_explicit(&rlc_ctx.sduNumCong, 1, memory_order_relaxed);
+        atomic_store_explicit(&rlc_ctx.sudCongState, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&rlc_ctx.pktdelayEnqueFlag, 1, memory_order_relaxed);
     }
     // timer_body_1 = benchmark_get_cycle();
 
@@ -427,14 +437,15 @@ static void producer(const unsigned int core_id) {
     // mm_memset(node->data, 0, PACKET_SIZE);
     /* Append the node to the shared linked list */
     list_push_back(&tosend_llist_lock_2, &rlc_ctx.list, node);
-    rlc_ctx.sduBytes += node->data_size;
-    rlc_ctx.sduNum++;
-    rlc_ctx.recvPdcpPduBytes += node->data_size;
-    rlc_ctx.rcvPktNum++;
-    rlc_ctx.recvPdcpPduBytes += node->data_size;
-    rlc_ctx.enQuePktNum++;
-    rlc_ctx.enQuePktLength += node->data_size;
+    atomic_fetch_add_explicit(&rlc_ctx.sduBytes, node->data_size, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.sduNum, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.recvPdcpPduBytes, node->data_size, memory_order_relaxed);
     rlc_ctx.lastRcvOrSubmitDataCyc = benchmark_get_cycle() - rlc_ctx.firstSduPktRxCycle;
+
+    atomic_fetch_add_explicit(&rlc_ctx.rcvPktNums, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.rcvPktLength, node->data_size, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.enQuePktNum, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.enQuePktLength, node->data_size, memory_order_relaxed);
 
     DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     DEBUG_PRINTF("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
@@ -456,7 +467,9 @@ static void pkt_production_and_recycle(const unsigned int core_id)
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
         producer(core_id);
-        ue_status_rpt(core_id);
+        if (core_id == 0) { /* ue status report runs in one core */
+            ue_status_rpt(core_id);
+        }
         uint32_t end_timecycle = benchmark_get_cycle();
         /* calculate delay interval */
         uint32_t interval = end_timecycle - start_timecycle;
@@ -474,9 +487,9 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    if (core_id >= 2) {
+    if (core_id == 3) { /* consumer runs in one core */
         consumer(core_id);
-    } else /*if (core_id == 0)*/ {
+    } else /* produce runs in multi core */ {
         pkt_production_and_recycle(core_id);
     }/* else {
         while (1) {}
