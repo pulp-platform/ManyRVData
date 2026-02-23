@@ -798,6 +798,9 @@ module cachepool_tile
   localparam int unsigned BankDataWidth = DataWidth * WordsPerPart;
   localparam int unsigned BankByteCount = BankDataWidth / 8;
   localparam int unsigned FoldedDataDepth = (L1CacheWayEntry / L1BankFactor) * PartSplit;
+  // Folded mode already shrinks request window to part-width; keep coalescer in
+  // equal-window mode to avoid response lane remap corner cases.
+  localparam int unsigned EffectiveCoalFactor = UseSkewedFolded ? 1 : L1CoalFactor;
   initial begin
     $display("Cache Configuration:");
     $display("  NumCtrl        : %0d", NumL1CtrlTile);
@@ -810,7 +813,7 @@ module cachepool_tile
     $display("  BankDataWidth  : %0d", BankDataWidth);
     $display("  NumTagBankPerCtrl : %0d", NumTagBankPerCtrl);
     $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
-    $display("  CoalFactor     : %0d", L1CoalFactor);
+    $display("  CoalFactor     : %0d", EffectiveCoalFactor);
     $display("  RefillDataWidth: %0d", RefillDataWidth);
     $display("  DynamicOffset  : %0d", dynamic_offset_q);
   end
@@ -930,7 +933,7 @@ module cachepool_tile
     cachepool_cache_ctrl #(
       // Core
       .NumPorts         (NrTCDMPortsPerCore ),
-      .CoalExtFactor    (L1CoalFactor       ),
+      .CoalExtFactor    (EffectiveCoalFactor),
       .AddrWidth        (L1AddrWidth        ),
       .WordWidth        (DataWidth          ),
       .ByteWidth        (8                  ),
