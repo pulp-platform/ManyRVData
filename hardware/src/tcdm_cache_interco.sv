@@ -230,5 +230,66 @@ module tcdm_cache_interco #(
 
   assign mem_rsp_ready_o  = mem_rsp_ready;
 
+`ifndef TARGET_SYNTHESIS
+  // Debug scoreboard: track outstanding requests per (output-bank, input-core)
+  // and validate that each response targets a core with outstanding traffic.
+  int unsigned outstanding_q [NumCache+NumRemotePort-1:0][NumCores+NumRemotePort-1:0];
+  int signed   delta_d       [NumCache+NumRemotePort-1:0][NumCores+NumRemotePort-1:0];
+  int unsigned outstanding_n [NumCache+NumRemotePort-1:0][NumCores+NumRemotePort-1:0];
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      for (int o = 0; o < NumCache + NumRemotePort; o++) begin
+        for (int c = 0; c < NumCores + NumRemotePort; c++) begin
+          outstanding_q[o][c] <= '0;
+        end
+      end
+    end else begin
+      // Start from previous occupancy.
+      for (int o = 0; o < NumCache + NumRemotePort; o++) begin
+        for (int c = 0; c < NumCores + NumRemotePort; c++) begin
+          delta_d[o][c] = 0;
+        end
+      end
+
+      // Account accepted requests (+1).
+      for (int c = 0; c < NumCores + NumRemotePort; c++) begin
+        if (core_req_valid[c] && core_req_ready[c]) begin
+          delta_d[core_req_sel[c]][c] = delta_d[core_req_sel[c]][c] + 1;
+        end
+      end
+
+      // Account accepted responses (-1), allowing same-cycle req/rsp for same
+      // (output, core) pair without false mismatch reports.
+      for (int o = 0; o < NumCache + NumRemotePort; o++) begin
+        if (mem_rsp_valid[o] && mem_rsp_ready[o]) begin
+          if (mem_rsp_sel[o] >= (NumCores + NumRemotePort)) begin
+            $error("[tcdm_cache_interco] Invalid mem_rsp_sel=%0d on output %0d",
+                   mem_rsp_sel[o], o);
+          end else if ((outstanding_q[o][mem_rsp_sel[o]] + delta_d[o][mem_rsp_sel[o]]) == 0) begin
+            $error("[tcdm_cache_interco] Response without outstanding req on output %0d -> core %0d",
+                   o, mem_rsp_sel[o]);
+          end else begin
+            delta_d[o][mem_rsp_sel[o]] = delta_d[o][mem_rsp_sel[o]] - 1;
+          end
+        end
+      end
+
+      // Commit updated outstanding counters.
+      for (int o = 0; o < NumCache + NumRemotePort; o++) begin
+        for (int c = 0; c < NumCores + NumRemotePort; c++) begin
+          outstanding_n[o][c] = outstanding_q[o][c] + delta_d[o][c];
+          if (outstanding_n[o][c][31]) begin
+            // Should never go negative.
+            $error("[tcdm_cache_interco] Outstanding underflow on output %0d core %0d", o, c);
+            outstanding_q[o][c] <= '0;
+          end else begin
+            outstanding_q[o][c] <= outstanding_n[o][c];
+          end
+        end
+      end
+    end
+  end
+`endif
+
 
 endmodule

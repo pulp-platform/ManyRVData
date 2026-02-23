@@ -276,7 +276,10 @@ module cachepool_cc
   tcdm_rsp_chan_t [NumMemPortsPerSpatz-1:0] spatz_mem_rsp, spatz_mem_fifo;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_valid;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_ready;
-  logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_empty, spatz_mem_rsp_pop, spatz_mem_rsp_push, spatz_mem_fifo_bypass;
+  logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_empty, spatz_mem_rsp_full;
+  logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_pop, spatz_mem_rsp_push, spatz_mem_fifo_bypass;
+  localparam int unsigned SpatzRspFifoDepth =
+    (NumSpatzOutstandingLoads > 0) ? NumSpatzOutstandingLoads : 1;
 
   spatz #(
     .NrMemPorts         (NumMemPortsPerSpatz     ),
@@ -326,7 +329,7 @@ module cachepool_cc
 
     fifo_v3 #(
       .dtype        (tcdm_rsp_chan_t    ),
-      .DEPTH        (4                  ),
+      .DEPTH        (SpatzRspFifoDepth  ),
       .FALL_THROUGH (1                  )
     ) i_spatz_rsp_fifo (
       .clk_i     (clk_i                 ),
@@ -337,7 +340,7 @@ module cachepool_cc
       .push_i    (spatz_mem_rsp_push[p] ),
       .data_o    (spatz_mem_fifo[p]     ),
       .pop_i     (spatz_mem_rsp_pop[p]  ),
-      .full_o    (         ),
+      .full_o    (spatz_mem_rsp_full[p] ),
       .empty_o   (spatz_mem_rsp_empty[p]),
       .usage_o   (/* Unused */          )
     );
@@ -360,6 +363,15 @@ module cachepool_cc
         spatz_mem_rsp[p]       = tcdm_rsp_i[p].p;
       end
     end
+
+`ifndef TARGET_SYNTHESIS
+    always_ff @(posedge clk_i) begin
+      if (rst_ni && tcdm_rsp_i[p].p_valid && !spatz_mem_fifo_bypass[p] &&
+          spatz_mem_rsp_full[p] && !spatz_mem_rsp_pop[p]) begin
+        $error("[cachepool_cc] Spatz response FIFO overflow on port %0d", p);
+      end
+    end
+`endif
   end
 
   typedef enum integer {
