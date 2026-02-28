@@ -29,6 +29,8 @@ jobs:
           install/*
           config/*
           hardware/tb/dpi/*
+          hardware/tb/dram_config/*
+          hardware/bootrom/*
           Bender.lock
           .gitignore
 
