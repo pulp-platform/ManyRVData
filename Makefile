@@ -41,8 +41,9 @@ SPATZ_DIR             ?= ${DEP_DIR}/spatz
 SPZ_CLS_DIR           ?= ${SPATZ_DIR}/hw/system/spatz_cluster
 ### DramSys
 DRAMSYS_DIR           ?= ${DEP_DIR}/dram_rtl_sim
-DRAMSYS_LIB_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/build/lib
-DRAMSYS_RES_PATH      ?= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys/configs
+DRAMSYS_PATH 		 			:= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys
+DRAMSYS_LIB_PATH 			:= ${DRAMSYS_PATH}/build/lib
+DRAMSYS_RES_PATH 			:= ${DRAMSYS_PATH}/configs
 
 ## Software subpaths
 SPATZ_SW_DIR          ?= ${SPATZ_DIR}/sw
@@ -54,7 +55,9 @@ SNLIB_DIR             ?= ${SPATZ_DIR}/hw/ip/snitch_test/src
 BOOTLIB_DIR           := ${SPZ_CLS_DIR}/test
 WORK_DIR              := ${SIM_DIR}/work
 SIMBIN_DIR            := ${SIM_DIR}/bin
-DPI_PATH              := ${HARDWARE_DIR}/tb/dpi
+TB_DIR 								:= ${HARDWARE_DIR}/tb
+DPI_PATH              := ${TB_DIR}/dpi
+DRAM_CFG_PATH         := ${TB_DIR}/dram_config
 DPI_LIB               ?= work-dpi
 # Set to 0 will turn off +acc target for faster simulation
 DEBUG 								?= 1
@@ -141,8 +144,6 @@ else
 endif
 
 # Paths
-
-# Paths
 BOOTROM_DIR := $(HARDWARE_DIR)/bootrom
 SCRIPTS_DIR := $(CACHEPOOL_DIR)/util/scripts
 TPL_DIR     := $(SPATZ_DIR)/hw/system/spatz_cluster/test
@@ -192,9 +193,47 @@ VSIM_FLAGS :=
 VSIM_BENDER =
 
 ## Build DramSys
-.PHONY: dram-build
-dram-build:
-	$(MAKE) -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
+# .PHONY: dram-build
+# dram-build:
+# 	$(MAKE) -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
+dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
+	cd $(DRAMSYS_PATH) && \
+	if [ ! -d "build" ]; then \
+		mkdir build && cd build; \
+		$(CMAKE) -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_C_FLAGS=-fPIC -D DRAMSYS_WITH_DRAMPOWER=ON .. ; \
+		make -j; \
+	fi
+
+$(DRAMSYS_PATH)/README.md: dram-init
+
+# Replace the default HBM2 model to cutmized model
+dram-config:
+	cp $(DRAM_CFG_PATH)/am_hbm2e_16Gb_pc_brc.json $(DRAMSYS_PATH)/configs/addressmapping/.
+	cp $(DRAM_CFG_PATH)/mc_hbm2e_fr_fcfs_grp.json $(DRAMSYS_PATH)/configs/mcconfig/.
+	cp $(DRAM_CFG_PATH)/ms_hbm2e_16Gb_3600.json $(DRAMSYS_PATH)/configs/memspec/.
+	cp $(DRAM_CFG_PATH)/simconfig_hbm2e.json $(DRAMSYS_PATH)/configs/simconfig/.
+	@if [ -f $(DRAMSYS_PATH)/configs/hbm2-example.json ]; then \
+		mv $(DRAMSYS_PATH)/configs/hbm2-example.json \
+		   $(DRAMSYS_PATH)/configs/hbm2-example.json.ori; \
+	fi
+	cp $(DRAM_CFG_PATH)/HBM2E-3600.json $(DRAMSYS_PATH)/configs/hbm2-example.json
+	cp $(DRAM_CFG_PATH)/am_ddr4.json $(DRAMSYS_PATH)/configs/addressmapping/.
+	cp $(DRAM_CFG_PATH)/simconfig_ddr4.json $(DRAMSYS_PATH)/configs/simconfig/.
+	@if [ -f $(DRAMSYS_PATH)/configs/ddr4-example.json ]; then \
+		mv $(DRAMSYS_PATH)/configs/ddr4-example.json \
+		   $(DRAMSYS_PATH)/configs/ddr4-example.json.ori; \
+	fi
+	cp $(DRAM_CFG_PATH)/DDR4-2400.json $(DRAMSYS_PATH)/configs/ddr4-example.json
+
+
+dram-clean:
+	if [ -d "$(DRAMSYS_PATH)/build" ]; then \
+		rm -rf $(DRAMSYS_PATH)/build; \
+	fi
+
+# To ensure the dramsys is downloaded, only need to call at first time
+dram-init:
+	make -C ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
 
 ############
 # Modelsim #
