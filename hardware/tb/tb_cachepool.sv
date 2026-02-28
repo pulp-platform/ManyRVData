@@ -30,7 +30,7 @@ module tb_cachepool;
   import axi_pkg::xbar_cfg_t;
   import axi_pkg::xbar_rule_32_t;
 
-  localparam ClockPeriod = 2.0ns;
+  localparam ClockPeriod = 1.0ns;
   localparam TA          = 0.1ns;
   localparam TT          = 0.4ns;
 
