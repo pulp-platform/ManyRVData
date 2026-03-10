@@ -228,7 +228,7 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
 
 #define PRODUCER_CORE_NUM 2
 #define CONSUMER_CORE_NUM 2
-#define CPU_FREQENCY 2200000
+#define CPU_FREQENCY 1000000000 // 1GHz
 #define OUTPUT_DATARATE 7000000
 #define INPUT_DATARATE 7000000
 
@@ -307,8 +307,8 @@ static void rlc_send_pkt(const unsigned int core_id, TestDataStru *testData)
         atomic_fetch_add_explicit(&rlc_ctx.tbsize, (node->data_size + 10), memory_order_relaxed);
         /* read one cacheline from node mem */
         RcvPktHeader tmp = *(RcvPktHeader *)node->data;
-        /* write one cacheline to node mem */
-        *((RcvPktHeader *)node->data + 1) = tmp;
+        /* write 64B to node mem */
+        vector_memcpy32_m4_opt(((RcvPktHeader *)node->data + 1), &tmp, sizeof(RcvPktHeader));
         rlc_ctx.pdcpcount++;
         atomic_fetch_add_explicit(&rlc_ctx.rlcthrp, node->data_size, memory_order_relaxed);
         atomic_fetch_add_explicit(&rlc_ctx.dlPduNum, 1, memory_order_relaxed);
@@ -318,7 +318,7 @@ static void rlc_send_pkt(const unsigned int core_id, TestDataStru *testData)
         testData->rlcDpbPduCnt = rlc_ctx.pdcpcount;
         testData->sudBytes = rlc_ctx.sduBytes;
         testData->totalPdlLen = rlc_ctx.tbsize;
-        /* write one cacheline data to node mem */
+        /* write one cacheline data to rlc_entity */
         for (uint32_t i = 0; i < 16; i++) {
             rlc_ctx.rlcOm[i] = 20;
         }
@@ -412,9 +412,8 @@ static void producer(const unsigned int core_id) {
         atomic_store_explicit(&rlc_ctx.pingFlag, pingflag, memory_order_relaxed);
         atomic_store_explicit(&rlc_ctx.recvMaxByte, node->data_size, memory_order_relaxed);
         (RcvPktHeader *)pt = ((RcvPktHeader *))((char *)node->data + sizeof(RcvPktHeader));
-        /* write one cacheline */
-        tmp = *pt;
-        *(pt + 1) = tmp;
+        /* write 64B data to Node */
+        vector_memcpy32_m4_opt((pt + 1), &tmp, sizeof(RcvPktHeader));
         atomic_fetch_add_explicit(&rlc_ctx.sduNumCong, 1, memory_order_relaxed);
         atomic_store_explicit(&rlc_ctx.sudCongState, 1, memory_order_relaxed);
         atomic_fetch_add_explicit(&rlc_ctx.pktdelayEnqueFlag, 1, memory_order_relaxed);
