@@ -113,7 +113,9 @@ module cachepool_tile
     parameter int                     unsigned               NrSramCfg                          = 1,
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
     parameter bit                                            UseFoldedDataBanks               = 1'b1,
-    parameter int                     unsigned               FoldWayGroup                     = 0
+    parameter int                     unsigned               FoldWayGroup                     = 0,
+    /// Use hash-based way selection (1 way per lookup, no LRU).
+    parameter bit                                            UseHashWaySelect                 = 1'b0
   ) (
     /// System clock.
     input  logic                                    clk_i,
@@ -943,6 +945,7 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .DataPartSplit    (PartSplit          ),
+      .UseHashWaySelect (UseHashWaySelect   ),
       .BankFactor       (L1BankFactor       ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
