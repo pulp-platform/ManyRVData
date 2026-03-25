@@ -277,7 +277,7 @@ module cachepool_cc
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_valid;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_ready;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_empty, spatz_mem_rsp_full;
-  logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_pop, spatz_mem_rsp_push, spatz_mem_fifo_bypass;
+  logic           [NumMemPortsPerSpatz-1:0] spatz_mem_rsp_pop, spatz_mem_rsp_push;
   localparam int unsigned SpatzRspFifoDepth =
     (NumSpatzOutstandingLoads > 0) ? NumSpatzOutstandingLoads : 1;
 
@@ -344,30 +344,17 @@ module cachepool_cc
       .empty_o   (spatz_mem_rsp_empty[p]),
       .usage_o   (/* Unused */          )
     );
-    // bypass fifo if response is valid and write
-    assign spatz_mem_fifo_bypass[p] = tcdm_rsp_i[p].p_valid & tcdm_rsp_i[p].p.write;
-
     always_comb begin
       spatz_mem_rsp_valid[p] = !spatz_mem_rsp_empty[p];
       spatz_mem_rsp[p]       = spatz_mem_fifo[p];
-      // if input response is valid, put it into fifo for HS check by default
+      // Queue every response to avoid lossy bypass under backpressure.
       spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid;
       spatz_mem_rsp_pop[p]   = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
-
-      // Bypass FIFO if is a write response
-      if (spatz_mem_fifo_bypass[p]) begin
-        // make sure not write this response into fifo
-        spatz_mem_rsp_push[p]  = 1'b0;
-        spatz_mem_rsp_pop[p]   = 1'b0;
-        spatz_mem_rsp_valid[p] = 1'b1;
-        spatz_mem_rsp[p]       = tcdm_rsp_i[p].p;
-      end
     end
 
 `ifndef TARGET_SYNTHESIS
     always_ff @(posedge clk_i) begin
-      if (rst_ni && tcdm_rsp_i[p].p_valid && !spatz_mem_fifo_bypass[p] &&
-          spatz_mem_rsp_full[p] && !spatz_mem_rsp_pop[p]) begin
+      if (rst_ni && tcdm_rsp_i[p].p_valid && spatz_mem_rsp_full[p] && !spatz_mem_rsp_pop[p]) begin
         $error("[cachepool_cc] Spatz response FIFO overflow on port %0d", p);
       end
     end

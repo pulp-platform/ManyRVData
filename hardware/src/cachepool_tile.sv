@@ -111,7 +111,9 @@ module cachepool_tile
     parameter int                     unsigned               NrSramCfg                          = 1,
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
     parameter bit                                            UseFoldedDataBanks               = 1'b1,
-    parameter int                     unsigned               FoldWayGroup                     = 0
+    parameter int                     unsigned               FoldWayGroup                     = 0,
+    /// Use hash-based way selection (1 way per lookup, no LRU).
+    parameter bit                                            UseHashWaySelect                 = 1'b0
   ) (
     /// System clock.
     input  logic                                    clk_i,
@@ -653,8 +655,8 @@ module cachepool_tile
         assign cache_req_data [cb][j] = cache_xbar_req   [j][cb].q.data;
         assign cache_req_strb [cb][j] = cache_xbar_req   [j][cb].q.strb;
 
-        assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
         assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
+        assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
         assign cache_xbar_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
         assign cache_xbar_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
 
@@ -725,6 +727,7 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .DataPartSplit    (PartSplit          ),
+      .UseHashWaySelect (UseHashWaySelect   ),
       .BankFactor       (L1BankFactor       ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type

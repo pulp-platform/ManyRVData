@@ -110,7 +110,8 @@ module cachepool_cluster
     parameter int                     unsigned               NrSramCfg                          = 1,
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
     parameter bit                                            UseFoldedDataBanks               = 1'b1,
-    parameter int                     unsigned               FoldWayGroup                     = 0
+    parameter int                     unsigned               FoldWayGroup                     = 0,
+    parameter bit                                            UseHashWaySelect                 = 1'b1
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -490,7 +491,8 @@ module cachepool_cluster
       .MaxMstTrans              ( MaxMstTrans              ),
       .MaxSlvTrans              ( MaxSlvTrans              ),
       .UseFoldedDataBanks       ( UseFoldedDataBanks       ),
-      .FoldWayGroup             ( FoldWayGroup             )
+      .FoldWayGroup             ( FoldWayGroup             ),
+      .UseHashWaySelect         ( UseHashWaySelect         )
     ) i_tile (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
