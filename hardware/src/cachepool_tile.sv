@@ -539,29 +539,32 @@ module cachepool_tile
       end
 
     end
-
-    // for (genvar rt = 0; rt < NumRemotePortTile; rt++) begin
-    //   assign cache_req[j][rt+NumL1CtrlTile] = remote_req_i[j*NrTCDMPortsPerCore+rt];
-    //   assign remote_rsp_o[j*NrTCDMPortsPerCore+rt] = cache_rsp [j][rt+NumL1CtrlTile];
-    // end
   end
-
-  // Connecting the remote ports
-  // if (NumRemotePort > 0) begin
-  //   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
-
-  //   end
-  // end
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
   logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
   assign dynamic_offset = dynamic_offset_i;
+  logic [NrTCDMPortsPerCore-1:0] remote_out_pready, remote_in_pready;
+
+  // Flush protection for remote ports.
+  tcdm_req_t [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_gated;
+
+  always_comb begin : remote_flush_protection
+    for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+      // Pass request payload through unchanged; only gate valid.
+      remote_req_gated[j].q       = remote_req_i[j].q;
+      remote_req_gated[j].q_valid = remote_req_i[j].q_valid && !(|l1d_busy_i);
+      // Gate the response-ready signal back to the remote tile.
+      remote_in_pready[j]         = remote_rsp_ready_i[j]  && !(|l1d_busy_i);
+    end
+  end
+
+
 
   // todo: multiple remote ports
-  logic [NrTCDMPortsPerCore-1:0] remote_out_pready, remote_in_pready;
   assign remote_rsp_ready_o = remote_out_pready;
-  assign remote_in_pready = remote_rsp_ready_i;
+  // assign remote_in_pready = remote_rsp_ready_i;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
@@ -583,7 +586,7 @@ module cachepool_tile
       .tile_id_i            ( tile_id_i                                   ),
       .dynamic_offset_i     ( dynamic_offset                              ),
       .num_private_cache_i  ( num_private_cache                           ),
-      .core_req_i           ({remote_req_i     [j], cache_req        [j]} ),
+      .core_req_i           ({remote_req_gated [j], cache_req        [j]} ),
       .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]} ),
       .core_rsp_o           ({remote_rsp_o     [j], cache_rsp        [j]} ),
       .tile_sel_o           ( remote_req_dst_o [j]                        ),
