@@ -1,4 +1,4 @@
-// Copyright 2022 ETH Zurich and University of Bologna.
+// Copyright 2026 ETH Zurich and University of Bologna.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -18,437 +18,400 @@
 
 #include <benchmark.h>
 #include <snrt.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include DATAHEADER
 
-int main() {
-  const unsigned int num_cores = snrt_cluster_core_num();
-  const unsigned int num_tiles = snrt_cluster_tile_num();
-  const unsigned int cid = snrt_cluster_core_idx();
+// -----------------------------------------------------------------------------
+// Test length control
+// -----------------------------------------------------------------------------
+// Define SHORT_TEST for faster functional/interconnect testing.
+// Test 1/2 use shortened accesses.
+// Test 3 keeps capacity-style behavior.
+#define SHORT_TEST 1
 
-  const int measure_iter = 1;
+// Cache line assumptions for test sizing.
+// Adjust if your cacheline size is different.
+#define CACHELINE_BYTES 64
+#define ELEM_BYTES      sizeof(uint32_t)
+#define ELEMS_PER_CL    (CACHELINE_BYTES / ELEM_BYTES)
 
-  uint32_t spm_size = 0;
+#if SHORT_TEST
+#define LOCAL_TEST_CLS   16   // per core, functional local traffic
+#define GLOBAL_TEST_CLS  32   // per core, functional shared traffic
+#else
+#define LOCAL_TEST_CLS   0    // 0 means use original full length
+#define GLOBAL_TEST_CLS  0
+#endif
 
-  const unsigned int dim = gemm_l.M;
-  const unsigned int dim_core = dim / num_cores;
+typedef struct {
+  uint32_t cold;
+  uint32_t hot;
+} test_result_t;
 
-  uint32_t offset = 31 - __builtin_clz(dim_core * sizeof(float));
+static inline void sync_all() { snrt_cluster_hw_barrier(); }
 
-  if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(offset);
-    // Initialize the cache
-    l1d_init(0);
-  }
+static inline uint32_t min_u32(uint32_t a, uint32_t b) { return (a < b) ? a : b; }
 
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
+static inline uint32_t cls_to_elems(uint32_t cls) {
+  return cls * ELEMS_PER_CL;
+}
 
-  // Reset timer
-  unsigned int timer_test1, timer_test1_cold, timer_test1_hot;
-  unsigned int timer_test2, timer_test2_cold, timer_test2_hot;
-  unsigned int timer_test3;
-
-
-  uint32_t *a_int = gemm_A_dram + dim_core * cid;
-  uint32_t *b_int = gemm_B_dram + dim_core * cid;
-  uint32_t *c_int = gemm_C_dram + dim_core * cid;
-  uint32_t avl = dim_core;
+static inline void stream_copy_vec(uint32_t *dst, uint32_t *src, uint32_t count) {
+  uint32_t avl = count;
   uint32_t vlen;
 
-  /***** Share Test 1 *****/
+  do {
+    asm volatile("vsetvli %0, %1, e32, m8, ta, ma"
+                 : "=r"(vlen)
+                 : "r"(avl));
+    asm volatile("vle32.v v0, (%0)" : : "r"(src));
+    asm volatile("vse32.v v0, (%0)" : : "r"(dst));
+    src += vlen;
+    dst += vlen;
+    avl -= vlen;
+  } while (avl > 0);
+}
+
+static uint32_t timed_stream_copy_vec(uint32_t *dst, uint32_t *src,
+                                      uint32_t count, uint32_t cid) {
+  uint32_t cycles = 0;
+
+  sync_all();
+
   if (cid == 0) {
-    // All cores will visit 1 MiB Data
+    start_kernel();
+    cycles = benchmark_get_cycle();
+  }
+
+  stream_copy_vec(dst, src, count);
+
+  sync_all();
+
+  if (cid == 0) {
+    cycles = benchmark_get_cycle() - cycles;
+    stop_kernel();
+  } else {
+    cachepool_wait(10);
+  }
+
+  return cycles;
+}
+
+static int check_const(uint32_t *ptr, uint32_t count, uint32_t value,
+                       uint32_t *fail_idx, uint32_t *fail_val) {
+  for (uint32_t i = 0; i < count; i++) {
+    if (ptr[i] != value) {
+      *fail_idx = i;
+      *fail_val = ptr[i];
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static inline void stream_load(uint32_t *ptr, uint32_t count) {
+  uint32_t avl = count;
+  uint32_t vlen;
+  do {
+    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
+    asm volatile("vle32.v v0, (%0)" : : "r"(ptr));
+    ptr += vlen;
+    avl -= vlen;
+  } while (avl > 0);
+}
+
+static uint32_t timed_stream_load(uint32_t *ptr, uint32_t count, uint32_t cid) {
+  uint32_t cycles = 0;
+
+  if (cid == 0) {
+    start_kernel();
+    cycles = benchmark_get_cycle();
+  }
+
+  stream_load(ptr, count);
+
+  sync_all();
+
+  if (cid == 0) {
+    cycles = benchmark_get_cycle() - cycles;
+    stop_kernel();
+  } else {
+    cachepool_wait(10);
+  }
+
+  return cycles;
+}
+
+static test_result_t run_cold_hot_test(uint32_t *ptr, uint32_t count,
+                                       uint32_t cid, uint32_t num_iters) {
+  test_result_t res = {0, (uint32_t)-1};
+
+  for (uint32_t i = 0; i < num_iters; i++) {
+    sync_all();
+    uint32_t cyc = timed_stream_load(ptr, count, cid);
+    if (cid == 0) {
+      if (i == 0) {
+        res.cold = cyc;
+      } else if (cyc < res.hot) {
+        res.hot = cyc;
+      }
+    }
+  }
+
+  if (num_iters == 1) res.hot = res.cold;
+  return res;
+}
+
+static uint32_t run_evict_test(uint32_t *evict_ptr, uint32_t *test_ptr,
+                               uint32_t count, uint32_t cid) {
+  sync_all();
+  stream_load(evict_ptr, count);
+  sync_all();
+  return timed_stream_load(test_ptr, count, cid);
+}
+
+static void cache_cfg(uint32_t cid, uint32_t xbar_offset, uint32_t part) {
+  if (cid == 0) {
+    l1d_xbar_config(xbar_offset);
+    l1d_init(0);
+    l1d_part(part);
+  }
+  sync_all();
+}
+
+static void cache_flush_all(uint32_t cid) {
+  if (cid == 0) {
+    l1d_flush();
+    l1d_wait();
+  }
+  sync_all();
+}
+
+int main() {
+  const uint32_t num_cores = snrt_cluster_core_num();
+  const uint32_t num_tiles = snrt_cluster_tile_num();
+  const uint32_t cid       = snrt_cluster_core_idx();
+
+  const uint32_t dim      = gemm_l.M;
+  const uint32_t dim_core = dim / num_cores;
+  const uint32_t dim_tile = dim / num_tiles;
+
+  const uint32_t local_offset  = 31 - __builtin_clz(dim_core * sizeof(uint32_t));
+  const uint32_t global_offset = 0;
+
+  // Keep starting points unchanged.
+  uint32_t *local_ptr  = gemm_A_dram + dim_core * cid;
+  uint32_t *global_ptr = gemm_A_dram;
+  uint32_t *next_ptr   = gemm_A_dram + dim_tile;
+
+  // Shortened functional lengths.
+  uint32_t local_len  = dim_core;
+  uint32_t global_len = dim_tile;
+
+#if SHORT_TEST
+  local_len  = min_u32(dim_core, cls_to_elems(LOCAL_TEST_CLS));
+  global_len = min_u32(dim_tile, cls_to_elems(GLOBAL_TEST_CLS));
+#endif
+
+  // Keep original capacity-style eviction length.
+  uint32_t evict_len = dim_tile;
+
+  test_result_t test1, test2;
+  uint32_t test3;
+
+  if (cid == 0) {
+    printf("*** Cache/interconnect test ***\n");
+#if SHORT_TEST
+    printf("Mode: SHORT_TEST\n");
+    printf("Local length : %u elems (%u cache lines)\n",
+           local_len, local_len / ELEMS_PER_CL);
+    printf("Global length: %u elems (%u cache lines)\n",
+           global_len, global_len / ELEMS_PER_CL);
+#else
+    printf("Mode: FULL_TEST\n");
+    printf("Local length : %u elems\n", local_len);
+    printf("Global length: %u elems\n", global_len);
+#endif
+    printf("Evict length : %u elems\n\n", evict_len);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared cache
+  // ---------------------------------------------------------------------------
+  if (cid == 0) {
     printf("***Testing shared cache configuration***\n");
-    l1d_part(0);
-    printf("Configuration done!\n\n");
-    printf("Test 1: Local Visit\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
   }
 
-  uint32_t iter = 2;
+  cache_cfg(cid, local_offset, 0);
 
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
-
-  while (iter > 0) {
-    iter --;
-    // Start dump
-    if (cid == 0)
-      start_kernel();
-
-    // Start timer
-    if (cid == 0)
-      timer_test1 = benchmark_get_cycle();
-
-    // Stripmine and accumulate a partial reduced vector
-    do {
-      asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-      asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-      a_int += vlen;
-      // b_int += vlen;
-      // c_int += vlen;
-      avl -= vlen;
-    } while (avl > 0);
-
-    snrt_cluster_hw_barrier();
-
-    // End timer and check if new best runtime
-    if (cid == 0) {
-      timer_test1  = benchmark_get_cycle() - timer_test1;
-      stop_kernel();
-      if (iter == 1)
-        timer_test1_cold = timer_test1;
-      else
-        timer_test1_hot  = timer_test1;
-    } else {
-      cachepool_wait(10);
-    }
-
-    a_int = gemm_A_dram + dim_core * cid;
-    avl   = dim_core;
-  }
-
-  snrt_cluster_hw_barrier();
-
-  // Second test is mainly for private v.s. shared
-  // No need to visit entire 1 MiB
-  avl   = dim / num_tiles;
-  a_int = gemm_A_dram;
-  iter  = 3;
+  uint32_t *a_local_ptr = gemm_A_dram + dim_core * cid;
+  uint32_t *b_local_ptr = gemm_B_dram + dim_core * cid;
+  uint32_t test1_cyc;
 
   if (cid == 0) {
+    printf("Test 1: Local Vector Copy + Flush + Check\n");
+    printf("dim per core:%u\n", local_len);
+    printf("a_ptr:%p\n", (void *)a_local_ptr);
+    printf("b_ptr:%p\n", (void *)b_local_ptr);
+  }
+
+  test1_cyc = timed_stream_copy_vec(a_local_ptr, b_local_ptr, local_len, cid);
+
+  if (cid == 0) {
+    printf("Vector copy complete\n");
+    printf("Cycles:%u cyc\n", test1_cyc);
+    printf("Flushing cache...\n");
+  }
+
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    int pass = 1;
+    for (uint32_t core = 0; core < num_cores; core++) {
+      uint32_t fail_idx, fail_val;
+      uint32_t *check_ptr = gemm_A_dram + dim_core * core;
+      if (!check_const(check_ptr, local_len, 2, &fail_idx, &fail_val)) {
+        printf("FAIL at core %u idx %u addr %p exp 0x%x got 0x%x\n",
+               core, fail_idx, (void *)&check_ptr[fail_idx], 2, fail_val);
+        pass = 0;
+        break;
+      }
+    }
+
     printf("Test 1 Complete\n");
-    printf("Cold:%u cyc; Hot:%u cyc\n", timer_test1_cold, timer_test1_hot);
-
-    // Each core will visit 1 MiB data
-    printf("\nTest 2: Global Visit\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
-    // Flush the cache
-    l1d_flush();
-    l1d_wait();
+    printf("Result:%s\n", pass ? "PASS" : "FAIL");
   }
 
-  // offset = 31 - __builtin_clz(dim_core / num_tiles * sizeof(float));
+  sync_all();
 
   if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(0);
-    // Initialize the cache
-    l1d_init(0);
+    printf("\nTest 2: Global Visit\n");
+    printf("dim per core:%u\n", global_len);
+    printf("a_ptr:%x\n", global_ptr);
   }
 
-  timer_test2_hot = (uint32_t) -1;
+  cache_flush_all(cid);
+  cache_cfg(cid, global_offset, 0);
 
-  /***** Share Test 2 *****/
-  snrt_cluster_hw_barrier();
-
-  while (iter > 0) {
-    iter --;
-
-    a_int = gemm_A_dram;
-    avl   = dim / num_tiles;
-
-    // Start dump
-    if (cid == 0)
-      start_kernel();
-
-    // Start timer
-    if (cid == 0)
-      timer_test2 = benchmark_get_cycle();
-
-    // Stripmine and accumulate a partial reduced vector
-    do {
-      asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-      asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-      a_int += vlen;
-      // b_int += vlen;
-      // c_int += vlen;
-      avl -= vlen;
-    } while (avl > 0);
-
-    snrt_cluster_hw_barrier();
-
-    // End timer and check if new best runtime
-    if (cid == 0) {
-      timer_test2  = benchmark_get_cycle() - timer_test2;
-      stop_kernel();
-      if (iter == 1)
-        timer_test2_cold = timer_test2;
-      else
-        timer_test2_hot  = timer_test2_hot > timer_test2 ? timer_test2 : timer_test2_hot;
-    } else {
-      cachepool_wait(10);
-    }
-  }
-
-  snrt_cluster_hw_barrier();
-
-  /***** Share Test 3 *****/
-  avl = dim / num_tiles;
+  test2 = run_cold_hot_test(global_ptr, global_len, cid, 3);
 
   if (cid == 0) {
     printf("Test 2 Complete\n");
-    printf("Cold:%u cyc; Hot:%u cyc\n", timer_test2_cold, timer_test2_hot);
+    printf("Cold:%u cyc; Hot:%u cyc\n", test2.cold, test2.hot);
 
-    // Each core will visit the next 256 KiB data and revisit the previous 128 KiB
-    // In shared cache, the revisit would be cache hit
     printf("\nTest 3: Eviction Test\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
+    printf("dim per core:%u\n", evict_len);
+    printf("evict_ptr:%x\n", next_ptr);
+    printf("test_ptr:%x\n", global_ptr);
   }
 
-  // Visit the next 256 KiB Block first
-  do {
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-    asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-    a_int += vlen;
-    avl -= vlen;
-  } while (avl > 0);
-
-  avl = dim / num_tiles;
-  a_int = gemm_A_dram;
-
-  // Start dump
-  if (cid == 0)
-    start_kernel();
-
-  // Start timer
-  if (cid == 0)
-    timer_test3 = benchmark_get_cycle();
-
-  // Stripmine and accumulate a partial reduced vector
-  do {
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-    asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-    a_int += vlen;
-    avl -= vlen;
-  } while (avl > 0);
-
-  snrt_cluster_hw_barrier();
-
-  // End timer and check if new best runtime
+#if SHORT_TEST
   if (cid == 0) {
-    timer_test3  = benchmark_get_cycle() - timer_test3;
-    stop_kernel();
-  } else {
-    cachepool_wait(10);
+    printf("Skip Test 3 in Short Test Mode\n");
   }
+#else
+  test3 = run_evict_test(next_ptr, global_ptr, evict_len, cid);
 
   if (cid == 0) {
     printf("Test 3 Complete\n");
-    printf("Result:%u cyc\n", timer_test3);
+    printf("Result:%u cyc\n", test3);
   }
+#endif
 
-  snrt_cluster_hw_barrier();
-
-  offset = 31 - __builtin_clz(dim_core * sizeof(float));
-
+  // ---------------------------------------------------------------------------
+  // Private cache
+  // ---------------------------------------------------------------------------
   if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(offset);
-    // Initialize the cache
-    l1d_init(0);
-  }
-
-  a_int = gemm_A_dram + dim_core * cid;
-  b_int = gemm_B_dram + dim_core * cid;
-  c_int = gemm_C_dram + dim_core * cid;
-  avl = dim_core;
-  iter = 2;
-
-  if (cid == 0) {
-    // All cores will visit 1 MiB Data
     printf("\n***Testing private cache configuration***\n");
-    l1d_part(4);
+  }
+
+  cache_cfg(cid, local_offset, 4);
+  cache_flush_all(cid);
+
+  if (cid == 0) {
     printf("Configuration done!\n\n");
-    printf("Test 1: Local Visit\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
-    // Flush the cache
-    l1d_flush();
-    l1d_wait();
   }
 
-  /***** Private Test 1 *****/
-
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
-
-  while (iter > 0) {
-    iter --;
-    // Start dump
-    if (cid == 0)
-      start_kernel();
-
-    // Start timer
-    if (cid == 0)
-      timer_test1 = benchmark_get_cycle();
-
-    // Stripmine and accumulate a partial reduced vector
-    do {
-      asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-      asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-      a_int += vlen;
-      // b_int += vlen;
-      // c_int += vlen;
-      avl -= vlen;
-    } while (avl > 0);
-
-    snrt_cluster_hw_barrier();
-
-    // End timer and check if new best runtime
-    if (cid == 0) {
-      timer_test1  = benchmark_get_cycle() - timer_test1;
-      stop_kernel();
-      if (iter == 1)
-        timer_test1_cold = timer_test1;
-      else
-        timer_test1_hot  = timer_test1;
-    } else {
-      cachepool_wait(10);
-    }
-
-    a_int = gemm_A_dram + dim_core * cid;
-    avl   = dim_core;
-  }
-
-  snrt_cluster_hw_barrier();
-
-  avl   = dim / num_tiles;
-  a_int = gemm_A_dram;
-  iter  = 3;
+  a_local_ptr = gemm_A_dram + dim_core * cid;
+  b_local_ptr = gemm_C_dram + dim_core * cid;
 
   if (cid == 0) {
+    printf("Test 1: Local Vector Copy + Flush + Check\n");
+    printf("dim per core:%u\n", local_len);
+    printf("a_ptr:%p\n", (void *)a_local_ptr);
+    printf("b_ptr:%p\n", (void *)b_local_ptr);
+  }
+
+  test1_cyc = timed_stream_copy_vec(a_local_ptr, b_local_ptr, local_len, cid);
+
+  if (cid == 0) {
+    printf("Vector copy complete\n");
+    printf("Cycles:%u cyc\n", test1_cyc);
+    printf("Flushing cache...\n");
+  }
+
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    int pass = 1;
+    for (uint32_t core = 0; core < num_cores; core++) {
+      uint32_t fail_idx, fail_val;
+      uint32_t *check_ptr = gemm_A_dram + dim_core * core;
+      if (!check_const(check_ptr, local_len, 3, &fail_idx, &fail_val)) {
+        printf("FAIL at core %u idx %u addr %p exp 0x%x got 0x%x\n",
+               core, fail_idx, (void *)&check_ptr[fail_idx], 3, fail_val);
+        pass = 0;
+        break;
+      }
+    }
+
     printf("Test 1 Complete\n");
-    printf("Cold:%u cyc; Hot:%u cyc\n", timer_test1_cold, timer_test1_hot);
-
-    // Each core will visit 1 MiB data
-    printf("\nTest 2: Global Visit\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
-    // Flush the cache
-    l1d_flush();
-    l1d_wait();
+    printf("Result:%s\n", pass ? "PASS" : "FAIL");
   }
 
-  // offset = 31 - __builtin_clz(dim_core / num_tiles * sizeof(float));
+  sync_all();
 
   if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(0);
-    // Initialize the cache
-    l1d_init(0);
+    printf("\nTest 2: Global Visit\n");
+    printf("dim per core:%u\n", global_len);
+    printf("a_ptr:%x\n", global_ptr);
   }
 
-  timer_test2_hot = (uint32_t) -1;
+  cache_flush_all(cid);
+  cache_cfg(cid, global_offset, 4);
 
-  /***** Private Test 2 *****/
-
-  snrt_cluster_hw_barrier();
-
-  while (iter > 0) {
-    iter --;
-    a_int = gemm_A_dram;
-
-    // Start dump
-    if (cid == 0)
-      start_kernel();
-
-    // Start timer
-    if (cid == 0)
-      timer_test2 = benchmark_get_cycle();
-
-    // Stripmine and accumulate a partial reduced vector
-    do {
-      asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-      asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-      a_int += vlen;
-      avl -= vlen;
-    } while (avl > 0);
-
-    snrt_cluster_hw_barrier();
-
-    // End timer and check if new best runtime
-    if (cid == 0) {
-      timer_test2  = benchmark_get_cycle() - timer_test2;
-      stop_kernel();
-      if (iter == 1)
-        timer_test2_cold = timer_test2;
-      else
-        timer_test2_hot  = timer_test2_hot > timer_test2 ? timer_test2 : timer_test2_hot;
-    } else {
-      cachepool_wait(10);
-    }
-
-    avl   = dim / num_tiles;
-  }
-
-  /***** Private Test 3 *****/
-
-  snrt_cluster_hw_barrier();
-
-  avl = dim / num_tiles;
+  test2 = run_cold_hot_test(global_ptr, global_len, cid, 3);
 
   if (cid == 0) {
     printf("Test 2 Complete\n");
-    printf("Cold:%u cyc; Hot:%u cyc\n", timer_test2_cold, timer_test2_hot);
+    printf("Cold:%u cyc; Hot:%u cyc\n", test2.cold, test2.hot);
 
-    // Each core will visit the next 256 KiB data and revisit the previous 128 KiB
-    // In private cache, the revisit would still the miss due to eviction
     printf("\nTest 3: Eviction Test\n");
-    printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x\n", a_int);
+    printf("dim per core:%u\n", evict_len);
+    printf("evict_ptr:%x\n", next_ptr);
+    printf("test_ptr:%x\n", global_ptr);
   }
 
-  // Visit the next 256 KiB Block first
-  do {
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-    asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-    a_int += vlen;
-    avl -= vlen;
-  } while (avl > 0);
-
-  avl = dim / num_tiles;
-  a_int = gemm_A_dram;
-
-  // Start dump
-  if (cid == 0)
-    start_kernel();
-
-  // Start timer
-  if (cid == 0)
-    timer_test3 = benchmark_get_cycle();
-
-  // Stripmine and accumulate a partial reduced vector
-  do {
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vlen) : "r"(avl));
-    asm volatile("vle32.v v0,  (%0)" ::"r"(a_int));
-    a_int += vlen;
-    avl -= vlen;
-  } while (avl > 0);
-
-  snrt_cluster_hw_barrier();
-
-  // End timer and check if new best runtime
+#if SHORT_TEST
   if (cid == 0) {
-    timer_test3  = benchmark_get_cycle() - timer_test3;
-    stop_kernel();
-  } else {
-    cachepool_wait(10);
+    printf("Skip Test 3 in Short Test Mode\n");
   }
 
-  if (cid == 0) {
-    printf("Test 3 Complete\n");
-    printf("Result:%u cyc\n", timer_test3);
-  }
-
-
-  snrt_cluster_hw_barrier();
+  sync_all();
 
   return 0;
+#else
+  test3 = run_evict_test(next_ptr, global_ptr, evict_len, cid);
+
+  if (cid == 0) {
+    printf("Test 3 Complete\n");
+    printf("Result:%u cyc\n", test3);
+  }
+
+  sync_all();
+  return 0;
+#endif
 }
+
