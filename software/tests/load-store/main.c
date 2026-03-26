@@ -125,6 +125,8 @@ static inline void stream_load(uint32_t *ptr, uint32_t count) {
 static uint32_t timed_stream_load(uint32_t *ptr, uint32_t count, uint32_t cid) {
   uint32_t cycles = 0;
 
+  sync_all();
+
   if (cid == 0) {
     start_kernel();
     cycles = benchmark_get_cycle();
@@ -398,10 +400,6 @@ int main() {
   if (cid == 0) {
     printf("Skip Test 3 in Short Test Mode\n");
   }
-
-  sync_all();
-
-  return 0;
 #else
   test3 = run_evict_test(next_ptr, global_ptr, evict_len, cid);
 
@@ -409,9 +407,71 @@ int main() {
     printf("Test 3 Complete\n");
     printf("Result:%u cyc\n", test3);
   }
+#endif
+
+  // ---------------------------------------------------------------------------
+  // Half-half
+  // ---------------------------------------------------------------------------
+  sync_all();
+
+  if (cid == 0) {
+    printf("\n***Testing half-half configuration***\n");
+  }
+
+  cache_cfg(cid, local_offset, 2);
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    printf("Configuration done!\n\n");
+  }
+
+  // D is in the shared region, A in private region
+  // Shuffle cid pointers to make sure remote/private access
+  if (cid == num_cores - 1) {
+    a_local_ptr = gemm_A_dram;
+    b_local_ptr = gemm_D_dram;
+  } else {
+    a_local_ptr = gemm_A_dram + dim_core * (cid + 1);
+    b_local_ptr = gemm_D_dram + dim_core * (cid + 1);
+  }
+
+  if (cid == 0) {
+    printf("Test 1: Local + Share Vector Copy + Flush + Check\n");
+    printf("dim per core:%u\n", local_len);
+    printf("a_ptr:%p\n", (void *)a_local_ptr);
+    printf("b_ptr:%p\n", (void *)b_local_ptr);
+  }
+
+  test1_cyc = timed_stream_copy_vec(a_local_ptr, b_local_ptr, local_len, cid);
+
+  if (cid == 0) {
+    printf("Vector copy complete\n");
+    printf("Cycles:%u cyc\n", test1_cyc);
+    printf("Flushing cache...\n");
+  }
+
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    int pass = 1;
+    for (uint32_t core = 0; core < num_cores; core++) {
+      uint32_t fail_idx, fail_val;
+      uint32_t *check_ptr = gemm_A_dram + dim_core * core;
+      if (!check_const(check_ptr, local_len, 4, &fail_idx, &fail_val)) {
+        printf("FAIL at core %u idx %u addr %p exp 0x%x got 0x%x\n",
+               core, fail_idx, (void *)&check_ptr[fail_idx], 4, fail_val);
+        pass = 0;
+        break;
+      }
+    }
+
+    printf("Test 1 Complete\n");
+    printf("Result:%s\n", pass ? "PASS" : "FAIL");
+  }
+
 
   sync_all();
+
   return 0;
-#endif
 }
 

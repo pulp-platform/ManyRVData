@@ -4,22 +4,37 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-// The cache xbar used to select the cache banks
+// The cache xbar used to select the cache banks.
+//
+// Supports three cache partitioning modes, selected at runtime via
+// num_private_cache_i (registered one cycle):
+//
+//   Mode          | num_private_cache_q | Private banks | Shared banks
+//   --------------|---------------------|---------------|-------------
+//   All-shared    |          0          |     none      | [0..N-1]
+//   Half-half     |         N/2         | [0..N/2-1]   | [N/2..N-1]
+//   All-private   |          N          | [0..N-1]      |     none
+//
+// Private banks are local to this tile only.  Shared banks participate in
+// the cluster-wide interleaved pool.
+//
+// Private vs. shared is currently identified by a fixed address threshold
+// (PrivateAddr); replace with a CSR/linker-script field when ready.
 
 module tcdm_cache_interco #(
-  /// Number of Tiles ('>=0')
+  /// Number of Tiles ('>= 1')
   parameter int unsigned NumTiles             = 32'd1,
   /// Number of inputs into the interconnect (Cores per Tile) (`> 0`).
   parameter int unsigned NumCores             = 32'd0,
   /// Number of remote ports added to xbar ('>= 0').
   parameter int unsigned NumRemotePort        = 32'd0,
-  /// Number of outputs from the interconnect (Cache per Tile) (`> 0`).
+  /// Number of outputs from the interconnect (Cache banks per Tile) (`> 0`).
   parameter int unsigned NumCache             = 32'd0,
-  /// Number of total cache (used for address scramble).
+  /// Number of total cache banks across all tiles (used for address scramble).
   parameter int unsigned NumTotCache          = 32'd0,
-  /// Offset bits based on cacheline: 512b => 6 bits
+  /// Address width in bits (cacheline offset: 512b => 6 bits).
   parameter int unsigned AddrWidth            = 32'd32,
-  /// Tile ID Width, used for checking tile id ('> 0')
+  /// Tile ID width ('> 0').
   parameter int unsigned TileIDWidth          = 32'd1,
 
   /// Port type of the data request ports.
@@ -32,7 +47,7 @@ module tcdm_cache_interco #(
   parameter type         tcdm_rsp_chan_t      = logic,
 
   parameter snitch_pkg::topo_e Topology       = snitch_pkg::LogarithmicInterconnect,
-  /// Dependency parameter, do not change
+  /// Dependency parameters – do not override.
   parameter type         tile_id_t            = logic [TileIDWidth-1:0],
   parameter type         addr_t               = logic [AddrWidth-1:0]
 
@@ -41,55 +56,67 @@ module tcdm_cache_interco #(
   input  logic                                     clk_i,
   /// Reset, active low.
   input  logic                                     rst_ni,
-  /// Tile ID
+  /// This tile's ID.
   input  tile_id_t                                 tile_id_i,
-  /// Dynamic address offset for cache bank selection
+  /// Dynamic address offset for cache bank selection (= log2 of cacheline size).
   input  logic             [$clog2(AddrWidth)-1:0] dynamic_offset_i,
-  /// Number of private cache for each tile, range: [0, NumCache]
+  /// Number of private cache banks for this tile. Must be 0, NumCache/2, or NumCache.
   input  logic                [$clog2(NumCache):0] num_private_cache_i,
-  /// Request port.
+  /// Request port (cores + remote-in).
   input  tcdm_req_t   [NumCores+NumRemotePort-1:0] core_req_i,
-  /// Response ready in
+  /// Response ready in.
   input  logic        [NumCores+NumRemotePort-1:0] core_rsp_ready_i,
-  /// Resposne port.
+  /// Response port (cores + remote-in).
   output tcdm_rsp_t   [NumCores+NumRemotePort-1:0] core_rsp_o,
-  /// Memory Side
-  /// Which remote tile visiting?
+  /// Memory side -------------------------------------------------------
+  /// Which remote tile is targeted (one entry per remote output port).
   output tile_id_t             [NumRemotePort-1:0] tile_sel_o,
-  /// Request.
+  /// Requests to cache banks and remote output ports.
   output tcdm_req_t   [NumCache+NumRemotePort-1:0] mem_req_o,
-  /// Response ready out
+  /// Response ready out.
   output logic        [NumCache+NumRemotePort-1:0] mem_rsp_ready_o,
-  /// Response.
+  /// Responses from cache banks and remote output ports.
   input  tcdm_rsp_t   [NumCache+NumRemotePort-1:0] mem_rsp_i
 );
 
-  // --------
-  // Parameters and Signals
-  // --------
+  // -------------------------------------------------------------------------
+  // Local parameters
+  // -------------------------------------------------------------------------
 
-  // One bit more for remote access
-  // Selection signal width and types
+  // Bits to index into xbar outputs (local banks + one remote slot).
   localparam int unsigned NumOutSelBits  = $clog2(NumCache + NumRemotePort);
-  // The bits used to select the local Cache bank
-  localparam int unsigned NumCacheSelBits  = $clog2(NumCache);
-  // localparam int unsigned NumInpSelBits = $clog2(NumCores);
-  localparam int unsigned NumInpSelBits = $clog2(NumCores + NumRemotePort);
+  // Bits to index into xbar inputs.
+  localparam int unsigned NumInpSelBits  = $clog2(NumCores + NumRemotePort);
+  // Bits needed to select among local cache banks.
+  localparam int unsigned CacheBankBits  = $clog2(NumCache);
+  // Bits needed to select the tile in the shared address space.
+  // Equals TileIDWidth by construction (NumTotCache / NumCache == NumTiles).
+  localparam int unsigned TileBits       = $clog2(NumTotCache / NumCache);
 
-  localparam int unsigned RemotePortSel  = (NumRemotePort > 0) ? NumRemotePort : 1;
+  // Fixed threshold: addresses >= PrivateAddr target the private partition.
+  // Replace with CSR/linker-script input once the infrastructure is ready.
+  localparam addr_t PrivateAddr = addr_t'(32'hA000_0000);
+
+  // -------------------------------------------------------------------------
+  // Types
+  // -------------------------------------------------------------------------
 
   typedef logic [NumInpSelBits-1:0]  mem_sel_t;
   typedef logic [NumOutSelBits -1:0] core_sel_t;
 
-  // core select which cache bank to go
-  core_sel_t [NumCores+NumRemotePort-1 :0] core_req_sel;
-  mem_sel_t  [NumCache+NumRemotePort-1 :0] mem_rsp_sel;
-  // Select if local or remote
-  logic      [NumCores+NumRemotePort-1 :0] local_sel;
+  // -------------------------------------------------------------------------
+  // Internal signals
+  // -------------------------------------------------------------------------
 
-  // Number of bits used to identify the cache bank
-  localparam int unsigned CacheBankBits  = $clog2(NumCache);
+  // Xbar routing signals.
+  core_sel_t [NumCores+NumRemotePort-1:0] core_req_sel;
+  mem_sel_t  [NumCache+NumRemotePort-1:0] mem_rsp_sel;
+  // '1' when this request stays on local banks.
+  logic      [NumCores+NumRemotePort-1:0] local_sel;
+  // '1' when a request targets the private partition.
+  logic      [NumCores+NumRemotePort-1:0] is_private;
 
+  // Xbar channel signals.
   tcdm_req_chan_t [NumCores+NumRemotePort-1:0] core_req;
   logic           [NumCores+NumRemotePort-1:0] core_req_valid, core_req_ready;
 
@@ -102,236 +129,288 @@ module tcdm_cache_interco #(
   tcdm_rsp_chan_t [NumCache+NumRemotePort-1:0] mem_rsp;
   logic           [NumCache+NumRemotePort-1:0] mem_rsp_valid, mem_rsp_ready;
 
-  // Buffer the signal
-  logic                   [$clog2(NumCache):0] num_private_cache_d, num_private_cache_q;
-  logic                   [$clog2(NumCache):0] num_shared_cache_d,  num_shared_cache_q;
+  // -------------------------------------------------------------------------
+  // Partition control – registered to ease timing
+  // -------------------------------------------------------------------------
 
-  assign num_private_cache_d = num_private_cache_i;
-  assign num_shared_cache_d  = NumCache - num_private_cache_d;
+  logic [$clog2(NumCache):0] num_private_cache_q;
+  logic [$clog2(NumCache):0] num_shared_cache_q;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin : proc_partition_ctrl
-    if(~rst_ni) begin
-      num_private_cache_q <= 0;
-      num_shared_cache_q  <= NumCache;
+    if (!rst_ni) begin
+      num_private_cache_q <= '0;
+      num_shared_cache_q  <= NumCache[$clog2(NumCache):0];
     end else begin
-      num_private_cache_q <= num_private_cache_d;
-      num_shared_cache_q  <= num_shared_cache_d;
+      num_private_cache_q <= num_private_cache_i;
+      num_shared_cache_q  <= ($clog2(NumCache)+1)'(NumCache) - num_private_cache_i;
     end
   end
 
-  // TODO: The private/shared tag should be generated based on REG or Compiler
-  // Hardcode it temporarily for testing
-  localparam logic [AddrWidth-1:0]    PrivateAddr = 32'hC000_0000;
-  logic [NumCores+NumRemotePort-1:0]  is_private;
-  logic [NumCache-1:0]                private_bank_mask;
-  logic [$clog2(NumCache)-1:0]        private_addr_mask, shared_addr_mask;
-  for (genvar inp = 0; inp < NumCores+NumRemotePort; inp++) begin
-    // Judge if a request is targetting private/shared partition
-    assign is_private[inp] = (core_req[inp].addr > PrivateAddr);
+  // -------------------------------------------------------------------------
+  // Private/shared classification (request side, before xbar)
+  // -------------------------------------------------------------------------
+
+  for (genvar inp = 0; inp < NumCores+NumRemotePort; inp++) begin : gen_is_private
+    assign is_private[inp] = (core_req[inp].addr >= PrivateAddr);
   end
 
-  assign private_bank_mask = (num_private_cache_q == 0) ? '0 : ((1 << num_private_cache_q) - 1);
-  // Used to calculate the address taken away for cache
-  assign private_addr_mask = (num_private_cache_q == 0) ? '0 : (num_private_cache_q - 1);
-  assign shared_addr_mask  = (num_shared_cache_q  == 0) ? '0 : (num_shared_cache_q - 1);
+  // -------------------------------------------------------------------------
+  // Crossbar
+  // -------------------------------------------------------------------------
 
-
-  // Actual Xbar
   reqrsp_xbar #(
-    .NumInp           (NumCores + NumRemotePort ),
-    .NumOut           (NumCache + NumRemotePort ),
-    .PipeReg          (1'b0                     ),
-    .ExtReqPrio       (1'b0                     ),
-    .ExtRspPrio       (1'b0                     ),
-    .tcdm_req_chan_t  (tcdm_req_chan_t          ),
-    .tcdm_rsp_chan_t  (tcdm_rsp_chan_t          )
+    .NumInp           (NumCores + NumRemotePort),
+    .NumOut           (NumCache + NumRemotePort),
+    .PipeReg          (1'b0                    ),
+    .ExtReqPrio       (1'b0                    ),
+    .ExtRspPrio       (1'b0                    ),
+    .tcdm_req_chan_t  (tcdm_req_chan_t         ),
+    .tcdm_rsp_chan_t  (tcdm_rsp_chan_t         )
   ) i_cache_xbar (
-    .clk_i            (clk_i                    ),
-    .rst_ni           (rst_ni                   ),
-    .slv_req_i        (core_req                 ),
-    .slv_rr_i         ('0                       ),
-    .slv_req_valid_i  (core_req_valid           ),
-    .slv_req_ready_o  (core_req_ready           ),
-    .slv_rsp_o        (core_rsp                 ),
-    .slv_rsp_valid_o  (core_rsp_valid           ),
-    .slv_rsp_ready_i  (core_rsp_ready           ),
-    .slv_sel_i        (core_req_sel             ),
-    .slv_selected_o   ( /* unused */            ),
-    .mst_req_o        (mem_req                  ),
-    .mst_rr_i         ('0                       ),
-    .mst_req_valid_o  (mem_req_valid            ),
-    .mst_req_ready_i  (mem_req_ready            ),
-    .mst_rsp_i        (mem_rsp                  ),
-    .mst_rsp_valid_i  (mem_rsp_valid            ),
-    .mst_rsp_ready_o  (mem_rsp_ready            ),
-    .mst_sel_i        (mem_rsp_sel              )
+    .clk_i            (clk_i                   ),
+    .rst_ni           (rst_ni                  ),
+    .slv_req_i        (core_req                ),
+    .slv_rr_i         ('0                      ),
+    .slv_req_valid_i  (core_req_valid          ),
+    .slv_req_ready_o  (core_req_ready          ),
+    .slv_rsp_o        (core_rsp                ),
+    .slv_rsp_valid_o  (core_rsp_valid          ),
+    .slv_rsp_ready_i  (core_rsp_ready          ),
+    .slv_sel_i        (core_req_sel            ),
+    .slv_selected_o   (/* unused */            ),
+    .mst_req_o        (mem_req                 ),
+    .mst_rr_i         ('0                      ),
+    .mst_req_valid_o  (mem_req_valid           ),
+    .mst_req_ready_i  (mem_req_ready           ),
+    .mst_rsp_i        (mem_rsp                 ),
+    .mst_rsp_valid_i  (mem_rsp_valid           ),
+    .mst_rsp_ready_o  (mem_rsp_ready           ),
+    .mst_sel_i        (mem_rsp_sel             )
   );
 
-  // --------
-  // Selection Signals
-  // --------
+  // -------------------------------------------------------------------------
+  // Request routing (xbar input-side selection)
+  // -------------------------------------------------------------------------
+  //
+  // Address layout (example: offset=6, CacheBankBits=2, TileBits=2):
+  //
+  //   31      14 | 13    12 | 11    10 | 9     7 | 5        0
+  //   Tag        | TileID   | BankSel  | Index   | CL offset
+  //              ^-- [offset+CacheBankBits+TileBits-1 : offset+CacheBankBits]
+  //                         ^-- [offset+CacheBankBits-1 : offset]
+  //
+  // In half-half mode (NumCache=4, NumCache/2=2):
+  //   Private banks : ports 0..1  (BankSel MSB forced to 0)
+  //   Shared  banks : ports 2..3  (BankSel MSB forced to 1)
+  //
+  // The raw BankSel bits in the address cannot be used directly because
+  // arbitrary shared/private addresses may have any BankSel pattern.
+  // The MSB is overridden based on the is_private classification so that
+  // private requests always land in [0..N/2-1] and shared in [N/2..N-1].
+  // Only the LSB(s) are taken from the address to select within each half.
 
-  // TODO: Cache Partitioning:
-  // 1. We need to identify if a transaction is targetting private/shared
-  //    This can be done through a. targetted address; b. tag in the request
-  // 2. If private, use the clog2(#P_BANK) bits to select the bank
-  // 3. If shared and in remote banks, proceed as before
-  // 4. If shared and in local banks, remap it to local banks if needed
-  // 5. Adjust the address reassembling accordingly (needs to be aware of partitioning)
-
-  // To make the local remapping simple, we can start with supporting only
-  // three configurations: all shared, half-half, all private
-
-
-  // select the target cache bank based on the `bank` bits
-  // Example: 128 KiB total, 4 way, 4 cache banks, 512b cacheline
-  // => 128*1024 = 2^17 Byte => 2^(17-6) = 2^11 cachelines
-  // => 2^11/4 = 2^9 sets per cache bank => 2^9/4 = 2^7 sets per way per cache bank
-  // => 7 bits index; 2 bits cache bank bits;
-  // addr: Tag: [31:14]; Index: [13:7]; Cache Bank: [7:6]; Offset: [5:0]
   for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_req_sel
     always_comb begin
+      // Defaults.
+      local_sel[port]    = 1'b1;
       core_req_sel[port] = '0;
-      if (num_private_cache_q == NumCache | NumTiles == 1) begin
-        // All private or only one tile
-        local_sel[port] = 1'b1;
-      end else begin
-        // Determine if we are targetting to a remote tile
-        local_sel[port] = (core_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth] == tile_id_i);
-      end
 
-      // Determine which bank is targeting at
-      core_req_sel[port] = local_sel[port] ?
-                           core_req[port].addr[dynamic_offset_i+:CacheBankBits] : NumCache;
+      if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache) || NumTiles == 1) begin
+        // All-private or single-tile: every request is local.
+        // Use the full BankSel field directly.
+        local_sel[port]    = 1'b1;
+        core_req_sel[port] = core_sel_t'(core_req[port].addr[dynamic_offset_i +: CacheBankBits]);
+
+      end else if (num_private_cache_q == '0) begin
+        // All-shared: check TileID to decide local vs. remote.
+        // Use the full BankSel field directly.
+        local_sel[port] =
+          (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
+        core_req_sel[port] = local_sel[port]
+                           ? core_sel_t'(core_req[port].addr[dynamic_offset_i +: CacheBankBits])
+                           : core_sel_t'(NumCache);
+
+      end else begin
+        // Half-half: MSB of BankSel is determined by partition, not address.
+        // Only the lower (CacheBankBits-1) address bits select within the half.
+        if (is_private[port]) begin
+          // Private request: always local, routed to banks [0..NumCache/2-1].
+          // Force BankSel MSB = 0.
+          local_sel[port]    = 1'b1;
+          core_req_sel[port] = core_sel_t'({1'b0,
+            core_req[port].addr[dynamic_offset_i +: CacheBankBits-1]});
+        end else begin
+          // Shared request: check TileID, routed to banks [NumCache/2..NumCache-1].
+          // Force BankSel MSB = 1.
+          local_sel[port] =
+            (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
+          core_req_sel[port] = local_sel[port]
+                             ? core_sel_t'({1'b1,
+                                 core_req[port].addr[dynamic_offset_i +: CacheBankBits-1]})
+                             : core_sel_t'(NumCache);
+        end
+      end
     end
   end
 
-  // forward response to the sender core
-  for (genvar port = 0; port < NumCache+NumRemotePort;  port++) begin : gen_rsp_sel
+  // -------------------------------------------------------------------------
+  // Response routing (xbar output-side selection)
+  // -------------------------------------------------------------------------
+
+  for (genvar port = 0; port < NumCache+NumRemotePort; port++) begin : gen_rsp_sel
     always_comb begin
       mem_rsp_sel[port] = mem_rsp[port].user.core_id;
       if (mem_rsp[port].user.tile_id != tile_id_i) begin
-        // go to the remote interco
-        mem_rsp_sel[port] = NumCores;
+        // Response from a remote tile: forward to the remote interco port.
+        mem_rsp_sel[port] = mem_sel_t'(NumCores);
       end
     end
   end
 
-
-  // --------
-  // Registers
-  // --------
+  // -------------------------------------------------------------------------
+  // Input-side pipeline registers
+  // -------------------------------------------------------------------------
 
   for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_cache_interco_reg
     spill_register #(
       .T      (tcdm_req_chan_t          )
     ) i_tcdm_req_reg (
-      .clk_i  (clk_i                    ),
-      .rst_ni (rst_ni                   ),
-      .data_i (core_req_i[port].q       ),
-      .valid_i(core_req_i[port].q_valid ),
-      .ready_o(core_rsp_o[port].q_ready ),
-      .data_o (core_req[port]           ),
-      .valid_o(core_req_valid[port]     ),
-      .ready_i(core_req_ready[port]     )
+      .clk_i  (clk_i                   ),
+      .rst_ni (rst_ni                  ),
+      .data_i (core_req_i[port].q      ),
+      .valid_i(core_req_i[port].q_valid),
+      .ready_o(core_rsp_o[port].q_ready),
+      .data_o (core_req[port]          ),
+      .valid_o(core_req_valid[port]    ),
+      .ready_i(core_req_ready[port]    )
     );
 
     fall_through_register #(
       .T         (tcdm_rsp_chan_t           )
     ) i_tcdm_rsp_reg (
-      .clk_i     (clk_i                     ),
-      .rst_ni    (rst_ni                    ),
-      .clr_i     (1'b0                      ),
-      .testmode_i(1'b0                      ),
-      .data_i    (core_rsp[port]            ),
-      .valid_i   (core_rsp_valid[port]      ),
-      .ready_o   (core_rsp_ready[port]      ),
-      .data_o    (core_rsp_o[port].p        ),
-      .valid_o   (core_rsp_o[port].p_valid  ),
-      .ready_i   (core_rsp_ready_i[port]    )
+      .clk_i     (clk_i                    ),
+      .rst_ni    (rst_ni                   ),
+      .clr_i     (1'b0                     ),
+      .testmode_i(1'b0                     ),
+      .data_i    (core_rsp[port]           ),
+      .valid_i   (core_rsp_valid[port]     ),
+      .ready_o   (core_rsp_ready[port]     ),
+      .data_o    (core_rsp_o[port].p       ),
+      .valid_o   (core_rsp_o[port].p_valid ),
+      .ready_i   (core_rsp_ready_i[port]   )
     );
   end
 
+  // -------------------------------------------------------------------------
+  // Output-side address rotation
+  // -------------------------------------------------------------------------
+  //
+  // After the xbar each bank port receives only its own requests.  The N
+  // routing bits (BankSel, and for shared also TileID) sitting immediately
+  // above dynamic_offset_i must be hidden from the cache's tag/index logic.
+  //
+  // Instead of stripping them (which wastes tag SRAM by leaving constant zeros
+  // at the top), we *rotate* them to the MSB:
+  //
+  //   Original:  [ Tag | {TileID,BankSel} | Index | CLoffset ]
+  //   Rotated:   [ {TileID,BankSel} | Tag | Index | CLoffset ]
+  //
+  // The cache stores the rotated address as-is.  On a miss the refill unit
+  // (outside this module) receives num_private_cache from the same mmapped
+  // register and applies the inverse rotation before issuing to the NoC.
+  //
+  // Rotation per mode / bank port (N = bits_to_rotate):
+  //
+  //   Mode         | port < NumCache/2 (private) | port >= NumCache/2 (shared)
+  //   -------------|-----------------------------|--------------------------
+  //   All-shared   |            N/A              | CacheBankBits + TileBits
+  //   Half-half    |        CacheBankBits        | CacheBankBits + TileBits
+  //   All-private  |        CacheBankBits        |           N/A
+  //
+  // Construction (all arithmetic on addr_t width to avoid overflow):
+  //
+  //   lower     = addr & ((1 << offset) - 1)              // CLoffset, verbatim
+  //   rot_field = (addr >> offset) & ((1 << N) - 1)       // N routing bits
+  //   upper     = addr >> (offset + N)                     // Tag+Index
+  //
+  //   addr_rot  = lower
+  //             | (upper     << offset)                    // close the hole
+  //             | (rot_field << (AddrWidth - N))           // park at MSB
 
-  // --------
-  // IO Assignment
-  // --------
+  // Width of bits_to_rotate signal: must hold values up to CacheBankBits+TileBits.
+  localparam int unsigned RotWidth = $clog2(CacheBankBits + TileBits + 1) + 1;
 
-  // Parameters & Types
-  localparam int BankBits = $clog2(NumCache);
-  localparam int TileBits = $clog2(NumTotCache/NumCache);
-  addr_t [NumCache-1:0] addr_lo, addr_up, addr_mid;
-
-  // Logic to determine how many bits to "hole" out of the address
-  // If private_i is Y/2, we only remove (BankBits - 1) bits to preserve
-  // the distinction between the private and shared halves.
-  logic [$clog2(BankBits + TileBits):0] total_bits_to_remove;
-  logic [$clog2(BankBits):0] bank_bits_to_remove;
-
-  assign bank_bits_to_remove  = (num_private_cache_q == NumCache/2) ? (BankBits - 1) : BankBits;
-  assign total_bits_to_remove = bank_bits_to_remove + TileBits;
-
-  addr_t bitmask_up, bitmask_lo, bitmask_mid;
-  // Generate masks based on the dynamic bit count
-  assign bitmask_lo = (addr_t'(1) << dynamic_offset_i) - 1;
-  // bitmask_mid only exists if private_i == Y/2.
-  // It captures the 1 bit of BankID we want to keep.
-  assign bitmask_mid = (num_private_cache_q == NumCache/2) ? (addr_t'(1) << dynamic_offset_i) : '0;
-  // bitmask_up clears the lower bits AND the bits being "holed"
-  assign bitmask_up = ~((addr_t'(1) << (dynamic_offset_i + BankBits + TileBits)) - 1);
+  addr_t [NumCache-1:0] addr_rot;
 
   for (genvar port = 0; port < NumCache; port++) begin : gen_scramble
-    // 1. Determine if this specific port/bank is in the Private or Shared range
-    // Lower num_private_cache_q banks are private.
-    logic is_private;
-    assign is_private = (port < num_private_cache_q);
+    logic [RotWidth-1:0] bits_to_rotate;
 
-    // 2. Calculate bits to remove for THIS port
-    // If Private: We only remove BankBits (to avoid indexing overlap).
-    // If Shared:  We remove BankBits + TileBits.
-    logic [$clog2(BankBits + TileBits):0] local_bits_to_remove;
+    always_comb begin
+      // All-private: rotate BankSel only (no TileID in private addresses).
+      // All-shared:  rotate BankSel + TileID.
+      // Half-half:   private ports rotate BankSel only,
+      //              shared  ports rotate BankSel + TileID.
+      // The port index is a genvar constant so the if/else is static per bank.
+      if (num_private_cache_q == '0) begin
+        bits_to_rotate = RotWidth'(CacheBankBits + TileBits);
+      end else if (num_private_cache_q == RotWidth'(NumCache)) begin
+        bits_to_rotate = RotWidth'(CacheBankBits);
+      end else begin
+        // Half-half.
+        if (port < NumCache / 2)
+          bits_to_rotate = RotWidth'(CacheBankBits);        // private bank
+        else
+          bits_to_rotate = RotWidth'(CacheBankBits + TileBits); // shared bank
+      end
+    end
 
-    assign local_bits_to_remove = is_private ? BankBits : (BankBits + TileBits);
+    always_comb begin
+      addr_t lower, rot_field, upper;
 
-    // 3. Address Reconstruction
-    // Note: We use the same bitmask_lo (based on dynamic_offset_i)
-    // But bitmask_up must start ABOVE the specific hole we are making.
-    addr_t local_up_mask;
-    assign local_up_mask = ~((addr_t'(1) << (dynamic_offset_i + local_bits_to_remove)) - 1);
+      // CL offset: bits below dynamic_offset_i, kept verbatim.
+      lower     = mem_req[port].addr & ((addr_t'(1) << dynamic_offset_i) - 1);
 
-    assign addr_lo[port] = mem_req[port].addr & bitmask_lo;
+      // Routing field: N bits starting at dynamic_offset_i.
+      rot_field = (mem_req[port].addr >> dynamic_offset_i)
+                & ((addr_t'(1) << bits_to_rotate) - 1);
 
-    // We don't really need addr_mid anymore because 'is_private' handles the
-    // shift logic. If you want to keep a bit for Y/2, that bit is naturally
-    // preserved if local_bits_to_remove is 0.
+      // Tag+Index: everything above the routing field.
+      upper     = mem_req[port].addr >> (dynamic_offset_i + bits_to_rotate);
 
-    assign addr_up[port] = (mem_req[port].addr & local_up_mask) >> local_bits_to_remove;
+      // Reassemble: close the hole, park routing bits at the MSB.
+      addr_rot[port] = lower
+                     | (upper     << dynamic_offset_i)
+                     | (rot_field << (AddrWidth - bits_to_rotate));
+    end
+  end
 
-end
-
+  // -------------------------------------------------------------------------
+  // Output assignment
+  // -------------------------------------------------------------------------
 
   for (genvar port = 0; port < NumCache + NumRemotePort; port++) begin : gen_cache_io
     always_comb begin
       mem_req_o[port] = '{
-        q:        mem_req[port],
-        q_valid:  mem_req_valid[port],
-        default:  '0
+        q       : mem_req[port],
+        q_valid : mem_req_valid[port],
+        default : '0
       };
 
       if (port < NumCache) begin
-        // Only scramble address for request going to local banks
-        mem_req_o[port].q.addr = addr_lo[port] | addr_up[port];
+        // Local bank: forward address with routing bits rotated to MSB.
+        mem_req_o[port].q.addr = addr_rot[port];
       end else begin
-        tile_sel_o[port-NumCache] = mem_req[port].addr[(dynamic_offset_i+CacheBankBits)+:TileIDWidth];
+        // Remote port: pass address untouched; extract target tile ID.
+        tile_sel_o[port - NumCache] =
+          mem_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth];
       end
     end
 
-    assign mem_rsp[port]          = mem_rsp_i[port].p;
-    assign mem_rsp_valid[port]    = mem_rsp_i[port].p_valid;
-    assign mem_req_ready[port]    = mem_rsp_i[port].q_ready;
+    assign mem_rsp[port]       = mem_rsp_i[port].p;
+    assign mem_rsp_valid[port] = mem_rsp_i[port].p_valid;
+    assign mem_req_ready[port] = mem_rsp_i[port].q_ready;
   end
 
-  assign mem_rsp_ready_o  = mem_rsp_ready;
-
+  assign mem_rsp_ready_o = mem_rsp_ready;
 
 endmodule
