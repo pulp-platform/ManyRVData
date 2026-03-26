@@ -111,8 +111,11 @@ extern "C" {
                         .index =                                               \
                             CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_OFFSET})
 
+// Starting address of private L1D partition
+#define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x40
+
 // Cache xbar offset setting
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x40
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x44
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK 0x1f
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_FIELD                          \
@@ -121,7 +124,7 @@ extern "C" {
                             CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET})
 
 // Cache xbar offset setting
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x44
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x48
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_COMMIT_BIT 0
 
 #ifdef __cplusplus

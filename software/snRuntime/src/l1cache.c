@@ -104,6 +104,15 @@ void l1d_part (uint32_t size) {
   l1d_commit();
 }
 
+// Configure the starting address mapping to the private partition
+void l1d_addr (uint32_t addr) {
+  // set the pointers
+  volatile uint32_t *cfg_private =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET);
+  *cfg_private = addr;
+  l1d_commit();
+}
 
 void set_eoc () {
     volatile uint32_t *eoc_reg =

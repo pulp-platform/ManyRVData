@@ -19,7 +19,8 @@
 // the cluster-wide interleaved pool.
 //
 // Private vs. shared is currently identified by a fixed address threshold
-// (PrivateAddr); replace with a CSR/linker-script field when ready.
+
+`include "common_cells/registers.svh"
 
 module tcdm_cache_interco #(
   /// Number of Tiles ('>= 1')
@@ -58,11 +59,14 @@ module tcdm_cache_interco #(
   input  logic                                     rst_ni,
   /// This tile's ID.
   input  tile_id_t                                 tile_id_i,
+  /// Configurations-----------------------------------------------------
   /// Dynamic address offset for cache bank selection (= log2 of cacheline size).
   input  logic             [$clog2(AddrWidth)-1:0] dynamic_offset_i,
   /// Number of private cache banks for this tile. Must be 0, NumCache/2, or NumCache.
   input  logic                [$clog2(NumCache):0] num_private_cache_i,
-  /// Request port (cores + remote-in).
+  /// Partitioning address
+  input  addr_t                                    private_start_addr_i,
+  /// Request port (cores + remote-in) ----------------------------------
   input  tcdm_req_t   [NumCores+NumRemotePort-1:0] core_req_i,
   /// Response ready in.
   input  logic        [NumCores+NumRemotePort-1:0] core_rsp_ready_i,
@@ -92,10 +96,6 @@ module tcdm_cache_interco #(
   // Bits needed to select the tile in the shared address space.
   // Equals TileIDWidth by construction (NumTotCache / NumCache == NumTiles).
   localparam int unsigned TileBits       = $clog2(NumTotCache / NumCache);
-
-  // Fixed threshold: addresses >= PrivateAddr target the private partition.
-  // Replace with CSR/linker-script input once the infrastructure is ready.
-  localparam addr_t PrivateAddr = addr_t'(32'hA000_0000);
 
   // -------------------------------------------------------------------------
   // Types
@@ -133,17 +133,19 @@ module tcdm_cache_interco #(
   // Partition control – registered to ease timing
   // -------------------------------------------------------------------------
 
-  logic [$clog2(NumCache):0] num_private_cache_q;
-  logic [$clog2(NumCache):0] num_shared_cache_q;
+  logic [$clog2(NumCache):0] num_private_cache_q, num_private_cache_d;
+  logic [$clog2(NumCache):0] num_shared_cache_q,  num_shared_cache_d;
 
-  always_ff @(posedge clk_i or negedge rst_ni) begin : proc_partition_ctrl
-    if (!rst_ni) begin
-      num_private_cache_q <= '0;
-      num_shared_cache_q  <= NumCache[$clog2(NumCache):0];
-    end else begin
-      num_private_cache_q <= num_private_cache_i;
-      num_shared_cache_q  <= ($clog2(NumCache)+1)'(NumCache) - num_private_cache_i;
-    end
+  addr_t private_start_addr_d, private_start_addr_q;
+
+  `FF(num_private_cache_q,  num_private_cache_d,  1'b0)
+  `FF(num_shared_cache_q,   num_shared_cache_d,   NumCache[$clog2(NumCache):0])
+  `FF(private_start_addr_q, private_start_addr_d, 1'b0)
+
+  always_comb begin
+    num_private_cache_d   = num_private_cache_i;
+    num_shared_cache_d    = ($clog2(NumCache)+1)'(NumCache) - num_private_cache_i;
+    private_start_addr_d  = private_start_addr_i;
   end
 
   // -------------------------------------------------------------------------
@@ -151,7 +153,7 @@ module tcdm_cache_interco #(
   // -------------------------------------------------------------------------
 
   for (genvar inp = 0; inp < NumCores+NumRemotePort; inp++) begin : gen_is_private
-    assign is_private[inp] = (core_req[inp].addr >= PrivateAddr);
+    assign is_private[inp] = (core_req[inp].addr >= private_start_addr_q);
   end
 
   // -------------------------------------------------------------------------
