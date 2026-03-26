@@ -18,3 +18,4 @@ const gemm_layer gemm_l = {
 static uint32_t gemm_A_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 1 };
 static uint32_t gemm_B_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 2 };
 static uint32_t gemm_C_dram [262144]  __attribute__((section(".pdcp_src")))  = { [0 ... 262143] = 3 };
+static uint32_t gemm_D_dram [262144]  __attribute__((section(".data")))  = { [0 ... 262143] = 4 };

@@ -548,23 +548,39 @@ module cachepool_tile
   logic [NrTCDMPortsPerCore-1:0] remote_out_pready, remote_in_pready;
 
   // Flush protection for remote ports.
+  //
+  // During a flush (|l1d_busy_i) remote tiles must be fully stalled:
+  //   - q_valid gated : stops new requests being presented to the xbar
+  //   - q_ready gated : stops the xbar accepting a request that is already
+  //                     sitting at the input (spill register would otherwise
+  //                     pop it, and the transaction would be lost because the
+  //                     cache is unavailable)
+  //   - remote_in_pready gated : stops response-ready from propagating back,
+  //                     preventing in-flight completions during the flush window
+
   tcdm_req_t [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_gated;
+  // Intermediate response signals from the xbar before q_ready gating.
+  tcdm_rsp_t [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
-      // Pass request payload through unchanged; only gate valid.
+      // Gate q_valid: prevent new requests entering the xbar.
       remote_req_gated[j].q       = remote_req_i[j].q;
       remote_req_gated[j].q_valid = remote_req_i[j].q_valid && !(|l1d_busy_i);
-      // Gate the response-ready signal back to the remote tile.
-      remote_in_pready[j]         = remote_rsp_ready_i[j]  && !(|l1d_busy_i);
+
+      // Pass the full xbar response through, then gate only q_ready so the
+      // remote tile cannot complete a handshake during a flush.
+      remote_rsp_o[j]          = remote_rsp_xbar[j];
+      remote_rsp_o[j].q_ready  = remote_rsp_xbar[j].q_ready && !(|l1d_busy_i);
+
+      // Gate response-ready back to us: prevent draining completions
+      // of requests that arrived just before the flush.
+      remote_in_pready[j] = remote_rsp_ready_i[j] && !(|l1d_busy_i);
     end
   end
 
-
-
   // todo: multiple remote ports
   assign remote_rsp_ready_o = remote_out_pready;
-  // assign remote_in_pready = remote_rsp_ready_i;
 
   /// Wire requests after strb handling to the cache controller
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
@@ -581,18 +597,18 @@ module cachepool_tile
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
       .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
-      .clk_i                ( clk_i                                       ),
-      .rst_ni               ( rst_ni                                      ),
-      .tile_id_i            ( tile_id_i                                   ),
-      .dynamic_offset_i     ( dynamic_offset                              ),
-      .num_private_cache_i  ( num_private_cache                           ),
-      .core_req_i           ({remote_req_gated [j], cache_req        [j]} ),
-      .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]} ),
-      .core_rsp_o           ({remote_rsp_o     [j], cache_rsp        [j]} ),
-      .tile_sel_o           ( remote_req_dst_o [j]                        ),
-      .mem_req_o            ({remote_req_o     [j], cache_xbar_req   [j]} ),
-      .mem_rsp_ready_o      ({remote_out_pready[j], cache_xbar_pready[j]} ),
-      .mem_rsp_i            ({remote_rsp_i     [j], cache_xbar_rsp   [j]} )
+      .clk_i                ( clk_i                                        ),
+      .rst_ni               ( rst_ni                                       ),
+      .tile_id_i            ( tile_id_i                                    ),
+      .dynamic_offset_i     ( dynamic_offset                               ),
+      .num_private_cache_i  ( num_private_cache                            ),
+      .core_req_i           ({remote_req_gated [j], cache_req        [j]}  ),
+      .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]}  ),
+      .core_rsp_o           ({remote_rsp_xbar  [j], cache_rsp        [j]}  ),
+      .tile_sel_o           ( remote_req_dst_o [j]                         ),
+      .mem_req_o            ({remote_req_o     [j], cache_xbar_req   [j]}  ),
+      .mem_rsp_ready_o      ({remote_out_pready[j], cache_xbar_pready[j]}  ),
+      .mem_rsp_i            ({remote_rsp_i     [j], cache_xbar_rsp   [j]}  )
     );
   end
 
@@ -687,10 +703,16 @@ module cachepool_tile
     end
   end
 
-  // For address scrambling
-  logic [$clog2(NumL1CacheCtrl)-1:0] num_sel_bits;
-  assign num_sel_bits = (num_private_cache == NumL1CtrlTile) ? $clog2(NumL1CtrlTile) : $clog2(NumL1CacheCtrl);
-  // localparam NumSelBits = $clog2(NumL1CacheCtrl);
+  // Refill address inverse rotation parameters.
+  // Must mirror the bits_to_rotate table in tcdm_cache_interco gen_scramble:
+  //   All-private or half-half private banks (cb < NumL1CtrlTile/2):
+  //     N = CacheBankBits
+  //   All-shared  or half-half shared  banks (cb >= NumL1CtrlTile/2):
+  //     N = CacheBankBits + TileBits
+  localparam int unsigned RefillCacheBankBits = $clog2(NumL1CtrlTile);
+  localparam int unsigned RefillTileBits      = $clog2(NumL1CacheCtrl / NumL1CtrlTile);
+  localparam int unsigned RefillRotWidth      = $clog2(RefillCacheBankBits + RefillTileBits + 1) + 1;
+
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   localparam int unsigned WordBytes = DataWidth / 8;
   initial begin
@@ -707,10 +729,10 @@ module cachepool_tile
     $display("  RefillDataWidth: %0d", RefillDataWidth);
     $display("  DynamicOffset  : %0d", dynamic_offset);
   end
-  logic [SpatzAxiAddrWidth-1:0] bitmask_up, bitmask_lo;
-  assign bitmask_lo = (1 << dynamic_offset) - 1;
-  // We will keep AddrWidth - Offset - log2(CacheBanks) bits in the upper half, and add back the NumSelBits bits
-  assign bitmask_up = ((1 << (SpatzAxiAddrWidth - dynamic_offset - num_sel_bits)) - 1) << (dynamic_offset);
+
+  // CL-offset mask: bits below dynamic_offset, verbatim in both directions.
+  logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
+  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset) - 1;
 
   cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
   burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
@@ -791,33 +813,53 @@ module cachepool_tile
       .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
     );
 
-    logic [$clog2(NumL1CacheCtrl)-1:0] tot_bank_id;
+    // Inverse rotation for the refill address.
+    //
+    // The cache controller stores a *rotated* address: routing bits (BankSel
+    // and, for shared banks, TileID) were moved to the MSB by the forward
+    // rotation in tcdm_cache_interco so the cache sees a dense index space.
+    // Before issuing the refill to the NoC we must undo that rotation to
+    // recover the original address.
+    //
+    // Forward rotation recap (N = bits_to_rotate):
+    //   rotated = lower | (upper << offset) | (rot_field << (AddrWidth - N))
+    //
+    // Inverse:
+    //   lower     = addr_rot & ((1 << offset) - 1)   // CL offset, verbatim
+    //   rot_field = addr_rot >> (AddrWidth - N)       // routing bits at top
+    //   upper     = (addr_rot >> offset)              // tag+index (no top bits)
+    //             & ((1 << (AddrWidth-offset-N)) - 1)
+    //   original  = lower | (rot_field << offset) | (upper << (offset + N))
+    //
+    // N per bank mirrors tcdm_cache_interco:
+    //   All-shared  / half-half shared  (cb >= NumL1CtrlTile/2):
+    //     N = RefillCacheBankBits + RefillTileBits
+    //   All-private / half-half private (cb <  NumL1CtrlTile/2):
+    //     N = RefillCacheBankBits
+    //
+    // cb is a genvar constant → static per-bank elaboration.
 
-    always_comb begin : revert_addr
-      // bank id is needed anyway
-      // TODO: adjust for half-half case
-      tot_bank_id = '0;
-      tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
-      if ((num_private_cache != NumL1CtrlTile) && (NumL1CacheCtrl > NumL1CtrlTile)) begin
-        tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
+    logic [RefillRotWidth-1:0] refill_bits_to_rotate;
+
+    always_comb begin : refill_rot_sel
+      if (num_private_cache == '0) begin
+        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
+      end else if (num_private_cache == 3'(NumL1CtrlTile)) begin
+        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
+      end else begin
+        if (cb < NumL1CtrlTile / 2)
+          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
+        else
+          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
       end
     end
-    // Add back the removed cache bank ID
-    // tid + cb => recover the full address
-    // assign tot_bank_id[$clog2(NumL1CtrlTile)-1:0] = cb;
-    // if (NumL1CacheCtrl > NumL1CtrlTile) begin
-    //   assign tot_bank_id[$clog2(NumL1CtrlTile)+:TileIDWidth] = tile_id_i;
-    // end
-
 
     always_comb begin : bank_addr_scramble
-      // TODO: use info and cb to calculate ID correctly
       cache_refill_req_o[cb].q = '{
         addr : cache_refill_req[cb].addr,
         write: cache_refill_req[cb].write,
         data : cache_refill_req[cb].wdata,
         strb : cache_refill_req[cb].wstrb,
-        // We always want full size from cache
         size : $clog2(RefillDataWidth/8),
         amo  : reqrsp_pkg::AMONone,
         default : '0
@@ -843,13 +885,25 @@ module cachepool_tile
       cache_refill_rsp_valid[cb] = cache_refill_rsp_i[cb].p_valid;
       cache_refill_req_ready[cb] = cache_refill_rsp_i[cb].q_ready;
 
+      // Inverse rotation: recover original address from the rotated form.
+      begin
+        logic [SpatzAxiAddrWidth-1:0] addr_rot, lower, rot_field, upper;
+        addr_rot  = cache_refill_req[cb].addr;
 
-      // Pass the lower bits first
-      cache_refill_req_o[cb].q.addr  =   cache_refill_req[cb].addr & bitmask_lo;
-      // Shift the upper part to its location
-      cache_refill_req_o[cb].q.addr |= ((cache_refill_req[cb].addr & bitmask_up) << num_sel_bits);
+        lower     = addr_rot & bitmask_lo;
 
-      cache_refill_req_o[cb].q.addr |= (tot_bank_id << dynamic_offset);
+        rot_field = addr_rot >> (SpatzAxiAddrWidth - refill_bits_to_rotate);
+
+        upper     = (addr_rot >> dynamic_offset)
+                  & ((SpatzAxiAddrWidth'(1) << (SpatzAxiAddrWidth
+                                                - dynamic_offset
+                                                - refill_bits_to_rotate)) - 1);
+
+        cache_refill_req_o[cb].q.addr = lower
+                                      | (rot_field << dynamic_offset)
+                                      | (upper     << (dynamic_offset
+                                                       + refill_bits_to_rotate));
+      end
     end
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
