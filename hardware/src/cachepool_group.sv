@@ -133,7 +133,9 @@ module cachepool_group
     input  logic                                  [9:0] hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  logic                     [AxiAddrWidth-1:0] cluster_base_addr_i,
+    input  axi_addr_t                                   cluster_base_addr_i,
+    /// Partitioning address
+    input  axi_addr_t                                   private_start_addr_i,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [GroupNarrowAxiPorts-1:0] axi_narrow_req_o,
     input  axi_narrow_resp_t  [GroupNarrowAxiPorts-1:0] axi_narrow_rsp_i,
@@ -320,6 +322,7 @@ module cachepool_group
       .hart_base_id_i           ( hart_base_id                                                ),
       .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
       .tile_id_i                ( tile_id                                                     ),
+      .private_start_addr_i     ( private_start_addr_i                                        ),
       // AXI out for UART
       .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
