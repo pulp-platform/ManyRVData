@@ -2,12 +2,12 @@
     "simulation": {
         "addressmapping": "am_ddr4.json",
         "mcconfig": "fr_fcfs.json",
-        "memspec": "JEDEC_4Gb_DDR4-2400_8bit_A.json",
+        "memspec": "JEDEC_4Gb_DDR4-1866_8bit_A.json",
         "simconfig": "simconfig_ddr4.json",
         "simulationid": "ddr4",
         "tracesetup": [
             {
-                "clkMhz": 1200,
+                "clkMhz": 933,
                 "name": "example.stl"
             }
         ]

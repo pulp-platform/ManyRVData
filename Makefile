@@ -41,36 +41,33 @@ SPATZ_DIR             ?= ${DEP_DIR}/spatz
 SPZ_CLS_DIR           ?= ${SPATZ_DIR}/hw/system/spatz_cluster
 ### DramSys
 DRAMSYS_DIR           ?= ${DEP_DIR}/dram_rtl_sim
-DRAMSYS_PATH 		 			:= ${DRAMSYS_DIR}/dramsys_lib/DRAMSys
-DRAMSYS_LIB_PATH 			:= ${DRAMSYS_PATH}/build/lib
-DRAMSYS_RES_PATH 			:= ${DRAMSYS_PATH}/configs
+DRAMSYS_PATH          := ${DRAMSYS_DIR}/dramsys_lib/DRAMSys
+DRAMSYS_LIB_PATH      := ${DRAMSYS_PATH}/build/lib
+DRAMSYS_RES_PATH      := ${DRAMSYS_PATH}/configs
 
 ## Software subpaths
 SPATZ_SW_DIR          ?= ${SPATZ_DIR}/sw
 
 ## Simulation related
 SIM_DIR               ?= ${CACHEPOOL_DIR}/sim
-SIMLIB_DIR            ?= ${SIM_DIR}/simlib              # local c lib for simulation
+SIMLIB_DIR            ?= ${SIM_DIR}/simlib
 SNLIB_DIR             ?= ${SPATZ_DIR}/hw/ip/snitch_test/src
 BOOTLIB_DIR           := ${SPZ_CLS_DIR}/test
 WORK_DIR              := ${SIM_DIR}/work
 SIMBIN_DIR            := ${SIM_DIR}/bin
-TB_DIR 								:= ${HARDWARE_DIR}/tb
+TB_DIR                := ${HARDWARE_DIR}/tb
 DPI_PATH              := ${TB_DIR}/dpi
 DRAM_CFG_PATH         := ${TB_DIR}/dram_config
 DPI_LIB               ?= work-dpi
-# Set to 0 will turn off +acc target for faster simulation
-DEBUG 								?= 1
+DEBUG                 ?= 1
 
 ## Bender usage (binary comes from toolchain.mk install)
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender
-# Guarded to avoid failing before bender is installed
 CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cache || true)
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config             		?= cachepool_512
-
+config                ?= cachepool_512
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -78,7 +75,6 @@ COMPILER              ?= llvm
 ############
 #  Bender  #
 ############
-# Optional sanity target to ensure the right bender version is installed
 BENDER_VERSION ?= 0.28.1
 .PHONY: bender check-bender
 bender: $(BENDER_INSTALL_DIR)/bender
@@ -95,7 +91,6 @@ check-bender:
 	  $(MAKE) bender; \
 	fi
 
-# Project-level Bender op
 .PHONY: checkout
 checkout: bender
 	${BENDER} checkout
@@ -104,7 +99,6 @@ checkout: bender
 # Prerequisites #
 #################
 
-# Export make vars so Python sees them (simple and robust)
 .EXPORT_ALL_VARIABLES:
 
 config_mk       := $(abspath $(CACHEPOOL_DIR)/config/config.mk)
@@ -118,19 +112,15 @@ gen-spatz-cfg: $(config_mk) $(HJSON_TEMPLATE) ${CACHEPOOL_DIR}/util/scripts/gen_
 	@mkdir -p $(CFG_DIR)
 	@python3 ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py --template $(HJSON_TEMPLATE) --out $(HJSON_OUT)
 
-
-# Initialize submodules
 .PHONY: init
 init:
 	git submodule update --init --recursive --jobs=8
 	${BENDER} checkout
 
-# ETH-only quick tool switch (softlink prebuilt toolchains)
 .PHONY: quick-tool
 quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
-# Build bootrom and spatz (depends on opcodes repo being present)
 .PHONY: generate
 generate: update_opcodes gen-spatz-cfg
 	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson
@@ -143,7 +133,6 @@ else
 	@echo "insitu-cache path unavailable (bender not installed yet?)"
 endif
 
-# Paths
 BOOTROM_DIR := $(HARDWARE_DIR)/bootrom
 SCRIPTS_DIR := $(CACHEPOOL_DIR)/util/scripts
 TPL_DIR     := $(SPATZ_DIR)/hw/system/spatz_cluster/test
@@ -151,18 +140,14 @@ TPL_DIR     := $(SPATZ_DIR)/hw/system/spatz_cluster/test
 .PHONY: bootrom
 bootrom: $(BOOTROM_DIR)/bootrom.sv
 
-# STEP 1: Generate the C++ bootdata file from HJSON
 $(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata_bootrom.cc.tpl -o $@
 
-# Rule for bootdata.cc
 $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
-# STEP 2: Compile to ELF, then create Disassembly and Raw Binary
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
   $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
-	# Compile and Link
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -171,19 +156,12 @@ $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bi
 		-I$(SPATZ_DIR)/hw/ip/snitch_test/src \
 		-I$(SOFTWARE_DIR)/snRuntime/include \
 		-o $(BOOTROM_DIR)/bootrom.elf
-	# Generate human-readable disassembly
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
-	# Extract raw binary for the ROM generator
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
 
-# STEP 3: Convert the binary into a SystemVerilog ROM module
 $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \
 		$< -c $(HJSON_OUT) --output $@
-
-# # Rule for bootdata_bootrom.cc
-$(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
-	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata_bootrom.cc.tpl -o $@
 
 ###########
 # DramSys #
@@ -192,10 +170,7 @@ USE_DRAMSYS ?= 1
 VSIM_FLAGS :=
 VSIM_BENDER =
 
-## Build DramSys
-# .PHONY: dram-build
-# dram-build:
-# 	$(MAKE) -BC ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
+.PHONY: dram-build
 dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
 	cd $(DRAMSYS_PATH) && \
 	if [ ! -d "build" ]; then \
@@ -206,7 +181,6 @@ dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
 
 $(DRAMSYS_PATH)/README.md: dram-init
 
-# Replace the default HBM2 model to cutmized model
 dram-config:
 	cp $(DRAM_CFG_PATH)/am_hbm2e_16Gb_pc_brc.json $(DRAMSYS_PATH)/configs/addressmapping/.
 	cp $(DRAM_CFG_PATH)/mc_hbm2e_fr_fcfs_grp.json $(DRAMSYS_PATH)/configs/mcconfig/.
@@ -223,15 +197,13 @@ dram-config:
 		mv $(DRAMSYS_PATH)/configs/ddr4-example.json \
 		   $(DRAMSYS_PATH)/configs/ddr4-example.json.ori; \
 	fi
-	cp $(DRAM_CFG_PATH)/DDR4-2400.json $(DRAMSYS_PATH)/configs/ddr4-example.json
-
+	cp $(DRAM_CFG_PATH)/DDR4-1866.json $(DRAMSYS_PATH)/configs/ddr4-example.json
 
 dram-clean:
 	if [ -d "$(DRAMSYS_PATH)/build" ]; then \
 		rm -rf $(DRAMSYS_PATH)/build; \
 	fi
 
-# To ensure the dramsys is downloaded, only need to call at first time
 dram-init:
 	make -C ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
 
@@ -244,9 +216,8 @@ VSIM        = ${QUESTA_VER} vsim
 VLOG        = ${QUESTA_VER} vlog
 VSIM_HOME   = /usr/pack/${QUESTA_VER}/questasim
 
-# fesvr is built locally into work dir; needs dtc/spike path
-FESVR          ?= ${SIM_DIR}/work
-FESVR_VERSION  ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
+FESVR         ?= ${SIM_DIR}/work
+FESVR_VERSION ?= c663ea20a53f4316db8cb4d591b1c8e437f4a0c4
 
 VLOG_FLAGS += -svinputport=compat
 VLOG_FLAGS += -override_timescale 1ns/1ps
@@ -279,7 +250,6 @@ VLOG_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
 VLOG_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
 VLOG_DEFS += -DL1D_TILE_SIZE=$(l1d_tile_size)
 VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
-# derived (no spaces so vlog gets one arg)
 VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
 VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
 
@@ -307,13 +277,11 @@ VLOG_DEFS += -DPERIPH_START_ADDR=$(periph_start_addr)
 VLOG_DEFS += -DBOOT_ADDR=$(boot_addr)
 VLOG_DEFS += -DUART_ADDR=$(uart_addr)
 
-
 ENABLE_CACHEPOOL_TESTS ?= 1
 
 # Bender targets
-VSIM_BENDER   += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
+VSIM_BENDER += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
 
-# Include the simulation makefile
 include sim/sim.mk
 
 ######
@@ -356,10 +324,10 @@ vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 .PHONY: clean
 clean: clean.sw clean.vsim
 	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
-											$(BOOTROM_DIR)/bootdata_bootrom.cc \
-											$(BOOTROM_DIR)/bootrom.sv \
-											$(BOOTROM_DIR)/bootrom.dump \
-											$(BOOTROM_DIR)/bootrom.elf
+	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
+	                    $(BOOTROM_DIR)/bootrom.sv \
+	                    $(BOOTROM_DIR)/bootrom.dump \
+	                    $(BOOTROM_DIR)/bootrom.elf
 
 ########
 # Lint #
@@ -375,8 +343,7 @@ lint: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/lint.
 ${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
 	@if [ ! -x "$(BENDER)" ]; then echo "bender not installed; run 'make bender'"; exit 1; fi
-	${BENDER} script verilator  $(VLOG_DEFS) -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
-
+	${BENDER} script verilator $(VLOG_DEFS) -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
 
 ########
 # Help #
@@ -389,28 +356,39 @@ help:
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Initialization:"
 	@echo ""
-	@echo "*init*:       clone the git submodules"
-	@echo "*toolchain*:  build the necessary toolchains (LLVM/GCC/Spike)"
-	@echo "*quick-tool*: *ETH Member Only* soft link to prebuilt toolchains"
-	@echo "*generate*:   generate the Spatz package and opcodes"
-	@echo "*bootrom*:    generate the bootrom"
-	@echo "*dram-build*: build DRAMSys for simulation"
+	@echo "*init*:           clone git submodules and run bender checkout"
+	@echo "*bender*:         install the bender dependency manager"
+	@echo "*check-bender*:   verify bender version (>= $(BENDER_VERSION)), reinstall if outdated"
+	@echo "*checkout*:       run bender checkout to fetch hardware dependencies"
+	@echo "*toolchain*:      build the necessary toolchains (LLVM/GCC/Spike) [from toolchain.mk]"
+	@echo "*quick-tool*:     *ETH Member Only* soft link to prebuilt toolchains"
+	@echo "*generate*:       generate the Spatz package and opcodes, and the cluster config HJSON"
+	@echo "*cache-init*:     source the insitu-cache environment (requires bender checkout)"
+	@echo "*bootrom*:        compile and generate the bootrom SystemVerilog module"
+	@echo ""
+	@echo "DRAMSys:"
+	@echo ""
+	@echo "*dram-build*:     build the DRAMSys simulation library"
+	@echo "*dram-clean*:     remove the DRAMSys build directory"
 	@echo ""
 	@echo "SW Build:"
 	@echo ""
-	@echo "*clean.sw*:   remove the current software build"
-	@echo "*sw*:         generate the latest kernel build (will overwrite the previous build)"
+	@echo "*sw*:             build software (generate + bootrom + cmake); overwrites previous build"
+	@echo "*clean.sw*:       remove the software build directory"
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
-	@echo "*clean.vsim*: remove the current hardware build"
-	@echo "*vsim*:       build both the software and hardware (not overwriting prev build by default)"
-	@echo "              USE_DRAMSYS=1 to use DRAMSys (default 1)"
+	@echo "*vsim*:           build hardware and software for QuestaSim simulation"
+	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
+	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
 	@echo ""
 	@echo "Lint:"
-	@echo "*lint*:       run SpyGlass lint (requires bender + SpyGlass in PATH)"
+	@echo ""
+	@echo "*lint*:           run SpyGlass lint (requires bender + SpyGlass in PATH)"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
-	@echo "Settings"
-	@echo "*CMAKE*:      CMake version needs to be >= 3.28 for DRAMSys"
+	@echo "Settings:"
+	@echo "*config*:         cluster configuration name (default: $(config))"
+	@echo "*CMAKE*:          CMake binary (default: $(CMAKE)); must be >= 3.28 for DRAMSys"
+	@echo "*DEBUG*:          enable +acc for waveform visibility in vsim (default: $(DEBUG))"
 	@echo ""
