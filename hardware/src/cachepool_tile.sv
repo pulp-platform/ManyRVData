@@ -138,9 +138,11 @@ module cachepool_tile
     input  logic              [9:0]                 hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  logic              [AxiAddrWidth-1:0]    cluster_base_addr_i,
+    input  axi_addr_t                               cluster_base_addr_i,
     /// Tile ID, internal ID, the base is always 0, in theory should not change during use
     input  remote_tile_sel_t                        tile_id_i,
+    /// Partitioning address
+    input  axi_addr_t                               private_start_addr_i,
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [1:0]                 axi_out_req_o,
     input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
@@ -601,6 +603,7 @@ module cachepool_tile
       .rst_ni               ( rst_ni                                       ),
       .tile_id_i            ( tile_id_i                                    ),
       .dynamic_offset_i     ( dynamic_offset                               ),
+      .private_start_addr_i ( private_start_addr_i                         ),
       .num_private_cache_i  ( num_private_cache                            ),
       .core_req_i           ({remote_req_gated [j], cache_req        [j]}  ),
       .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]}  ),

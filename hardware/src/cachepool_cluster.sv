@@ -220,14 +220,26 @@ module cachepool_cluster
   // 1. AXI
   axi_mst_cache_req_t  [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_req;
   axi_mst_cache_resp_t [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_rsp;
-  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1 :0]               wide_axi_slv_req;
-  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1 :0]               wide_axi_slv_rsp;
-  axi_narrow_req_t     [NumTiles-1:0][1:0]                axi_out_req;
-  axi_narrow_resp_t    [NumTiles-1:0][1:0]                axi_out_resp;
+  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1 :0]          wide_axi_slv_req;
+  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1 :0]          wide_axi_slv_rsp;
+  axi_narrow_req_t     [NumTiles-1:0][1:0]                    axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1:0][1:0]                    axi_out_resp;
 
   // 2. BootROM
   reg_cache_req_t [NumTiles-1:0] bootrom_reg_req;
   reg_cache_rsp_t [NumTiles-1:0] bootrom_reg_rsp;
+
+  // 3. Peripherals
+  axi_addr_t                               private_start_addr;
+  icache_events_t    [NrCores-1:0]         icache_events;
+  logic                                    icache_prefetch_enable;
+  logic              [NrCores-1:0]         cl_interrupt;
+  logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
+  logic              [3:0]                 l1d_private;
+  logic              [1:0]                 l1d_insn;
+  logic                                    l1d_insn_valid;
+  logic              [NumL1CacheCtrl-1:0]  l1d_insn_ready;
+  logic              [NumL1CacheCtrl-1:0]  l1d_busy;
 
   // ---------------
   // CachePool Tile
@@ -353,16 +365,6 @@ module cachepool_cluster
     assign l2_rsp_rr = '0;
   end
 
-  icache_events_t    [NrCores-1:0]         icache_events;
-  logic                                    icache_prefetch_enable;
-  logic              [NrCores-1:0]         cl_interrupt;
-  logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
-  logic              [3:0]                 l1d_private;
-  logic              [1:0]                 l1d_insn;
-  logic                                    l1d_insn_valid;
-  logic              [NumL1CacheCtrl-1:0]  l1d_insn_ready;
-  logic              [NumL1CacheCtrl-1:0]  l1d_busy;
-
   if (NumTiles > 1) begin : gen_group
     cachepool_group #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
@@ -414,6 +416,7 @@ module cachepool_cluster
       .msip_i                   ( msip_i                   ),
       .hart_base_id_i           ( hart_base_id_i           ),
       .cluster_base_addr_i      ( cluster_base_addr_i      ),
+      .private_start_addr_i     ( private_start_addr        ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
       .axi_wide_req_o           ( axi_tile_req             ),
@@ -510,6 +513,7 @@ module cachepool_cluster
       .hart_base_id_i           ( hart_base_id_i            ),
       .cluster_base_addr_i      ( cluster_base_addr_i       ),
       .tile_id_i                ( '0                        ),
+      .private_start_addr_i     ( private_start_addr        ),
       .axi_out_req_o            ( axi_out_req  [0]          ),
       .axi_out_resp_i           ( axi_out_resp [0]          ),
       // Remote Ports (not used)
@@ -707,7 +711,7 @@ module cachepool_cluster
 
   for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch ++) begin : gen_output_axi
     reqrsp_to_axi #(
-      .MaxTrans           (NumSpatzOutstandingLoads   ),
+      .MaxTrans           (NumSpatzOutstandingLoads*2 ),
       .ID                 ('0                         ),
       .EnBurst            (1                          ),
       .ShuffleId          (1                          ),
@@ -994,6 +998,7 @@ module cachepool_cluster
     .cluster_hart_base_id_i   (hart_base_id_i        ),
     .cluster_probe_o          (cluster_probe_o       ),
     .dynamic_offset_o         (dynamic_offset        ),
+    .private_start_addr_o     (private_start_addr    ),
     .l1d_spm_size_o           (                      ),
     .l1d_private_o            (l1d_private           ),
     .l1d_insn_o               (l1d_insn              ),
