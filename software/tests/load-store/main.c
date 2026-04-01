@@ -472,6 +472,149 @@ int main() {
 
   sync_all();
 
+  // ---------------------------------------------------------------------------
+  // 1 private + 3 shared
+  // ---------------------------------------------------------------------------
+  if (cid == 0) {
+    printf("\n***Testing 1-private 3-shared configuration***\n");
+  }
+
+  cache_cfg(cid, local_offset, 1);
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    printf("Configuration done!\n\n");
+  }
+
+  // Private side: copy gemm_C_dram -> gemm_A_dram, flush, check value 3.
+  a_local_ptr = gemm_A_dram + dim_core * cid;
+  b_local_ptr = gemm_C_dram + dim_core * cid;
+
+  if (cid == 0) {
+    printf("Test 1: Private Vector Copy + Flush + Check\n");
+    printf("dim per core:%u\n", local_len);
+    printf("a_ptr:%p\n", (void *)a_local_ptr);
+    printf("b_ptr:%p\n", (void *)b_local_ptr);
+  }
+
+  test1_cyc = timed_stream_copy_vec(a_local_ptr, b_local_ptr, local_len, cid);
+
+  if (cid == 0) {
+    printf("Vector copy complete\n");
+    printf("Cycles:%u cyc\n", test1_cyc);
+    printf("Flushing cache...\n");
+  }
+
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    int pass = 1;
+    for (uint32_t core = 0; core < num_cores; core++) {
+      uint32_t fail_idx, fail_val;
+      uint32_t *check_ptr = gemm_A_dram + dim_core * core;
+      if (!check_const(check_ptr, local_len, 3, &fail_idx, &fail_val)) {
+        printf("FAIL at core %u idx %u addr %p exp 0x%x got 0x%x\n",
+               core, fail_idx, (void *)&check_ptr[fail_idx], 3, fail_val);
+        pass = 0;
+        break;
+      }
+    }
+    printf("Test 1 Complete\n");
+    printf("Result:%s\n", pass ? "PASS" : "FAIL");
+  }
+
+  sync_all();
+
+  // Shared side: load-only from gemm_D_dram.
+  // Inspect waveform to confirm traffic goes only to banks 1, 2, 3.
+  cache_flush_all(cid);
+  cache_cfg(cid, global_offset, 1);
+
+  if (cid == 0) {
+    printf("\nTest 2: Shared Load (waveform inspection)\n");
+    printf("dim per core:%u\n", global_len);
+    printf("d_ptr:%p\n", (void *)gemm_D_dram);
+  }
+
+  timed_stream_load(gemm_D_dram, global_len, cid);
+
+  if (cid == 0) {
+    printf("Test 2 Complete (check waveform: only banks 1-3 should be active)\n");
+  }
+
+  sync_all();
+
+  // ---------------------------------------------------------------------------
+  // 3 private + 1 shared
+  // ---------------------------------------------------------------------------
+  if (cid == 0) {
+    printf("\n***Testing 3-private 1-shared configuration***\n");
+  }
+
+  cache_cfg(cid, local_offset, 3);
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    printf("Configuration done!\n\n");
+  }
+
+  // Private side: copy gemm_C_dram -> gemm_A_dram, flush, check value 3.
+  a_local_ptr = gemm_A_dram + dim_core * cid;
+  b_local_ptr = gemm_C_dram + dim_core * cid;
+
+  if (cid == 0) {
+    printf("Test 1: Private Vector Copy + Flush + Check\n");
+    printf("dim per core:%u\n", local_len);
+    printf("a_ptr:%p\n", (void *)a_local_ptr);
+    printf("b_ptr:%p\n", (void *)b_local_ptr);
+  }
+
+  test1_cyc = timed_stream_copy_vec(a_local_ptr, b_local_ptr, local_len, cid);
+
+  if (cid == 0) {
+    printf("Vector copy complete\n");
+    printf("Cycles:%u cyc\n", test1_cyc);
+    printf("Flushing cache...\n");
+  }
+
+  cache_flush_all(cid);
+
+  if (cid == 0) {
+    int pass = 1;
+    for (uint32_t core = 0; core < num_cores; core++) {
+      uint32_t fail_idx, fail_val;
+      uint32_t *check_ptr = gemm_A_dram + dim_core * core;
+      if (!check_const(check_ptr, local_len, 3, &fail_idx, &fail_val)) {
+        printf("FAIL at core %u idx %u addr %p exp 0x%x got 0x%x\n",
+               core, fail_idx, (void *)&check_ptr[fail_idx], 3, fail_val);
+        pass = 0;
+        break;
+      }
+    }
+    printf("Test 1 Complete\n");
+    printf("Result:%s\n", pass ? "PASS" : "FAIL");
+  }
+
+  sync_all();
+
+  // Shared side: load-only from gemm_D_dram.
+  // Inspect waveform to confirm traffic goes only to bank 3.
+  cache_flush_all(cid);
+  cache_cfg(cid, global_offset, 3);
+
+  if (cid == 0) {
+    printf("\nTest 2: Shared Load (waveform inspection)\n");
+    printf("dim per core:%u\n", global_len);
+    printf("d_ptr:%p\n", (void *)gemm_D_dram);
+  }
+
+  timed_stream_load(gemm_D_dram, global_len, cid);
+
+  if (cid == 0) {
+    printf("Test 2 Complete (check waveform: only bank 3 should be active)\n");
+  }
+
+  sync_all();
+
   return 0;
 }
-
