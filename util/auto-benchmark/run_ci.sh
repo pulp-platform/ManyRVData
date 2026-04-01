@@ -57,3 +57,5 @@ done
 
 echo
 echo "All runs complete. Logs stored in $LOG_DIR"
+
+python3 check-ci.py $summary_file
