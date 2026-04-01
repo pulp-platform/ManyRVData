@@ -318,6 +318,19 @@ package cachepool_pkg;
     burst_len_t  burst_len;
   } burst_req_t;
 
+  // Cache flush/invalidation instruction issued by the peripheral flush controller.
+  // insn encoding:
+  //   2'b00 : flush private banks only
+  //   2'b01 : flush shared  banks only
+  //   2'b10 : flush all banks
+  //   2'b11 : invalidate (init) all banks
+  // tile_sel: one-hot mask over NumTiles. For insn != 2'b00 the peripheral
+  //           sets tile_sel to '1 (all tiles) for consistency.
+  typedef struct packed {
+    logic [1:0]          insn;
+    logic [NumTiles-1:0] tile_sel;
+  } cache_insn_t;
+
   typedef struct packed {
     logic                  for_write_pend;
     cache_ways_entry_ptr_t depth;

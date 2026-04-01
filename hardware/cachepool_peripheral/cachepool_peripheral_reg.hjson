@@ -173,6 +173,20 @@
         }]
     },
     {
+        name: "CFG_L1D_TILE_SEL",
+        desc: '''Controls Tiles to be flushed'''
+        // hwext: "true",
+        // hwqe: "true",
+        swaccess: "rw",
+        hwaccess: "hro",
+        resval: "0",
+        fields: [{
+            bits: "31:0",
+            name: "TILE",
+            desc: "Select the tile to be flush, only used in private partition flush."
+        }]
+    },
+    {
         name: "L1D_SPM_COMMIT",
         desc: '''Controls the L1 DCache flushing and invalidation.'''
         // hwext: "true",

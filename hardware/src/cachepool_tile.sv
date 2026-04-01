@@ -166,11 +166,11 @@ module cachepool_tile
     input  logic                                    icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]         cl_interrupt_i,
     input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
-    input  logic              [1:0]                 l1d_insn_i,
+    input  cache_insn_t                             l1d_insn_i,
     input  logic              [3:0]                 l1d_private_i,
     input  logic                                    l1d_insn_valid_i,
-    output logic              [NumL1CtrlTile-1:0]   l1d_insn_ready_o,
-    input  logic              [NumL1CtrlTile-1:0]   l1d_busy_i,
+    output logic                                    l1d_insn_ready_o,
+    input  logic                                    l1d_busy_i,
 
 
 
@@ -520,13 +520,13 @@ module cachepool_tile
       // Wire to Cache outputs
       unmerge_req[j].q       = tcdm_req[j].q;
       // invalidate the request when cache is busy
-      unmerge_req[j].q_valid = tcdm_req[j].q_valid && !(|l1d_busy_i);
+      unmerge_req[j].q_valid = tcdm_req[j].q_valid && !l1d_busy_i;
       unmerge_pready[j]      = 1'b1;
 
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
       tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
-      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !(|l1d_busy_i);
+      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !l1d_busy_i;
     end
 
   end
@@ -551,7 +551,7 @@ module cachepool_tile
 
   // Flush protection for remote ports.
   //
-  // During a flush (|l1d_busy_i) remote tiles must be fully stalled:
+  // During a flush (l1d_busy_i) remote tiles must be fully stalled:
   //   - q_valid gated : stops new requests being presented to the xbar
   //   - q_ready gated : stops the xbar accepting a request that is already
   //                     sitting at the input (spill register would otherwise
@@ -568,16 +568,16 @@ module cachepool_tile
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
       // Gate q_valid: prevent new requests entering the xbar.
       remote_req_gated[j].q       = remote_req_i[j].q;
-      remote_req_gated[j].q_valid = remote_req_i[j].q_valid && !(|l1d_busy_i);
+      remote_req_gated[j].q_valid = remote_req_i[j].q_valid && !l1d_busy_i;
 
       // Pass the full xbar response through, then gate only q_ready so the
       // remote tile cannot complete a handshake during a flush.
       remote_rsp_o[j]          = remote_rsp_xbar[j];
-      remote_rsp_o[j].q_ready  = remote_rsp_xbar[j].q_ready && !(|l1d_busy_i);
+      remote_rsp_o[j].q_ready  = remote_rsp_xbar[j].q_ready && !l1d_busy_i;
 
       // Gate response-ready back to us: prevent draining completions
       // of requests that arrived just before the flush.
-      remote_in_pready[j] = remote_rsp_ready_i[j] && !(|l1d_busy_i);
+      remote_in_pready[j] = remote_rsp_ready_i[j] && !l1d_busy_i;
     end
   end
 
@@ -743,6 +743,107 @@ module cachepool_tile
   cache_refill_rsp_chan_t [NumL1CtrlTile-1 : 0] cache_refill_rsp;
   logic                   [NumL1CtrlTile-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
 
+  // -------------------------------------------------------------------------
+  // Tile-level flush tracking
+  // -------------------------------------------------------------------------
+  //
+  // flush_pending_q : set when this tile accepts an instruction, cleared when
+  //                   all targeted controllers complete (cache_flush_q == 0).
+  //                   Prevents accepting a second instruction mid-flush.
+  //
+  // cache_flush_q[cb] : per-controller pending bit.  Set when ctrl_sync_valid
+  //                     is asserted to controller cb; cleared on ctrl_sync_ready.
+  //
+  // ctrl_sync_valid[cb] : per-controller valid, gated by partition membership.
+  // ctrl_sync_insn[cb]  : per-controller insn encoding (translated to 2-bit
+  //                       controller encoding: flush->2'b00, init->2'b11).
+  // ctrl_sync_ready[cb] : wired back from cache controller.
+  //
+  // l1d_insn_ready_o : one-cycle pulse to peripheral when flush_pending_q
+  //                    is asserted and cache_flush_d has just reached zero.
+  //                    Using cache_flush_d (not _q) avoids the one-cycle delay
+  //                    that _q would introduce.  No combinational loop exists
+  //                    because l1d_insn_ready_o feeds only the peripheral lock
+  //                    register, which has no same-cycle path back into the tile.
+
+  // Determine whether this tile should act on the incoming instruction.
+  // Private flush (insn==00): only if our tile_id bit is set in tile_sel.
+  // All other modes: always act.
+  logic tile_insn_active;
+  always_comb begin : gen_tile_active
+    if (l1d_insn_i.insn == 2'b00)
+      tile_insn_active = l1d_insn_i.tile_sel[tile_id_i];
+    else
+      tile_insn_active = 1'b1;
+  end
+
+  // Per-controller signals driven by the flush tracking logic.
+  logic [NumL1CtrlTile-1:0] ctrl_sync_valid;
+  logic [1:0]               ctrl_sync_insn [NumL1CtrlTile-1:0];
+  logic [NumL1CtrlTile-1:0] ctrl_sync_ready;
+
+  logic [NumL1CtrlTile-1:0] cache_flush_d, cache_flush_q;
+  logic                     flush_pending_d, flush_pending_q;
+
+  // Determine which controllers to activate based on insn partition field.
+  //   insn==00 (private) : cb < num_private_cache
+  //   insn==01 (shared)  : cb >= num_private_cache
+  //   insn==10 or 11     : all controllers
+  always_comb begin : gen_ctrl_valid
+    for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
+      ctrl_sync_valid[cb] = 1'b0;
+      ctrl_sync_insn[cb]  = 2'b00; // default: flush encoding for controller
+
+      if (l1d_insn_valid_i && tile_insn_active && !flush_pending_q) begin
+        case (l1d_insn_i.insn)
+          2'b00: begin // flush private
+            ctrl_sync_valid[cb] = (cb < int'(num_private_cache));
+          end
+          2'b01: begin // flush shared
+            ctrl_sync_valid[cb] = (cb >= int'(num_private_cache));
+          end
+          2'b10: begin // flush all
+            ctrl_sync_valid[cb] = 1'b1;
+          end
+          2'b11: begin // invalidate all
+            ctrl_sync_valid[cb] = 1'b1;
+            ctrl_sync_insn[cb]  = 2'b11;
+          end
+          default: ctrl_sync_valid[cb] = 1'b0;
+        endcase
+      end
+    end
+  end
+
+  // Flush pending and per-controller tracking (combinational next-state).
+  always_comb begin : gen_flush_next
+    cache_flush_d   = cache_flush_q;
+    flush_pending_d = flush_pending_q;
+
+    // Set bits for controllers being activated this cycle.
+    for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
+      if (ctrl_sync_valid[cb])
+        cache_flush_d[cb] = 1'b1;
+      // Clear bit when controller returns ready (one-cycle pulse).
+      if (ctrl_sync_ready[cb])
+        cache_flush_d[cb] = 1'b0;
+    end
+
+    // Raise flush_pending when accepting a new instruction.
+    if (l1d_insn_valid_i && tile_insn_active && !flush_pending_q)
+      flush_pending_d = 1'b1;
+
+    // Clear flush_pending once all controllers have finished.
+    if (flush_pending_q && (cache_flush_d == '0))
+      flush_pending_d = 1'b0;
+  end
+
+  `FF(cache_flush_q,   cache_flush_d,   '0, clk_i, rst_ni)
+  `FF(flush_pending_q, flush_pending_d, '0, clk_i, rst_ni)
+
+  // One-cycle ready pulse to the peripheral when flush completes.
+  assign l1d_insn_ready_o = flush_pending_q && (cache_flush_d == '0);
+
   for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin: gen_l1_cache_ctrl
     cachepool_cache_ctrl #(
       // Core
@@ -769,9 +870,9 @@ module cachepool_tile
       .rst_ni                (rst_ni                         ),
       .impl_i                ('0                             ),
       // Sync Control
-      .cache_sync_valid_i    (l1d_insn_valid_i               ),
-      .cache_sync_ready_o    (l1d_insn_ready_o[cb]           ),
-      .cache_sync_insn_i     (l1d_insn_i                     ),
+      .cache_sync_valid_i    (ctrl_sync_valid[cb]            ),
+      .cache_sync_ready_o    (ctrl_sync_ready[cb]            ),
+      .cache_sync_insn_i     (ctrl_sync_insn[cb]             ),
       // SPM Size
       // The calculation of spm region in cache is different
       // than other modules (needs to times 2)
