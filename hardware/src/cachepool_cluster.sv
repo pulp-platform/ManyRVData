@@ -236,10 +236,10 @@ module cachepool_cluster
   logic              [NrCores-1:0]         cl_interrupt;
   logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
   logic              [3:0]                 l1d_private;
-  logic              [1:0]                 l1d_insn;
+  cache_insn_t                             l1d_insn;
   logic                                    l1d_insn_valid;
-  logic              [NumL1CacheCtrl-1:0]  l1d_insn_ready;
-  logic              [NumL1CacheCtrl-1:0]  l1d_busy;
+  logic              [NumTiles-1:0]        l1d_insn_ready;
+  logic              [NumTiles-1:0]        l1d_busy;
 
   // ---------------
   // CachePool Tile
@@ -978,11 +978,10 @@ module cachepool_cluster
   cachepool_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
-    .NumCacheCtrl  (NumL1CacheCtrl  ),
+    .NumTiles      (NumTiles        ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
-    .tcdm_events_t (tcdm_events_t   ),
-    .dma_events_t  (dma_events_t    ),
+    .cache_insn_t  (cache_insn_t    ),
     .NrCores       (NrCores         )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    (clk_i                 ),

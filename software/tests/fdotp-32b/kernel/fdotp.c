@@ -45,7 +45,7 @@ float fdotp_v32b_lmul8(const float *a, const float *b, const unsigned int offset
   asm volatile("vfmul.vv v24, v8, v16");
 
   // Stripmine and accumulate a partial reduced vector
-  do {
+  while (iter > 0) {
     // Load chunk a and b
     a += offset;
     asm volatile("vle32.v v8,  (%0)" ::"r"(a));
@@ -55,7 +55,7 @@ float fdotp_v32b_lmul8(const float *a, const float *b, const unsigned int offset
 
     // Multiply and accumulate
     asm volatile("vfmacc.vv v24, v8, v16");
-  } while (iter > 0);
+  }
 
   // Reduce and return
   asm volatile("vfredusum.vs v0, v24, v0");

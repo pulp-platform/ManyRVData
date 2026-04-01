@@ -153,10 +153,10 @@ module cachepool_group
     input  logic                          [NrCores-1:0] cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
     input  logic                                  [3:0] l1d_private_i,
-    input  logic                                  [1:0] l1d_insn_i,
+    input  cache_insn_t                                   l1d_insn_i,
     input  logic                                        l1d_insn_valid_i,
-    output logic                   [NumL1CacheCtrl-1:0] l1d_insn_ready_o,
-    input  logic                   [NumL1CacheCtrl-1:0] l1d_busy_i,
+    output logic                       [NumTiles-1:0] l1d_insn_ready_o,
+    input  logic                       [NumTiles-1:0] l1d_busy_i,
 
     /// SRAM Configuration
     input  impl_in_t                    [NrSramCfg-1:0] impl_i,
@@ -348,8 +348,8 @@ module cachepool_group
       .l1d_insn_i               ( l1d_insn_i                                                  ),
       .l1d_private_i            ( l1d_private_i                                               ),
       .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
-      .l1d_insn_ready_o         ( l1d_insn_ready_o  [t*NumL1CtrlTile+:NumL1CtrlTile]          ),
-      .l1d_busy_i               ( l1d_busy_i        [t*NumL1CtrlTile+:NumL1CtrlTile]          )
+      .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
+      .l1d_busy_i               ( l1d_busy_i        [t]                                       )
     );
   end
 

@@ -13,12 +13,11 @@ module cachepool_peripheral
   parameter int unsigned AddrWidth    = 0,
   parameter int unsigned DMADataWidth = 0,
   parameter int unsigned SPMWidth     = 0,
-  // Used to generate the cache busy signal
-  parameter int unsigned NumCacheCtrl = 1,
+  // Number of tiles (used for flush controller granularity)
+  parameter int unsigned NumTiles     = 1,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
-  parameter type         tcdm_events_t = logic,
-  parameter type         dma_events_t = logic,
+  parameter type cache_insn_t = logic,
   // Nr of course in the cluster
   parameter logic [31:0] NrCores       = 0,
   /// Derived parameter *Do not override*
@@ -43,19 +42,11 @@ module cachepool_peripheral
   output logic [4:0]                 dynamic_offset_o,
   output spm_size_t                  l1d_spm_size_o,
   output logic [3:0]                 l1d_private_o,
-  output logic [1:0]                 l1d_insn_o,
+  output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
-  input  logic [NumCacheCtrl-1:0]    l1d_insn_ready_i,
-  output logic [NumCacheCtrl-1:0]    l1d_busy_o
+  input  logic [NumTiles-1:0]        l1d_insn_ready_i,
+  output logic [NumTiles-1:0]        l1d_busy_o
 );
-
-  // Pipeline register to ease timing.
-  // tcdm_events_t tcdm_events_q;
-  // dma_events_t dma_events_q;
-  // snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events_q;
-  // `FF(tcdm_events_q, tcdm_events_i, '0)
-  // `FF(dma_events_q, dma_events_i, '0)
-  // `FF(icache_events_q, icache_events_i, '0)
 
   cachepool_peripheral_reg2hw_t reg2hw;
   cachepool_peripheral_hw2reg_t hw2reg;
@@ -98,13 +89,13 @@ module cachepool_peripheral
 
   //////////// L1 DCache ////////////
   logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
-  logic [31:0] cl_clint_d, cl_clint_q;
-  logic [9:0]  l1d_spm_size_d, l1d_spm_size_q;
-  logic [3:0]  l1d_private_d, l1d_private_q;
-  addr_t       private_start_addr_d, private_start_addr_q;
+  logic [31:0]          cl_clint_d, cl_clint_q;
+  logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
+  logic [3:0]           l1d_private_d, l1d_private_q;
+  addr_t                private_start_addr_d, private_start_addr_q;
   // L1 is running flush/invalidation
-  logic [NumCacheCtrl-1:0]       l1d_lock_d, l1d_lock_q;
-  logic        l1d_spm_commit, l1d_insn_commit;
+  logic [NumTiles-1:0]  l1d_lock_d, l1d_lock_q;
+  logic                 l1d_spm_commit, l1d_insn_commit;
 
   // L1D Cache
   // For committing the cfg, if the cfg is taken, it will be pulled to 0;
@@ -135,7 +126,10 @@ module cachepool_peripheral
   assign l1d_private_o        = l1d_private_q;
   assign private_start_addr_o = private_start_addr_q;
 
-  // Cache Flush
+  // Cache Flush Controller
+  // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is
+  // issued an instruction and cleared when tile t returns ready.
+  // Busy is asserted while any selected tile has not yet completed.
   always_comb begin : l1d_insn_cfg
     // Flush takes time, we cannot take next insn while flushing
     l1d_insn_o            = '0;
@@ -152,25 +146,28 @@ module cachepool_peripheral
       private_start_addr_d  = reg2hw.l1d_addr.q;
       // User issues a flush/invalidation
       if (|l1d_lock_q == '0) begin
-        // We are ready to accept a flush
-        l1d_insn_o        = reg2hw.cfg_l1d_insn.q;
-        l1d_insn_valid_o  = 1'b1;
-        // Cache busy now!
-        l1d_lock_d        = {NumCacheCtrl{1'b1}};
+        // We are ready to accept a new instruction.
+        // Build the cache_insn_t: pack insn + tile_sel.
+        // For non-private modes (shared/all/init), tile_sel is forced to '1.
+        l1d_insn_o.insn     = reg2hw.cfg_l1d_insn.q;
+        l1d_insn_o.tile_sel = (reg2hw.cfg_l1d_insn.q == 2'b00)
+                            ? reg2hw.cfg_l1d_tile_sel.q[NumTiles-1:0]
+                            : {NumTiles{1'b1}};
+        l1d_insn_valid_o    = 1'b1;
+        // Lock only the tiles that will receive the instruction.
+        l1d_lock_d          = l1d_insn_o.tile_sel;
         // Clear the commit
         hw2reg.l1d_insn_commit.d  = 1'b0;
         hw2reg.l1d_insn_commit.de = 1'b1;
       end
     end
 
-    for (int i = 0; i < NumCacheCtrl; i++) begin
-      // unlock
-      if (l1d_insn_ready_i[i]) begin
-        // Cache finishes previous insn, remove lock!
-        l1d_lock_d[i] --;
+    for (int t = 0; t < NumTiles; t++) begin
+      // Unlock tile t when it signals completion (one-cycle ready pulse).
+      if (l1d_insn_ready_i[t]) begin
+        l1d_lock_d[t] = 1'b0;
       end
-
-      l1d_busy_o[i] = l1d_lock_q[i];
+      l1d_busy_o[t] = l1d_lock_q[t];
     end
   end
 
@@ -200,55 +197,7 @@ module cachepool_peripheral
   // Probe
   assign cluster_probe_o = reg2hw.spatz_status.q;
 
-  // // Continuously assign the perf values.
-  // for (genvar i = 0; i < NumPerfCounters; i++) begin : gen_perf_assign
-  //   assign hw2reg.perf_counter[i].d = perf_counter_q[i];
-  // end
-
   // The hardware barrier is external and always reads `0`.
   assign hw2reg.hw_barrier.d = 0;
-
-  // always_comb begin
-  //   perf_counter_d = perf_counter_q;
-  //   for (int i = 0; i < NumPerfCounters; i++) begin
-  //     automatic core_events_t sel_core_events;
-  //     sel_core_events = core_events_i[reg2hw.hart_select[i].q[$clog2(NrCores):0]];
-  //     // Cycle
-  //     if (reg2hw.perf_counter_enable[i].cycle.q) begin
-  //       perf_counter_d[i]++;
-  //     end
-  //     // Per-hart performance counter.
-  //     // Issue FPU
-  //     else if (reg2hw.perf_counter_enable[i].issue_fpu.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu;
-  //     end
-  //     // Issue FPU Sequencer
-  //     else if (reg2hw.perf_counter_enable[i].issue_fpu_seq.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_fpu_seq;
-  //     end
-  //     // Issue Core to FPU
-  //     else if (reg2hw.perf_counter_enable[i].issue_core_to_fpu.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.issue_core_to_fpu;
-  //     end
-  //     // Retired instructions
-  //     else if (reg2hw.perf_counter_enable[i].retired_instr.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_instr;
-  //     end
-  //     // Retired load instructions
-  //     else if (reg2hw.perf_counter_enable[i].retired_load.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_load;
-  //     end
-  //     // Retired base instructions
-  //     else if (reg2hw.perf_counter_enable[i].retired_i.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_i;
-  //     end
-  //     // Retired offloaded instructions
-  //     else if (reg2hw.perf_counter_enable[i].retired_acc.q) begin
-  //       perf_counter_d[i] = perf_counter_d[i] + sel_core_events.retired_acc;
-  //     end
-  //   end
-  // end
-
-  // `FF(perf_counter_q, perf_counter_d, '0, clk_i, rst_ni)
 
 endmodule

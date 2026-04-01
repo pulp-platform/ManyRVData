@@ -50,11 +50,39 @@ void l1d_init(uint32_t size) {
   // l1d_spm_config(size);
 }
 
+// Flush all partition in all tiles
 void l1d_flush() {
   uint32_t *insn =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
+  // 2'b10 stands for flush all
+  *insn = 2;
+  l1d_commit();
+}
+
+// Flush private partitions in input tiles (onehot)
+void l1d_private_flush(uint32_t tile) {
+  uint32_t *insn =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
+  // 2'b00 stands for flush all
   *insn = 0;
+
+  uint32_t *tile_reg =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_REG_OFFSET);
+  // 2'b00 stands for flush all
+  *tile_reg = tile;
+  l1d_commit();
+}
+
+// Flush shared partitions in all tiles
+void l1d_shared_flush() {
+  uint32_t *insn =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
+  // 2'b01 stands for flush all
+  *insn = 1;
   l1d_commit();
 }
 
