@@ -119,6 +119,7 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 | `configs.sh` | Defines configurations (`CONFIGS`) and kernel suffixes (`KERNELS`) to test, along with optional `PREFIX` and `ROOT_PATH`. |
 | `run_all.sh` | Main automation script that builds each configuration, runs all kernels, saves logs, and generates summaries. |
 | `write_results.py` | Extracts `[UART]` lines from simulator logs and appends them to per-configuration summary files. |
+| `check_ci.py` | Scans a simulation log for failures and exits non-zero if any are found (see [CI Checking](#ci-checking)). |
 
 ### Usage
 
@@ -158,6 +159,21 @@ Each run includes:
 - `*_summary.txt` — `[UART]` summaries for each configuration, grouped by kernel with clear headers
 
 This setup allows quick reproducible benchmarks with all results neatly organized per run.
+
+### CI Checking
+
+`check_ci.py` scans a simulation log and exits non-zero if any failure is detected, making it suitable for integration into CI pipelines. It flags the following patterns:
+
+- Any line containing `FAIL` or `[FAIL]` (case-insensitive)
+- Any line matching `error <N>` where N is non-zero (`error 0` is treated as pass)
+
+Usage:
+
+```bash
+python3 check_ci.py logs/latest/cachepool_fpu_512_load-store.log
+```
+
+Exit code 0 means all tests passed; exit code 1 means at least one failure was detected. On failure the offending lines and their line numbers are printed for manual inspection.
 
 ## Configurations
 
@@ -204,17 +220,73 @@ make generate config=cachepool_fpu_512
 
 ## Cache Bank Partitioning
 
-L1 cache banks can be partitioned at runtime between a **shared pool** (accessible cluster-wide via the interconnect) and a **private partition** (local to each tile). Three modes are currently supported:
+L1 cache banks can be partitioned at runtime between a **shared pool** (accessible cluster-wide via the interconnect) and a **private partition** (local to each tile). Five modes are supported:
 
-| Mode | Description |
-|------|-------------|
-| All-shared | All banks contribute to the cluster-wide interleaved pool |
-| All-private | All banks are local to the tile, not visible to remote tiles |
-| Half-private / half-shared | Half the banks are private, half remain in the shared pool |
+| Mode | `l1d_part` value | Private banks | Shared banks |
+|------|-----------------|---------------|--------------|
+| All-shared | 0 | none | all |
+| 1 private, 3 shared | 1 | 1 | 3 |
+| Half-half | 2 | 2 | 2 |
+| 3 private, 1 shared | 3 | 3 | 1 |
+| All-private | 4 | all | none |
+
+Private banks are local to each tile and not visible to remote tiles. Shared banks participate in the cluster-wide interleaved pool. For non-power-of-2 partition sizes (1 or 3 banks), bank selection uses modulo folding, which causes slightly uneven bank utilisation.
 
 Partitioning is controlled via the `l1d_private` memory-mapped register in the cluster peripheral. The interconnect (`tcdm_cache_interco`) uses a runtime-configurable address rotation scheme to present a dense index space to each cache bank regardless of partition mode, preserving full SRAM utilization. The refill unit applies the inverse rotation before issuing misses to the NoC.
 
-> Changing the partition mode while the cache contains valid data requires a flush first.
+### Private/shared address classification
+
+The boundary between private and shared address regions is configurable at runtime via `l1d_addr(...)`:
+
+- Addresses **≥ boundary** are classified as **private**
+- Addresses **<  boundary** are classified as **shared**
+
+The default boundary is `0xA000_0000`. This means data in `.pdcp_src` (at `0xA000_0000+`) is private by default, and data in `.data` (at `0x8000_0000+`) is shared by default. The boundary can be raised or lowered at runtime to reclassify data regions without moving them in memory.
+
+> Changing either the partition mode or the boundary address while the cache contains valid data requires a flush first.
+
+## Cache Flushing
+
+Flush instructions are issued through the cluster peripheral and dispatched to cache controllers via a two-level controller:
+
+- **Cluster level** (`cachepool_peripheral`): holds the instruction and a per-tile one-hot tile-select mask. Issues the instruction to all tiles simultaneously and tracks completion at tile granularity.
+- **Tile level** (`cachepool_tile`): receives the instruction, determines which of its local cache controllers to activate based on the partition field, and returns a single ready pulse to the cluster controller when all targeted controllers finish.
+
+### Flush instruction encoding
+
+| `insn` value | Operation | Banks targeted | Tile select |
+|-------------|-----------|----------------|-------------|
+| `2'b00` | Flush private | Private banks only | Per-tile one-hot mask |
+| `2'b01` | Flush shared | Shared banks only | All tiles (forced) |
+| `2'b10` | Flush all | All banks | All tiles (forced) |
+| `2'b11` | Invalidate (init) | All banks | All tiles (forced) |
+
+For `insn != 2'b00`, the peripheral sets the tile-select mask to all-ones for consistency.
+
+### Software API
+
+```c
+// Flush all banks in all tiles (existing behaviour)
+l1d_flush();
+
+// Flush private banks in selected tiles (one-hot tile mask)
+l1d_private_flush(uint32_t tile_mask);
+
+// Flush shared banks in all tiles
+l1d_shared_flush();
+
+// Set the private/shared address boundary
+l1d_addr(uint32_t addr);
+
+// Poll until all pending flush operations complete
+l1d_wait();
+```
+
+### Flush completion
+
+Each tile tracks completion per cache controller using a `cache_flush_q` register (one bit per controller). The tile asserts a one-cycle ready pulse to the cluster controller when all targeted controllers have finished. The cluster controller uses a per-tile lock register to track in-flight flushes; a new instruction cannot be issued until all selected tiles report completion.
+
+Cache accesses from cores and remote tiles are gated (`l1d_busy`) while a flush is in progress, preventing stale hits during the flush window.
 
 ## Snitch–Spatz Core Complex
 
@@ -237,6 +309,7 @@ Cluster peripherals (including the BootROM and memory-mapped registers) are inst
 | `0x0000_0000` | `0x0000_1000`| Unused        | —                                    |
 | `0x0000_1000` | `0x0000_1000`| Boot ROM      | Boot address typically `0x0000_1000` |
 | `0x8000_0000` | `0x2000_0000`| DRAM          | 512 MiB (default in template)        |
+| `0xA000_0000` | —            | Private boundary | Default `l1d_addr` value; addresses ≥ this are private |
 | `0xBFFF_F800` | `0x0000_0200`| Stack (local) | Example stack window                 |
 | `0xC000_0000` | `0x2000_0000`| Uncached      | MMIO/peripherals region              |
 | `0xC001_0000` | `0x0000_1000`| UART          | UART base inside peripheral window   |
@@ -257,3 +330,4 @@ make lint config=cachepool_fpu_512
 - If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
 - Use `make clean` when switching flavors/configs to prevent stale build artifacts.
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
+- Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_flush()` or the appropriate partition flush) before reconfiguring.
