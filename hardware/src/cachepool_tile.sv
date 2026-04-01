@@ -834,23 +834,29 @@ module cachepool_tile
     //             & ((1 << (AddrWidth-offset-N)) - 1)
     //   original  = lower | (rot_field << offset) | (upper << (offset + N))
     //
-    // N per bank mirrors tcdm_cache_interco:
-    //   All-shared  / half-half shared  (cb >= NumL1CtrlTile/2):
-    //     N = RefillCacheBankBits + RefillTileBits
-    //   All-private / half-half private (cb <  NumL1CtrlTile/2):
+    // N per bank mirrors tcdm_cache_interco gen_scramble:
+    //   Private banks (cb < num_private_cache):
     //     N = RefillCacheBankBits
+    //   Shared banks (cb >= num_private_cache):
+    //     N = RefillCacheBankBits + RefillTileBits
     //
-    // cb is a genvar constant → static per-bank elaboration.
+    // cb is a genvar constant → static per-bank elaboration, but the
+    // boundary (num_private_cache) is a registered runtime signal.
 
     logic [RefillRotWidth-1:0] refill_bits_to_rotate;
 
     always_comb begin : refill_rot_sel
       if (num_private_cache == '0) begin
+        // All-shared: every bank is shared.
         refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
       end else if (num_private_cache == 3'(NumL1CtrlTile)) begin
+        // All-private: every bank is private.
         refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
       end else begin
-        if (cb < NumL1CtrlTile / 2)
+        // Mixed: use num_private_cache boundary, mirroring gen_scramble in
+        // tcdm_cache_interco.  Banks [0..num_private_cache-1] are private,
+        // banks [num_private_cache..NumL1CtrlTile-1] are shared.
+        if (cb < int'(num_private_cache))
           refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
         else
           refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);

@@ -6,19 +6,21 @@
 
 // The cache xbar used to select the cache banks.
 //
-// Supports three cache partitioning modes, selected at runtime via
+// Supports cache partitioning modes, selected at runtime via
 // num_private_cache_i (registered one cycle):
 //
-//   Mode          | num_private_cache_q | Private banks | Shared banks
-//   --------------|---------------------|---------------|-------------
-//   All-shared    |          0          |     none      | [0..N-1]
-//   Half-half     |         N/2         | [0..N/2-1]   | [N/2..N-1]
-//   All-private   |          N          | [0..N-1]      |     none
+//   Mode          | num_private_cache_q | Private banks       | Shared banks
+//   --------------|---------------------|---------------------|-------------------
+//   All-shared    |          0          | none                | [0..N-1]
+//   1-priv 3-shr  |          1          | [0]                 | [1..N-1]
+//   Half-half     |         N/2         | [0..N/2-1]          | [N/2..N-1]
+//   3-priv 1-shr  |         N-1         | [0..N-2]            | [N-1]
+//   All-private   |          N          | [0..N-1]            | none
 //
-// Private banks are local to this tile only.  Shared banks participate in
-// the cluster-wide interleaved pool.
-//
-// Private vs. shared is currently identified by a fixed address threshold
+// Bank selection uses modulo folding so that any partition size is supported:
+//   private_bank = addr_bank_bits % num_private_cache_q
+//   shared_bank  = num_private_cache_q + (addr_bank_bits % num_shared_cache_q)
+// For non-power-of-2 partition sizes this causes uneven bank utilisation.
 
 `include "common_cells/registers.svh"
 
@@ -201,54 +203,58 @@ module tcdm_cache_interco #(
   //              ^-- [offset+CacheBankBits+TileBits-1 : offset+CacheBankBits]
   //                         ^-- [offset+CacheBankBits-1 : offset]
   //
-  // In half-half mode (NumCache=4, NumCache/2=2):
-  //   Private banks : ports 0..1  (BankSel MSB forced to 0)
-  //   Shared  banks : ports 2..3  (BankSel MSB forced to 1)
+  // Partitioning supports any num_private_cache_q in [0..NumCache]:
+  //   Private banks : ports [0 .. num_private_cache_q-1]
+  //   Shared  banks : ports [num_private_cache_q .. NumCache-1]
   //
-  // The raw BankSel bits in the address cannot be used directly because
-  // arbitrary shared/private addresses may have any BankSel pattern.
-  // The MSB is overridden based on the is_private classification so that
-  // private requests always land in [0..N/2-1] and shared in [N/2..N-1].
-  // Only the LSB(s) are taken from the address to select within each half.
+  // Bank selection uses modulo folding:
+  //   private_bank = (addr_bank_bits % num_private_cache_q)
+  //   shared_bank  = num_private_cache_q + (addr_bank_bits % num_shared_cache_q)
+  //
+  // For power-of-2 partition sizes this reduces to a simple bit mask.
+  // For non-power-of-2 sizes (e.g. 3) the modulo is a small comparator since
+  // addr_bank_bits is only CacheBankBits wide.
 
   for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_req_sel
+    logic [CacheBankBits-1:0] addr_bank;
+
     always_comb begin
       // Defaults.
       local_sel[port]    = 1'b1;
       core_req_sel[port] = '0;
 
+      // Extract the raw BankSel field from the address.
+      addr_bank = core_req[port].addr[dynamic_offset_i +: CacheBankBits];
+
       if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache) || NumTiles == 1) begin
         // All-private or single-tile: every request is local.
-        // Use the full BankSel field directly.
+        // Use the full BankSel field directly (no folding needed).
         local_sel[port]    = 1'b1;
-        core_req_sel[port] = core_sel_t'(core_req[port].addr[dynamic_offset_i +: CacheBankBits]);
+        core_req_sel[port] = core_sel_t'(addr_bank);
 
       end else if (num_private_cache_q == '0) begin
         // All-shared: check TileID to decide local vs. remote.
-        // Use the full BankSel field directly.
+        // Use the full BankSel field directly (no folding needed).
         local_sel[port] =
           (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
         core_req_sel[port] = local_sel[port]
-                           ? core_sel_t'(core_req[port].addr[dynamic_offset_i +: CacheBankBits])
+                           ? core_sel_t'(addr_bank)
                            : core_sel_t'(NumCache);
 
       end else begin
-        // Half-half: MSB of BankSel is determined by partition, not address.
-        // Only the lower (CacheBankBits-1) address bits select within the half.
+        // Mixed: fold addr_bank into the appropriate partition via modulo.
         if (is_private[port]) begin
-          // Private request: always local, routed to banks [0..NumCache/2-1].
-          // Force BankSel MSB = 0.
+          // Private request: always local.
+          // bank = addr_bank % num_private_cache_q, offset from bank 0.
           local_sel[port]    = 1'b1;
-          core_req_sel[port] = core_sel_t'({1'b0,
-            core_req[port].addr[dynamic_offset_i +: CacheBankBits-1]});
+          core_req_sel[port] = core_sel_t'(addr_bank % num_private_cache_q);
         end else begin
-          // Shared request: check TileID, routed to banks [NumCache/2..NumCache-1].
-          // Force BankSel MSB = 1.
+          // Shared request: check TileID to decide local vs. remote.
+          // bank = num_private_cache_q + (addr_bank % num_shared_cache_q).
           local_sel[port] =
             (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
           core_req_sel[port] = local_sel[port]
-                             ? core_sel_t'({1'b1,
-                                 core_req[port].addr[dynamic_offset_i +: CacheBankBits-1]})
+                             ? core_sel_t'(num_private_cache_q + (addr_bank % num_shared_cache_q))
                              : core_sel_t'(NumCache);
         end
       end
@@ -323,11 +329,13 @@ module tcdm_cache_interco #(
   //
   // Rotation per mode / bank port (N = bits_to_rotate):
   //
-  //   Mode         | port < NumCache/2 (private) | port >= NumCache/2 (shared)
-  //   -------------|-----------------------------|--------------------------
-  //   All-shared   |            N/A              | CacheBankBits + TileBits
-  //   Half-half    |        CacheBankBits        | CacheBankBits + TileBits
-  //   All-private  |        CacheBankBits        |           N/A
+  //   Mode                      | port < num_private_cache_q  | port >= num_private_cache_q
+  //   --------------------------|-----------------------------|--------------------------
+  //   All-shared   (priv=0)     |            N/A              | CacheBankBits + TileBits
+  //   1-private  3-shared       |        CacheBankBits        | CacheBankBits + TileBits
+  //   Half-half  (priv=N/2)     |        CacheBankBits        | CacheBankBits + TileBits
+  //   3-private  1-shared       |        CacheBankBits        | CacheBankBits + TileBits
+  //   All-private  (priv=N)     |        CacheBankBits        |           N/A
   //
   // Construction (all arithmetic on addr_t width to avoid overflow):
   //
@@ -354,15 +362,17 @@ module tcdm_cache_interco #(
       //              shared  ports rotate BankSel + TileID.
       // The port index is a genvar constant so the if/else is static per bank.
       if (num_private_cache_q == '0) begin
+        // All-shared: every bank is shared.
         bits_to_rotate = RotWidth'(CacheBankBits + TileBits);
-      end else if (num_private_cache_q == RotWidth'(NumCache)) begin
+      end else if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache)) begin
+        // All-private: every bank is private.
         bits_to_rotate = RotWidth'(CacheBankBits);
       end else begin
-        // Half-half.
-        if (port < NumCache / 2)
-          bits_to_rotate = RotWidth'(CacheBankBits);        // private bank
+        // Mixed: port index determines private vs. shared.
+        if (port < int'(num_private_cache_q))
+          bits_to_rotate = RotWidth'(CacheBankBits);             // private bank
         else
-          bits_to_rotate = RotWidth'(CacheBankBits + TileBits); // shared bank
+          bits_to_rotate = RotWidth'(CacheBankBits + TileBits);  // shared bank
       end
     end
 
