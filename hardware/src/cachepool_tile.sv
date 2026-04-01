@@ -778,12 +778,12 @@ module cachepool_tile
   end
 
   // Per-controller signals driven by the flush tracking logic.
-  logic [NumL1CtrlTile-1:0] ctrl_sync_valid;
-  logic [1:0]               ctrl_sync_insn [NumL1CtrlTile-1:0];
-  logic [NumL1CtrlTile-1:0] ctrl_sync_ready;
+  logic [NumL1CtrlTile-1:0]       ctrl_sync_valid;
+  logic [NumL1CtrlTile-1:0][1:0]  ctrl_sync_insn;
+  logic [NumL1CtrlTile-1:0]       ctrl_sync_ready;
 
-  logic [NumL1CtrlTile-1:0] cache_flush_d, cache_flush_q;
-  logic                     flush_pending_d, flush_pending_q;
+  logic [NumL1CtrlTile-1:0]       cache_flush_d, cache_flush_q;
+  logic                           flush_pending_d, flush_pending_q;
 
   // Determine which controllers to activate based on insn partition field.
   //   insn==00 (private) : cb < num_private_cache
