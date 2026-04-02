@@ -29,6 +29,27 @@
 
 #define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes
 
+typedef struct {
+   char data[CACHE_LINE_SIZE];
+} RcvPktHeader;
+
+typedef struct {
+   char content[CACHE_LINE_SIZE / 2];
+} DlschInd;
+
+typedef struct {
+   DlschInd dlschInd;
+   char reserve[2 *CACHE_LINE_SIZE - sizeof(DlschInd) - 4];
+   uint32_t sduNum;
+   uint32_t sudBytes;
+   uint32_t totalPdlLen;
+   uint32_t rlcDpbPduCnt;
+} TestDataStru;
+
+typedef struct {
+   char stateRpt[2048];
+} UeStateRpt;
+
 /* rlc_context_t maintains the state of the RLC kernel, including:
 
    - rlcId: Unique identifier for the RLC entity.
@@ -68,9 +89,22 @@ typedef struct {
    _Atomic unsigned int pollByte __attribute__((aligned(4)));
    unsigned int pduWithoutPoll __attribute__((aligned(4)));  /* Indicates the total number of PDUs that are not polled. */
    unsigned int byteWithoutPoll __attribute__((aligned(4))); /* Indicates the total bytes of PDUs that are not polled. */
-
-   // unsigned int sduNum; /* Number of sdus to be sent */
-   // unsigned int sduBytes; /* Number of sdus bytes to be sent */
+   _Atomic unsigned int pingFlag __attribute__((aligned(4)));
+   _Atomic unsigned int recvMaxByte __attribute__((aligned(4)));
+   _Atomic unsigned int sduNumCong __attribute__((aligned(4)));
+   _Atomic unsigned int sudCongState __attribute__((aligned(4)));
+   _Atomic unsigned int pktdelayEnqueFlag __attribute__((aligned(4)));
+   unsigned int firstSduPktRxCycle __attribute__((aligned(4)));
+   _Atomic unsigned int recvPdcpPduBytes __attribute__((aligned(4)));
+   unsigned int lastRcvOrSubmitDataCyc __attribute__((aligned(4)));
+   _Atomic unsigned int sduNum; /* Number of sdus to be sent */
+   _Atomic unsigned int sduBytes; /* Number of sdus bytes to be sent */
+   
+   char Reserve0[CACHE_LINE_SIZE-16] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
+   _Atomic unsigned int rcvPktNum __attribute__((aligned(4)));   
+   _Atomic unsigned int rcvPktLength __attribute__((aligned(4)));
+   _Atomic unsigned int enQuePktNum __attribute__((aligned(4)));
+   _Atomic unsigned int enQuePktLength __attribute__((aligned(4)));   
    // void *sduLinkHdr; /* First SDU to be sent */
    // void *sduLinkTail; /* Last SDU to be sent */
    LinkedList list __attribute__((aligned(4)));
@@ -78,12 +112,25 @@ typedef struct {
 
    _Atomic unsigned int vtNextAck __attribute__((aligned(4))); /* First SN to be confirmed */
    unsigned int vtNext __attribute__((aligned(4))); /* Next Available RLCSN */
-   // unsigned int sendPduNum; /* Number of pdus to be confirmed */
-   // unsigned int sendPduBytes; /* Number of pdus to be confirmed */
+   _Atomic unsigned int tbsize;
+   unsigned int pdcpcount;
+   unsigned int sendPduNum; /* Number of pdus to be confirmed */
+   unsigned int sendPduBytes; /* Number of pdus to be confirmed */
+   unsigned int pktdelay;
+   _Atomic unsigned int rlcthrp;
+   _Atomic unsigned int dlPduNum;
+   char Reserve3[CACHE_LINE_SIZE-36] __attribute__((aligned(4))); 
+   unsigned int rlcOm[16];
+   unsigned int dlDelayInfo[16];
+
    // void *waitAckLinkHdr;  /* First SDU to be confirmed */
    // void *waitAckLinkTail; /* Last SDU to be confirmed */
    LinkedList sent_list __attribute__((aligned(4)));
-   char Reserve2[CACHE_LINE_SIZE-2-sizeof(LinkedList)] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
+   unsigned int acksn;
+   unsigned int nackcount;
+   unsigned int parseindex;
+   unsigned int rsv3;
+   char Reserve2[CACHE_LINE_SIZE-16-sizeof(LinkedList)] __attribute__((aligned(4))); /* Reserved for future use, pieced into a cacheline */
 
    mm_context_t *mm_ctx __attribute__((aligned(4)));
 } rlc_context_t;
