@@ -24,7 +24,7 @@ GCC_LIB  ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
 
 # Tools
 CMAKE  ?= cmake-3.28.3
-PYTHON ?= python3.6
+PYTHON ?= python3
 
 # -------- Toolchain (exports GCC/LLVM/Spike/Bender install dirs) --------
 include toolchain.mk
@@ -123,7 +123,7 @@ quick-tool:
 
 .PHONY: generate
 generate: update_opcodes gen-spatz-cfg
-	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson
+	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson PYTHON=${PYTHON}
 
 .PHONY: cache-init
 cache-init:
