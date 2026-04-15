@@ -218,12 +218,13 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  axi_mst_cache_req_t  [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_req;
-  axi_mst_cache_resp_t [NumTiles-1:0][TileNarrowAxiPorts-1:0] axi_tile_rsp;
-  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1 :0]          wide_axi_slv_req;
-  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1 :0]          wide_axi_slv_rsp;
-  axi_narrow_req_t     [NumTiles-1:0][1:0]                    axi_out_req;
-  axi_narrow_resp_t    [NumTiles-1:0][1:0]                    axi_out_resp;
+  // BootROM wide AXI from group (one per tile, BootROM only)
+  axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_req;
+  axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_rsp;
+  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0]         wide_axi_slv_req;
+  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0]         wide_axi_slv_rsp;
+  axi_narrow_req_t     [NumTiles-1:0][1:0]                  axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1:0][1:0]                  axi_out_resp;
 
   // 2. BootROM
   reg_cache_req_t [NumTiles-1:0] bootrom_reg_req;
@@ -245,125 +246,9 @@ module cachepool_cluster
   // CachePool Tile
   // ---------------
 
-  cache_trans_req_t      [NumL1CacheCtrl-1         :0] cache_refill_req;
-  cache_trans_rsp_t      [NumL1CacheCtrl-1         :0] cache_refill_rsp;
-
-  cache_trans_req_t      [NumTiles-1               :0] cache_core_req;
-  cache_trans_rsp_t      [NumTiles-1               :0] cache_core_rsp;
-
-  cache_trans_req_chan_t [NumTiles*NumClusterMst-1 :0] tile_req_chan;
-  cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1 :0] tile_rsp_chan;
-  logic                  [NumTiles*NumClusterMst-1 :0] tile_req_valid, tile_req_ready, tile_rsp_valid, tile_rsp_ready;
-
-  l2_req_t               [ClusterWideOutAxiPorts-1 :0] l2_req;
-  l2_rsp_t               [ClusterWideOutAxiPorts-1 :0] l2_rsp;
-
-  cache_trans_req_chan_t [ClusterWideOutAxiPorts-1 :0] l2_req_chan;
-  cache_trans_rsp_chan_t [ClusterWideOutAxiPorts-1 :0] l2_rsp_chan;
-  logic                  [ClusterWideOutAxiPorts-1 :0] l2_req_valid,   l2_req_ready  , l2_rsp_valid,   l2_rsp_ready;
-
-  typedef logic   [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
-  // one more bit for out-of-range alert
-  typedef logic   [$clog2(ClusterWideOutAxiPorts)  :0] tile_sel_err_t;
-  typedef logic   [$clog2(ClusterWideOutAxiPorts)-1:0] tile_sel_t;
-
-  // Which l2 we want to select for each req
-  tile_sel_err_t  [NumTiles*NumClusterMst-1        :0] tile_sel_err;
-  tile_sel_t      [NumTiles*NumClusterMst-1        :0] tile_sel;
-  // Which tile we selected for each req
-  l2_sel_t        [ClusterWideOutAxiPorts-1        :0] tile_selected;
-  // which tile we want to select for each rsp
-  l2_sel_t        [ClusterWideOutAxiPorts-1        :0] l2_sel;
-  // What is the priority for response wiring?
-  // Here we want to make sure the responses from one burst
-  // continues until done
-  // If the rsp is a burst with blen != 0, then we will keep
-  // the rr same, until got a burst rsp with blen == 0
-  tile_sel_t      [NumTiles*NumClusterMst-1        :0] l2_rsp_rr;
-
-  logic           [NumTiles*NumClusterMst-1        :0] rr_lock_d, rr_lock_q;
-  tile_sel_t      [NumTiles*NumClusterMst-1        :0] l2_prio_d, l2_prio_q;
-
-
-  l2_sel_t [ClusterWideOutAxiPorts-1:0]  port_id;
-
-  for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
-    assign port_id[i] = l2_rsp[i].p.user.tile_id * NumClusterMst + l2_rsp[i].p.user.bank_id;
-  end
-
-
-  if (Burst_Enable) begin : gen_burst_ext_sel
-    `FF(rr_lock_q, rr_lock_d, 1'b0)
-    `FF(l2_prio_q, l2_prio_d, 1'b0)
-
-    for (genvar port = 0; port < NumTiles*NumClusterMst; port ++) begin : gen_rsp_rr
-      tile_sel_t l2_rr;
-      logic [ClusterWideOutAxiPorts-1:0] arb_valid;
-      for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
-        // Used to check the round-robin selection
-        assign arb_valid[i] = (port_id[i] == port) & l2_rsp_valid[i];
-      end
-
-      always_comb begin
-        l2_prio_d[port] = l2_prio_q[port];
-        rr_lock_d[port] = rr_lock_q[port];
-
-        // Determine the priority we give
-        // round-robin or locked to previous value?
-        if (|arb_valid) begin
-          if (rr_lock_q[port]) begin
-            // rr is locked because of burst
-            l2_prio_d[port] = l2_prio_q[port];
-          end else begin
-            l2_prio_d[port] = l2_rr;
-          end
-        end
-        // assigned to xbar rr_i
-        l2_rsp_rr[port] = l2_prio_d[port];
-
-        // Lock judgement
-        // Should it work on the l2_rsp instead of tile_rsp?
-        if (tile_rsp_chan[port].user.burst.is_burst & |arb_valid) begin
-          // We got a burst response
-          if (tile_rsp_chan[port].user.burst.burst_len == 0) begin
-            // this is the last transaction within a burt, remove lock
-            rr_lock_d[port] = 1'b0;
-          end else begin
-            // the burst response is not finished yet, lock the rr
-            rr_lock_d[port] = 1'b1;
-          end
-        end
-      end
-
-      // We use the rr_arb_tree to get the round-robin selection
-      // No data is needed here, only need the handshaking
-      rr_arb_tree #(
-        .NumIn     ( ClusterWideOutAxiPorts    ),
-        .DataType  ( logic     ),
-        .ExtPrio   ( 1'b0      ),
-        .AxiVldRdy ( 1'b1      ),
-        .LockIn    ( 1'b1      )
-      ) i_rr_arb_tree (
-        .clk_i   ( clk_i        ),
-        .rst_ni  ( rst_ni       ),
-        .flush_i ( '0           ),
-        .rr_i    ( '0           ),
-        .req_i   ( arb_valid    ),
-        .gnt_o   ( /*not used*/ ),
-        .data_i  ( '0           ),
-        .req_o   ( /*not used*/ ),
-        .gnt_i   ( tile_rsp_ready[port] ),
-        .data_o  ( /*not used*/ ),
-        .idx_o   ( l2_rr        )
-      );
-    end
-  end else begin
-    assign l2_prio_d = '0;
-    assign l2_prio_q = '0;
-    assign rr_lock_d = '0;
-    assign rr_lock_q = '0;
-    assign l2_rsp_rr = '0;
-  end
+  // l2 reqrsp ports from the group (one per L2 channel)
+  l2_req_t [ClusterWideOutAxiPorts-1:0] l2_req;
+  l2_rsp_t [ClusterWideOutAxiPorts-1:0] l2_rsp;
 
   if (NumTiles > 1) begin : gen_group
     cachepool_group #(
@@ -419,11 +304,12 @@ module cachepool_cluster
       .private_start_addr_i     ( private_start_addr        ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
-      .axi_wide_req_o           ( axi_tile_req             ),
-      .axi_wide_rsp_i           ( axi_tile_rsp             ),
-      // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req         ),
-      .cache_refill_rsp_i       ( cache_refill_rsp         ),
+      // BootROM wide AXI (one per tile, BootROM only)
+      .axi_wide_req_o           ( axi_tile_req          ),
+      .axi_wide_rsp_i           ( axi_tile_rsp          ),
+      // DRAM refill reqrsp (post-xbar, one per L2 channel)
+      .l2_req_o                 ( l2_req                   ),
+      .l2_rsp_i                 ( l2_rsp                   ),
       // Peripherals
       .icache_events_o          ( icache_events             ),
       .icache_prefetch_enable_i ( icache_prefetch_enable    ),
@@ -435,32 +321,18 @@ module cachepool_cluster
       .l1d_insn_ready_o         ( l1d_insn_ready            ),
       .l1d_busy_i               ( l1d_busy                  )
     );
-    // TODO: 2 axi ports converted lost correct assignments
-    // 1. tile id?
-    // 2. mux then convert?
-    for (genvar t = 0; t < NumTiles; t ++) begin : gen_axi_converter
-      axi_to_reqrsp #(
-        .axi_req_t    ( axi_mst_cache_req_t        ),
-        .axi_rsp_t    ( axi_mst_cache_resp_t       ),
-        .AddrWidth    ( AxiAddrWidth               ),
-        .DataWidth    ( AxiDataWidth               ),
-        .UserWidth    ( $bits(refill_user_t)       ),
-        .IdWidth      ( AxiIdWidthIn               ),
-        .BufDepth     ( NumSpatzOutstandingLoads   ),
-        .reqrsp_req_t ( cache_trans_req_t          ),
-        .reqrsp_rsp_t ( cache_trans_rsp_t          )
-      ) i_axi2reqrsp  (
-        .clk_i        ( clk_i                      ),
-        .rst_ni       ( rst_ni                     ),
-        .busy_o       (                            ),
-        .axi_req_i    ( axi_tile_req [t][TileMem]  ),
-        .axi_rsp_o    ( axi_tile_rsp [t][TileMem]  ),
-        .reqrsp_req_o ( cache_core_req[t]          ),
-        .reqrsp_rsp_i ( cache_core_rsp[t]          )
-      );
-    end
 
   end else begin : gen_tile
+    // Signals used by gen_tile (single-tile path, not currently active)
+    cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req;
+    cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp;
+    cache_trans_req_t [NumTiles-1:0]       cache_core_req;
+    cache_trans_rsp_t [NumTiles-1:0]       cache_core_rsp;
+
+    // TODO: gen_tile TileMem path — needs its own axi_tile_mem signals once fully migrated
+    axi_mst_cache_req_t  gen_tile_mem_req;
+    axi_mst_cache_resp_t gen_tile_mem_rsp;
+
     cachepool_tile #(
       .AxiAddrWidth             ( AxiAddrWidth              ),
       .AxiDataWidth             ( AxiDataWidth              ),
@@ -527,8 +399,8 @@ module cachepool_cluster
       // Cache Refill Ports
       .cache_refill_req_o       ( cache_refill_req          ),
       .cache_refill_rsp_i       ( cache_refill_rsp          ),
-      .axi_wide_req_o           ( axi_tile_req[0]           ),
-      .axi_wide_rsp_i           ( axi_tile_rsp[0]           ),
+      .axi_wide_req_o           ( {gen_tile_mem_req, axi_tile_req[0]}  ),
+      .axi_wide_rsp_i           ( {gen_tile_mem_rsp, axi_tile_rsp[0]}  ),
       // Peripherals
       .icache_events_o          ( icache_events             ),
       .icache_prefetch_enable_i ( icache_prefetch_enable    ),
@@ -555,160 +427,16 @@ module cachepool_cluster
       .clk_i        ( clk_i                      ),
       .rst_ni       ( rst_ni                     ),
       .busy_o       (                            ),
-      .axi_req_i    ( axi_tile_req [0][TileMem]  ),
-      .axi_rsp_o    ( axi_tile_rsp [0][TileMem]  ),
+      .axi_req_i    ( gen_tile_mem_req           ),
+      .axi_rsp_o    ( gen_tile_mem_rsp           ),
       .reqrsp_req_o ( cache_core_req[0]          ),
       .reqrsp_rsp_i ( cache_core_rsp[0]          )
     );
   end
 
-  // Additional one port for iCache connection
-  localparam int unsigned ReqrspPortsTile = NumL1CtrlTile + 1;
-  always_comb begin
-    for (int t = 0; t < NumTiles; t++) begin
-      for (int p = 0; p < ReqrspPortsTile; p++) begin
-        automatic int unsigned xbar_idx   = t*ReqrspPortsTile + p;
-        automatic int unsigned refill_idx = t*NumL1CtrlTile   + p-1;
-
-        if (p == 0) begin
-          // connect_icache_path
-          tile_req_chan   [xbar_idx]           = cache_core_req  [t].q;
-          // Scrmable address
-          tile_req_chan   [xbar_idx].addr      = scrambleAddr(cache_core_req[t].q.addr);
-          tile_req_valid  [xbar_idx]           = cache_core_req  [t].q_valid;
-          cache_core_rsp  [t].q_ready          = tile_req_ready  [xbar_idx];
-
-          cache_core_rsp  [t].p                = tile_rsp_chan   [xbar_idx];
-          cache_core_rsp  [t].p_valid          = tile_rsp_valid  [xbar_idx];
-          tile_rsp_ready  [xbar_idx]           = cache_core_req  [t].p_ready;
-          // Tile ID assignment
-          tile_req_chan   [xbar_idx].user.tile_id = t;
-        end else begin
-          // connect_refill_path
-          tile_req_chan   [xbar_idx]           = cache_refill_req[refill_idx].q;
-          // Scramble address
-          tile_req_chan   [xbar_idx].addr      = scrambleAddr(cache_refill_req[refill_idx].q.addr);
-          tile_req_valid  [xbar_idx]           = cache_refill_req[refill_idx].q_valid;
-          cache_refill_rsp[refill_idx].q_ready = tile_req_ready  [xbar_idx];
-
-          cache_refill_rsp[refill_idx].p       = tile_rsp_chan   [xbar_idx];
-          cache_refill_rsp[refill_idx].p_valid = tile_rsp_valid  [xbar_idx];
-          tile_rsp_ready  [xbar_idx]           = cache_refill_req[refill_idx].p_ready;
-          // Tile ID assignment
-          tile_req_chan   [xbar_idx].user.tile_id = t;
-        end
-      end
-    end
-  end
-
-  typedef struct packed {
-    int unsigned idx;
-    logic [AxiAddrWidth-1:0] base;
-    logic [AxiAddrWidth-1:0] mask;
-  } reqrsp_rule_t;
-
-  reqrsp_rule_t [ClusterWideOutAxiPorts-1:0] xbar_rule;
-
-  for (genvar i = 0; i < ClusterWideOutAxiPorts; i ++) begin
-    assign xbar_rule[i] = '{
-      idx  : i,
-      base : DramAddr + DramPerChSize * i,
-      mask : ({AxiAddrWidth{1'b1}} << $clog2(DramPerChSize))
-    };
-  end
-
-  logic [$clog2(ClusterWideOutAxiPorts):0] default_idx;
-  assign default_idx = ClusterWideOutAxiPorts;
-
-  for (genvar inp = 0; inp < NumClusterMst*NumTiles; inp ++) begin : gen_xbar_sel
-    addr_decode_napot #(
-      .NoIndices (ClusterWideOutAxiPorts+1   ),
-      .NoRules   (ClusterWideOutAxiPorts     ),
-      .addr_t    (axi_addr_t        ),
-      .rule_t    (reqrsp_rule_t     )
-    ) i_snitch_decode_napot (
-      .addr_i           (tile_req_chan[inp].addr),
-      .addr_map_i       (xbar_rule              ),
-      .idx_o            (tile_sel_err[inp]      ),
-      .dec_valid_o      (/* Unused */           ),
-      .dec_error_o      (/* Unused */           ),
-      .en_default_idx_i (1'b1                   ),
-      .default_idx_i    (default_idx            )
-    );
-
-    assign tile_sel[inp] = tile_sel_err[inp][$clog2(ClusterWideOutAxiPorts)-1:0];
-
-`ifndef TARGET_SYNTHESIS
-    // Alert the system that we have illegal memory access
-    IllegalMemAccess : assert property(
-      @(posedge clk_i) disable iff (!rst_ni) (tile_req_valid[inp] |-> !tile_sel_err[inp][$clog2(ClusterWideOutAxiPorts)]))
-      else $error("Visited illegal address: time=%0t, port=%0d, addr=0x%08h", $time, inp, tile_req_chan[inp].addr);
-      // else $fatal (1, "Visited address is not mapped");
-`endif
-  end
-
-  reqrsp_xbar #(
-    .NumInp           (NumClusterMst*NumTiles ),
-    .NumOut           (ClusterWideOutAxiPorts ),
-    .PipeReg          (1'b1                   ),
-    .ExtReqPrio       (1'b0                   ),
-    .ExtRspPrio       (Burst_Enable           ),
-    .tcdm_req_chan_t  (cache_trans_req_chan_t ),
-    .tcdm_rsp_chan_t  (cache_trans_rsp_chan_t )
-  ) i_cluster_xbar (
-    .clk_i            (clk_i            ),
-    .rst_ni           (rst_ni           ),
-    .slv_req_i        (tile_req_chan    ),
-    .slv_req_valid_i  (tile_req_valid   ),
-    .slv_req_ready_o  (tile_req_ready   ),
-    .slv_rsp_o        (tile_rsp_chan    ),
-    .slv_rsp_valid_o  (tile_rsp_valid   ),
-    .slv_rsp_ready_i  (tile_rsp_ready   ),
-    .slv_sel_i        (tile_sel[NumTiles*NumClusterMst-1:0] ),
-    .slv_rr_i         ('0               ),
-    .slv_selected_o   (tile_selected    ),
-    .mst_req_o        (l2_req_chan      ),
-    .mst_req_valid_o  (l2_req_valid     ),
-    .mst_req_ready_i  (l2_req_ready     ),
-    .mst_rsp_i        (l2_rsp_chan      ),
-    .mst_rr_i         (l2_rsp_rr        ),
-    .mst_rsp_valid_i  (l2_rsp_valid     ),
-    .mst_rsp_ready_o  (l2_rsp_ready     ),
-    .mst_sel_i        (l2_sel           )
-  );
-
-  for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin
-    // To L2 Channels
-    always_comb begin
-      l2_req[ch].q       = '{
-        addr : l2_req_chan[ch].addr,
-        write: l2_req_chan[ch].write,
-        amo  : l2_req_chan[ch].amo,
-        data : l2_req_chan[ch].data,
-        strb : l2_req_chan[ch].strb,
-        size : l2_req_chan[ch].size,
-        default: '0
-      };
-      l2_req[ch].q.user  = l2_req_chan[ch].user;
-      l2_req[ch].q_valid = l2_req_valid[ch] ;
-      l2_req_ready[ch]   = l2_rsp[ch].q_ready;
-
-      l2_rsp_chan [ch]   = '{
-        data : l2_rsp[ch].p.data,
-        error: l2_rsp[ch].p.error,
-        write: l2_rsp[ch].p.write,
-        default: '0
-      };
-      l2_rsp_chan [ch].user = l2_rsp[ch].p.user;
-      l2_rsp_valid[ch]   = l2_rsp[ch].p_valid;
-      l2_req[ch].p_ready = l2_rsp_ready[ch];
-      // calculate the port from the tile id and bank id
-      // bank_id == 0   --- bypass
-      // bank_id == 1-4 --- cache bank 0-3
-      l2_sel[ch]         = l2_rsp[ch].p.user.tile_id * NumClusterMst + l2_rsp[ch].p.user.bank_id;
-    end
-  end
-
+  // -------------
+  // To Main Memory: reqrsp_to_axi + output cut, consuming group l2 reqrsp ports
+  // -------------
   for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch ++) begin : gen_output_axi
     reqrsp_to_axi #(
       .MaxTrans           (NumSpatzOutstandingLoads*2 ),
@@ -723,7 +451,7 @@ module cachepool_cluster
       .reqrsp_rsp_t       (l2_rsp_t                   ),
       .axi_req_t          (axi_slv_cache_req_t        ),
       .axi_rsp_t          (axi_slv_cache_resp_t       )
-    ) i_reqrsp2axi  (
+    ) i_reqrsp2axi (
       .clk_i        (clk_i                ),
       .rst_ni       (rst_ni               ),
       .user_i       (l2_req[ch].q.user    ),
@@ -734,10 +462,6 @@ module cachepool_cluster
     );
   end
 
-
-  // -------------
-  // To Main Memory
-  // -------------
   // Optionally decouple the external wide AXI master port.
   for (genvar port = 0; port < ClusterWideOutAxiPorts; port ++) begin : gen_axi_out_cut
     axi_cut #(
@@ -825,13 +549,13 @@ module cachepool_cluster
       .reg_req_t          (reg_cache_req_t     ),
       .reg_rsp_t          (reg_cache_rsp_t     )
     ) i_axi_to_reg_bootrom (
-      .clk_i      (clk_i                        ),
-      .rst_ni     (rst_ni                       ),
-      .testmode_i (1'b0                         ),
-      .axi_req_i  (axi_tile_req[t][TileBootROM] ),
-      .axi_rsp_o  (axi_tile_rsp[t][TileBootROM] ),
-      .reg_req_o  (bootrom_reg_req[t]           ),
-      .reg_rsp_i  (bootrom_reg_rsp[t]           )
+      .clk_i      (clk_i              ),
+      .rst_ni     (rst_ni             ),
+      .testmode_i (1'b0               ),
+      .axi_req_i  (axi_tile_req[t] ),
+      .axi_rsp_o  (axi_tile_rsp[t] ),
+      .reg_req_o  (bootrom_reg_req[t] ),
+      .reg_rsp_i  (bootrom_reg_rsp[t] )
     );
 
     bootrom i_bootrom (
