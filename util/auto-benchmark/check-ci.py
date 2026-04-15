@@ -20,7 +20,7 @@ def main():
     # Matches "error <integer>" anywhere in a line, captured as group 1.
     error_val_re = re.compile(r'\berror\s+(\d+)\b', re.IGNORECASE)
     # Matches FAIL or [FAIL] anywhere in a line.
-    fail_re = re.compile(r'\bFAIL\b', re.IGNORECASE)
+    fail_re = re.compile(r'\bFailed\b', re.IGNORECASE)
 
     failures = []
 

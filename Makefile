@@ -164,6 +164,27 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 		$< -c $(HJSON_OUT) --output $@
 
 ###########
+# FlooNoC #
+###########
+FLOO_DIR  ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
+FLOO_GEN_OUTDIR	?= $(ROOT_DIR)/hardware/generated
+FLOO_CFG  ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+FLOO_SYS  = $(subst .yml,,$(notdir $(FLOO_CFG)))
+FLOO_NOC  ?= $(addprefix $(FLOO_GEN_OUTDIR)/,$(subst .yml,_floo_noc.sv,$(notdir $(FLOO_CFG))))
+
+$(info FLOO_DIR: $(FLOO_DIR))
+
+# Generates the sources for FlooNoC
+.PHONY: update-floonoc install-floogen clean-floonoc
+install-floogen:
+	$(MAKE) -C $(FLOO_DIR) install-floogen
+
+update-floonoc: $(FLOO_NOC)
+$(FLOO_NOC): install-floogen $(FLOO_CFG)
+	mkdir -p $(FLOO_GEN_OUTDIR)
+	floogen -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --only-pkg
+
+###########
 # DramSys #
 ###########
 USE_DRAMSYS ?= 1
@@ -232,13 +253,13 @@ VLOG_FLAGS += -64
 VLOG_DEFS = -DCACHEPOOL
 
 # Cluster configuration
+VLOG_DEFS += -DNUM_GROUPS=$(num_groups)
 VLOG_DEFS += -DNUM_TILES=$(num_tiles)
 VLOG_DEFS += -DNUM_CORES=$(num_cores)
 VLOG_DEFS += -DDATA_WIDTH=$(data_width)
 VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
 
 # Tile configuration
-VLOG_DEFS += -DNUM_CORES_PER_TILE=$(num_cores_per_tile)
 VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 
 # L1 Data Cache
@@ -265,6 +286,7 @@ VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
 VLOG_DEFS += -DREMOTE_PORT_PER_CORE=$(num_remote_ports_per_tile)
+VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
 
 # AXI configuration
 VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)

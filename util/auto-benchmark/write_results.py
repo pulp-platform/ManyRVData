@@ -18,7 +18,7 @@ def extract_uart_lines(input_file_path, output_file_path, config=None, kernel=No
 
             # Copy only lines containing '[UART]'
             for line in input_file:
-                if '[UART]' in line:
+                if '[UART]' in line or '[EOC]' in line:
                     output_file.write(line)
 
             output_file.write("\n----------------------------------------\n")

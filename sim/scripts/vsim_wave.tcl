@@ -1,12 +1,14 @@
-# Copyright 2021 ETH Zurich and University of Bologna.
+# Copyright 2026 ETH Zurich and University of Bologna.
 # Solderpad Hardware License, Version 0.51, see LICENSE for details.
 # SPDX-License-Identifier: SHL-0.51
 
 onerror {resume}
 quietly WaveActivateNextPane {} 0
 
+# --- Configuration Variables ---
 set cluster_path    /tb_cachepool/i_cluster_wrapper/i_cluster
-set group_path      ${cluster_path}/gen_group/i_group
+set NUM_GROUPS      4  ;# Change this variable to match your total number of groups
+set NUM_CORES       4  ;# Assuming 4 cores per tile based on original script
 
 # Add the cluster probe
 add wave /tb_cachepool/cluster_probe
@@ -14,23 +16,43 @@ add wave /tb_cachepool/cluster_probe
 # Cluster
 do sim/scripts/vsim_cluster.tcl ${cluster_path}
 
-# Group
-# add wave -noupdate -group Group ${group_path}/*
-do sim/scripts/vsim_group.tcl ${group_path} 5
+# Iterate through all groups
+for {set g 0} {$g < $NUM_GROUPS} {incr g} {
+    set group_wp_path   ${cluster_path}/gen_group[$g]/i_group
+    set group_path      ${group_wp_path}/i_group
 
-# Tile and Core
-for {set tile 0}  {$tile < 4} {incr tile} {
-    set tile_path ${group_path}/gen_tiles[$tile]
+    # 1. Plot all GroupWP levels of all groups
+    add wave -noupdate -group "GroupWP_$g" ${group_wp_path}/* 
 
-    do sim/scripts/vsim_tile.tcl $tile ${tile_path}
-    # Add all cores in Tile 0
-    for {set core 0}  {$core < 4} {incr core} {
-        set core_path       ${tile_path}/i_tile/gen_core[$core]
-        do sim/scripts/vsim_core.tcl $tile $core ${core_path}
-    }
+    do sim/scripts/vsim_group.tcl ${group_path} 5
 
-    for {set ch 0}  {$ch < 4} {incr ch} {
-        add wave -noupdate -group DramSys$ch /tb_cachepool/gen_dram[$ch]/i_axi_dram_sim/*
+    # Conditional plotting based on the group
+    if {$g == 0} {
+        # 2. Call to plot tile 0 and tile 3 for Group 0 only
+        foreach tile {0 3} {
+            set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
+            do sim/scripts/vsim_tile.tcl $tile ${tile_path}
+            
+            # 3. Plot all cores in the plotted tile
+            for {set core 0} {$core < $NUM_CORES} {incr core} {
+                set core_path ${tile_path}/i_tile/gen_core[$core]
+                # Pass an empty string to indicate NO parent group
+                do sim/scripts/vsim_core.tcl 0 $tile $core ${core_path} ""
+            }
+        }
+    } else {
+        # 4. Plot core 0 in tile 0 of other groups
+        set tile 0
+        set core 0
+        set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
+        set core_path ${tile_path}/i_tile/gen_core[$core]
+        
+        # FIX: Use 'do' instead of 'source' and pass just the parent group name
+        do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} "GroupWP_$g"
     }
 }
 
+# Add DRAM waves once at the end
+for {set ch 0} {$ch < 4} {incr ch} {
+    add wave -noupdate -group "DramSys_$ch" /tb_cachepool/gen_dram[$ch]/i_axi_dram_sim/*
+}

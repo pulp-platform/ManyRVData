@@ -26,13 +26,20 @@ include $(CACHEPOOL_DIR)/config/$(config).mk
 ##  CachePool Cluster  ##
 #########################
 
+# Number of groups
+num_groups ?= 1
+
 # Number of tiles
-num_tiles ?= 1
+num_tiles_per_group ?= 4
+num_tiles = $(shell echo $$(( $(num_groups) * $(num_tiles_per_group))))
 
 num_remote_ports_per_tile ?= 1
 
 # Number of cores
-num_cores ?= 4
+num_cores_per_tile ?= 4
+num_cores ?= $(shell echo $$(( $(num_tiles) * $(num_cores_per_tile))))
+
+num_rg_ports_per_core ?= 0
 
 # Core datawidth
 data_width ?= 32
@@ -44,9 +51,6 @@ addr_width ?= 32
 ######################
 ##  CachePool Tile  ##
 ######################
-
-# Number of cores per CachePool tile
-num_cores_per_tile ?= 4
 
 # Refill interconnection data width
 refill_data_width ?= 128
