@@ -81,6 +81,5 @@ int main(void) {
     // Wait for all cores to finish
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
-    set_eoc();
     return 0;
 }

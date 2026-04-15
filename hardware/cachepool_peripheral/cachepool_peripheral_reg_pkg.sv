@@ -51,7 +51,7 @@ package cachepool_peripheral_reg_pkg;
   } cachepool_peripheral_reg2hw_cluster_boot_control_reg_t;
 
   typedef struct packed {
-    logic        q;
+    logic [3:0]  q;
   } cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t;
 
   typedef struct packed {
@@ -115,15 +115,15 @@ package cachepool_peripheral_reg_pkg;
 
   // Register -> HW type
   typedef struct packed {
-    cachepool_peripheral_reg2hw_hart_select_mreg_t [1:0] hart_select; // [272:253]
-    cachepool_peripheral_reg2hw_cl_clint_set_reg_t cl_clint_set; // [252:220]
-    cachepool_peripheral_reg2hw_cl_clint_clear_reg_t cl_clint_clear; // [219:187]
-    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [186:155]
-    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [154:154]
-    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [153:153]
-    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [152:121]
-    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [120:89]
-    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [88:88]
+    cachepool_peripheral_reg2hw_hart_select_mreg_t [1:0] hart_select; // [275:256]
+    cachepool_peripheral_reg2hw_cl_clint_set_reg_t cl_clint_set; // [255:223]
+    cachepool_peripheral_reg2hw_cl_clint_clear_reg_t cl_clint_clear; // [222:190]
+    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [189:158]
+    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [157:157]
+    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [156:156]
+    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [155:124]
+    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [123:92]
+    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [91:88]
     cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [87:78]
     cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [77:76]
     cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_reg_t cfg_l1d_tile_sel; // [75:44]

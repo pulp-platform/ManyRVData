@@ -142,9 +142,10 @@ void l1d_addr (uint32_t addr) {
   l1d_commit();
 }
 
-void set_eoc () {
+void set_eoc (uint32_t eoc_value) {
     volatile uint32_t *eoc_reg =
-    (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET);
-    *eoc_reg = 1;
+        (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                    CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET);
+    // Value is already encoded by caller, write directly
+    *eoc_reg = eoc_value;
 }

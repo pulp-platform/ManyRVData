@@ -447,9 +447,5 @@ int main(void) {
 
   snrt_cluster_hw_barrier();
 
-  if (core_id == 0) {
-    set_eoc();
-  }
-
   return 0;
 }

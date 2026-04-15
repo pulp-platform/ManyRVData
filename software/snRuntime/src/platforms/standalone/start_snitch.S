@@ -29,7 +29,9 @@ _snrt_exit:
     ori       t0, t0, 1
     la        t1, tohost
     sw        t0, 0(t1)
+    mv        s0, t0
     call      l1d_flush
+    mv        a0, s0
     call      set_eoc
 1:  ret
 

@@ -30,7 +30,7 @@ module cachepool_peripheral
   input  reg_req_t                   reg_req_i,
   output reg_rsp_t                   reg_rsp_o,
 
-  output logic                       eoc_o,
+  output logic [3:0]                 eoc_o,
   input  addr_t                      tcdm_start_address_i,
   input  addr_t                      tcdm_end_address_i,
   output addr_t                      private_start_addr_o,
