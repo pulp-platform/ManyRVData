@@ -56,7 +56,7 @@ package cachepool_pkg;
 
   // How many remote ports for each tile per core's port?
   // localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
-  localparam int unsigned NumRemotePortCore = 1;
+  localparam int unsigned NumRemotePortCore = 2;
 
   // How many cores within a tile? This is used to select the ports within a tile.
   localparam int unsigned LogNumCoresTile   = $clog2(NumCoresTile);
@@ -219,6 +219,9 @@ package cachepool_pkg;
   // Wide Data ports
   localparam int unsigned GroupWideDataPorts  = NumL1CtrlTile;
 
+  // Correct selection width for remote xbar at group level
+  localparam int unsigned RemoteXbarSelWidth = $clog2(NumTiles * NumRemotePortCore);
+
   /***** Cluster Ports *****/
   // Narrow AXI ports: 1 In from SoC, 1 Out to UART
   localparam int unsigned ClusterNarrowInAxiPorts  = 1;
@@ -355,6 +358,13 @@ package cachepool_pkg;
     cache_info_t            info;
     burst_req_t             burst;
   } refill_user_t;
+
+  ///////////////////
+  //  GROUP TYPES  //
+  ///////////////////
+
+  typedef logic [RemoteXbarSelWidth-1:0] remote_xbar_sel_t;
+
 
   /////////////////////
   //  CLUSTER TYPES  //

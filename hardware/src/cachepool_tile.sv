@@ -547,7 +547,9 @@ module cachepool_tile
   // Set through CSR
   logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
   assign dynamic_offset = dynamic_offset_i;
-  logic [NrTCDMPortsPerCore-1:0] remote_out_pready, remote_in_pready;
+  // One entry per flat remote port: flat index = j + r*NrTCDMPortsPerCore
+  // where j is the xbar index and r is the remote slot within that xbar.
+  logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
 
   // Flush protection for remote ports.
   //
@@ -566,26 +568,51 @@ module cachepool_tile
 
   always_comb begin : remote_flush_protection
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
-      // Gate q_valid: prevent new requests entering the xbar.
-      remote_req_gated[j].q       = remote_req_i[j].q;
-      remote_req_gated[j].q_valid = remote_req_i[j].q_valid && !l1d_busy_i;
+      for (int r = 0; r < NumRemotePortCore; r++) begin
+        automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
-      // Pass the full xbar response through, then gate only q_ready so the
-      // remote tile cannot complete a handshake during a flush.
-      remote_rsp_o[j]          = remote_rsp_xbar[j];
-      remote_rsp_o[j].q_ready  = remote_rsp_xbar[j].q_ready && !l1d_busy_i;
+        // Gate q_valid: prevent new requests entering the xbar.
+        remote_req_gated[flat].q       = remote_req_i[flat].q;
+        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid && !l1d_busy_i;
 
-      // Gate response-ready back to us: prevent draining completions
-      // of requests that arrived just before the flush.
-      remote_in_pready[j] = remote_rsp_ready_i[j] && !l1d_busy_i;
+        // Pass the full xbar response through, then gate only q_ready so the
+        // remote tile cannot complete a handshake during a flush.
+        remote_rsp_o[flat]         = remote_rsp_xbar[flat];
+        remote_rsp_o[flat].q_ready = remote_rsp_xbar[flat].q_ready && !l1d_busy_i;
+
+        // Gate response-ready back to us: prevent draining completions
+        // of requests that arrived just before the flush.
+        remote_in_pready[flat] = remote_rsp_ready_i[flat] && !l1d_busy_i;
+      end
     end
   end
 
-  // todo: multiple remote ports
   assign remote_rsp_ready_o = remote_out_pready;
 
-  /// Wire requests after strb handling to the cache controller
+  /// Wire requests after strb handling to the cache controller.
+  /// Each xbar j handles NumRemotePortCore remote slots at flat indices
+  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemotePortCore).
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
+    // Collect the NumRemotePortCore remote slots for this xbar.
+    tcdm_req_t [NumRemotePortCore-1:0] xbar_remote_req_gated;
+    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_xbar;
+    logic      [NumRemotePortCore-1:0] xbar_remote_in_pready;
+    logic      [NumRemotePortCore-1:0] xbar_remote_out_pready;
+    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_i;
+    remote_tile_sel_t [NumRemotePortCore-1:0] xbar_remote_req_dst;
+    tcdm_req_t        [NumRemotePortCore-1:0] xbar_remote_req_o;
+
+    for (genvar r = 0; r < NumRemotePortCore; r++) begin : gen_remote_slice
+      localparam int unsigned flat = j + r * NrTCDMPortsPerCore;
+      assign xbar_remote_req_gated [r]  = remote_req_gated      [flat];
+      assign xbar_remote_in_pready [r]  = remote_in_pready      [flat];
+      assign xbar_remote_rsp_i     [r]  = remote_rsp_i          [flat];
+      assign remote_rsp_xbar       [flat] = xbar_remote_rsp_xbar  [r];
+      assign remote_out_pready     [flat] = xbar_remote_out_pready[r];
+      assign remote_req_dst_o      [flat] = xbar_remote_req_dst   [r];
+      assign remote_req_o          [flat] = xbar_remote_req_o     [r];
+    end
+
     tcdm_cache_interco #(
       .NumTiles              (NumTiles          ),
       .NumCores              (NrCores           ),
@@ -599,19 +626,19 @@ module cachepool_tile
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
       .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
-      .clk_i                ( clk_i                                        ),
-      .rst_ni               ( rst_ni                                       ),
-      .tile_id_i            ( tile_id_i                                    ),
-      .dynamic_offset_i     ( dynamic_offset                               ),
-      .private_start_addr_i ( private_start_addr_i                         ),
-      .num_private_cache_i  ( num_private_cache                            ),
-      .core_req_i           ({remote_req_gated [j], cache_req        [j]}  ),
-      .core_rsp_ready_i     ({remote_in_pready [j], cache_pready     [j]}  ),
-      .core_rsp_o           ({remote_rsp_xbar  [j], cache_rsp        [j]}  ),
-      .tile_sel_o           ( remote_req_dst_o [j]                         ),
-      .mem_req_o            ({remote_req_o     [j], cache_xbar_req   [j]}  ),
-      .mem_rsp_ready_o      ({remote_out_pready[j], cache_xbar_pready[j]}  ),
-      .mem_rsp_i            ({remote_rsp_i     [j], cache_xbar_rsp   [j]}  )
+      .clk_i                ( clk_i                                              ),
+      .rst_ni               ( rst_ni                                             ),
+      .tile_id_i            ( tile_id_i                                          ),
+      .dynamic_offset_i     ( dynamic_offset                                     ),
+      .private_start_addr_i ( private_start_addr_i                               ),
+      .num_private_cache_i  ( num_private_cache                                  ),
+      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
+      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
+      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
+      .tile_sel_o           ( xbar_remote_req_dst                                ),
+      .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
+      .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
+      .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
     );
   end
 
