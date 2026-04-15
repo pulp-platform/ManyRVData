@@ -54,14 +54,18 @@ package cachepool_pkg;
   // How many cores for each tile?
   localparam int unsigned NumCoresTile      = NumCores / NumTiles;
 
-  // How many remote ports for each tile? Currently needs to be 0 or 1.
+  // How many remote ports for each tile per core's port?
   // localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
-  localparam int unsigned NumRemotePortTile = 1;
+  localparam int unsigned NumRemotePortCore = 1;
 
   // How many cores within a tile? This is used to select the ports within a tile.
   localparam int unsigned LogNumCoresTile   = $clog2(NumCoresTile);
 
+  // 4 ports from Spatz + 1 shared port from Snitch/FPU
   localparam int unsigned NrTCDMPortsPerCore = 5;
+
+  // How many remote ports for each tile in total?
+  localparam int unsigned NumRemotePortTile = NumRemotePortCore * NrTCDMPortsPerCore;
 
   ////////////////////
   //  CLUSTER HW    //

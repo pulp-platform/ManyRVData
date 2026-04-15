@@ -147,20 +147,20 @@ module cachepool_tile
     output axi_narrow_req_t   [1:0]                 axi_out_req_o,
     input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
     /// Cache Refill ports
-    output cache_trans_req_t  [NumL1CtrlTile-1:0]   cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]   cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CtrlTile-1:0]       cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]       cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
     output axi_out_req_t      [TileNarrowAxiPorts-1:0]  axi_wide_req_o,
     input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]  axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
-    output tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_o,
-    output remote_tile_sel_t  [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_dst_o,
-    input  tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_i,
-    input  logic              [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_ready_i,
+    output tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_o,
+    output remote_tile_sel_t  [NumRemotePortTile-1:0]   remote_req_dst_o,
+    input  tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_i,
+    input  logic              [NumRemotePortTile-1:0]   remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
-    input  tcdm_req_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_i,
-    output tcdm_rsp_t         [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_o,
-    output logic              [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_ready_o,
+    input  tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_i,
+    output tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_o,
+    output logic              [NumRemotePortTile-1:0]   remote_rsp_ready_o,
     /// Peripheral signals
     output icache_events_t    [NrCores-1:0]         icache_events_o,
     input  logic                                    icache_prefetch_enable_i,
@@ -560,9 +560,9 @@ module cachepool_tile
   //   - remote_in_pready gated : stops response-ready from propagating back,
   //                     preventing in-flight completions during the flush window
 
-  tcdm_req_t [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_req_gated;
+  tcdm_req_t [NumRemotePortTile-1:0] remote_req_gated;
   // Intermediate response signals from the xbar before q_ready gating.
-  tcdm_rsp_t [NrTCDMPortsPerCore*NumRemotePortTile-1:0] remote_rsp_xbar;
+  tcdm_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
@@ -591,7 +591,7 @@ module cachepool_tile
       .NumCores              (NrCores           ),
       .NumCache              (NumL1CtrlTile     ),
       .NumTotCache           (NumL1CacheCtrl    ),
-      .NumRemotePort         (NumRemotePortTile ),
+      .NumRemotePort         (NumRemotePortCore ),
       .AddrWidth             (TCDMAddrWidth     ),
       .TileIDWidth           (TileIDWidth       ),
       .tcdm_req_t            (tcdm_req_t        ),

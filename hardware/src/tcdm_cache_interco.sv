@@ -77,6 +77,7 @@ module tcdm_cache_interco #(
   /// Memory side -------------------------------------------------------
   /// Which remote tile is targeted (one entry per remote output port).
   output tile_id_t             [NumRemotePort-1:0] tile_sel_o,
+  // output logic                                     remote_group_o,
   /// Requests to cache banks and remote output ports.
   output tcdm_req_t   [NumCache+NumRemotePort-1:0] mem_req_o,
   /// Response ready out.
