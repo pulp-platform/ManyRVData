@@ -55,8 +55,7 @@ package cachepool_pkg;
   localparam int unsigned NumCoresTile      = NumCores / NumTiles;
 
   // How many remote ports for each tile per core's port?
-  // localparam int unsigned NumRemotePortTile = `ifdef NumRemotePortTile `NumRemotePortTile `else 0 `endif;
-  localparam int unsigned NumRemotePortCore = 2;
+  localparam int unsigned NumRemotePortCore = `ifdef REMOTE_PORT_PER_CORE `REMOTE_PORT_PER_CORE `else 0 `endif;
 
   // How many cores within a tile? This is used to select the ports within a tile.
   localparam int unsigned LogNumCoresTile   = $clog2(NumCoresTile);

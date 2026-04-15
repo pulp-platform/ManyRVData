@@ -233,7 +233,6 @@ VLOG_DEFS = -DCACHEPOOL
 
 # Cluster configuration
 VLOG_DEFS += -DNUM_TILES=$(num_tiles)
-VLOG_DEFS += -DNumRemotePortTile=$(num_remote_ports_per_tile)
 VLOG_DEFS += -DNUM_CORES=$(num_cores)
 VLOG_DEFS += -DDATA_WIDTH=$(data_width)
 VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
@@ -259,6 +258,7 @@ VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
+VLOG_DEFS += -DREMOTE_PORT_PER_CORE=$(num_remote_ports_per_tile)
 
 # AXI configuration
 VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
