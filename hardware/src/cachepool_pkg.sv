@@ -192,6 +192,13 @@ package cachepool_pkg;
   // UART ID width, with an extra xbar
   localparam int unsigned SpatzAxiUartIdWidth     = SpatzAxiNarrowIdWidth + $clog2(NumTiles);
 
+  // BootROM AXI ID width: wide data bus, muxed from NumTiles tile ports.
+  // The group's axi_mst_cache slave ID width = GroupAxiIdWidth + 1
+  // (cluster passes WideIdWidthIn = SpatzAxiIdOutWidth - clog2(NumClusterMst)
+  //  = ClusterAxiIdWidth + 1 - ClusterRouteIdWidth = GroupAxiIdWidth + 1).
+  // The mux master adds $clog2(NumTiles) bits on top.
+  localparam int unsigned BootRomAxiSlvIdWidth    = GroupAxiIdWidth + 1 + $clog2(NumTiles);
+
   /***** Tile Ports *****/
   // We have three sets of AXI ports for each tile:
   // 1) Wide   output bus for BootRom & L2 (from ICache)
@@ -285,6 +292,8 @@ package cachepool_pkg;
   typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
 
   typedef logic [IwcAxiIdOutWidth-1:0]          axi_id_out_iwc_t;
+
+  typedef logic [BootRomAxiSlvIdWidth-1:0]      axi_bootrom_slv_id_t;
 
   //////////////////
   //  TILE TYPES  //
@@ -424,9 +433,11 @@ package cachepool_pkg;
   `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,     axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
 
-  `AXI_TYPEDEF_ALL(axi_uart,          axi_addr_t, axi_uart_id_t,    axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(axi_csr_mst,       axi_addr_t, axi_id_csr_mst_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(axi_csr_slv,       axi_addr_t, axi_id_csr_slv_t, axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_uart,          axi_addr_t, axi_uart_id_t,        axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_csr_mst,       axi_addr_t, axi_id_csr_mst_t,     axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  `AXI_TYPEDEF_ALL(axi_csr_slv,       axi_addr_t, axi_id_csr_slv_t,     axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  // BootROM: wide data bus (same payload as cache), slv = post-mux (widened ID)
+  `AXI_TYPEDEF_ALL(axi_bootrom_slv,   axi_addr_t, axi_bootrom_slv_id_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
 
   /**************************************************************
    *  FUNCTIONS
