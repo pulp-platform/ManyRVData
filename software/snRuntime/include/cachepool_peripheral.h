@@ -70,7 +70,12 @@ extern "C" {
 
 // End of computation and exit status register
 #define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET 0x24
-#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_BIT 0
+#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_MASK 0xf
+#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_OFFSET 0
+#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_FIELD                   \
+  ((bitfield_field32_t){                                                       \
+      .mask = CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_MASK,             \
+      .index = CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_OFFSET})
 
 // Controls the configurations of L1 DCache SPM size.
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET 0x28

@@ -77,6 +77,7 @@ module tcdm_cache_interco #(
   /// Memory side -------------------------------------------------------
   /// Which remote tile is targeted (one entry per remote output port).
   output tile_id_t             [NumRemotePort-1:0] tile_sel_o,
+  // output logic                                     remote_group_o,
   /// Requests to cache banks and remote output ports.
   output tcdm_req_t   [NumCache+NumRemotePort-1:0] mem_req_o,
   /// Response ready out.
@@ -239,7 +240,7 @@ module tcdm_cache_interco #(
           (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
         core_req_sel[port] = local_sel[port]
                            ? core_sel_t'(addr_bank)
-                           : core_sel_t'(NumCache);
+                           : core_sel_t'(NumCache + (port % NumRemotePort));
 
       end else begin
         // Mixed: fold addr_bank into the appropriate partition via modulo.
@@ -255,7 +256,7 @@ module tcdm_cache_interco #(
             (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
           core_req_sel[port] = local_sel[port]
                              ? core_sel_t'(num_private_cache_q + (addr_bank % num_shared_cache_q))
-                             : core_sel_t'(NumCache);
+                             : core_sel_t'(NumCache + (port % NumRemotePort));
         end
       end
     end
@@ -270,7 +271,9 @@ module tcdm_cache_interco #(
       mem_rsp_sel[port] = mem_rsp[port].user.core_id;
       if (mem_rsp[port].user.tile_id != tile_id_i) begin
         // Response from a remote tile: forward to the remote interco port.
-        mem_rsp_sel[port] = mem_sel_t'(NumCores);
+        // Use core_id % NumRemotePort to select the correct remote-in channel,
+        // consistent with the request-side mapping (port % NumRemotePort).
+        mem_rsp_sel[port] = mem_sel_t'(NumCores + (mem_rsp[port].user.core_id % NumRemotePort));
       end
     end
   end

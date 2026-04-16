@@ -42,7 +42,7 @@ module tb_cachepool;
 
   logic clk;
   logic rst_n;
-  logic eoc;
+  logic [3:0] eoc;
 
   // Toggling the clock
   always #(ClockPeriod/2) clk = !clk;
@@ -217,8 +217,8 @@ module tb_cachepool;
     debug_req = '0;
 
     // Wait for end of computing signal
-    wait (eoc);
-    $display("[EOC] Simulation ended at %t (retval = WIP).", $time);
+    wait (eoc[0]);
+    $display("[EOC] Simulation ended at %t (retval = %u).", $time, eoc[3:1]);
     $finish(0);
   end
 

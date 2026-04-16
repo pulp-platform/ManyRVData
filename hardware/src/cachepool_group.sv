@@ -219,46 +219,63 @@ module cachepool_group
 
   // Tile remote access signals
   // In/Out relative to the tile (out--leave a tile; in--enter a tile)
-  tcdm_req_t        [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_out_req;
-  tcdm_rsp_t        [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_out_rsp;
-  logic             [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_in_ready,      tile_remote_out_ready;
-  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_req_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
-  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_rsp_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_out_rsp_valid, tile_remote_out_rsp_ready;
+  // Tile-side flat layout: index = j + r*NrTCDMPortsPerCore (j=xbar idx, r=remote slot within xbar)
+  tcdm_req_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_out_req;
+  tcdm_rsp_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_out_rsp;
+  logic             [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_ready, tile_remote_out_ready;
 
-  tcdm_req_t        [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_in_req;
-  tcdm_rsp_t        [NumTiles-1:0][NrTCDMPortsPerCore-1:0] tile_remote_in_rsp;
-  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_req_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_req_valid,  tile_remote_in_req_ready;
-  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
+  tcdm_req_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_req;
+  tcdm_rsp_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_rsp;
 
-  // Symmetric xbar, in/out select types are the same
-  remote_tile_sel_t [NumTiles-1:0][NrTCDMPortsPerCore-1:0] remote_out_sel_tile, remote_in_sel_tile;
-  remote_tile_sel_t [NrTCDMPortsPerCore-1:0][NumTiles-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
+  // Xbar-side: NrTCDMPortsPerCore xbars, each with NumTiles*NumRemotePortCore ports
+  // Xbar port index = t*NumRemotePortCore + r
+  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_req_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
+  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_rsp_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_rsp_valid, tile_remote_out_rsp_ready;
+
+  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_req_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_req_valid,  tile_remote_in_req_ready;
+  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_rsp_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
+
+  // Tile-side selection: narrow type, only carries tile_id
+  remote_tile_sel_t [NumTiles-1:0][NumRemotePortTile-1:0]                    remote_out_sel_tile;
+  // Xbar-side selection: wider type, encodes tile_id*NumRemotePortCore + core_id%NumRemotePortCore
+  remote_xbar_sel_t [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
 
   for (genvar t = 0; t < NumTiles; t++) begin
-    for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin
-      assign tile_remote_out_req_chan [p][t] = tile_remote_out_req[t][p].q;
-      assign tile_remote_out_req_valid[p][t] = tile_remote_out_req[t][p].q_valid;
-      assign tile_remote_out_rsp_ready[p][t] = tile_remote_in_ready[t][p];
+    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
+      for (genvar r = 0; r < NumRemotePortCore; r++) begin
+        // tile flat index: j + r*NrTCDMPortsPerCore
+        // xbar port index: t*NumRemotePortCore + r
+        assign tile_remote_out_req_chan [j][t*NumRemotePortCore+r] = tile_remote_out_req[t][j+r*NrTCDMPortsPerCore].q;
+        assign tile_remote_out_req_valid[j][t*NumRemotePortCore+r] = tile_remote_out_req[t][j+r*NrTCDMPortsPerCore].q_valid;
+        assign tile_remote_out_rsp_ready[j][t*NumRemotePortCore+r] = tile_remote_in_ready[t][j+r*NrTCDMPortsPerCore];
 
-      assign tile_remote_out_rsp[t][p].p       = tile_remote_out_rsp_chan [p][t];
-      assign tile_remote_out_rsp[t][p].p_valid = tile_remote_out_rsp_valid[p][t];
-      assign tile_remote_out_rsp[t][p].q_ready = tile_remote_out_req_ready[p][t];
+        assign tile_remote_out_rsp[t][j+r*NrTCDMPortsPerCore].p       = tile_remote_out_rsp_chan [j][t*NumRemotePortCore+r];
+        assign tile_remote_out_rsp[t][j+r*NrTCDMPortsPerCore].p_valid = tile_remote_out_rsp_valid[j][t*NumRemotePortCore+r];
+        assign tile_remote_out_rsp[t][j+r*NrTCDMPortsPerCore].q_ready = tile_remote_out_req_ready[j][t*NumRemotePortCore+r];
 
-      assign tile_remote_in_req[t][p].q       = tile_remote_in_req_chan [p][t];
-      assign tile_remote_in_req[t][p].q_valid = tile_remote_in_req_valid[p][t];
-      assign tile_remote_out_ready[t][p]      = tile_remote_in_rsp_ready[p][t];
+        assign tile_remote_in_req[t][j+r*NrTCDMPortsPerCore].q       = tile_remote_in_req_chan [j][t*NumRemotePortCore+r];
+        assign tile_remote_in_req[t][j+r*NrTCDMPortsPerCore].q_valid = tile_remote_in_req_valid[j][t*NumRemotePortCore+r];
+        assign tile_remote_out_ready[t][j+r*NrTCDMPortsPerCore]      = tile_remote_in_rsp_ready[j][t*NumRemotePortCore+r];
 
-      assign tile_remote_in_rsp_chan [p][t] = tile_remote_in_rsp[t][p].p;
-      assign tile_remote_in_rsp_valid[p][t] = tile_remote_in_rsp[t][p].p_valid;
-      assign tile_remote_in_req_ready[p][t] = tile_remote_in_rsp[t][p].q_ready;
+        assign tile_remote_in_rsp_chan [j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p;
+        assign tile_remote_in_rsp_valid[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p_valid;
+        assign tile_remote_in_req_ready[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
-      // Selection signals
-      assign remote_out_sel_xbar[p][t] = remote_out_sel_tile[t][p];
-      assign remote_in_sel_xbar [p][t] = tile_remote_in_rsp_chan[p][t].user.tile_id;
+        // Request selection: convert narrow tile_id to wide xbar index by appending
+        // core_id % NumRemotePortCore (available in the request channel user field)
+        assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
+            remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumRemotePortCore
+          + tile_remote_out_req_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
+
+        // Response selection: recover xbar port from tile_id and core_id in response user field
+        assign remote_in_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
+            tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.tile_id * NumRemotePortCore
+          + tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
+      end
     end
   end
 
@@ -361,8 +378,8 @@ module cachepool_group
 
     // Decide which tile to go
     reqrsp_xbar #(
-      .NumInp           (NumTiles                     ),
-      .NumOut           (NumTiles                     ),
+      .NumInp           (NumTiles * NumRemotePortCore ),
+      .NumOut           (NumTiles * NumRemotePortCore ),
       .PipeReg          (1'b1                         ),
       .RspReg           (1'b1                         ),
       .ExtReqPrio       (1'b0                         ),
@@ -391,6 +408,5 @@ module cachepool_group
       .mst_sel_i        (remote_in_sel_xbar       [p] )
     );
   end
-
 
 endmodule

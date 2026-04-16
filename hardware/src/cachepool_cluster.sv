@@ -117,7 +117,7 @@ module cachepool_cluster
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           debug_req_i,
     /// End of Computing indicator to notify the host/tb
-    output logic                                  eoc_o,
+    output logic          [3:0]                   eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic          [NrCores-1:0]           meip_i,

@@ -31,7 +31,7 @@ module cachepool_cluster_wrapper
 )(
   input  logic                                 clk_i,
   input  logic                                 rst_ni,
-  output logic                                 eoc_o,
+  output logic          [3:0]                  eoc_o,
   input  logic                                 debug_req_i,
 
   input  logic                                 meip_i,

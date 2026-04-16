@@ -20,5 +20,6 @@ void l1d_flush();
 void l1d_wait();
 void l1d_spm_config (uint32_t size);
 void l1d_part (uint32_t size);
+void l1d_addr (uint32_t addr);
 
-void set_eoc();
+void set_eoc (uint32_t eoc_value);
