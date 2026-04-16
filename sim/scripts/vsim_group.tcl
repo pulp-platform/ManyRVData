@@ -16,4 +16,8 @@ for {set p 0}  {$p < $2} {incr p} {
 	add wave -noupdate -group Group -group remote_xbar[$p] ${xbar_path}/*
 }
 
+add wave -noupdate -group Group -group refill_xbar -group req_xbar ${group_path}/i_refill_xbar/i_req_xbar/*
+add wave -noupdate -group Group -group refill_xbar -group rsp_xbar ${group_path}/i_refill_xbar/i_rsp_xbar/*
+
+
 add wave -noupdate -group Group -group Internal ${group_path}/*

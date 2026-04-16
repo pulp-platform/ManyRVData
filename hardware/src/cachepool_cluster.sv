@@ -218,17 +218,10 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
-  // BootROM wide AXI from group (one per tile, BootROM only)
-  axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_req;
-  axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_rsp;
-  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0]         wide_axi_slv_req;
-  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0]         wide_axi_slv_rsp;
-  axi_narrow_req_t     [NumTiles-1:0][1:0]                  axi_out_req;
-  axi_narrow_resp_t    [NumTiles-1:0][1:0]                  axi_out_resp;
-
-  // 2. BootROM
-  reg_cache_req_t [NumTiles-1:0] bootrom_reg_req;
-  reg_cache_rsp_t [NumTiles-1:0] bootrom_reg_rsp;
+  axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
+  axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
+  axi_narrow_req_t     [NumTiles-1:0][1:0]          axi_out_req;
+  axi_narrow_resp_t    [NumTiles-1:0][1:0]          axi_out_resp;
 
   // 3. Peripherals
   axi_addr_t                               private_start_addr;
@@ -304,9 +297,6 @@ module cachepool_cluster
       .private_start_addr_i     ( private_start_addr        ),
       .axi_narrow_req_o         ( axi_out_req              ),
       .axi_narrow_rsp_i         ( axi_out_resp             ),
-      // BootROM wide AXI (one per tile, BootROM only)
-      .axi_wide_req_o           ( axi_tile_req          ),
-      .axi_wide_rsp_i           ( axi_tile_rsp          ),
       // DRAM refill reqrsp (post-xbar, one per L2 channel)
       .l2_req_o                 ( l2_req                   ),
       .l2_rsp_i                 ( l2_rsp                   ),
@@ -323,16 +313,8 @@ module cachepool_cluster
     );
 
   end else begin : gen_tile
-    // Signals used by gen_tile (single-tile path, not currently active)
-    cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req;
-    cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp;
-    cache_trans_req_t [NumTiles-1:0]       cache_core_req;
-    cache_trans_rsp_t [NumTiles-1:0]       cache_core_rsp;
-
-    // TODO: gen_tile TileMem path — needs its own axi_tile_mem signals once fully migrated
-    axi_mst_cache_req_t  gen_tile_mem_req;
-    axi_mst_cache_resp_t gen_tile_mem_rsp;
-
+    // TODO: single-tile path not yet migrated to new refill/bootrom datapath.
+    // This branch is never elaborated in the current configuration (NumTiles > 1 always).
     cachepool_tile #(
       .AxiAddrWidth             ( AxiAddrWidth              ),
       .AxiDataWidth             ( AxiDataWidth              ),
@@ -388,7 +370,6 @@ module cachepool_cluster
       .private_start_addr_i     ( private_start_addr        ),
       .axi_out_req_o            ( axi_out_req  [0]          ),
       .axi_out_resp_i           ( axi_out_resp [0]          ),
-      // Remote Ports (not used)
       .remote_req_o             (                           ),
       .remote_req_dst_o         (                           ),
       .remote_rsp_i             ( '0                        ),
@@ -396,13 +377,11 @@ module cachepool_cluster
       .remote_req_i             ( '0                        ),
       .remote_rsp_o             (                           ),
       .remote_rsp_ready_o       (                           ),
-      // Cache Refill Ports
-      .cache_refill_req_o       ( cache_refill_req          ),
-      .cache_refill_rsp_i       ( cache_refill_rsp          ),
-      .axi_wide_req_o           ( {gen_tile_mem_req, axi_tile_req[0]}  ),
-      .axi_wide_rsp_i           ( {gen_tile_mem_rsp, axi_tile_rsp[0]}  ),
-      // Peripherals
-      .icache_events_o          ( icache_events             ),
+      .cache_refill_req_o       (                           ),
+      .cache_refill_rsp_i       ( '0                        ),
+      .axi_wide_req_o           (                           ),
+      .axi_wide_rsp_i           ( '0                        ),
+      .icache_events_o          (                           ),
       .icache_prefetch_enable_i ( icache_prefetch_enable    ),
       .cl_interrupt_i           ( cl_interrupt              ),
       .dynamic_offset_i         ( dynamic_offset            ),
@@ -411,26 +390,6 @@ module cachepool_cluster
       .l1d_insn_valid_i         ( l1d_insn_valid            ),
       .l1d_insn_ready_o         ( l1d_insn_ready            ),
       .l1d_busy_i               ( l1d_busy                  )
-    );
-
-    axi_to_reqrsp #(
-      .axi_req_t    ( axi_mst_cache_req_t        ),
-      .axi_rsp_t    ( axi_mst_cache_resp_t       ),
-      .AddrWidth    ( AxiAddrWidth               ),
-      .DataWidth    ( AxiDataWidth               ),
-      .UserWidth    ( $bits(refill_user_t)       ),
-      .IdWidth      ( AxiIdWidthIn               ),
-      .BufDepth     ( NumSpatzOutstandingLoads   ),
-      .reqrsp_req_t ( cache_trans_req_t          ),
-      .reqrsp_rsp_t ( cache_trans_rsp_t          )
-    ) i_axi2reqrsp  (
-      .clk_i        ( clk_i                      ),
-      .rst_ni       ( rst_ni                     ),
-      .busy_o       (                            ),
-      .axi_req_i    ( gen_tile_mem_req           ),
-      .axi_rsp_o    ( gen_tile_mem_rsp           ),
-      .reqrsp_req_o ( cache_core_req[0]          ),
-      .reqrsp_rsp_i ( cache_core_rsp[0]          )
     );
   end
 
@@ -534,43 +493,6 @@ module cachepool_cluster
     assign axi_out_resp[0][ClusterUart] = axi_narrow_resp_i;
   end
 
-  /***** BootROM ****/
-  for (genvar t = 0; t < NumTiles; t++) begin : gen_bootrom
-    axi_to_reg #(
-      .ADDR_WIDTH         (AxiAddrWidth        ),
-      .DATA_WIDTH         (AxiDataWidth        ),
-      .AXI_MAX_WRITE_TXNS (1                   ),
-      .AXI_MAX_READ_TXNS  (1                   ),
-      .DECOUPLE_W         (0                   ),
-      .ID_WIDTH           (WideIdWidthIn       ),
-      .USER_WIDTH         (AxiUserWidth        ),
-      .axi_req_t          (axi_mst_cache_req_t ),
-      .axi_rsp_t          (axi_mst_cache_resp_t),
-      .reg_req_t          (reg_cache_req_t     ),
-      .reg_rsp_t          (reg_cache_rsp_t     )
-    ) i_axi_to_reg_bootrom (
-      .clk_i      (clk_i              ),
-      .rst_ni     (rst_ni             ),
-      .testmode_i (1'b0               ),
-      .axi_req_i  (axi_tile_req[t] ),
-      .axi_rsp_o  (axi_tile_rsp[t] ),
-      .reg_req_o  (bootrom_reg_req[t] ),
-      .reg_rsp_i  (bootrom_reg_rsp[t] )
-    );
-
-    bootrom i_bootrom (
-      .clk_i  (clk_i                            ),
-      .req_i  (bootrom_reg_req[t].valid         ),
-      .addr_i (addr_t'(bootrom_reg_req[t].addr) ),
-      .rdata_o(bootrom_reg_rsp[t].rdata         )
-    );
-
-    `FF(bootrom_reg_rsp[t].ready, bootrom_reg_req[t].valid, 1'b0)
-
-    assign bootrom_reg_rsp[t].error = 1'b0;
-  end
-
-
   /***** CSR/Peripherals *****/
 
   `REG_BUS_TYPEDEF_ALL(reg, narrow_addr_t, narrow_data_t, narrow_strb_t)
@@ -644,13 +566,13 @@ module cachepool_cluster
     .SpillR        ( XbarLatency[0]         ),
     .MaxWTrans     ( 2                      )
   ) i_axi_csr_mux (
-    .clk_i       ( clk_i        ),   // Clock
-    .rst_ni      ( rst_ni       ),  // Asynchronous reset active low
-    .test_i      ('0            ),  // Test Mode enable
+    .clk_i       ( clk_i                              ),
+    .rst_ni      ( rst_ni                             ),
+    .test_i      ('0                                  ),
     .slv_reqs_i  ( {axi_in_req_i,  axi_core_csr_req}  ),
     .slv_resps_o ( {axi_in_resp_o, axi_core_csr_rsp}  ),
-    .mst_req_o   ( axi_csr_req  ),
-    .mst_resp_i  ( axi_csr_rsp  )
+    .mst_req_o   ( axi_csr_req                        ),
+    .mst_resp_i  ( axi_csr_rsp                        )
   );
 
   axi_to_reg #(
@@ -666,13 +588,13 @@ module cachepool_cluster
     .reg_req_t          (reg_req_t                ),
     .reg_rsp_t          (reg_rsp_t                )
   ) i_csr_axi_to_reg (
-    .clk_i      (clk_i                    ),
-    .rst_ni     (rst_ni                   ),
-    .testmode_i (1'b0                     ),
-    .axi_req_i  (axi_csr_req              ),
-    .axi_rsp_o  (axi_csr_rsp              ),
-    .reg_req_o  (reg_req                  ),
-    .reg_rsp_i  (reg_rsp                  )
+    .clk_i              (clk_i                    ),
+    .rst_ni             (rst_ni                   ),
+    .testmode_i         (1'b0                     ),
+    .axi_req_i          (axi_csr_req              ),
+    .axi_rsp_o          (axi_csr_rsp              ),
+    .reg_req_o          (reg_req                  ),
+    .reg_rsp_i          (reg_rsp                  )
   );
 
 

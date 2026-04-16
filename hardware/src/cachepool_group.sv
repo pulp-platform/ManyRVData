@@ -139,13 +139,10 @@ module cachepool_group
     /// AXI Narrow out-port (UART/Peripheral)
     output axi_narrow_req_t   [GroupNarrowAxiPorts-1:0] axi_narrow_req_o,
     input  axi_narrow_resp_t  [GroupNarrowAxiPorts-1:0] axi_narrow_rsp_i,
-    /// Wide AXI ports to cluster level (BootROM only, one per tile)
-    output axi_out_req_t          [NumTiles-1:0] axi_wide_req_o,
-    input  axi_out_resp_t         [NumTiles-1:0] axi_wide_rsp_i,
 
     /// DRAM refill reqrsp ports (post-xbar, one per L2 channel)
-    output l2_req_t   [ClusterWideOutAxiPorts-1:0] l2_req_o,
-    input  l2_rsp_t   [ClusterWideOutAxiPorts-1:0] l2_rsp_i,
+    output l2_req_t        [ClusterWideOutAxiPorts-1:0] l2_req_o,
+    input  l2_rsp_t        [ClusterWideOutAxiPorts-1:0] l2_rsp_i,
 
     /// Peripheral signals
     output icache_events_t                [NrCores-1:0] icache_events_o,
@@ -153,10 +150,10 @@ module cachepool_group
     input  logic                          [NrCores-1:0] cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
     input  logic                                  [3:0] l1d_private_i,
-    input  cache_insn_t                                   l1d_insn_i,
+    input  cache_insn_t                                 l1d_insn_i,
     input  logic                                        l1d_insn_valid_i,
-    output logic                       [NumTiles-1:0] l1d_insn_ready_o,
-    input  logic                       [NumTiles-1:0] l1d_busy_i,
+    output logic                       [NumTiles-1:0]   l1d_insn_ready_o,
+    input  logic                       [NumTiles-1:0]   l1d_busy_i,
 
     /// SRAM Configuration
     input  impl_in_t                    [NrSramCfg-1:0] impl_i,
@@ -218,18 +215,92 @@ module cachepool_group
   assign error_o = |error;
 
   // Internal tile-side wide AXI: split into two flat arrays by port function
-  // BootROM (TileBootROM=0): goes to cluster output
+  // BootROM (TileBootROM=0): muxed into single shared bootrom in this group
   axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_bootrom_req;
   axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_bootrom_rsp;
   // TileMem (TileMem=1): stays in group, fed into axi_to_reqrsp
   axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_mem_req;
   axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_mem_rsp;
 
-  // BootROM ports routed directly to cluster output (one per tile)
-  for (genvar t = 0; t < NumTiles; t++) begin : gen_bootrom_passthrough
-    assign axi_wide_req_o[t]          = axi_tile_bootrom_req[t];
-    assign axi_tile_bootrom_rsp[t]    = axi_wide_rsp_i[t];
+  // Mux all per-tile BootROM AXI ports into a single bootrom instance
+  axi_bootrom_slv_req_t  axi_bootrom_mux_req;
+  axi_bootrom_slv_resp_t axi_bootrom_mux_rsp;
+
+  if (NumTiles > 1) begin : gen_bootrom_mux
+    axi_mux #(
+      .SlvAxiIDWidth ( WideIdWidthIn            ),
+      .slv_aw_chan_t ( axi_mst_cache_aw_chan_t  ),
+      .mst_aw_chan_t ( axi_bootrom_slv_aw_chan_t ),
+      .w_chan_t      ( axi_mst_cache_w_chan_t   ),
+      .slv_b_chan_t  ( axi_mst_cache_b_chan_t   ),
+      .mst_b_chan_t  ( axi_bootrom_slv_b_chan_t  ),
+      .slv_ar_chan_t ( axi_mst_cache_ar_chan_t  ),
+      .mst_ar_chan_t ( axi_bootrom_slv_ar_chan_t ),
+      .slv_r_chan_t  ( axi_mst_cache_r_chan_t   ),
+      .mst_r_chan_t  ( axi_bootrom_slv_r_chan_t  ),
+      .slv_req_t     ( axi_mst_cache_req_t      ),
+      .slv_resp_t    ( axi_mst_cache_resp_t     ),
+      .mst_req_t     ( axi_bootrom_slv_req_t    ),
+      .mst_resp_t    ( axi_bootrom_slv_resp_t   ),
+      .NoSlvPorts    ( NumTiles                 ),
+      .FallThrough   ( 0                        ),
+      .SpillAw       ( XbarLatency[4]           ),
+      .SpillW        ( XbarLatency[3]           ),
+      .SpillB        ( XbarLatency[2]           ),
+      .SpillAr       ( XbarLatency[1]           ),
+      .SpillR        ( XbarLatency[0]           ),
+      .MaxWTrans     ( 2                        )
+    ) i_axi_bootrom_mux (
+      .clk_i      ( clk_i                ),
+      .rst_ni     ( rst_ni               ),
+      .test_i     ( '0                   ),
+      .slv_reqs_i ( axi_tile_bootrom_req ),
+      .slv_resps_o( axi_tile_bootrom_rsp ),
+      .mst_req_o  ( axi_bootrom_mux_req  ),
+      .mst_resp_i ( axi_bootrom_mux_rsp  )
+    );
+  end else begin : gen_bootrom_connect
+    // NumTiles==1: direct connect, no ID widening needed
+    assign axi_bootrom_mux_req             = axi_bootrom_slv_req_t'(axi_tile_bootrom_req[0]);
+    assign axi_tile_bootrom_rsp[0]         = axi_mst_cache_resp_t'(axi_bootrom_mux_rsp);
   end
+
+  // Single BootROM instance shared across all tiles in the group
+  `REG_BUS_TYPEDEF_ALL(reg_bootrom, addr_t, data_cache_t, strb_cache_t)
+  reg_bootrom_req_t bootrom_reg_req;
+  reg_bootrom_rsp_t bootrom_reg_rsp;
+
+  axi_to_reg #(
+    .ADDR_WIDTH         ( AxiAddrWidth           ),
+    .DATA_WIDTH         ( AxiDataWidth           ),
+    .AXI_MAX_WRITE_TXNS ( 1                      ),
+    .AXI_MAX_READ_TXNS  ( 1                      ),
+    .DECOUPLE_W         ( 0                      ),
+    .ID_WIDTH           ( BootRomAxiSlvIdWidth   ),
+    .USER_WIDTH         ( AxiUserWidth           ),
+    .axi_req_t          ( axi_bootrom_slv_req_t  ),
+    .axi_rsp_t          ( axi_bootrom_slv_resp_t ),
+    .reg_req_t          ( reg_bootrom_req_t      ),
+    .reg_rsp_t          ( reg_bootrom_rsp_t      )
+  ) i_axi_to_reg_bootrom (
+    .clk_i      ( clk_i              ),
+    .rst_ni     ( rst_ni             ),
+    .testmode_i ( 1'b0               ),
+    .axi_req_i  ( axi_bootrom_mux_req ),
+    .axi_rsp_o  ( axi_bootrom_mux_rsp ),
+    .reg_req_o  ( bootrom_reg_req    ),
+    .reg_rsp_i  ( bootrom_reg_rsp    )
+  );
+
+  bootrom i_bootrom (
+    .clk_i   ( clk_i                             ),
+    .req_i   ( bootrom_reg_req.valid             ),
+    .addr_i  ( addr_t'(bootrom_reg_req.addr)     ),
+    .rdata_o ( bootrom_reg_rsp.rdata             )
+  );
+
+  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+  assign bootrom_reg_rsp.error = 1'b0;
 
   // Cache refill ports from tiles (NumL1CacheCtrl = NumCores total)
   cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req;
@@ -449,7 +520,7 @@ module cachepool_group
   end
 
   // ---------------------
-  // Cluster (DRAM) xbar
+  // Refill (DRAM) xbar
   // ---------------------
   reqrsp_xbar #(
     .NumInp          ( NumClusterMst*NumTiles  ),
@@ -459,7 +530,7 @@ module cachepool_group
     .ExtRspPrio      ( Burst_Enable            ),
     .tcdm_req_chan_t ( cache_trans_req_chan_t  ),
     .tcdm_rsp_chan_t ( cache_trans_rsp_chan_t  )
-  ) i_cluster_xbar (
+  ) i_refill_xbar (
     .clk_i           ( clk_i          ),
     .rst_ni          ( rst_ni         ),
     .slv_req_i       ( tile_req_chan  ),
@@ -630,8 +701,7 @@ module cachepool_group
       .clk_i                    ( clk_i                                                       ),
       .rst_ni                   ( rst_ni                                                      ),
       .impl_i                   ( impl_i                                                      ),
-      .error_o                  ( error[t]                                                    ),
-      // TODO: remove hardcode
+      .error_o                  ( error             [t]                                       ),
       .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
       .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
       .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
@@ -644,19 +714,19 @@ module cachepool_group
       .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
       // Remote Access Ports
-      .remote_req_o             ( tile_remote_out_req[t]                                      ),
-      .remote_req_dst_o         ( remote_out_sel_tile[t]                                      ),
-      .remote_rsp_i             ( tile_remote_out_rsp[t]                                      ),
+      .remote_req_o             ( tile_remote_out_req  [t]                                    ),
+      .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),
+      .remote_rsp_i             ( tile_remote_out_rsp  [t]                                    ),
       .remote_rsp_ready_i       ( tile_remote_out_ready[t]                                    ),
-      .remote_req_i             ( tile_remote_in_req [t]                                      ),
-      .remote_rsp_o             ( tile_remote_in_rsp [t]                                      ),
-      .remote_rsp_ready_o       ( tile_remote_in_ready[t]                                     ),
+      .remote_req_i             ( tile_remote_in_req   [t]                                    ),
+      .remote_rsp_o             ( tile_remote_in_rsp   [t]                                    ),
+      .remote_rsp_ready_o       ( tile_remote_in_ready [t]                                    ),
       // Cache Refill Ports (now internal, connected to group-level xbar)
-      .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]          ),
-      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]          ),
+      .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
       // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
-      .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}            ),
-      .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}            ),
+      .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
+      .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
       // Peripherals
       .icache_events_o          ( /* unused */                                                ),
       .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
