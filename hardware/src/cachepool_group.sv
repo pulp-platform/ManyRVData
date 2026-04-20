@@ -265,16 +265,20 @@ module cachepool_group
         assign tile_remote_in_rsp_valid[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p_valid;
         assign tile_remote_in_req_ready[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
-        // Request selection: convert narrow tile_id to wide xbar index by appending
-        // core_id % NumRemotePortCore (available in the request channel user field)
+        // Request selection: route to target tile's remote-in slot based on
+        // target tile ID, so that all requests to the same destination tile
+        // travel through one pipeline — preserving write-before-read ordering.
         assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
             remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumRemotePortCore
-          + tile_remote_out_req_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
+          + remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] % NumRemotePortCore);
 
-        // Response selection: recover xbar port from tile_id and core_id in response user field
+        // Response selection: route back to source tile's remote-out slot.
+        // The originator (tile_id in user field) sent on slot
+        // (target_tile % NumRemotePortCore).  The responding tile is `t`
+        // (genvar), so target_tile = t.
         assign remote_in_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
             tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.tile_id * NumRemotePortCore
-          + tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
+          + t % NumRemotePortCore);
       end
     end
   end
