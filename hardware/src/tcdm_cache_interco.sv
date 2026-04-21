@@ -218,6 +218,7 @@ module tcdm_cache_interco #(
 
   for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_req_sel
     logic [CacheBankBits-1:0] addr_bank;
+    logic [TileIDWidth-1:0]   addr_tile;
 
     always_comb begin
       // Defaults.
@@ -226,6 +227,8 @@ module tcdm_cache_interco #(
 
       // Extract the raw BankSel field from the address.
       addr_bank = core_req[port].addr[dynamic_offset_i +: CacheBankBits];
+      // Extract the target TileID from the address (used for remote port selection).
+      addr_tile = core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth];
 
       if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache) || NumTiles == 1) begin
         // All-private or single-tile: every request is local.
@@ -236,11 +239,13 @@ module tcdm_cache_interco #(
       end else if (num_private_cache_q == '0) begin
         // All-shared: check TileID to decide local vs. remote.
         // Use the full BankSel field directly (no folding needed).
-        local_sel[port] =
-          (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
+        local_sel[port] = (addr_tile == tile_id_i);
+        // Route remote requests by target tile ID so that all accesses to the
+        // same tile share a single pipeline, preserving write-before-read
+        // ordering across barriers.
         core_req_sel[port] = local_sel[port]
                            ? core_sel_t'(addr_bank)
-                           : core_sel_t'(NumCache + (port % NumRemotePort));
+                           : core_sel_t'(NumCache + (addr_tile % NumRemotePort));
 
       end else begin
         // Mixed: fold addr_bank into the appropriate partition via modulo.
@@ -252,11 +257,10 @@ module tcdm_cache_interco #(
         end else begin
           // Shared request: check TileID to decide local vs. remote.
           // bank = num_private_cache_q + (addr_bank % num_shared_cache_q).
-          local_sel[port] =
-            (core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth] == tile_id_i);
+          local_sel[port] = (addr_tile == tile_id_i);
           core_req_sel[port] = local_sel[port]
                              ? core_sel_t'(num_private_cache_q + (addr_bank % num_shared_cache_q))
-                             : core_sel_t'(NumCache + (port % NumRemotePort));
+                             : core_sel_t'(NumCache + (addr_tile % NumRemotePort));
         end
       end
     end
@@ -270,10 +274,11 @@ module tcdm_cache_interco #(
     always_comb begin
       mem_rsp_sel[port] = mem_rsp[port].user.core_id;
       if (mem_rsp[port].user.tile_id != tile_id_i) begin
-        // Response from a remote tile: forward to the remote interco port.
-        // Use core_id % NumRemotePort to select the correct remote-in channel,
-        // consistent with the request-side mapping (port % NumRemotePort).
-        mem_rsp_sel[port] = mem_sel_t'(NumCores + (mem_rsp[port].user.core_id % NumRemotePort));
+        // Response destined for a remote tile: forward to the remote interco
+        // port that matches the incoming request path.  The group-level xbar
+        // routes requests from source tile S to our remote-in slot
+        // (S % NumRemotePort), so responses must return via the same slot.
+        mem_rsp_sel[port] = mem_sel_t'(NumCores + (mem_rsp[port].user.tile_id % NumRemotePort));
       end
     end
   end
