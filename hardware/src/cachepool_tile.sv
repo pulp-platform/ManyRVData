@@ -545,8 +545,10 @@ module cachepool_tile
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
-  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
-  assign dynamic_offset = dynamic_offset_i;
+  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset_d, dynamic_offset_q;
+  `FF(dynamic_offset_q, dynamic_offset_d, '0)
+  assign dynamic_offset_d = dynamic_offset_i;
+
   // One entry per flat remote port: flat index = j + r*NrTCDMPortsPerCore
   // where j is the xbar index and r is the remote slot within that xbar.
   logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
@@ -626,19 +628,19 @@ module cachepool_tile
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
       .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
-      .clk_i                ( clk_i                                              ),
-      .rst_ni               ( rst_ni                                             ),
-      .tile_id_i            ( tile_id_i                                          ),
-      .dynamic_offset_i     ( dynamic_offset                                     ),
-      .private_start_addr_i ( private_start_addr_i                               ),
-      .num_private_cache_i  ( num_private_cache                                  ),
-      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
-      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
-      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
-      .tile_sel_o           ( xbar_remote_req_dst                                ),
-      .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
-      .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
-      .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
+      .clk_i                ( clk_i                                         ),
+      .rst_ni               ( rst_ni                                        ),
+      .tile_id_i            ( tile_id_i                                     ),
+      .dynamic_offset_i     ( dynamic_offset_q                              ),
+      .private_start_addr_i ( private_start_addr_i                          ),
+      .num_private_cache_i  ( num_private_cache                             ),
+      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]} ),
+      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]} ),
+      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]} ),
+      .tile_sel_o           ( xbar_remote_req_dst                           ),
+      .mem_req_o            ({xbar_remote_req_o,      cache_xbar_req   [j]} ),
+      .mem_rsp_ready_o      ({xbar_remote_out_pready, cache_xbar_pready[j]} ),
+      .mem_rsp_i            ({xbar_remote_rsp_i,      cache_xbar_rsp   [j]} )
     );
   end
 
@@ -757,12 +759,12 @@ module cachepool_tile
     $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
     $display("  CoalFactor     : %0d", L1CoalFactor);
     $display("  RefillDataWidth: %0d", RefillDataWidth);
-    $display("  DynamicOffset  : %0d", dynamic_offset);
+    $display("  DynamicOffset  : %0d", dynamic_offset_q);
   end
 
-  // CL-offset mask: bits below dynamic_offset, verbatim in both directions.
+  // CL-offset mask: bits below dynamic_offset_q, verbatim in both directions.
   logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
-  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset) - 1;
+  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset_q) - 1;
 
   cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
   burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
@@ -1031,14 +1033,14 @@ module cachepool_tile
 
         rot_field = addr_rot >> (SpatzAxiAddrWidth - refill_bits_to_rotate);
 
-        upper     = (addr_rot >> dynamic_offset)
+        upper     = (addr_rot >> dynamic_offset_q)
                   & ((SpatzAxiAddrWidth'(1) << (SpatzAxiAddrWidth
-                                                - dynamic_offset
+                                                - dynamic_offset_q
                                                 - refill_bits_to_rotate)) - 1);
 
         cache_refill_req_o[cb].q.addr = lower
-                                      | (rot_field << dynamic_offset)
-                                      | (upper     << (dynamic_offset
+                                      | (rot_field << dynamic_offset_q)
+                                      | (upper     << (dynamic_offset_q
                                                        + refill_bits_to_rotate));
       end
     end
