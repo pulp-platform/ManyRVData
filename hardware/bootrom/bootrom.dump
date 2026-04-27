@@ -1,5 +1,5 @@
 
-/scratch2/diyou/cachepool/ManyRVData/hardware/bootrom/bootrom.elf:     file format elf32-littleriscv
+/scratch/diyou/cachepool/4t16c/ManyRVData/hardware/bootrom/bootrom.elf:     file format elf32-littleriscv
 
 
 Disassembly of section .text:
