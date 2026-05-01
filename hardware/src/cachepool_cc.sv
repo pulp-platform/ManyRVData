@@ -95,6 +95,23 @@ module cachepool_cc
     /// Insert Pipeline registers into data memory path (response)
     parameter bit                                          RegisterCoreRsp          = 0,
     parameter snitch_pma_pkg::snitch_pma_t                 SnitchPMACfg             = '{default: 0},
+    /// DEBUG: enable Spatz<->TCDM request/response scoreboard.
+    /// When 1, per-port counters and a queue of outstanding (id,addr,write)
+    /// records are exposed in the waveform under
+    ///   gen_spatz_req_scoreboard.gen_port[P]/{req_id_q,rsp_id_q,outstanding_q,sb_q,...}
+    /// A watchdog $displays the contents of any port that has been stuck
+    /// for >5 us (configurable below).  Defaults off; pass
+    ///   +define+ENABLE_SPATZ_REQ_SCOREBOARD
+    /// to vlog to enable globally, or override per instance.
+`ifdef ENABLE_SPATZ_REQ_SCOREBOARD
+    parameter bit                                          EnableSpatzReqScoreboard = 1'b1,
+`else
+    parameter bit                                          EnableSpatzReqScoreboard = 1'b0,
+`endif
+    /// DEBUG: scoreboard depth (entries per port).
+    parameter int                          unsigned        SpatzReqScoreboardDepth  = 64,
+    /// DEBUG: watchdog timeout in ps. 0 disables the watchdog.
+    parameter longint                      unsigned        SpatzReqScoreboardWdogPs = 5_000_000,
     /// Derived parameter *Do not override*
     parameter int                          unsigned        NumSpatzFUs              = (NumSpatzFPUs > NumSpatzIPUs) ? NumSpatzFPUs : NumSpatzIPUs,
     parameter int                          unsigned        NumMemPortsPerSpatz      = NumSpatzFUs,
@@ -360,6 +377,188 @@ module cachepool_cc
     end
 `endif
   end
+
+  // ---------------------------------------------------------------------------
+  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY).
+  //
+  // Compile-time gated by `EnableSpatzReqScoreboard`.  When the parameter is
+  // 1'b0 the entire `gen_spatz_req_scoreboard` block is elaborated empty and
+  // synthesizes to nothing.
+  //
+  // The scoreboard is a per-port table indexed by `user.req_id` (NOT a
+  // FIFO).  This is critical because:
+  //
+  //   * The 4 cache banks can return responses in any global order.
+  //   * Each cache bank has MSHRs and supports hit-under-miss / miss-under-
+  //     miss, so even a single bank can return responses out-of-order.
+  //
+  // A FIFO scoreboard would mis-attribute out-of-order responses to the
+  // wrong issued request.  Indexing the slot table by `user.req_id` makes
+  // the match correct regardless of arrival order: when a response arrives
+  // its `user.req_id` directly identifies which outstanding entry it
+  // resolves.
+  //
+  // Per port:
+  //   sb_q[p][id]     -- {valid, write, global_id, addr, issue_time}
+  //                      Slot is filled on req_fire (idx = req's user.req_id);
+  //                      cleared on rsp_fire (idx = rsp's user.req_id).
+  //                      `valid` set means an outstanding request with that
+  //                      `user.req_id` is currently in flight.
+  //   req_id_q        -- 32-bit cumulative count of issued reqs (sanity)
+  //   rsp_id_q        -- 32-bit cumulative count of received rsps (sanity)
+  //   outstanding_q   -- req_id_q - rsp_id_q (in-flight count)
+  //   req_fire/rsp_fire -- per-cycle handshake strobes (waveform aid)
+  //
+  // The slot table size = `NumSpatzOutstandingLoads`, which is the maximum
+  // number of unique `user.req_id` values Spatz can issue per port.  Spatz
+  // does not reuse a `user.req_id` while another request with the same id
+  // is in flight, so each slot can hold at most one entry at any time.
+  //
+  // SVA / watchdog:
+  //   * sba_no_dup_push  : asserts a slot is not already valid when pushed.
+  //   * sba_pop_was_valid: asserts a slot was valid when popped.
+  //   * watchdog $displays valid entries of stuck ports every WdogPs ps.
+  // ---------------------------------------------------------------------------
+  localparam int unsigned SpatzSbPorts    = NumMemPortsPerSpatz;
+  localparam int unsigned SpatzSbReqIdW   = (NumSpatzOutstandingLoads <= 1) ? 1
+                                          : $clog2(NumSpatzOutstandingLoads);
+  localparam int unsigned SpatzSbDepth    = (NumSpatzOutstandingLoads <= 1) ? 1
+                                          : NumSpatzOutstandingLoads;
+
+  typedef struct packed {
+    logic         valid;
+    logic         write;
+    logic [31:0]  global_id;     // monotonic counter at issue time
+    logic [31:0]  addr;
+    logic [63:0]  issue_time;    // $time at issue (sim only)
+  } spatz_sb_entry_t;
+
+  if (EnableSpatzReqScoreboard) begin : gen_spatz_req_scoreboard
+
+    // Module-scope arrays.  Adding the array name once in the wave window
+    // expands to all ports / all ids.
+    logic            [SpatzSbPorts-1:0][31:0]                  req_id_q,      req_id_d;
+    logic            [SpatzSbPorts-1:0][31:0]                  rsp_id_q,      rsp_id_d;
+    logic            [SpatzSbPorts-1:0][31:0]                  outstanding_q, outstanding_d;
+    spatz_sb_entry_t [SpatzSbPorts-1:0][SpatzSbDepth-1:0]      sb_q,          sb_d;
+    logic            [SpatzSbPorts-1:0]                        req_fire;
+    logic            [SpatzSbPorts-1:0]                        rsp_fire;
+    // Per-cycle indices used (waveform aid)
+    logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     req_idx;
+    logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     rsp_idx;
+`ifndef TARGET_SYNTHESIS
+    logic [SpatzSbPorts-1:0][63:0]                             last_progress_time_q;
+    logic [SpatzSbPorts-1:0][63:0]                             last_warn_time_q;
+`endif
+
+    `FFARN(req_id_q,      req_id_d,      '0, clk_i, rst_ni)
+    `FFARN(rsp_id_q,      rsp_id_d,      '0, clk_i, rst_ni)
+    `FFARN(outstanding_q, outstanding_d, '0, clk_i, rst_ni)
+    `FFARN(sb_q,          sb_d,          '0, clk_i, rst_ni)
+
+    for (genvar p = 0; p < SpatzSbPorts; p++) begin : gen_port
+      assign req_fire[p] = spatz_mem_req_valid[p] & spatz_mem_req_ready[p];
+      assign rsp_fire[p] = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
+      // Slot index is the lower SpatzSbReqIdW bits of user.req_id.
+      // (`reqid_t` is exactly that width, so this is a width match.)
+      assign req_idx[p]  = SpatzSbReqIdW'(spatz_mem_req[p].user.req_id);
+      assign rsp_idx[p]  = SpatzSbReqIdW'(spatz_mem_rsp[p].user.req_id);
+
+      always_comb begin
+        req_id_d[p]      = req_id_q[p];
+        rsp_id_d[p]      = rsp_id_q[p];
+        sb_d[p]          = sb_q[p];
+
+        // Push (slot indexed by request's user.req_id).
+        if (req_fire[p]) begin
+          req_id_d[p]                          = req_id_q[p] + 32'd1;
+          sb_d[p][req_idx[p]].valid            = 1'b1;
+          sb_d[p][req_idx[p]].write            = spatz_mem_req[p].write;
+          sb_d[p][req_idx[p]].global_id        = req_id_q[p];
+          sb_d[p][req_idx[p]].addr             = 32'(spatz_mem_req[p].addr);
+`ifndef TARGET_SYNTHESIS
+          sb_d[p][req_idx[p]].issue_time       = 64'($time);
+`else
+          sb_d[p][req_idx[p]].issue_time       = '0;
+`endif
+        end
+
+        // Pop (slot indexed by response's user.req_id).
+        // If both fire same cycle for the SAME id, the pop wins (rare,
+        // would require Spatz to re-issue the id in the same cycle the
+        // previous one resolves; semantics match a straight-through hit).
+        if (rsp_fire[p]) begin
+          rsp_id_d[p]                          = rsp_id_q[p] + 32'd1;
+          sb_d[p][rsp_idx[p]].valid            = 1'b0;
+        end
+
+        outstanding_d[p] = (req_id_d[p] - rsp_id_d[p]);
+      end
+    end : gen_port
+
+`ifndef TARGET_SYNTHESIS
+    // SVA: a request must not push to a slot that is already valid (would
+    // mean Spatz reused a user.req_id while a previous one with the same
+    // id was still in flight -- a protocol violation).
+    for (genvar p = 0; p < SpatzSbPorts; p++) begin : gen_assert_dup_push
+      property p_no_dup_push;
+        @(posedge clk_i) disable iff (!rst_ni)
+        req_fire[p] |-> !sb_q[p][req_idx[p]].valid;
+      endproperty
+      sba_no_dup_push: assert property (p_no_dup_push)
+        else $error("[SPATZ-SB %m port %0d] DUP-PUSH: req_id=0x%h slot already valid (prior global_id=%0d addr=0x%08h)",
+                    p, req_idx[p],
+                    sb_q[p][req_idx[p]].global_id,
+                    sb_q[p][req_idx[p]].addr);
+
+      // SVA: a response must not pop a slot that is invalid (would mean
+      // a response arrived for a request that was never issued or already
+      // resolved).
+      property p_pop_was_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+        rsp_fire[p] |-> sb_q[p][rsp_idx[p]].valid;
+      endproperty
+      sba_pop_was_valid: assert property (p_pop_was_valid)
+        else $error("[SPATZ-SB %m port %0d] STRAY-RSP: rsp_id=0x%h has no matching outstanding request",
+                    p, rsp_idx[p]);
+    end
+
+    // Watchdog: when a port has not received any rsp for SpatzReqScoreboardWdogPs
+    // and outstanding > 0, dump the still-valid entries (each is the
+    // exact `user.req_id` whose response is missing).  Re-warns every
+    // WdogPs while still stuck.
+    if (SpatzReqScoreboardWdogPs > 0) begin : gen_wdog
+      always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+          last_progress_time_q <= '0;
+          last_warn_time_q     <= '0;
+        end else begin
+          for (int unsigned p = 0; p < SpatzSbPorts; p++) begin
+            if (rsp_fire[p] || outstanding_q[p] == 32'd0) begin
+              last_progress_time_q[p] <= 64'($time);
+              last_warn_time_q[p]     <= 64'($time);
+            end
+            if (outstanding_q[p] != 32'd0 &&
+                (64'($time) - last_progress_time_q[p]) > SpatzReqScoreboardWdogPs &&
+                (64'($time) - last_warn_time_q[p])     > SpatzReqScoreboardWdogPs) begin
+              last_warn_time_q[p] <= 64'($time);
+              $display("[%0t] [SPATZ-SB %m port %0d] STUCK: req_cnt=%0d rsp_cnt=%0d outstanding=%0d (entries below indexed by user.req_id)",
+                       $time, p, req_id_q[p], rsp_id_q[p], outstanding_q[p]);
+              for (int unsigned ii = 0; ii < SpatzSbDepth; ii++) begin
+                if (sb_q[p][ii].valid) begin
+                  $display("    user.req_id=0x%02h global_id=%0d addr=0x%08h write=%0b issued@%0t (age=%0t)",
+                           ii, sb_q[p][ii].global_id, sb_q[p][ii].addr, sb_q[p][ii].write,
+                           sb_q[p][ii].issue_time,
+                           64'($time) - sb_q[p][ii].issue_time);
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+`endif
+  end : gen_spatz_req_scoreboard
 
   typedef enum integer {
     SnitchMem       = 0,
