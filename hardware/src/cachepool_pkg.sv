@@ -52,19 +52,32 @@ package cachepool_pkg;
   //  TILE CONFIG  //
   ///////////////////
   // How many cores for each tile?
-  localparam int unsigned NumCoresTile      = NumCores / NumTiles;
+  localparam int unsigned NumCoresTile        = NumCores / NumTiles;
 
   // How many remote ports for each tile per core's port?
-  localparam int unsigned NumRemotePortCore = `ifdef REMOTE_PORT_PER_CORE `REMOTE_PORT_PER_CORE `else 0 `endif;
+  localparam int unsigned NumRemotePortCore   = `ifdef REMOTE_PORT_PER_CORE `REMOTE_PORT_PER_CORE `else 0 `endif;
 
   // How many cores within a tile? This is used to select the ports within a tile.
-  localparam int unsigned LogNumCoresTile   = $clog2(NumCoresTile);
+  localparam int unsigned LogNumCoresTile     = $clog2(NumCoresTile);
 
   // 4 ports from Spatz + 1 shared port from Snitch/FPU
-  localparam int unsigned NrTCDMPortsPerCore = 5;
+  localparam int unsigned NrTCDMPortsPerCore  = 5;
 
   // How many remote ports for each tile in total?
-  localparam int unsigned NumRemotePortTile = NumRemotePortCore * NrTCDMPortsPerCore;
+  localparam int unsigned NumRemotePortTile   = NumRemotePortCore * NrTCDMPortsPerCore;
+
+  ////////////////////
+  //  GROUP CONFIG  //
+  ////////////////////
+  // How many tiles for each group?
+  localparam int unsigned NumTilesPerGroup       = NumTiles / NumGroups;
+
+  // How many cores for each group?
+  localparam int unsigned NumCoreGroup           = NumCores / NumGroups;
+
+  // How many remote group ports for each tile?
+  localparam int unsigned NumRemoteGroupPortCore = `ifdef RG_PORT_PER_CORE `RG_PORT_PER_CORE `else 0 `endif;
+
 
   ////////////////////
   //  CLUSTER HW    //
@@ -179,7 +192,12 @@ package cachepool_pkg;
   // legacy naming
   localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
   // localparam int unsigned SpatzAxiIdInWidth       = TileAxiIdWidth;
-  localparam int unsigned SpatzAxiIdOutWidth      = ClusterAxiIdWidth + 1;
+  // Per-group AXI output ID width (pre multi-group mux).
+  localparam int unsigned GroupAxiIdOutWidth      = ClusterAxiIdWidth + 1;
+  // Cluster-level AXI output ID width: widened by multi-group mux.
+  // When NumGroups == 1, $clog2(1) == 0 so this equals GroupAxiIdOutWidth.
+  localparam int unsigned GroupMuxIdBits          = (NumGroups > 1) ? $clog2(NumGroups) : 0;
+  localparam int unsigned SpatzAxiIdOutWidth      = GroupAxiIdOutWidth + GroupMuxIdBits;
 
   // Fixed AXI ID width for IWC
   localparam int unsigned IwcAxiIdOutWidth        = SpatzAxiIdOutWidth + 1;
@@ -281,6 +299,7 @@ package cachepool_pkg;
 
   typedef logic [SpatzAxiIdInWidth-1:0]         axi_id_in_t;
   typedef logic [SpatzAxiIdOutWidth-1:0]        axi_id_out_t;
+  typedef logic [GroupAxiIdOutWidth-1:0]        axi_id_group_out_t;
 
   typedef logic [SpatzAxiNarrowIdWidth-1:0]     axi_narrow_id_t;
   // legacy name; TODO: remove
@@ -371,7 +390,23 @@ package cachepool_pkg;
   //  GROUP TYPES  //
   ///////////////////
 
-  typedef logic [RemoteXbarSelWidth-1:0] remote_xbar_sel_t;
+  typedef logic [RemoteXbarSelWidth-1:0]         remote_xbar_sel_t;
+  typedef logic [$clog2(NrTCDMPortsPerCore)-1:0] portid_t;
+
+  typedef struct packed {
+    // sender core within tile
+    logic [CoreIDWidth-1:0] core_id;
+    // sender tile (globally unique)
+    logic [TileIDWidth-1:0] tile_id;
+    // outstanding request ID
+    reqid_t                 req_id;
+    // FPU path indicator
+    logic                   is_fpu;
+    // interco instance index (for demux)
+    portid_t                port_id;
+  } remote_group_user_t;
+
+  `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
 
 
   /////////////////////
@@ -430,7 +465,9 @@ package cachepool_pkg;
   // AXI typedef bundles
   `AXI_TYPEDEF_ALL(spatz_axi_narrow,  axi_addr_t, axi_narrow_id_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_in,      axi_addr_t, axi_id_in_t,      axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,     axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  // Per-group AXI output: narrower ID (pre multi-group mux).
+  `AXI_TYPEDEF_ALL(spatz_axi_group_out, axi_addr_t, axi_id_group_out_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
 
   `AXI_TYPEDEF_ALL(axi_uart,          axi_addr_t, axi_uart_id_t,        axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)

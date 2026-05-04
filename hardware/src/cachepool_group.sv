@@ -107,7 +107,12 @@ module cachepool_group
     parameter int unsigned                              MemoryMacroLatency        = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
-    parameter int unsigned                              NrSramCfg                 = 1
+    parameter int unsigned                              NrSramCfg                 = 1,
+
+    localparam int unsigned                             TotRGPorts                = (NumRemoteGroupPortCore == 0) ? 0 :
+                                                                                     NumTilesPerGroup*NumRemoteGroupPortCore*NrTCDMPortsPerCore-1,
+    localparam int unsigned                             NumRemoteGroupPortTile    = (NumRemoteGroupPortCore == 0) ? 1 :
+                                                                                     NumRemoteGroupPortCore * NrTCDMPortsPerCore
   ) (
     /// System clock.
     input  logic                                        clk_i,
@@ -137,8 +142,8 @@ module cachepool_group
     /// Partitioning address
     input  axi_addr_t                                   private_start_addr_i,
     /// AXI Narrow out-port (UART/Peripheral)
-    output axi_narrow_req_t   [GroupNarrowAxiPorts-1:0] axi_narrow_req_o,
-    input  axi_narrow_resp_t  [GroupNarrowAxiPorts-1:0] axi_narrow_rsp_i,
+    output axi_narrow_req_t   [TileNarrowAxiPorts*NumTilesPerGroup-1:0] axi_narrow_req_o,
+    input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0] axi_narrow_rsp_i,
 
     /// DRAM refill reqrsp ports (post-xbar, one per L2 channel)
     output l2_req_t        [ClusterWideOutAxiPorts-1:0] l2_req_o,
@@ -152,8 +157,21 @@ module cachepool_group
     input  logic                                  [3:0] l1d_private_i,
     input  cache_insn_t                                 l1d_insn_i,
     input  logic                                        l1d_insn_valid_i,
-    output logic                       [NumTiles-1:0]   l1d_insn_ready_o,
-    input  logic                       [NumTiles-1:0]   l1d_busy_i,
+    output logic               [NumTilesPerGroup-1:0]   l1d_insn_ready_o,
+    input  logic               [NumTilesPerGroup-1:0]   l1d_busy_i,
+
+    /// Inter-group remote access ports (to other groups).
+    /// Layout: [NumTilesPerGroup-1:0][NumRemoteGroupPortTile-1:0] flattened to
+    /// [NumTilesPerGroup * NumRemoteGroupPortTile - 1 : 0].
+    /// Per-tile flat index: j + r * NrTCDMPortsPerCore (j = interco instance,
+    /// r = inter-group slot within that instance).
+    /// NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore.
+    /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
+    output remote_group_req_t            [TotRGPorts:0] remote_group_req_o,
+    input  remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_i,
+    /// Inter-group remote access ports (from other groups)
+    input  remote_group_req_t            [TotRGPorts:0] remote_group_req_i,
+    output remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_o,
 
     /// SRAM Configuration
     input  impl_in_t                    [NrSramCfg-1:0] impl_i,
@@ -174,8 +192,15 @@ module cachepool_group
   localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
   localparam int unsigned TileIDWidth     = cf_math_pkg::idx_width(NumTiles);
 
+  // Per-group overrides of package-level constants that depend on NumTiles/NumCores.
+  localparam int unsigned NrCoresTileLocal   = NrCores / NumTilesPerGroup;
+  localparam int unsigned NumL1CacheCtrlLocal  = NrCores;
+  localparam int unsigned NumL1CtrlTileLocal  = NumL1CacheCtrlLocal / NumTilesPerGroup;
+
   // Enlarge the address width for Spatz due to cache
   localparam int unsigned TCDMAddrWidth   = L1AddrWidth;
+
+  // Per-tile inter-group remote port count (across all interco instances).
 
   // Core Request, SoC Request
   localparam int unsigned NrNarrowMasters = 2;
@@ -211,38 +236,44 @@ module cachepool_group
   // CachePool Tile
   // ---------------
 
-  logic [NumTiles-1:0] error;
+  logic [NumTilesPerGroup-1:0] error;
   assign error_o = |error;
 
   // Internal tile-side wide AXI: split into two flat arrays by port function
   // BootROM (TileBootROM=0): muxed into single shared bootrom in this group
-  axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_bootrom_req;
-  axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_bootrom_rsp;
+  axi_mst_cache_req_t  [NumTilesPerGroup-1:0] axi_tile_bootrom_req;
+  axi_mst_cache_resp_t [NumTilesPerGroup-1:0] axi_tile_bootrom_rsp;
   // TileMem (TileMem=1): stays in group, fed into axi_to_reqrsp
-  axi_mst_cache_req_t  [NumTiles-1:0] axi_tile_mem_req;
-  axi_mst_cache_resp_t [NumTiles-1:0] axi_tile_mem_rsp;
+  axi_mst_cache_req_t  [NumTilesPerGroup-1:0] axi_tile_mem_req;
+  axi_mst_cache_resp_t [NumTilesPerGroup-1:0] axi_tile_mem_rsp;
+
+  // Per-group bootrom mux AXI type: the mux prepends $clog2(NumTilesPerGroup)
+  // bits to the ID, not $clog2(NumTiles) as the package assumes.
+  localparam int unsigned LocalBootRomIdWidth = WideIdWidthIn + $clog2(NumTilesPerGroup);
+  typedef logic [LocalBootRomIdWidth-1:0] local_bootrom_id_t;
+  `AXI_TYPEDEF_ALL(local_bootrom, addr_t, local_bootrom_id_t, data_cache_t, strb_cache_t, user_cache_t)
 
   // Mux all per-tile BootROM AXI ports into a single bootrom instance
-  axi_bootrom_slv_req_t  axi_bootrom_mux_req;
-  axi_bootrom_slv_resp_t axi_bootrom_mux_rsp;
+  local_bootrom_req_t  axi_bootrom_mux_req;
+  local_bootrom_resp_t axi_bootrom_mux_rsp;
 
-  if (NumTiles > 1) begin : gen_bootrom_mux
+  if (NumTilesPerGroup > 1) begin : gen_bootrom_mux
     axi_mux #(
       .SlvAxiIDWidth ( WideIdWidthIn            ),
       .slv_aw_chan_t ( axi_mst_cache_aw_chan_t  ),
-      .mst_aw_chan_t ( axi_bootrom_slv_aw_chan_t ),
+      .mst_aw_chan_t ( local_bootrom_aw_chan_t   ),
       .w_chan_t      ( axi_mst_cache_w_chan_t   ),
       .slv_b_chan_t  ( axi_mst_cache_b_chan_t   ),
-      .mst_b_chan_t  ( axi_bootrom_slv_b_chan_t  ),
+      .mst_b_chan_t  ( local_bootrom_b_chan_t    ),
       .slv_ar_chan_t ( axi_mst_cache_ar_chan_t  ),
-      .mst_ar_chan_t ( axi_bootrom_slv_ar_chan_t ),
+      .mst_ar_chan_t ( local_bootrom_ar_chan_t   ),
       .slv_r_chan_t  ( axi_mst_cache_r_chan_t   ),
-      .mst_r_chan_t  ( axi_bootrom_slv_r_chan_t  ),
+      .mst_r_chan_t  ( local_bootrom_r_chan_t    ),
       .slv_req_t     ( axi_mst_cache_req_t      ),
       .slv_resp_t    ( axi_mst_cache_resp_t     ),
-      .mst_req_t     ( axi_bootrom_slv_req_t    ),
-      .mst_resp_t    ( axi_bootrom_slv_resp_t   ),
-      .NoSlvPorts    ( NumTiles                 ),
+      .mst_req_t     ( local_bootrom_req_t      ),
+      .mst_resp_t    ( local_bootrom_resp_t     ),
+      .NoSlvPorts    ( NumTilesPerGroup                 ),
       .FallThrough   ( 0                        ),
       .SpillAw       ( XbarLatency[4]           ),
       .SpillW        ( XbarLatency[3]           ),
@@ -260,8 +291,8 @@ module cachepool_group
       .mst_resp_i ( axi_bootrom_mux_rsp  )
     );
   end else begin : gen_bootrom_connect
-    // NumTiles==1: direct connect, no ID widening needed
-    assign axi_bootrom_mux_req             = axi_bootrom_slv_req_t'(axi_tile_bootrom_req[0]);
+    // NumTilesPerGroup==1: direct connect, no ID widening needed
+    assign axi_bootrom_mux_req             = local_bootrom_req_t'(axi_tile_bootrom_req[0]);
     assign axi_tile_bootrom_rsp[0]         = axi_mst_cache_resp_t'(axi_bootrom_mux_rsp);
   end
 
@@ -276,10 +307,10 @@ module cachepool_group
     .AXI_MAX_WRITE_TXNS ( 1                      ),
     .AXI_MAX_READ_TXNS  ( 1                      ),
     .DECOUPLE_W         ( 0                      ),
-    .ID_WIDTH           ( BootRomAxiSlvIdWidth   ),
+    .ID_WIDTH           ( LocalBootRomIdWidth    ),
     .USER_WIDTH         ( AxiUserWidth           ),
-    .axi_req_t          ( axi_bootrom_slv_req_t  ),
-    .axi_rsp_t          ( axi_bootrom_slv_resp_t ),
+    .axi_req_t          ( local_bootrom_req_t  ),
+    .axi_rsp_t          ( local_bootrom_resp_t ),
     .reg_req_t          ( reg_bootrom_req_t      ),
     .reg_rsp_t          ( reg_bootrom_rsp_t      )
   ) i_axi_to_reg_bootrom (
@@ -302,18 +333,18 @@ module cachepool_group
   `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
   assign bootrom_reg_rsp.error = 1'b0;
 
-  // Cache refill ports from tiles (NumL1CacheCtrl = NumCores total)
-  cache_trans_req_t [NumL1CacheCtrl-1:0] cache_refill_req;
-  cache_trans_rsp_t [NumL1CacheCtrl-1:0] cache_refill_rsp;
+  // Cache refill ports from tiles (NumL1CacheCtrlLocal = NumCores total)
+  cache_trans_req_t [NumL1CacheCtrlLocal-1:0] cache_refill_req;
+  cache_trans_rsp_t [NumL1CacheCtrlLocal-1:0] cache_refill_rsp;
 
   // cache_core_req/rsp: icache-bypass path, one per tile (from axi_to_reqrsp)
-  cache_trans_req_t [NumTiles-1:0] cache_core_req;
-  cache_trans_rsp_t [NumTiles-1:0] cache_core_rsp;
+  cache_trans_req_t [NumTilesPerGroup-1:0] cache_core_req;
+  cache_trans_rsp_t [NumTilesPerGroup-1:0] cache_core_rsp;
 
-  // Flat xbar input channels: NumTiles * NumClusterMst ports
-  cache_trans_req_chan_t [NumTiles*NumClusterMst-1:0] tile_req_chan;
-  cache_trans_rsp_chan_t [NumTiles*NumClusterMst-1:0] tile_rsp_chan;
-  logic                  [NumTiles*NumClusterMst-1:0] tile_req_valid, tile_req_ready,
+  // Flat xbar input channels: NumTilesPerGroup * NumClusterMst ports
+  cache_trans_req_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_req_chan;
+  cache_trans_rsp_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_rsp_chan;
+  logic                  [NumTilesPerGroup*NumClusterMst-1:0] tile_req_valid, tile_req_ready,
                                                       tile_rsp_valid, tile_rsp_ready;
 
   // Xbar output channels: one per L2 channel
@@ -323,18 +354,18 @@ module cachepool_group
                                                       l2_rsp_valid, l2_rsp_ready;
 
   // Selection types
-  typedef logic [$clog2(NumClusterMst*NumTiles)-1:0] l2_sel_t;
+  typedef logic [$clog2(NumClusterMst*NumTilesPerGroup)-1:0] l2_sel_t;
   typedef logic [$clog2(ClusterWideOutAxiPorts)  :0] tile_sel_err_t; // one extra bit for OOB
   typedef logic [$clog2(ClusterWideOutAxiPorts)-1:0] tile_sel_t;
 
-  tile_sel_err_t [NumTiles*NumClusterMst-1:0] tile_sel_err;
-  tile_sel_t     [NumTiles*NumClusterMst-1:0] tile_sel;
+  tile_sel_err_t [NumTilesPerGroup*NumClusterMst-1:0] tile_sel_err;
+  tile_sel_t     [NumTilesPerGroup*NumClusterMst-1:0] tile_sel;
   l2_sel_t       [ClusterWideOutAxiPorts-1:0] tile_selected;
   l2_sel_t       [ClusterWideOutAxiPorts-1:0] l2_sel;
-  tile_sel_t     [NumTiles*NumClusterMst-1:0] l2_rsp_rr;
+  tile_sel_t     [NumTilesPerGroup*NumClusterMst-1:0] l2_rsp_rr;
 
-  logic          [NumTiles*NumClusterMst-1:0] rr_lock_d, rr_lock_q;
-  tile_sel_t     [NumTiles*NumClusterMst-1:0] l2_prio_d, l2_prio_q;
+  logic          [NumTilesPerGroup*NumClusterMst-1:0] rr_lock_d, rr_lock_q;
+  tile_sel_t     [NumTilesPerGroup*NumClusterMst-1:0] l2_prio_d, l2_prio_q;
 
   // port_id: which xbar input port does each L2 channel response target
   l2_sel_t [ClusterWideOutAxiPorts-1:0] port_id;
@@ -346,7 +377,7 @@ module cachepool_group
   // ---------------------
   // axi_to_reqrsp: TileMem (icache-bypass) path, one per tile
   // ---------------------
-  for (genvar t = 0; t < NumTiles; t++) begin : gen_axi_converter
+  for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_axi_converter
     axi_to_reqrsp #(
       .axi_req_t    ( axi_mst_cache_req_t       ),
       .axi_rsp_t    ( axi_mst_cache_resp_t      ),
@@ -375,7 +406,7 @@ module cachepool_group
   //                       p=1..NumL1CtrlTile -> refill (cache_refill_req)
   localparam int unsigned ReqrspPortsTile = NumL1CtrlTile + 1;
   always_comb begin
-    for (int t = 0; t < NumTiles; t++) begin
+    for (int t = 0; t < NumTilesPerGroup; t++) begin
       for (int p = 0; p < ReqrspPortsTile; p++) begin
         automatic int unsigned xbar_idx   = t * ReqrspPortsTile + p;
         automatic int unsigned refill_idx = t * NumL1CtrlTile   + p - 1;
@@ -428,7 +459,7 @@ module cachepool_group
   logic [$clog2(ClusterWideOutAxiPorts):0] default_idx;
   assign default_idx = ClusterWideOutAxiPorts;
 
-  for (genvar inp = 0; inp < NumClusterMst*NumTiles; inp++) begin : gen_xbar_sel
+  for (genvar inp = 0; inp < NumClusterMst*NumTilesPerGroup; inp++) begin : gen_xbar_sel
     addr_decode_napot #(
       .NoIndices ( ClusterWideOutAxiPorts+1 ),
       .NoRules   ( ClusterWideOutAxiPorts   ),
@@ -461,7 +492,7 @@ module cachepool_group
     `FF(rr_lock_q, rr_lock_d, 1'b0)
     `FF(l2_prio_q, l2_prio_d, 1'b0)
 
-    for (genvar port = 0; port < NumTiles*NumClusterMst; port++) begin : gen_rsp_rr
+    for (genvar port = 0; port < NumTilesPerGroup*NumClusterMst; port++) begin : gen_rsp_rr
       tile_sel_t l2_rr;
       logic [ClusterWideOutAxiPorts-1:0] arb_valid;
 
@@ -523,7 +554,7 @@ module cachepool_group
   // Refill (DRAM) xbar
   // ---------------------
   reqrsp_xbar #(
-    .NumInp          ( NumClusterMst*NumTiles  ),
+    .NumInp          ( NumClusterMst*NumTilesPerGroup  ),
     .NumOut          ( ClusterWideOutAxiPorts  ),
     .PipeReg         ( 1'b1                    ),
     .ExtReqPrio      ( 1'b0                    ),
@@ -539,7 +570,7 @@ module cachepool_group
     .slv_rsp_o       ( tile_rsp_chan  ),
     .slv_rsp_valid_o ( tile_rsp_valid ),
     .slv_rsp_ready_i ( tile_rsp_ready ),
-    .slv_sel_i       ( tile_sel[NumTiles*NumClusterMst-1:0] ),
+    .slv_sel_i       ( tile_sel[NumTilesPerGroup*NumClusterMst-1:0] ),
     .slv_rr_i        ( '0            ),
     .slv_selected_o  ( tile_selected ),
     .mst_req_o       ( l2_req_chan   ),
@@ -591,31 +622,36 @@ module cachepool_group
   // Tile remote access signals
   // In/Out relative to the tile (out--leave a tile; in--enter a tile)
   // Tile-side flat layout: index = j + r*NrTCDMPortsPerCore (j=xbar idx, r=remote slot within xbar)
-  tcdm_req_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_out_req;
-  tcdm_rsp_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_out_rsp;
-  logic             [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_ready, tile_remote_out_ready;
+  tcdm_req_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_req;
+  tcdm_rsp_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_rsp;
+  logic             [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_ready, tile_remote_out_ready;
 
-  tcdm_req_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_req;
-  tcdm_rsp_t        [NumTiles-1:0][NumRemotePortTile-1:0] tile_remote_in_rsp;
+  tcdm_req_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_req;
+  tcdm_rsp_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_rsp;
 
-  // Xbar-side: NrTCDMPortsPerCore xbars, each with NumTiles*NumRemotePortCore ports
+  // Xbar-side: NrTCDMPortsPerCore xbars, each with NumTilesPerGroup*NumRemotePortCore ports
   // Xbar port index = t*NumRemotePortCore + r
-  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_req_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
-  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_rsp_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_out_rsp_valid, tile_remote_out_rsp_ready;
+  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_req_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
+  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_rsp_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_rsp_valid, tile_remote_out_rsp_ready;
 
-  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_req_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_req_valid,  tile_remote_in_req_ready;
-  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_rsp_chan;
-  logic             [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
+  tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_req_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_req_valid,  tile_remote_in_req_ready;
+  tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_rsp_chan;
+  logic             [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_rsp_valid,  tile_remote_in_rsp_ready;
+
+  // Per-group override of package-level remote xbar selection width.
+  // The package uses NumTiles (total), but the group's xbar is sized per-group.
+  localparam int unsigned LocalRemoteXbarSelWidth = $clog2(NumTilesPerGroup * NumRemotePortCore);
+  typedef logic [LocalRemoteXbarSelWidth-1:0] local_remote_xbar_sel_t;
 
   // Tile-side selection: narrow type, only carries tile_id
-  remote_tile_sel_t [NumTiles-1:0][NumRemotePortTile-1:0]                    remote_out_sel_tile;
+  remote_tile_sel_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0]                    remote_out_sel_tile;
   // Xbar-side selection: wider type, encodes tile_id*NumRemotePortCore + core_id%NumRemotePortCore
-  remote_xbar_sel_t [NrTCDMPortsPerCore-1:0][NumTiles*NumRemotePortCore-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
+  local_remote_xbar_sel_t [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
 
-  for (genvar t = 0; t < NumTiles; t++) begin
+  for (genvar t = 0; t < NumTilesPerGroup; t++) begin
     for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
       for (genvar r = 0; r < NumRemotePortCore; r++) begin
         // tile flat index: j + r*NrTCDMPortsPerCore
@@ -636,112 +672,206 @@ module cachepool_group
         assign tile_remote_in_rsp_valid[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p_valid;
         assign tile_remote_in_req_ready[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
-        // Request selection: route to target tile's remote-in slot based on
-        // target tile ID, so that all requests to the same destination tile
-        // travel through one pipeline — preserving write-before-read ordering.
-        assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
+        // Request selection: convert narrow tile_id to wide xbar index by appending
+        // core_id % NumRemotePortCore (available in the request channel user field)
+        assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = local_remote_xbar_sel_t'(
             remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumRemotePortCore
-          + remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] % NumRemotePortCore);
+          + tile_remote_out_req_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
 
-        // Response selection: route back to source tile's remote-out slot.
-        // The originator (tile_id in user field) sent on slot
-        // (target_tile % NumRemotePortCore).  The responding tile is `t`
-        // (genvar), so target_tile = t.
-        assign remote_in_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
+        // Response selection: recover xbar port from tile_id and core_id in response user field
+        assign remote_in_sel_xbar[j][t*NumRemotePortCore+r] = local_remote_xbar_sel_t'(
             tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.tile_id * NumRemotePortCore
-          + t % NumRemotePortCore);
+          + tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
       end
     end
   end
 
-  for (genvar t = 0; t < NumTiles; t ++) begin : gen_tiles
+  for (genvar t = 0; t < NumTilesPerGroup; t ++) begin : gen_tiles
     logic [9:0] hart_base_id;
     assign hart_base_id = hart_base_id_i + t * NumCoresTile;
 
     logic [TileIDWidth-1:0] tile_id;
     assign tile_id = t;
 
-    cachepool_tile #(
-      .AxiAddrWidth             ( AxiAddrWidth             ),
-      .AxiDataWidth             ( AxiDataWidth             ),
-      .AxiIdWidthIn             ( AxiIdWidthIn             ),
-      .AxiIdWidthOut            ( WideIdWidthIn            ),
-      .AxiUserWidth             ( AxiUserWidth             ),
-      .BootAddr                 ( BootAddr                 ),
-      .UartAddr                 ( UartAddr                 ),
-      .ClusterPeriphSize        ( ClusterPeriphSize        ),
-      .NrCores                  ( NumCoresTile             ),
-      .TCDMDepth                ( TCDMDepth                ),
-      .NrBanks                  ( NrBanks                  ),
-      .ICacheLineWidth          ( ICacheLineWidth          ),
-      .ICacheLineCount          ( ICacheLineCount          ),
-      .ICacheSets               ( ICacheSets               ),
-      .FPUImplementation        ( FPUImplementation        ),
-      .NumSpatzFPUs             ( NumSpatzFPUs             ),
-      .NumSpatzIPUs             ( NumSpatzIPUs             ),
-      .SnitchPMACfg             ( SnitchPMACfg             ),
-      .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
-      .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
-      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-      .axi_in_req_t             ( axi_in_req_t             ),
-      .axi_in_resp_t            ( axi_in_resp_t            ),
-      .axi_narrow_req_t         ( axi_narrow_req_t         ),
-      .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
-      .axi_out_req_t            ( axi_mst_cache_req_t      ),
-      .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-      .Xdma                     ( Xdma                     ),
-      .TileIDWidth              ( TileIDWidth              ),
-      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-      .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
-      .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
-      .RegisterCoreReq          ( RegisterCoreReq          ),
-      .RegisterCoreRsp          ( RegisterCoreRsp          ),
-      .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
-      .RegisterExt              ( RegisterExt              ),
-      .XbarLatency              ( XbarLatency              ),
-      .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              )
-    ) i_tile (
-      .clk_i                    ( clk_i                                                       ),
-      .rst_ni                   ( rst_ni                                                      ),
-      .impl_i                   ( impl_i                                                      ),
-      .error_o                  ( error             [t]                                       ),
-      .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
-      .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
-      .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
-      .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
-      .hart_base_id_i           ( hart_base_id                                                ),
-      .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
-      .tile_id_i                ( tile_id                                                     ),
-      .private_start_addr_i     ( private_start_addr_i                                        ),
-      // AXI out for UART
-      .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
-      .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
-      // Remote Access Ports
-      .remote_req_o             ( tile_remote_out_req  [t]                                    ),
-      .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),
-      .remote_rsp_i             ( tile_remote_out_rsp  [t]                                    ),
-      .remote_rsp_ready_i       ( tile_remote_out_ready[t]                                    ),
-      .remote_req_i             ( tile_remote_in_req   [t]                                    ),
-      .remote_rsp_o             ( tile_remote_in_rsp   [t]                                    ),
-      .remote_rsp_ready_o       ( tile_remote_in_ready [t]                                    ),
-      // Cache Refill Ports (now internal, connected to group-level xbar)
-      .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
-      .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
-      // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
-      .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
-      .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
-      // Peripherals
-      .icache_events_o          ( /* unused */                                                ),
-      .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
-      .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]            ),
-      .dynamic_offset_i         ( dynamic_offset_i                                            ),
-      .l1d_insn_i               ( l1d_insn_i                                                  ),
-      .l1d_private_i            ( l1d_private_i                                               ),
-      .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
-      .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
-      .l1d_busy_i               ( l1d_busy_i        [t]                                       )
-    );
+    if (NumRemoteGroupPortCore == 0) begin : gen_tile
+      cachepool_tile #(
+        .AxiAddrWidth             ( AxiAddrWidth             ),
+        .AxiDataWidth             ( AxiDataWidth             ),
+        .AxiIdWidthIn             ( AxiIdWidthIn             ),
+        .AxiIdWidthOut            ( WideIdWidthIn            ),
+        .AxiUserWidth             ( AxiUserWidth             ),
+        .BootAddr                 ( BootAddr                 ),
+        .UartAddr                 ( UartAddr                 ),
+        .ClusterPeriphSize        ( ClusterPeriphSize        ),
+        .NrCores                  ( NumCoresTile             ),
+        .TCDMDepth                ( TCDMDepth                ),
+        .NrBanks                  ( NrBanks                  ),
+        .ICacheLineWidth          ( ICacheLineWidth          ),
+        .ICacheLineCount          ( ICacheLineCount          ),
+        .ICacheSets               ( ICacheSets               ),
+        .FPUImplementation        ( FPUImplementation        ),
+        .NumSpatzFPUs             ( NumSpatzFPUs             ),
+        .NumSpatzIPUs             ( NumSpatzIPUs             ),
+        .SnitchPMACfg             ( SnitchPMACfg             ),
+        .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+        .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+        .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+        .axi_in_req_t             ( axi_in_req_t             ),
+        .axi_in_resp_t            ( axi_in_resp_t            ),
+        .axi_narrow_req_t         ( axi_narrow_req_t         ),
+        .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+        .axi_out_req_t            ( axi_mst_cache_req_t      ),
+        .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+        .Xdma                     ( Xdma                     ),
+        .TileIDWidth              ( TileIDWidth              ),
+        .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
+        .NumTilesPerGroup         ( NumTilesPerGroup         ),
+        .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
+        .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
+        .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterCoreReq          ( RegisterCoreReq          ),
+        .RegisterCoreRsp          ( RegisterCoreRsp          ),
+        .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+        .RegisterExt              ( RegisterExt              ),
+        .XbarLatency              ( XbarLatency              ),
+        .MaxMstTrans              ( MaxMstTrans              ),
+        .MaxSlvTrans              ( MaxSlvTrans              )
+      ) i_tile (
+        .clk_i                    ( clk_i                                                       ),
+        .rst_ni                   ( rst_ni                                                      ),
+        .impl_i                   ( impl_i                                                      ),
+        .error_o                  ( error             [t]                                       ),
+        .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
+        .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .hart_base_id_i           ( hart_base_id                                                ),
+        .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
+        .tile_id_i                ( tile_id                                                     ),
+        .private_start_addr_i     ( private_start_addr_i                                        ),
+        // AXI out for UART
+        .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
+        .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
+        // Remote Access Ports
+        .remote_req_o             ( tile_remote_out_req  [t]                                    ),
+        .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),
+        .remote_rsp_i             ( tile_remote_out_rsp  [t]                                    ),
+        .remote_rsp_ready_i       ( tile_remote_out_ready[t]                                    ),
+        .remote_req_i             ( tile_remote_in_req   [t]                                    ),
+        .remote_rsp_o             ( tile_remote_in_rsp   [t]                                    ),
+        .remote_rsp_ready_o       ( tile_remote_in_ready [t]                                    ),
+        // Inter-group Remote Access Ports (directly exposed to group I/O)
+        .remote_group_req_o       (    ),
+        .remote_group_rsp_i       ( '0 ),
+        .remote_group_req_i       ( '0 ),
+        .remote_group_rsp_o       (    ),
+        // Cache Refill Ports (now internal, connected to group-level xbar)
+        .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+        .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+        // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
+        .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
+        .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
+        // Peripherals
+        .icache_events_o          ( /* unused */                                                ),
+        .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
+        .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]            ),
+        .dynamic_offset_i         ( dynamic_offset_i                                            ),
+        .l1d_insn_i               ( l1d_insn_i                                                  ),
+        .l1d_private_i            ( l1d_private_i                                               ),
+        .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
+        .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
+        .l1d_busy_i               ( l1d_busy_i        [t]                                       )
+      );
+    end else begin : gen_tile
+      cachepool_tile #(
+        .AxiAddrWidth             ( AxiAddrWidth             ),
+        .AxiDataWidth             ( AxiDataWidth             ),
+        .AxiIdWidthIn             ( AxiIdWidthIn             ),
+        .AxiIdWidthOut            ( WideIdWidthIn            ),
+        .AxiUserWidth             ( AxiUserWidth             ),
+        .BootAddr                 ( BootAddr                 ),
+        .UartAddr                 ( UartAddr                 ),
+        .ClusterPeriphSize        ( ClusterPeriphSize        ),
+        .NrCores                  ( NumCoresTile             ),
+        .TCDMDepth                ( TCDMDepth                ),
+        .NrBanks                  ( NrBanks                  ),
+        .ICacheLineWidth          ( ICacheLineWidth          ),
+        .ICacheLineCount          ( ICacheLineCount          ),
+        .ICacheSets               ( ICacheSets               ),
+        .FPUImplementation        ( FPUImplementation        ),
+        .NumSpatzFPUs             ( NumSpatzFPUs             ),
+        .NumSpatzIPUs             ( NumSpatzIPUs             ),
+        .SnitchPMACfg             ( SnitchPMACfg             ),
+        .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+        .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+        .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+        .axi_in_req_t             ( axi_in_req_t             ),
+        .axi_in_resp_t            ( axi_in_resp_t            ),
+        .axi_narrow_req_t         ( axi_narrow_req_t         ),
+        .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+        .axi_out_req_t            ( axi_mst_cache_req_t      ),
+        .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+        .Xdma                     ( Xdma                     ),
+        .TileIDWidth              ( TileIDWidth              ),
+        .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
+        .NumTilesPerGroup         ( NumTilesPerGroup         ),
+        .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
+        .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
+        .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterCoreReq          ( RegisterCoreReq          ),
+        .RegisterCoreRsp          ( RegisterCoreRsp          ),
+        .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+        .RegisterExt              ( RegisterExt              ),
+        .XbarLatency              ( XbarLatency              ),
+        .MaxMstTrans              ( MaxMstTrans              ),
+        .MaxSlvTrans              ( MaxSlvTrans              )
+      ) i_tile (
+        .clk_i                    ( clk_i                                                       ),
+        .rst_ni                   ( rst_ni                                                      ),
+        .impl_i                   ( impl_i                                                      ),
+        .error_o                  ( error             [t]                                       ),
+        .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
+        .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .hart_base_id_i           ( hart_base_id                                                ),
+        .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
+        .tile_id_i                ( tile_id                                                     ),
+        .private_start_addr_i     ( private_start_addr_i                                        ),
+        // AXI out for UART
+        .axi_out_req_o            ( axi_narrow_req_o  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
+        .axi_out_resp_i           ( axi_narrow_rsp_i  [t*TileNarrowAxiPorts+:TileNarrowAxiPorts]),
+        // Remote Access Ports
+        .remote_req_o             ( tile_remote_out_req  [t]                                    ),
+        .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),
+        .remote_rsp_i             ( tile_remote_out_rsp  [t]                                    ),
+        .remote_rsp_ready_i       ( tile_remote_out_ready[t]                                    ),
+        .remote_req_i             ( tile_remote_in_req   [t]                                    ),
+        .remote_rsp_o             ( tile_remote_in_rsp   [t]                                    ),
+        .remote_rsp_ready_o       ( tile_remote_in_ready [t]                                    ),
+        // Inter-group Remote Access Ports (directly exposed to group I/O)
+        .remote_group_req_o       ( remote_group_req_o      [t*NumRemoteGroupPortTile+:NumRemoteGroupPortTile]),
+        .remote_group_rsp_i       ( remote_group_rsp_i      [t*NumRemoteGroupPortTile+:NumRemoteGroupPortTile]),
+        .remote_group_req_i       ( remote_group_req_i      [t*NumRemoteGroupPortTile+:NumRemoteGroupPortTile]),
+        .remote_group_rsp_o       ( remote_group_rsp_o      [t*NumRemoteGroupPortTile+:NumRemoteGroupPortTile]),
+        // Cache Refill Ports (now internal, connected to group-level xbar)
+        .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+        .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+        // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
+        .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
+        .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
+        // Peripherals
+        .icache_events_o          ( /* unused */                                                ),
+        .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
+        .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]            ),
+        .dynamic_offset_i         ( dynamic_offset_i                                            ),
+        .l1d_insn_i               ( l1d_insn_i                                                  ),
+        .l1d_private_i            ( l1d_private_i                                               ),
+        .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
+        .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
+        .l1d_busy_i               ( l1d_busy_i        [t]                                       )
+      );
+    end
   end
 
   // ------------
@@ -749,11 +879,10 @@ module cachepool_group
   // ------------
 
   for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin : gen_remote_tile_xbar
-
     // Decide which tile to go
     reqrsp_xbar #(
-      .NumInp           (NumTiles * NumRemotePortCore ),
-      .NumOut           (NumTiles * NumRemotePortCore ),
+      .NumInp           (NumTilesPerGroup * NumRemotePortCore ),
+      .NumOut           (NumTilesPerGroup * NumRemotePortCore ),
       .PipeReg          (1'b1                         ),
       .RspReg           (1'b1                         ),
       .ExtReqPrio       (1'b0                         ),

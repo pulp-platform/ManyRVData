@@ -172,7 +172,11 @@ module cachepool_cluster
   localparam int unsigned NrNarrowMasters = 2;
 
   localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst);
+  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst) - GroupMuxIdBits;
+
+  // Pre-mux AXI ID width: per-group reqrsp_to_axi output.
+  // The multi-group axi_mux adds GroupMuxIdBits on top to reach WideIdWidthOut.
+  localparam int unsigned WideIdWidthPreMux = WideIdWidthOut - GroupMuxIdBits;
 
   // Cache XBar configuration struct
   localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
@@ -201,8 +205,14 @@ module cachepool_cluster
   typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
   typedef logic [AxiUserWidth-1:0]      user_cache_t;
 
+  // Pre-mux (per-group) AXI types: narrower ID, widened by axi_mux.
+  typedef logic [WideIdWidthPreMux-1:0] id_cache_premux_t;
+
   `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
+  // Post-mux AXI types (same as before — used for axi_cut and output).
   `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
+  // Pre-mux AXI types (per-group reqrsp_to_axi output, input to axi_mux).
+  `AXI_TYPEDEF_ALL(axi_premux_cache, addr_t, id_cache_premux_t, data_cache_t, strb_cache_t, user_cache_t)
 
   `REG_BUS_TYPEDEF_ALL(reg_cache, addr_t, data_cache_t, strb_cache_t)
 
@@ -218,8 +228,13 @@ module cachepool_cluster
   // Wire Definitions
   // ----------------
   // 1. AXI
+  // Post-mux wide AXI (one per L2 channel, merged across groups).
   axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
   axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
+  // Per-group pre-mux wide AXI (per group, per L2 channel).
+  axi_premux_cache_req_t  [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_req;
+  axi_premux_cache_resp_t [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_rsp;
+  // Narrow AXI per tile (UART + Periph).
   axi_narrow_req_t     [NumTiles-1:0][1:0]          axi_out_req;
   axi_narrow_resp_t    [NumTiles-1:0][1:0]          axi_out_resp;
 
@@ -235,16 +250,21 @@ module cachepool_cluster
   logic              [NumTiles-1:0]        l1d_insn_ready;
   logic              [NumTiles-1:0]        l1d_busy;
 
+  // Per-group error signals.
+  logic              [NumGroups-1:0]       group_error;
+
   // ---------------
-  // CachePool Tile
+  // CachePool Group
   // ---------------
 
-  // l2 reqrsp ports from the group (one per L2 channel)
-  l2_req_t [ClusterWideOutAxiPorts-1:0] l2_req;
-  l2_rsp_t [ClusterWideOutAxiPorts-1:0] l2_rsp;
+  // Per-group L2 reqrsp ports (one per L2 channel per group).
+  l2_req_t [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] l2_req;
+  l2_rsp_t [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] l2_rsp;
 
-  if (NumTiles > 1) begin : gen_group
-    cachepool_group #(
+  assign error_o = |group_error;
+
+  for (genvar g = 0; g < NumGroups; g++) begin : gen_group
+    cachepool_group_noc_wrapper #(
       .AxiAddrWidth             ( AxiAddrWidth             ),
       .AxiDataWidth             ( AxiDataWidth             ),
       .AxiIdWidthIn             ( AxiIdWidthIn             ),
@@ -253,9 +273,9 @@ module cachepool_cluster
       .BootAddr                 ( BootAddr                 ),
       .UartAddr                 ( UartAddr                 ),
       .ClusterPeriphSize        ( ClusterPeriphSize        ),
-      .NrCores                  ( NrCores                  ),
+      .NrCores                  ( NumCoreGroup             ),
       .TCDMDepth                ( TCDMDepth                ),
-      .NrBanks                  ( NrBanks                  ),
+      .NrBanks                  ( NrBanks / NumGroups      ),
       .ICacheLineWidth          ( ICacheLineWidth          ),
       .ICacheLineCount          ( ICacheLineCount          ),
       .ICacheSets               ( ICacheSets               ),
@@ -272,7 +292,7 @@ module cachepool_cluster
       .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
       .axi_out_req_t            ( axi_mst_cache_req_t      ),
       .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-      .Xdma                     ( Xdma                     ),
+      .Xdma                     ( Xdma[g*NumCoreGroup +: NumCoreGroup] ),
       .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
       .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
       .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
@@ -284,141 +304,118 @@ module cachepool_cluster
       .MaxMstTrans              ( MaxMstTrans              ),
       .MaxSlvTrans              ( MaxSlvTrans              )
     ) i_group (
-      .clk_i                    ( clk_i                    ),
-      .rst_ni                   ( rst_ni                   ),
-      .impl_i                   ( impl_i                   ),
-      .error_o                  ( error_o                  ),
-      .debug_req_i              ( debug_req_i              ),
-      .meip_i                   ( meip_i                   ),
-      .mtip_i                   ( mtip_i                   ),
-      .msip_i                   ( msip_i                   ),
-      .hart_base_id_i           ( hart_base_id_i           ),
-      .cluster_base_addr_i      ( cluster_base_addr_i      ),
-      .private_start_addr_i     ( private_start_addr        ),
-      .axi_narrow_req_o         ( axi_out_req              ),
-      .axi_narrow_rsp_i         ( axi_out_resp             ),
+      .clk_i                    ( clk_i                                           ),
+      .rst_ni                   ( rst_ni                                          ),
+      .impl_i                   ( impl_i                                          ),
+      .error_o                  ( group_error[g]                                  ),
+      .debug_req_i              ( debug_req_i[g*NumCoreGroup +: NumCoreGroup]     ),
+      .meip_i                   ( meip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
+      .mtip_i                   ( mtip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
+      .msip_i                   ( msip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
+      .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+      .cluster_base_addr_i      ( cluster_base_addr_i                             ),
+      .private_start_addr_i     ( private_start_addr                              ),
+      .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
+      .axi_narrow_rsp_i         ( axi_out_resp[g*NumTilesPerGroup +: NumTilesPerGroup]  ),
       // DRAM refill reqrsp (post-xbar, one per L2 channel)
-      .l2_req_o                 ( l2_req                   ),
-      .l2_rsp_i                 ( l2_rsp                   ),
+      .l2_req_o                 ( l2_req[g]                                       ),
+      .l2_rsp_i                 ( l2_rsp[g]                                       ),
       // Peripherals
-      .icache_events_o          ( icache_events             ),
-      .icache_prefetch_enable_i ( icache_prefetch_enable    ),
-      .cl_interrupt_i           ( cl_interrupt              ),
-      .dynamic_offset_i         ( dynamic_offset            ),
-      .l1d_private_i            ( l1d_private               ),
-      .l1d_insn_i               ( l1d_insn                  ),
-      .l1d_insn_valid_i         ( l1d_insn_valid            ),
-      .l1d_insn_ready_o         ( l1d_insn_ready            ),
-      .l1d_busy_i               ( l1d_busy                  )
-    );
-
-  end else begin : gen_tile
-    // TODO: single-tile path not yet migrated to new refill/bootrom datapath.
-    // This branch is never elaborated in the current configuration (NumTiles > 1 always).
-    cachepool_tile #(
-      .AxiAddrWidth             ( AxiAddrWidth              ),
-      .AxiDataWidth             ( AxiDataWidth              ),
-      .AxiIdWidthIn             ( AxiIdWidthIn              ),
-      .AxiIdWidthOut            ( WideIdWidthIn             ),
-      .AxiUserWidth             ( AxiUserWidth              ),
-      .BootAddr                 ( BootAddr                  ),
-      .UartAddr                 ( UartAddr                  ),
-      .ClusterPeriphSize        ( ClusterPeriphSize         ),
-      .NrCores                  ( NrCores                   ),
-      .TCDMDepth                ( TCDMDepth                 ),
-      .NrBanks                  ( NrBanks                   ),
-      .ICacheLineWidth          ( ICacheLineWidth           ),
-      .ICacheLineCount          ( ICacheLineCount           ),
-      .ICacheSets               ( ICacheSets                ),
-      .FPUImplementation        ( FPUImplementation         ),
-      .NumSpatzFPUs             ( NumSpatzFPUs              ),
-      .NumSpatzIPUs             ( NumSpatzIPUs              ),
-      .SnitchPMACfg             ( SnitchPMACfg              ),
-      .TileIDWidth              ( 1                         ),
-      .NumIntOutstandingLoads   ( NumIntOutstandingLoads    ),
-      .NumIntOutstandingMem     ( NumIntOutstandingMem      ),
-      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads  ),
-      .axi_in_req_t             ( axi_in_req_t              ),
-      .axi_in_resp_t            ( axi_in_resp_t             ),
-      .axi_narrow_req_t         ( axi_narrow_req_t          ),
-      .axi_narrow_resp_t        ( axi_narrow_resp_t         ),
-      .axi_out_req_t            ( axi_mst_cache_req_t       ),
-      .axi_out_resp_t           ( axi_mst_cache_resp_t      ),
-      .Xdma                     ( Xdma                      ),
-      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth        ),
-      .DMAReqFifoDepth          ( DMAReqFifoDepth           ),
-      .RegisterOffloadRsp       ( RegisterOffloadRsp        ),
-      .RegisterCoreReq          ( RegisterCoreReq           ),
-      .RegisterCoreRsp          ( RegisterCoreRsp           ),
-      .RegisterTCDMCuts         ( RegisterTCDMCuts          ),
-      .RegisterExt              ( RegisterExt               ),
-      .XbarLatency              ( XbarLatency               ),
-      .MaxMstTrans              ( MaxMstTrans               ),
-      .MaxSlvTrans              ( MaxSlvTrans               )
-    ) i_tile (
-      .clk_i                    ( clk_i                     ),
-      .rst_ni                   ( rst_ni                    ),
-      .impl_i                   ( impl_i                    ),
-      .error_o                  ( error_o                   ),
-      .debug_req_i              ( debug_req_i               ),
-      .meip_i                   ( meip_i                    ),
-      .mtip_i                   ( mtip_i                    ),
-      .msip_i                   ( msip_i                    ),
-      .hart_base_id_i           ( hart_base_id_i            ),
-      .cluster_base_addr_i      ( cluster_base_addr_i       ),
-      .tile_id_i                ( '0                        ),
-      .private_start_addr_i     ( private_start_addr        ),
-      .axi_out_req_o            ( axi_out_req  [0]          ),
-      .axi_out_resp_i           ( axi_out_resp [0]          ),
-      .remote_req_o             (                           ),
-      .remote_req_dst_o         (                           ),
-      .remote_rsp_i             ( '0                        ),
-      .remote_rsp_ready_i       ( '0                        ),
-      .remote_req_i             ( '0                        ),
-      .remote_rsp_o             (                           ),
-      .remote_rsp_ready_o       (                           ),
-      .cache_refill_req_o       (                           ),
-      .cache_refill_rsp_i       ( '0                        ),
-      .axi_wide_req_o           (                           ),
-      .axi_wide_rsp_i           ( '0                        ),
-      .icache_events_o          (                           ),
-      .icache_prefetch_enable_i ( icache_prefetch_enable    ),
-      .cl_interrupt_i           ( cl_interrupt              ),
-      .dynamic_offset_i         ( dynamic_offset            ),
-      .l1d_private_i            ( l1d_private               ),
-      .l1d_insn_i               ( l1d_insn                  ),
-      .l1d_insn_valid_i         ( l1d_insn_valid            ),
-      .l1d_insn_ready_o         ( l1d_insn_ready            ),
-      .l1d_busy_i               ( l1d_busy                  )
+      .icache_events_o          ( icache_events[g*NumCoreGroup +: NumCoreGroup]   ),
+      .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
+      .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
+      .dynamic_offset_i         ( dynamic_offset                                  ),
+      .l1d_private_i            ( l1d_private                                     ),
+      .l1d_insn_i               ( l1d_insn                                        ),
+      .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
+      .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
+      .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup])
     );
   end
 
   // -------------
-  // To Main Memory: reqrsp_to_axi + output cut, consuming group l2 reqrsp ports
+  // To Main Memory: reqrsp_to_axi per group, then axi_mux across groups
   // -------------
-  for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch ++) begin : gen_output_axi
-    reqrsp_to_axi #(
-      .MaxTrans           (NumSpatzOutstandingLoads*2 ),
-      .ID                 ('0                         ),
-      .EnBurst            (1                          ),
-      .ShuffleId          (1                          ),
-      .UserWidth          ($bits(refill_user_t)       ),
-      .ReqUserFallThrough (1'b0                       ),
-      .DataWidth          (AxiDataWidth               ),
-      .AxiUserWidth       (AxiUserWidth               ),
-      .reqrsp_req_t       (l2_req_t                   ),
-      .reqrsp_rsp_t       (l2_rsp_t                   ),
-      .axi_req_t          (axi_slv_cache_req_t        ),
-      .axi_rsp_t          (axi_slv_cache_resp_t       )
-    ) i_reqrsp2axi (
-      .clk_i        (clk_i                ),
-      .rst_ni       (rst_ni               ),
-      .user_i       (l2_req[ch].q.user    ),
-      .reqrsp_req_i (l2_req[ch]           ),
-      .reqrsp_rsp_o (l2_rsp[ch]           ),
-      .axi_req_o    (wide_axi_slv_req[ch] ),
-      .axi_rsp_i    (wide_axi_slv_rsp[ch] )
-    );
+
+  // Step 1: Per-group reqrsp_to_axi conversion.
+  for (genvar g = 0; g < NumGroups; g++) begin : gen_per_group_l2
+    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_per_ch
+      reqrsp_to_axi #(
+        .MaxTrans           ( NumSpatzOutstandingLoads*2 ),
+        .ID                 ( '0                         ),
+        .EnBurst            ( 1                          ),
+        .ShuffleId          ( 1                          ),
+        .UserWidth          ( $bits(refill_user_t)       ),
+        .ReqUserFallThrough ( 1'b0                       ),
+        .DataWidth          ( AxiDataWidth               ),
+        .AxiUserWidth       ( AxiUserWidth               ),
+        .reqrsp_req_t       ( l2_req_t                   ),
+        .reqrsp_rsp_t       ( l2_rsp_t                   ),
+        .axi_req_t          ( axi_premux_cache_req_t     ),
+        .axi_rsp_t          ( axi_premux_cache_resp_t    )
+      ) i_reqrsp2axi        (
+        .clk_i              ( clk_i                      ),
+        .rst_ni             ( rst_ni                     ),
+        .user_i             ( l2_req[g][ch].q.user       ),
+        .reqrsp_req_i       ( l2_req[g][ch]              ),
+        .reqrsp_rsp_o       ( l2_rsp[g][ch]              ),
+        .axi_req_o          ( wide_axi_premux_req[g][ch] ),
+        .axi_rsp_i          ( wide_axi_premux_rsp[g][ch] )
+      );
+    end
+  end
+
+  // Step 2: Per-L2-channel axi_mux across groups.
+  if (NumGroups > 1) begin : gen_l2_group_mux
+    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_l2_ch_mux
+      // Collect per-group inputs for this channel.
+      axi_premux_cache_req_t  [NumGroups-1:0] l2_mux_slv_req;
+      axi_premux_cache_resp_t [NumGroups-1:0] l2_mux_slv_rsp;
+
+      for (genvar g = 0; g < NumGroups; g++) begin : gen_l2_mux_connect
+        assign l2_mux_slv_req[g] = wide_axi_premux_req[g][ch];
+        assign wide_axi_premux_rsp[g][ch] = l2_mux_slv_rsp[g];
+      end
+
+      axi_mux #(
+        .SlvAxiIDWidth ( WideIdWidthPreMux            ),
+        .slv_aw_chan_t ( axi_premux_cache_aw_chan_t   ),
+        .mst_aw_chan_t ( axi_slv_cache_aw_chan_t      ),
+        .w_chan_t      ( axi_slv_cache_w_chan_t       ),
+        .slv_b_chan_t  ( axi_premux_cache_b_chan_t    ),
+        .mst_b_chan_t  ( axi_slv_cache_b_chan_t       ),
+        .slv_ar_chan_t ( axi_premux_cache_ar_chan_t   ),
+        .mst_ar_chan_t ( axi_slv_cache_ar_chan_t      ),
+        .slv_r_chan_t  ( axi_premux_cache_r_chan_t    ),
+        .mst_r_chan_t  ( axi_slv_cache_r_chan_t       ),
+        .slv_req_t     ( axi_premux_cache_req_t       ),
+        .slv_resp_t    ( axi_premux_cache_resp_t      ),
+        .mst_req_t     ( axi_slv_cache_req_t          ),
+        .mst_resp_t    ( axi_slv_cache_resp_t         ),
+        .NoSlvPorts    ( NumGroups                    ),
+        .FallThrough   ( 0                            ),
+        .SpillAw       ( XbarLatency[4]               ),
+        .SpillW        ( XbarLatency[3]               ),
+        .SpillB        ( XbarLatency[2]               ),
+        .SpillAr       ( XbarLatency[1]               ),
+        .SpillR        ( XbarLatency[0]               ),
+        .MaxWTrans     ( 2                            )
+      ) i_axi_l2_mux   (
+        .clk_i         ( clk_i                        ),
+        .rst_ni        ( rst_ni                       ),
+        .test_i        ( '0                           ),
+        .slv_reqs_i    ( l2_mux_slv_req               ),
+        .slv_resps_o   ( l2_mux_slv_rsp               ),
+        .mst_req_o     ( wide_axi_slv_req[ch]         ),
+        .mst_resp_i    ( wide_axi_slv_rsp[ch]         )
+      );
+    end
+  end else begin : gen_l2_no_mux
+    // Single group: direct connection, no mux needed.
+    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_l2_ch_direct
+      assign wide_axi_slv_req[ch] = wide_axi_premux_req[0][ch];
+      assign wide_axi_premux_rsp[0][ch] = wide_axi_slv_rsp[ch];
+    end
   end
 
   // Optionally decouple the external wide AXI master port.
@@ -458,20 +455,20 @@ module cachepool_cluster
 
     axi_mux #(
       .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
-      .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ), // AW Channel Type, slave ports
-      .mst_aw_chan_t ( axi_uart_aw_chan_t     ), // AW Channel Type, master port
-      .w_chan_t      ( axi_uart_w_chan_t      ), //  W Channel Type, all ports
-      .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ), //  B Channel Type, slave ports
-      .mst_b_chan_t  ( axi_uart_b_chan_t      ), //  B Channel Type, master port
-      .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ), // AR Channel Type, slave ports
-      .mst_ar_chan_t ( axi_uart_ar_chan_t     ), // AR Channel Type, master port
-      .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ), //  R Channel Type, slave ports
-      .mst_r_chan_t  ( axi_uart_r_chan_t      ), //  R Channel Type, master port
+      .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ),
+      .mst_aw_chan_t ( axi_uart_aw_chan_t     ),
+      .w_chan_t      ( axi_uart_w_chan_t      ),
+      .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ),
+      .mst_b_chan_t  ( axi_uart_b_chan_t      ),
+      .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ),
+      .mst_ar_chan_t ( axi_uart_ar_chan_t     ),
+      .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ),
+      .mst_r_chan_t  ( axi_uart_r_chan_t      ),
       .slv_req_t     ( axi_csr_mst_req_t      ),
       .slv_resp_t    ( axi_csr_mst_resp_t     ),
       .mst_req_t     ( axi_uart_req_t         ),
       .mst_resp_t    ( axi_uart_resp_t        ),
-      .NoSlvPorts    ( NumTiles               ), // Number of Masters for the module
+      .NoSlvPorts    ( NumTiles               ),
       .FallThrough   ( 0                      ),
       .SpillAw       ( XbarLatency[4]         ),
       .SpillW        ( XbarLatency[3]         ),
@@ -480,9 +477,9 @@ module cachepool_cluster
       .SpillR        ( XbarLatency[0]         ),
       .MaxWTrans     ( 2                      )
     ) i_axi_uart_mux (
-      .clk_i         ( clk_i                  ),  // Clock
-      .rst_ni        ( rst_ni                 ),  // Asynchronous reset active low
-      .test_i        ( '0                     ),  // Test Mode enable
+      .clk_i         ( clk_i                  ),
+      .rst_ni        ( rst_ni                 ),
+      .test_i        ( '0                     ),
       .slv_reqs_i    ( axi_uart_mux_req       ),
       .slv_resps_o   ( axi_uart_mux_rsp       ),
       .mst_req_o     ( axi_narrow_req_o       ),
@@ -544,20 +541,20 @@ module cachepool_cluster
 
   axi_mux #(
     .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
-    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ), // AW Channel Type, slave ports
-    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ), // AW Channel Type, master port
-    .w_chan_t      ( axi_csr_slv_w_chan_t   ), //  W Channel Type, all ports
-    .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ), //  B Channel Type, slave ports
-    .mst_b_chan_t  ( axi_csr_slv_b_chan_t   ), //  B Channel Type, master port
-    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ), // AR Channel Type, slave ports
-    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t  ), // AR Channel Type, master port
-    .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ), //  R Channel Type, slave ports
-    .mst_r_chan_t  ( axi_csr_slv_r_chan_t   ), //  R Channel Type, master port
+    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ),
+    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ),
+    .w_chan_t      ( axi_csr_slv_w_chan_t   ),
+    .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ),
+    .mst_b_chan_t  ( axi_csr_slv_b_chan_t   ),
+    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ),
+    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t  ),
+    .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ),
+    .mst_r_chan_t  ( axi_csr_slv_r_chan_t   ),
     .slv_req_t     ( axi_csr_mst_req_t      ),
     .slv_resp_t    ( axi_csr_mst_resp_t     ),
     .mst_req_t     ( axi_csr_slv_req_t      ),
     .mst_resp_t    ( axi_csr_slv_resp_t     ),
-    .NoSlvPorts    ( NumTiles + 1           ), // Number of Masters for the module
+    .NoSlvPorts    ( NumTiles + 1           ),
     .FallThrough   ( 0                      ),
     .SpillAw       ( XbarLatency[4]         ),
     .SpillW        ( XbarLatency[3]         ),

@@ -70,6 +70,12 @@ module cachepool_tile
     parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// Tile ID Width
     parameter int                     unsigned               TileIDWidth                        = 0,
+    /// Number of dedicated inter-group remote ports per xbar plane.
+    /// When 0, no inter-group ports are generated (single-group mode).
+    parameter int                     unsigned               NumRemoteGroupPortCore             = 0,
+    /// Number of tiles within a single group (passed to interco for
+    /// group-id extraction from the address).
+    parameter int                     unsigned               NumTilesPerGroup                   = 0,
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int                     unsigned               NumIntOutstandingLoads             = '0,
@@ -110,7 +116,8 @@ module cachepool_tile
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
-    parameter int                     unsigned               NrSramCfg                          = 1
+    parameter int                     unsigned               NrSramCfg                          = 1,
+    localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
   ) (
     /// System clock.
     input  logic                                    clk_i,
@@ -161,6 +168,16 @@ module cachepool_tile
     input  tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_i,
     output tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_o,
     output logic              [NumRemotePortTile-1:0]   remote_rsp_ready_o,
+    /// Inter-group remote access ports (to other groups).
+    /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
+    /// where j is the interco instance and r is the inter-group remote slot.
+    /// Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
+    /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
+    output remote_group_req_t [TotRGPorts:0] remote_group_req_o,
+    input  remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_i,
+    /// Inter-group remote access ports (from other groups)
+    input  remote_group_req_t [TotRGPorts:0] remote_group_req_i,
+    output remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_o,
     /// Peripheral signals
     output icache_events_t    [NrCores-1:0]         icache_events_o,
     input  logic                                    icache_prefetch_enable_i,
@@ -589,9 +606,145 @@ module cachepool_tile
 
   assign remote_rsp_ready_o = remote_out_pready;
 
+  // -------------------------------------------------------------------------
+  // Inter-group remote ports – type conversion and flush protection
+  // -------------------------------------------------------------------------
+  // External ports use REQRSP-style remote_group_req_t / remote_group_rsp_t
+  // (with built-in ready and remote_group_user_t).
+  // Internal interco uses TCDM-style tcdm_req_t / tcdm_rsp_t.
+  // This section bridges the two and applies flush gating.
+  //
+  // Same flat layout as remote ports: flat = j + r * NrTCDMPortsPerCore.
+  // Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
+
+  localparam int unsigned NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore;
+
+  // Internal TCDM-style signals going to/from the interco.
+  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_in_req;   // incoming requests to interco
+  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_in_rsp;   // responses from interco (for incoming)
+  logic      [NumRemoteGroupPortTile-1:0] rg_interco_in_pready; // response ready for incoming
+
+  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_out_req;  // outgoing requests from interco
+  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_out_rsp;  // responses returning (for outgoing)
+  logic      [NumRemoteGroupPortTile-1:0] rg_interco_out_pready;// response ready for outgoing
+  remote_tile_sel_t [NumRemoteGroupPortTile-1:0] rg_interco_out_dst; // target tile from interco
+
+  if (NumRemoteGroupPortCore > 0) begin : gen_remote_group_ports
+    always_comb begin
+      for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+        for (int r = 0; r < NumRemoteGroupPortCore; r++) begin
+          automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
+
+          // -----------------------------------------------------------
+          // Incoming: REQRSP → TCDM conversion + flush gating → interco
+          // -----------------------------------------------------------
+          rg_interco_in_req[flat] = '{
+            q: '{
+              addr:  remote_group_req_i[flat].q.addr,
+              write: remote_group_req_i[flat].q.write,
+              data:  remote_group_req_i[flat].q.data,
+              strb:  remote_group_req_i[flat].q.strb,
+              amo:   remote_group_req_i[flat].q.amo,
+              user: '{
+                core_id: remote_group_req_i[flat].q.user.core_id,
+                tile_id: remote_group_req_i[flat].q.user.tile_id,
+                req_id:  remote_group_req_i[flat].q.user.req_id,
+                is_fpu:  remote_group_req_i[flat].q.user.is_fpu,
+                default: '0
+              },
+              default: '0
+            },
+            q_valid: remote_group_req_i[flat].q_valid && !l1d_busy_i,
+            default: '0
+          };
+
+          // Interco response (TCDM) → REQRSP for remote_group_rsp_o.
+          remote_group_rsp_o[flat] = '{
+            p: '{
+              data:  rg_interco_in_rsp[flat].p.data,
+              write: rg_interco_in_rsp[flat].p.write,
+              user: '{
+                core_id: rg_interco_in_rsp[flat].p.user.core_id,
+                tile_id: rg_interco_in_rsp[flat].p.user.tile_id,
+                req_id:  rg_interco_in_rsp[flat].p.user.req_id,
+                is_fpu:  rg_interco_in_rsp[flat].p.user.is_fpu,
+                port_id: portid_t'(j),
+                default: '0
+              },
+              default: '0
+            },
+            p_valid: rg_interco_in_rsp[flat].p_valid,
+            q_ready: rg_interco_in_rsp[flat].q_ready && !l1d_busy_i,
+            default: '0
+          };
+
+          // Response ready from the external port (REQRSP p_ready).
+          rg_interco_in_pready[flat] = remote_group_req_i[flat].p_ready && !l1d_busy_i;
+
+          // -----------------------------------------------------------
+          // Outgoing: interco → flush gating → TCDM to REQRSP → output
+          // -----------------------------------------------------------
+          remote_group_req_o[flat] = '{
+            q: '{
+              addr:  rg_interco_out_req[flat].q.addr,
+              write: rg_interco_out_req[flat].q.write,
+              data:  rg_interco_out_req[flat].q.data,
+              strb:  rg_interco_out_req[flat].q.strb,
+              amo:   rg_interco_out_req[flat].q.amo,
+              user: '{
+                core_id: rg_interco_out_req[flat].q.user.core_id,
+                tile_id: rg_interco_out_req[flat].q.user.tile_id,
+                req_id:  rg_interco_out_req[flat].q.user.req_id,
+                is_fpu:  rg_interco_out_req[flat].q.user.is_fpu,
+                port_id: portid_t'(j),
+                default: '0
+              },
+              default: '0
+            },
+            q_valid: rg_interco_out_req[flat].q_valid && !l1d_busy_i,
+            p_ready: rg_interco_out_pready[flat] && !l1d_busy_i,
+            default: '0
+          };
+
+          // Returning response (REQRSP) → TCDM for the interco.
+          rg_interco_out_rsp[flat] = '{
+            p: '{
+              data:  remote_group_rsp_i[flat].p.data,
+              write: remote_group_rsp_i[flat].p.write,
+              user: '{
+                core_id: remote_group_rsp_i[flat].p.user.core_id,
+                tile_id: remote_group_rsp_i[flat].p.user.tile_id,
+                req_id:  remote_group_rsp_i[flat].p.user.req_id,
+                is_fpu:  remote_group_rsp_i[flat].p.user.is_fpu,
+                default: '0
+              },
+              default: '0
+            },
+            p_valid: remote_group_rsp_i[flat].p_valid,
+            q_ready: remote_group_rsp_i[flat].q_ready,
+            default: '0
+          };
+        end
+      end
+    end
+  end else begin : gen_remote_group_no_ports
+    // No inter-group remote ports: tie off outputs.
+    assign remote_group_rsp_o      = '0;
+    assign remote_group_req_o      = '0;
+    assign rg_interco_in_req       = '0;
+    assign rg_interco_in_pready    = '0;
+    assign rg_interco_out_rsp      = '0;
+    assign rg_interco_out_pready   = '0;
+    assign rg_interco_in_rsp       = '0;
+    assign rg_interco_out_req      = '0;
+    assign rg_interco_out_dst      = '0;
+  end
+
   /// Wire requests after strb handling to the cache controller.
   /// Each xbar j handles NumRemotePortCore remote slots at flat indices
   /// j + r*NrTCDMPortsPerCore for r in [0, NumRemotePortCore).
+  /// Similarly, each xbar j handles NumRemoteGroupPortCore inter-group remote slots at flat indices
+  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemoteGroupPortCore).
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
     // Collect the NumRemotePortCore remote slots for this xbar.
     tcdm_req_t [NumRemotePortCore-1:0] xbar_remote_req_gated;
@@ -613,33 +766,92 @@ module cachepool_tile
       assign remote_req_o          [flat] = xbar_remote_req_o     [r];
     end
 
-    tcdm_cache_interco #(
-      .NumTiles              (NumTiles          ),
-      .NumCores              (NrCores           ),
-      .NumCache              (NumL1CtrlTile     ),
-      .NumTotCache           (NumL1CacheCtrl    ),
-      .NumRemotePort         (NumRemotePortCore ),
-      .AddrWidth             (TCDMAddrWidth     ),
-      .TileIDWidth           (TileIDWidth       ),
-      .tcdm_req_t            (tcdm_req_t        ),
-      .tcdm_rsp_t            (tcdm_rsp_t        ),
-      .tcdm_req_chan_t       (tcdm_req_chan_t   ),
-      .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
-    ) i_cache_xbar (
-      .clk_i                ( clk_i                                              ),
-      .rst_ni               ( rst_ni                                             ),
-      .tile_id_i            ( tile_id_i                                          ),
-      .dynamic_offset_i     ( dynamic_offset                                     ),
-      .private_start_addr_i ( private_start_addr_i                               ),
-      .num_private_cache_i  ( num_private_cache                                  ),
-      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
-      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
-      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
-      .tile_sel_o           ( xbar_remote_req_dst                                ),
-      .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
-      .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
-      .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
-    );
+    // Collect the NumRemoteGroupPortCore inter-group remote slots for this xbar (same flat layout).
+    // When NumRemoteGroupPortCore == 0, no inter-group remote signals exist and the interco is
+    // instantiated without inter-group remote ports (backward-compatible).
+    if (NumRemoteGroupPortCore > 0) begin : gen_remote_group_slice
+      tcdm_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_req;
+      tcdm_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_rsp;
+      logic      [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_pready;
+      tcdm_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_req;
+      tcdm_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_rsp;
+      logic      [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_pready;
+      remote_tile_sel_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_dst;
+
+      for (genvar r = 0; r < NumRemoteGroupPortCore; r++) begin : gen_remote_group_slice_r
+        localparam int unsigned flat = j + r * NrTCDMPortsPerCore;
+        // Incoming: from conversion/flush → interco input
+        assign xbar_remote_group_in_req    [r]    = rg_interco_in_req    [flat];
+        assign xbar_remote_group_in_pready [r]    = rg_interco_in_pready [flat];
+        assign rg_interco_in_rsp           [flat] = xbar_remote_group_in_rsp [r];
+        // Outgoing: interco output → conversion/flush
+        assign rg_interco_out_req          [flat] = xbar_remote_group_out_req [r];
+        assign rg_interco_out_dst          [flat] = xbar_remote_group_out_dst [r];
+        assign xbar_remote_group_out_rsp   [r]    = rg_interco_out_rsp   [flat];
+        assign rg_interco_out_pready       [flat] = xbar_remote_group_out_pready[r];
+      end
+
+      tcdm_cache_interco #(
+        .NumTiles              (NumTiles          ),
+        .NumCores              (NrCores           ),
+        .NumCache              (NumL1CtrlTile     ),
+        .NumTotCache           (NumL1CacheCtrl    ),
+        .NumRemotePort         (NumRemotePortCore ),
+        .NumRemoteGroupPort    (NumRemoteGroupPortCore    ),
+        .NumTilesPerGroup      (NumTilesPerGroup  ),
+        .AddrWidth             (TCDMAddrWidth     ),
+        .TileIDWidth           (TileIDWidth       ),
+        .tcdm_req_t            (tcdm_req_t        ),
+        .tcdm_rsp_t            (tcdm_rsp_t        ),
+        .tcdm_req_chan_t       (tcdm_req_chan_t   ),
+        .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+      ) i_cache_xbar (
+        .clk_i                ( clk_i                                              ),
+        .rst_ni               ( rst_ni                                             ),
+        .tile_id_i            ( tile_id_i                                          ),
+        .dynamic_offset_i     ( dynamic_offset                                     ),
+        .private_start_addr_i ( private_start_addr_i                               ),
+        .num_private_cache_i  ( num_private_cache                                  ),
+        .core_req_i           ({xbar_remote_group_in_req,    xbar_remote_req_gated,  cache_req        [j]}),
+        .core_rsp_ready_i     ({xbar_remote_group_in_pready, xbar_remote_in_pready,  cache_pready     [j]}),
+        .core_rsp_o           ({xbar_remote_group_in_rsp,    xbar_remote_rsp_xbar,   cache_rsp        [j]}),
+        .tile_sel_o           ( xbar_remote_req_dst                                ),
+        .remote_group_sel_o   ( xbar_remote_group_out_dst                          ),
+        .mem_req_o            ({xbar_remote_group_out_req,   xbar_remote_req_o,       cache_xbar_req   [j]}),
+        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready,  cache_xbar_pready[j]}),
+        .mem_rsp_i            ({xbar_remote_group_out_rsp,   xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
+      );
+    end else begin : gen_no_remote_group
+      // No inter-group remote ports: instantiate interco without inter-group remote ports (backward-compatible).
+      tcdm_cache_interco #(
+        .NumTiles              (NumTiles          ),
+        .NumCores              (NrCores           ),
+        .NumCache              (NumL1CtrlTile     ),
+        .NumTotCache           (NumL1CacheCtrl    ),
+        .NumRemotePort         (NumRemotePortCore ),
+        .AddrWidth             (TCDMAddrWidth     ),
+        .TileIDWidth           (TileIDWidth       ),
+        .tcdm_req_t            (tcdm_req_t        ),
+        .tcdm_rsp_t            (tcdm_rsp_t        ),
+        .tcdm_req_chan_t       (tcdm_req_chan_t   ),
+        .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+      ) i_cache_xbar (
+        .clk_i                ( clk_i                                              ),
+        .rst_ni               ( rst_ni                                             ),
+        .tile_id_i            ( tile_id_i                                          ),
+        .dynamic_offset_i     ( dynamic_offset                                     ),
+        .private_start_addr_i ( private_start_addr_i                               ),
+        .num_private_cache_i  ( num_private_cache                                  ),
+        .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
+        .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
+        .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
+        .tile_sel_o           ( xbar_remote_req_dst                                ),
+        .remote_group_sel_o   (                                                    ),
+        .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
+        .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
+        .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
+      );
+    end
   end
 
   for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin : gen_cache_connect

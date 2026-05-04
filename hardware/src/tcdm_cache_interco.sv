@@ -21,6 +21,21 @@
 //   private_bank = addr_bank_bits % num_private_cache_q
 //   shared_bank  = num_private_cache_q + (addr_bank_bits % num_shared_cache_q)
 // For non-power-of-2 partition sizes this causes uneven bank utilisation.
+//
+// Multi-group support (NumRemoteGroupPort > 0):
+//
+//   When the cluster contains multiple groups, tile IDs are globally unique
+//   and encode both the group and tile-within-group:
+//     tile_id = {group_id, local_tile_id}
+//
+//   The xbar performs three-way routing for shared (non-private) requests:
+//     1. Local       : same tile             -> local cache bank
+//     2. Intra-group : same group, diff tile -> remote port (existing xbar)
+//     3. Inter-group : different group       -> inter-group remote port (new)
+//
+//   inter-group remote ports are appended after the remote ports on both input and output
+//   sides of the xbar, preserving full backward compatibility when
+//   NumRemoteGroupPort == 0.
 
 `include "common_cells/registers.svh"
 
@@ -29,16 +44,31 @@ module tcdm_cache_interco #(
   parameter int unsigned NumTiles             = 32'd1,
   /// Number of inputs into the interconnect (Cores per Tile) (`> 0`).
   parameter int unsigned NumCores             = 32'd0,
-  /// Number of remote ports added to xbar ('>= 0').
+  /// Number of remote ports added to xbar for intra-group traffic ('>= 0').
   parameter int unsigned NumRemotePort        = 32'd0,
+  /// Number of dedicated inter-group inter-group remote ports ('>= 0').
+  /// When 0, the module behaves identically to the single-group configuration.
+  /// Each inter-group remote port serves as both an output (requests to other groups) and an
+  /// input (requests arriving from other groups), mirroring NumRemotePort.
+  parameter int unsigned NumRemoteGroupPort   = 32'd0,
   /// Number of outputs from the interconnect (Cache banks per Tile) (`> 0`).
   parameter int unsigned NumCache             = 32'd0,
   /// Number of total cache banks across all tiles (used for address scramble).
+  /// For multi-group, this must cover all tiles across all groups.
   parameter int unsigned NumTotCache          = 32'd0,
   /// Address width in bits (cacheline offset: 512b => 6 bits).
   parameter int unsigned AddrWidth            = 32'd32,
   /// Tile ID width ('> 0').
+  /// In multi-group configurations, TileIDWidth covers the globally unique
+  /// tile ID which encodes both group and tile-within-group:
+  ///   tile_id = {group_id, local_tile_id}
   parameter int unsigned TileIDWidth          = 32'd1,
+  /// Number of tiles within a single group.
+  /// Used to extract the group portion from the address tile field:
+  ///   group_id = addr_tile_bits / NumTilesPerGroup
+  /// Only relevant when NumRemoteGroupPort > 0.  Defaults to NumTiles for
+  /// backward compatibility (single-group: all tiles are in one group).
+  parameter int unsigned NumTilesPerGroup     = NumTiles,
 
   /// Port type of the data request ports.
   parameter type         tcdm_req_t           = logic,
@@ -68,69 +98,82 @@ module tcdm_cache_interco #(
   input  logic                [$clog2(NumCache):0] num_private_cache_i,
   /// Partitioning address
   input  addr_t                                    private_start_addr_i,
-  /// Request port (cores + remote-in) ----------------------------------
-  input  tcdm_req_t   [NumCores+NumRemotePort-1:0] core_req_i,
+  /// Request port (cores + intra-group remote-in + inter-group inter-group remote-in) ----
+  input  tcdm_req_t   [NumCores+NumRemotePort+NumRemoteGroupPort-1:0] core_req_i,
   /// Response ready in.
-  input  logic        [NumCores+NumRemotePort-1:0] core_rsp_ready_i,
-  /// Response port (cores + remote-in).
-  output tcdm_rsp_t   [NumCores+NumRemotePort-1:0] core_rsp_o,
+  input  logic        [NumCores+NumRemotePort+NumRemoteGroupPort-1:0] core_rsp_ready_i,
+  /// Response port (cores + intra-group remote-in + inter-group inter-group remote-in).
+  output tcdm_rsp_t   [NumCores+NumRemotePort+NumRemoteGroupPort-1:0] core_rsp_o,
   /// Memory side -------------------------------------------------------
-  /// Which remote tile is targeted (one entry per remote output port).
+  /// Which remote tile is targeted (one entry per intra-group remote output).
   output tile_id_t             [NumRemotePort-1:0] tile_sel_o,
-  // output logic                                     remote_group_o,
-  /// Requests to cache banks and remote output ports.
-  output tcdm_req_t   [NumCache+NumRemotePort-1:0] mem_req_o,
+  /// Which tile is targeted via inter-group remote (one entry per inter-group remote output).
+  /// Carries the full globally-unique tile ID; the wrapper decomposes it
+  /// into group XY coordinates for the router and local tile ID for the
+  /// receiving-side xbar.
+  output tile_id_t                [NumRemoteGroupPort-1:0] remote_group_sel_o,
+  /// Requests to cache banks, intra-group remote, and inter-group inter-group remote ports.
+  output tcdm_req_t   [NumCache+NumRemotePort+NumRemoteGroupPort-1:0] mem_req_o,
   /// Response ready out.
-  output logic        [NumCache+NumRemotePort-1:0] mem_rsp_ready_o,
-  /// Responses from cache banks and remote output ports.
-  input  tcdm_rsp_t   [NumCache+NumRemotePort-1:0] mem_rsp_i
+  output logic        [NumCache+NumRemotePort+NumRemoteGroupPort-1:0] mem_rsp_ready_o,
+  /// Responses from cache banks, intra-group remote, and inter-group inter-group remote ports.
+  input  tcdm_rsp_t   [NumCache+NumRemotePort+NumRemoteGroupPort-1:0] mem_rsp_i
 );
 
   // -------------------------------------------------------------------------
   // Local parameters
   // -------------------------------------------------------------------------
 
-  // Bits to index into xbar outputs (local banks + one remote slot).
-  localparam int unsigned NumOutSelBits  = $clog2(NumCache + NumRemotePort);
+  // Total number of xbar input and output ports.
+  localparam int unsigned NumInp        = NumCores + NumRemotePort + NumRemoteGroupPort;
+  localparam int unsigned NumOut        = NumCache + NumRemotePort + NumRemoteGroupPort;
+  // Bits to index into xbar outputs.
+  localparam int unsigned NumOutSelBits = $clog2(NumOut);
   // Bits to index into xbar inputs.
-  localparam int unsigned NumInpSelBits  = $clog2(NumCores + NumRemotePort);
+  localparam int unsigned NumInpSelBits = $clog2(NumInp);
   // Bits needed to select among local cache banks.
-  localparam int unsigned CacheBankBits  = $clog2(NumCache);
+  localparam int unsigned CacheBankBits = $clog2(NumCache);
   // Bits needed to select the tile in the shared address space.
-  // Equals TileIDWidth by construction (NumTotCache / NumCache == NumTiles).
-  localparam int unsigned TileBits       = $clog2(NumTotCache / NumCache);
+  // Equals TileIDWidth by construction (NumTotCache / NumCache == NumTotalTiles).
+  localparam int unsigned TileBits     = $clog2(NumTotCache / NumCache);
+
+  // Group extraction: number of bits to identify the group within TileID.
+  // GroupBits = TileBits - LocalTileBits, where LocalTileBits = $clog2(NumTilesPerGroup).
+  // Only meaningful when NumRemoteGroupPort > 0.
+  localparam int unsigned LocalTileBits = $clog2(NumTilesPerGroup);
+  localparam int unsigned GroupBits     = TileBits - LocalTileBits;
 
   // -------------------------------------------------------------------------
   // Types
   // -------------------------------------------------------------------------
 
   typedef logic [NumInpSelBits-1:0]  mem_sel_t;
-  typedef logic [NumOutSelBits -1:0] core_sel_t;
+  typedef logic [NumOutSelBits-1:0]  core_sel_t;
 
   // -------------------------------------------------------------------------
   // Internal signals
   // -------------------------------------------------------------------------
 
   // Xbar routing signals.
-  core_sel_t [NumCores+NumRemotePort-1:0] core_req_sel;
-  mem_sel_t  [NumCache+NumRemotePort-1:0] mem_rsp_sel;
+  core_sel_t [NumInp-1:0] core_req_sel;
+  mem_sel_t  [NumOut-1:0] mem_rsp_sel;
   // '1' when this request stays on local banks.
-  logic      [NumCores+NumRemotePort-1:0] local_sel;
+  logic      [NumInp-1:0] local_sel;
   // '1' when a request targets the private partition.
-  logic      [NumCores+NumRemotePort-1:0] is_private;
+  logic      [NumInp-1:0] is_private;
 
   // Xbar channel signals.
-  tcdm_req_chan_t [NumCores+NumRemotePort-1:0] core_req;
-  logic           [NumCores+NumRemotePort-1:0] core_req_valid, core_req_ready;
+  tcdm_req_chan_t [NumInp-1:0] core_req;
+  logic           [NumInp-1:0] core_req_valid, core_req_ready;
 
-  tcdm_req_chan_t [NumCache+NumRemotePort-1:0] mem_req;
-  logic           [NumCache+NumRemotePort-1:0] mem_req_valid, mem_req_ready;
+  tcdm_req_chan_t [NumOut-1:0] mem_req;
+  logic           [NumOut-1:0] mem_req_valid, mem_req_ready;
 
-  tcdm_rsp_chan_t [NumCores+NumRemotePort-1:0] core_rsp;
-  logic           [NumCores+NumRemotePort-1:0] core_rsp_valid, core_rsp_ready;
+  tcdm_rsp_chan_t [NumInp-1:0] core_rsp;
+  logic           [NumInp-1:0] core_rsp_valid, core_rsp_ready;
 
-  tcdm_rsp_chan_t [NumCache+NumRemotePort-1:0] mem_rsp;
-  logic           [NumCache+NumRemotePort-1:0] mem_rsp_valid, mem_rsp_ready;
+  tcdm_rsp_chan_t [NumOut-1:0] mem_rsp;
+  logic           [NumOut-1:0] mem_rsp_valid, mem_rsp_ready;
 
   // -------------------------------------------------------------------------
   // Partition control – registered to ease timing
@@ -155,7 +198,7 @@ module tcdm_cache_interco #(
   // Private/shared classification (request side, before xbar)
   // -------------------------------------------------------------------------
 
-  for (genvar inp = 0; inp < NumCores+NumRemotePort; inp++) begin : gen_is_private
+  for (genvar inp = 0; inp < NumInp; inp++) begin : gen_is_private
     assign is_private[inp] = (core_req[inp].addr >= private_start_addr_q);
   end
 
@@ -164,8 +207,8 @@ module tcdm_cache_interco #(
   // -------------------------------------------------------------------------
 
   reqrsp_xbar #(
-    .NumInp           (NumCores + NumRemotePort),
-    .NumOut           (NumCache + NumRemotePort),
+    .NumInp           (NumInp                   ),
+    .NumOut           (NumOut                    ),
     .PipeReg          (1'b0                    ),
     .ExtReqPrio       (1'b0                    ),
     .ExtRspPrio       (1'b0                    ),
@@ -197,28 +240,43 @@ module tcdm_cache_interco #(
   // Request routing (xbar input-side selection)
   // -------------------------------------------------------------------------
   //
-  // Address layout (example: offset=6, CacheBankBits=2, TileBits=2):
+  // Address layout (example: offset=6, CacheBankBits=2, TileBits=4 with
+  // LocalTileBits=2 and GroupBits=2):
   //
-  //   31      14 | 13    12 | 11    10 | 9     7 | 5        0
-  //   Tag        | TileID   | BankSel  | Index   | CL offset
-  //              ^-- [offset+CacheBankBits+TileBits-1 : offset+CacheBankBits]
-  //                         ^-- [offset+CacheBankBits-1 : offset]
+  //   31    16 | 15  14 | 13  12 | 11  10 | 9     7 | 5        0
+  //   Tag      | GroupID | LclTID | BankSel | Index  | CL offset
+  //            ^-- [offset+CacheBankBits+TileBits-1 : offset+CacheBankBits+LocalTileBits]
+  //                       ^-- [offset+CacheBankBits+LocalTileBits-1 : offset+CacheBankBits]
+  //                                ^-- [offset+CacheBankBits-1 : offset]
   //
-  // Partitioning supports any num_private_cache_q in [0..NumCache]:
-  //   Private banks : ports [0 .. num_private_cache_q-1]
-  //   Shared  banks : ports [num_private_cache_q .. NumCache-1]
+  // Three-way routing classification:
+  //   1. Local       : addr tile == my tile          -> route to cache bank
+  //   2. Intra-group : same group, different tile    -> route to remote port
+  //   3. Inter-group : different group               -> route to inter-group remote port
   //
-  // Bank selection uses modulo folding:
-  //   private_bank = (addr_bank_bits % num_private_cache_q)
-  //   shared_bank  = num_private_cache_q + (addr_bank_bits % num_shared_cache_q)
+  // Partitioning (private/shared) interacts as follows:
+  //   - Private requests are always local (same as before).
+  //   - Shared requests use the full three-way classification.
   //
-  // For power-of-2 partition sizes this reduces to a simple bit mask.
-  // For non-power-of-2 sizes (e.g. 3) the modulo is a small comparator since
-  // addr_bank_bits is only CacheBankBits wide.
+  // The original two-way classification (local vs. remote) is preserved
+  // when NumRemoteGroupPort == 0, ensuring backward compatibility.
 
-  for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_req_sel
+  // Derive this tile's group ID from the globally-unique tile_id_i.
+  logic [TileBits-1:0] my_group_id;
+  if (NumRemoteGroupPort == 0) begin
+    assign my_group_id = tile_id_i;
+  end else begin
+    assign my_group_id = tile_id_i[TileBits-1:LocalTileBits];
+  end
+
+  for (genvar port = 0; port < NumInp; port++) begin : gen_req_sel
     logic [CacheBankBits-1:0] addr_bank;
-    logic [TileIDWidth-1:0]   addr_tile;
+    // Full tile ID extracted from the address (covers group + local tile).
+    logic [TileBits-1:0]     addr_tile_id;
+    // Group portion of the address tile field.
+    logic [TileBits-1:0]     addr_group_id;
+    // Whether the addressed group matches this tile's group.
+    logic                    same_group;
 
     always_comb begin
       // Defaults.
@@ -226,41 +284,63 @@ module tcdm_cache_interco #(
       core_req_sel[port] = '0;
 
       // Extract the raw BankSel field from the address.
-      addr_bank = core_req[port].addr[dynamic_offset_i +: CacheBankBits];
-      // Extract the target TileID from the address (used for remote port selection).
-      addr_tile = core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth];
+      addr_bank    = core_req[port].addr[dynamic_offset_i +: CacheBankBits];
+      // Extract the full tile ID (group + local) from the address.
+      addr_tile_id  = core_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileBits];
+      // Extract group portion (upper bits of tile ID).
+      addr_group_id = addr_tile_id >> LocalTileBits;
+      // Compare group IDs.
+      same_group    = (addr_group_id == my_group_id);
 
-      if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache) || NumTiles == 1) begin
-        // All-private or single-tile: every request is local.
+      if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache)
+          || (NumTiles == 1 && NumRemoteGroupPort == 0)) begin
+        // All-private, or single-tile single-group: every request is local.
         // Use the full BankSel field directly (no folding needed).
         local_sel[port]    = 1'b1;
         core_req_sel[port] = core_sel_t'(addr_bank);
 
       end else if (num_private_cache_q == '0) begin
-        // All-shared: check TileID to decide local vs. remote.
-        // Use the full BankSel field directly (no folding needed).
-        local_sel[port] = (addr_tile == tile_id_i);
-        // Route remote requests by target tile ID so that all accesses to the
-        // same tile share a single pipeline, preserving write-before-read
-        // ordering across barriers.
-        core_req_sel[port] = local_sel[port]
-                           ? core_sel_t'(addr_bank)
-                           : core_sel_t'(NumCache + (addr_tile % NumRemotePort));
+        // All-shared: full three-way classification.
+        if (NumRemoteGroupPort > 0 && !same_group) begin
+          // Inter-group: route to inter-group remote port.
+          local_sel[port]    = 1'b0;
+          core_req_sel[port] = core_sel_t'(NumCache + NumRemotePort
+                                          + (port % NumRemoteGroupPort));
+        end else if (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]
+                    && !(NumTiles == 1)) begin
+          // Intra-group remote: different tile, same group.
+          local_sel[port]    = 1'b0;
+          core_req_sel[port] = core_sel_t'(NumCache + (port % NumRemotePort));
+        end else begin
+          // Local: same tile.
+          local_sel[port]    = 1'b1;
+          core_req_sel[port] = core_sel_t'(addr_bank);
+        end
 
       end else begin
-        // Mixed: fold addr_bank into the appropriate partition via modulo.
+        // Mixed partition: fold addr_bank into the appropriate partition.
         if (is_private[port]) begin
           // Private request: always local.
-          // bank = addr_bank % num_private_cache_q, offset from bank 0.
           local_sel[port]    = 1'b1;
           core_req_sel[port] = core_sel_t'(addr_bank % num_private_cache_q);
         end else begin
-          // Shared request: check TileID to decide local vs. remote.
-          // bank = num_private_cache_q + (addr_bank % num_shared_cache_q).
-          local_sel[port] = (addr_tile == tile_id_i);
-          core_req_sel[port] = local_sel[port]
-                             ? core_sel_t'(num_private_cache_q + (addr_bank % num_shared_cache_q))
-                             : core_sel_t'(NumCache + (addr_tile % NumRemotePort));
+          // Shared request: three-way classification.
+          if (NumRemoteGroupPort > 0 && !same_group) begin
+            // Inter-group: route to inter-group remote port.
+            local_sel[port]    = 1'b0;
+            core_req_sel[port] = core_sel_t'(NumCache + NumRemotePort
+                                            + (port % NumRemoteGroupPort));
+          end else if (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]
+                      && !(NumTiles == 1)) begin
+            // Intra-group remote: different tile, same group.
+            local_sel[port]    = 1'b0;
+            core_req_sel[port] = core_sel_t'(NumCache + (port % NumRemotePort));
+          end else begin
+            // Local: same tile.
+            local_sel[port]    = 1'b1;
+            core_req_sel[port] = core_sel_t'(num_private_cache_q
+                                            + (addr_bank % num_shared_cache_q));
+          end
         end
       end
     end
@@ -269,16 +349,35 @@ module tcdm_cache_interco #(
   // -------------------------------------------------------------------------
   // Response routing (xbar output-side selection)
   // -------------------------------------------------------------------------
+  //
+  // Responses from local cache banks are routed back to the originating
+  // core using core_id.  Responses from intra-group remote tiles and
+  // inter-group inter-group remote ports carry a tile_id that differs from tile_id_i;
+  // these are forwarded to the corresponding remote-in or inter-group remote-in port.
 
-  for (genvar port = 0; port < NumCache+NumRemotePort; port++) begin : gen_rsp_sel
+  for (genvar port = 0; port < NumOut; port++) begin : gen_rsp_sel
+    logic [TileBits-1:0] rsp_group_id;
+    if (NumRemoteGroupPort == 0) begin
+      assign rsp_group_id = my_group_id;
+    end else begin
+      assign rsp_group_id = mem_rsp[port].user.tile_id[TileBits-1:LocalTileBits];
+    end
+
     always_comb begin
       mem_rsp_sel[port] = mem_rsp[port].user.core_id;
       if (mem_rsp[port].user.tile_id != tile_id_i) begin
-        // Response destined for a remote tile: forward to the remote interco
-        // port that matches the incoming request path.  The group-level xbar
-        // routes requests from source tile S to our remote-in slot
-        // (S % NumRemotePort), so responses must return via the same slot.
-        mem_rsp_sel[port] = mem_sel_t'(NumCores + (mem_rsp[port].user.tile_id % NumRemotePort));
+        // Response originates from a different tile (intra-group remote or
+        // inter-group remote).  Determine which input port set it came from.
+        if (NumRemoteGroupPort > 0
+            && rsp_group_id != my_group_id) begin
+          // Inter-group: forward to the inter-group remote-in input port.
+          mem_rsp_sel[port] = mem_sel_t'(NumCores + NumRemotePort
+                              + (mem_rsp[port].user.core_id % NumRemoteGroupPort));
+        end else begin
+          // Intra-group: forward to the remote-in input port.
+          mem_rsp_sel[port] = mem_sel_t'(NumCores
+                              + (mem_rsp[port].user.core_id % NumRemotePort));
+        end
       end
     end
   end
@@ -287,7 +386,7 @@ module tcdm_cache_interco #(
   // Input-side pipeline registers
   // -------------------------------------------------------------------------
 
-  for (genvar port = 0; port < NumCores+NumRemotePort; port++) begin : gen_cache_interco_reg
+  for (genvar port = 0; port < NumInp; port++) begin : gen_cache_interco_reg
     spill_register #(
       .T      (tcdm_req_chan_t          )
     ) i_tcdm_req_reg (
@@ -349,11 +448,11 @@ module tcdm_cache_interco #(
   //
   //   lower     = addr & ((1 << offset) - 1)              // CLoffset, verbatim
   //   rot_field = (addr >> offset) & ((1 << N) - 1)       // N routing bits
-  //   upper     = addr >> (offset + N)                     // Tag+Index
+  //   upper     = addr >> (offset + N)                    // Tag+Index
   //
   //   addr_rot  = lower
-  //             | (upper     << offset)                    // close the hole
-  //             | (rot_field << (AddrWidth - N))           // park at MSB
+  //             | (upper     << offset)                   // close the hole
+  //             | (rot_field << (AddrWidth - N))          // park at MSB
 
   // Width of bits_to_rotate signal: must hold values up to CacheBankBits+TileBits.
   localparam int unsigned RotWidth = $clog2(CacheBankBits + TileBits + 1) + 1;
@@ -408,7 +507,7 @@ module tcdm_cache_interco #(
   // Output assignment
   // -------------------------------------------------------------------------
 
-  for (genvar port = 0; port < NumCache + NumRemotePort; port++) begin : gen_cache_io
+  for (genvar port = 0; port < NumOut; port++) begin : gen_cache_io
     always_comb begin
       mem_req_o[port] = '{
         q       : mem_req[port],
@@ -419,9 +518,13 @@ module tcdm_cache_interco #(
       if (port < NumCache) begin
         // Local bank: forward address with routing bits rotated to MSB.
         mem_req_o[port].q.addr = addr_rot[port];
-      end else begin
-        // Remote port: pass address untouched; extract target tile ID.
+      end else if (port < NumCache + NumRemotePort) begin
+        // Intra-group remote port: pass address untouched; extract target tile ID.
         tile_sel_o[port - NumCache] =
+          mem_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth];
+      end else begin
+        // Inter-group inter-group remote port: pass address untouched; extract target tile ID.
+        remote_group_sel_o[port - NumCache - NumRemotePort] =
           mem_req[port].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth];
       end
     end
