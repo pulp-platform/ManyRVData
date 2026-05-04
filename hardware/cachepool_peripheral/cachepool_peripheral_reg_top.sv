@@ -517,7 +517,7 @@ module cachepool_peripheral_reg_top #(
   prim_subreg #(
     .DW      (4),
     .SWACCESS("RW"),
-    .RESVAL  (4'h0)
+    .RESVAL  (4'h4)
   ) u_l1d_private (
     .clk_i   (clk_i    ),
     .rst_ni  (rst_ni  ),

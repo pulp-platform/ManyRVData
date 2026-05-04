@@ -165,8 +165,8 @@ int main() {
 
       if (cid == 0) {
         for (uint32_t j = 0; j < num_cores; j++) {
-          printf("Core %d error %d\n", j, error[j]);
-          // error[0] += error[j];
+          if (error[j] != 0)
+            printf("Core %d error %d\n", j, error[j]);
         }
 
       } else {
@@ -174,14 +174,6 @@ int main() {
       }
 
       snrt_cluster_hw_barrier();
-
-      // if (error[0] != 0) {
-      //   if (cid == 0) {
-      //     printf("Check failed, error count:%d\n", error[0]);
-      //     // printf("First iter took %u cycles\n", timer_iter1);
-      //   }
-      //   // return -1;
-      // }
     }
   }
 

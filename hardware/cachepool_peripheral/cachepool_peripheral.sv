@@ -172,7 +172,7 @@ module cachepool_peripheral
   end
 
   `FF(private_start_addr_q, private_start_addr_d, 32'hA000_0000, clk_i, rst_ni)
-  `FF(l1d_private_q, l1d_private_d, '0, clk_i, rst_ni)
+  `FF(l1d_private_q, l1d_private_d, 4, clk_i, rst_ni)
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
