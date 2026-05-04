@@ -17,6 +17,7 @@ dependencies:
   Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/cachepool_dev  }
   spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b        }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool            }
+  floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                 }
 
 workspace:
   checkout_dir: "./hardware/deps"
@@ -45,6 +46,7 @@ sources:
   - hardware/src/cachepool_tile.sv
   # Level 3
   - hardware/src/cachepool_group.sv
+  - hardware/src/cachepool_group_noc_wrapper.sv
 
   - hardware/src/cachepool_cluster.sv
   # Level 4
