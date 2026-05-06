@@ -871,6 +871,34 @@ module cachepool_tile
       logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankDataWidth-1:0] part_wdata;
       logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankByteCount-1:0] part_be;
 
+      // -- Per-way, per-column write contention (loop-free) --
+      // For way W and column col, "another way writes at col" is true
+      // iff some part P' has part_we[col][bank_sel][P'] set AND the
+      // (col, P') mapping belongs to a way != W.  Depends ONLY on
+      // writes (part_we) -- safe to feed into the grant path without
+      // creating a combinational loop through read-side signals.
+      logic [L1AssoPerCtrl-1:0][L1AssoPerCtrl-1:0][L1BankFactor-1:0] any_other_write_in_col;
+      always_comb begin
+        for (int wW = 0; wW < L1AssoPerCtrl; wW++) begin
+          for (int col = 0; col < L1AssoPerCtrl; col++) begin
+            for (int bsel = 0; bsel < L1BankFactor; bsel++) begin
+              any_other_write_in_col[wW][col][bsel] = 1'b0;
+              for (int pp = 0; pp < PartSplit; pp++) begin
+                // Way that maps to (col, part=pp): same group, way =
+                //   ((col - pp) mod EffectiveFoldWayGroup).
+                int unsigned mapped_way;
+                mapped_way =
+                  (col / EffectiveFoldWayGroup) * EffectiveFoldWayGroup +
+                  ((col - pp + EffectiveFoldWayGroup) % EffectiveFoldWayGroup);
+                if (mapped_way != wW) begin
+                  any_other_write_in_col[wW][col][bsel] |= part_we[col][bsel][pp];
+                end
+              end
+            end
+          end
+        end
+      end
+
       for (genvar group = 0; group < NumWayGroups; group++) begin : gen_skew_groups
         for (genvar way = 0; way < EffectiveFoldWayGroup; way++) begin : gen_skew_ways
           localparam int unsigned WayIdx = group * EffectiveFoldWayGroup + way;
@@ -893,7 +921,20 @@ module cachepool_tile
                     l1_data_bank_be[cb][FlatIdx];
                 assign l1_data_bank_rdata[cb][FlatIdx] =
                     bank_rdata[ColIdx][bank_sel][w*DataWidth +: DataWidth];
-                assign l1_data_bank_gnt[cb][FlatIdx] = 1'b1;
+                // Grant propagation.  The skew-bank arbiter at (ColIdx,
+                // bank_sel) picks writes with write-priority over reads;
+                // without grant propagation a concurrent read that shares
+                // a column with another way's write is silently dropped
+                // and upstream gets stale rdata.
+                //   - Writes always granted (gnt=1) -- writes win arbitration.
+                //   - Reads granted iff no OTHER way writes at the same
+                //     (col, bank_sel).  We exclude our own way's writes
+                //     to avoid spuriously blocking our way's idle words
+                //     that happen to sit in our own write's column.
+                // Loop-free: depends on part_we only, no read feedback.
+                assign l1_data_bank_gnt[cb][FlatIdx] =
+                    l1_data_bank_we[cb][FlatIdx]
+                    | ~any_other_write_in_col[WayIdx][ColIdx][bank_sel];
               end
             end
           end
