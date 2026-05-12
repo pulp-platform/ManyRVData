@@ -294,6 +294,14 @@ static inline void snrt_mutex_release(volatile uint32_t *pmtx) {
     dm_exit();                       \
     snrt_cluster_hw_barrier();
 
+//================================================================================
+// Printf functions
+//================================================================================
+
+// Print a float value without promoting to double (avoids fcvt.d.s / fsd,
+// which are illegal on rv32imaf). All arithmetic stays in single precision.
+extern void snrt_printf_float(float val);
+
 #ifdef __cplusplus
 }
 #endif

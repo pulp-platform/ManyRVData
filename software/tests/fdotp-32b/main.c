@@ -56,7 +56,7 @@ int main() {
   } else {
     if (cid == 0) {
       printf("FATAL: Problem size too small!\n");
-      return 0;
+      return -2;
     }
   }
 
@@ -81,8 +81,6 @@ int main() {
   if (cid == 0) {
     // Set xbar policy
     l1d_xbar_config(l1_scramble_bits);
-    // Initialize the cache
-    l1d_init(0);
   }
 
   snrt_cluster_hw_barrier();
@@ -126,7 +124,7 @@ int main() {
     else if (lmul >= 1)
       acc = fdotp_v32b_lmul1(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
     else
-      return 0;
+      return -3;
 
     result[cid] = acc;
 
@@ -143,11 +141,22 @@ int main() {
       stop_kernel();
     }
 
-    // Final reduction
+    // Final reduction: two-level tree with group size 4
+    const uint32_t red_group = 4;
+
+    // Level 1: lead core of each group accumulates its group
+    if (cid % red_group == 0) {
+      for (uint32_t i = 1; i < red_group && (cid + i) < num_cores; ++i)
+        acc += result[cid + i];
+      result[cid] = acc;
+    }
+
+    snrt_cluster_hw_barrier();
+
+    // Level 2: core 0 sums all group results
     if (cid == 0) {
-      // timer_tmp = benchmark_get_cycle() - timer_tmp;
-      for (uint32_t i = 1; i < num_cores; ++i)
-        acc += result[i];
+      for (uint32_t g = red_group; g < num_cores; g += red_group)
+        acc += result[g];
       result[0] = acc;
     }
 
@@ -176,6 +185,12 @@ int main() {
   if (cid == 0) {
     if (fp_check(result[0], dotp_result*measure_iter)) {
       printf("Check Failed!\n");
+      printf("Calc:");
+      snrt_printf_float(result[0]);
+      printf(", Exp:");
+      snrt_printf_float((float)(dotp_result * measure_iter));
+      printf("\n");
+      return -1;
     }
   }
 

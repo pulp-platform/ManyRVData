@@ -4,19 +4,11 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
 `include "axi/typedef.svh"
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
-`include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
 `include "reqrsp_interface/typedef.svh"
 `include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
 /// Tile implementation for CachePool
 module cachepool_tile
@@ -24,7 +16,7 @@ module cachepool_tile
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
-  import snitch_icache_pkg::icache_events_t;
+  import snitch_icache_pkg::icache_l1_events_t;
   #(
     /// Width of physical address.
     parameter int                     unsigned               AxiAddrWidth                       = 48,
@@ -48,10 +40,6 @@ module cachepool_tile
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
     parameter int                     unsigned               NrBanks                            = 2 * NrCores,
-    /// Size of DMA AXI buffer.
-    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
-    /// Size of DMA request fifo.
-    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -66,8 +54,6 @@ module cachepool_tile
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
-    /// Per-core enabling of the custom `Xdma` ISA extensions.
-    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// Tile ID Width
     parameter int                     unsigned               TileIDWidth                        = 0,
     /// Number of dedicated inter-group remote ports per xbar plane.
@@ -132,20 +118,18 @@ module cachepool_tile
     input  logic                                    rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic              [NrCores-1:0]         debug_req_i,
-    /// End of Computing indicator to notify the host/tb
-    // output logic                                    eoc_o,
+    input  logic                                    debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic              [NrCores-1:0]         meip_i,
+    input  logic                                    meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic              [NrCores-1:0]         mtip_i,
+    input  logic                                    mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic              [NrCores-1:0]         msip_i,
+    input  logic                                    msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
@@ -186,7 +170,7 @@ module cachepool_tile
     input  remote_group_req_t [TotRGPorts:0] remote_group_req_i,
     output remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_o,
     /// Peripheral signals
-    output icache_events_t    [NrCores-1:0]         icache_events_o,
+    output icache_l1_events_t [NrCores-1:0]         icache_events_o,
     input  logic                                    icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]         cl_interrupt_i,
     input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
@@ -213,7 +197,6 @@ module cachepool_tile
   // ---------
   // TODO: Should be imported from Memory-mapped Reg
   logic [2:0] num_private_cache;
-  // half-half
   assign num_private_cache = l1d_private_i[2:0];
 
   /// Minimum width to hold the core number.
@@ -328,11 +311,6 @@ module cachepool_tile
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
-  `MEM_TYPEDEF_ALL(mem, tcdm_mem_addr_t, data_t, strb_t, tcdm_user_t)
-
-  `REG_BUS_TYPEDEF_ALL(reg, addr_t, data_t, strb_t)
-
-
   typedef struct packed {
     int unsigned idx;
     addr_t start_addr;
@@ -429,7 +407,7 @@ module cachepool_tile
 
   core_events_t [NrCores-1:0] core_events;
 
-  snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events;
+  // snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events;
 
   // 4. Memory Subsystem (Core side).
   reqrsp_req_t [NrCores-1:0] core_req, filtered_core_req;
@@ -701,12 +679,13 @@ module cachepool_tile
               strb:  rg_interco_out_req[flat].q.strb,
               amo:   rg_interco_out_req[flat].q.amo,
               user: '{
-                core_id: rg_interco_out_req[flat].q.user.core_id,
-                tile_id: rg_interco_out_req[flat].q.user.tile_id,
-                req_id:  rg_interco_out_req[flat].q.user.req_id,
-                is_fpu:  rg_interco_out_req[flat].q.user.is_fpu,
-                port_id: portid_t'(j),
-                default: '0
+                core_id:     rg_interco_out_req[flat].q.user.core_id,
+                tile_id:     rg_interco_out_req[flat].q.user.tile_id,
+                req_id:      rg_interco_out_req[flat].q.user.req_id,
+                is_fpu:      rg_interco_out_req[flat].q.user.is_fpu,
+                port_id:     portid_t'(j),
+                dst_tile_id: rg_interco_out_dst[flat],
+                default:     '0
               },
               default: '0
             },
@@ -821,14 +800,14 @@ module cachepool_tile
         .dynamic_offset_i     ( dynamic_offset_q                                   ),
         .private_start_addr_i ( private_start_addr_i                               ),
         .num_private_cache_i  ( num_private_cache                                  ),
-        .core_req_i           ({xbar_remote_group_in_req,    xbar_remote_req_gated,  cache_req        [j]}),
-        .core_rsp_ready_i     ({xbar_remote_group_in_pready, xbar_remote_in_pready,  cache_pready     [j]}),
-        .core_rsp_o           ({xbar_remote_group_in_rsp,    xbar_remote_rsp_xbar,   cache_rsp        [j]}),
-        .tile_sel_o           ( xbar_remote_req_dst                                ),
-        .remote_group_sel_o   ( xbar_remote_group_out_dst                          ),
-        .mem_req_o            ({xbar_remote_group_out_req,   xbar_remote_req_o,       cache_xbar_req   [j]}),
-        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready,  cache_xbar_pready[j]}),
-        .mem_rsp_i            ({xbar_remote_group_out_rsp,   xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
+        .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  cache_req        [j]}),
+        .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  cache_pready     [j]}),
+        .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   cache_rsp        [j]}),
+        .tile_sel_o           ( xbar_remote_req_dst                                                        ),
+        .remote_group_sel_o   ( xbar_remote_group_out_dst                                                  ),
+        .mem_req_o            ({xbar_remote_group_out_req,    xbar_remote_req_o,      cache_xbar_req   [j]}),
+        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready, cache_xbar_pready[j]}),
+        .mem_rsp_i            ({xbar_remote_group_out_rsp,    xbar_remote_rsp_i,      cache_xbar_rsp   [j]})
       );
     end else begin : gen_no_remote_group
       // No inter-group remote ports: instantiate interco without inter-group remote ports (backward-compatible).
@@ -1164,6 +1143,7 @@ module cachepool_tile
       .UseHashWaySelect (UseHashWaySelect   ),
       .UseForwardingBuffer (UseForwardingBuffer ),
       .BankFactor       (L1BankFactor       ),
+      .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),
@@ -1335,7 +1315,7 @@ module cachepool_tile
         .clk_i  (clk_i                   ),
         .rst_ni (rst_ni                  ),
         .impl_i ('0                      ),
-        .impl_o (/* unsed */             ),
+        .impl_o (/* unused */             ),
         .req_i  (l1_tag_bank_req  [cb][j]),
         .we_i   (l1_tag_bank_we   [cb][j]),
         .addr_i (l1_tag_bank_addr [cb][j]),
@@ -1558,13 +1538,13 @@ module cachepool_tile
     interrupts_t irq;
 
     sync #(.STAGES (2))
-    i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i[i]), .serial_o (irq.debug));
+    i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i), .serial_o (irq.debug));
     sync #(.STAGES (2))
-    i_sync_meip (.clk_i, .rst_ni, .serial_i (meip_i[i]), .serial_o (irq.meip));
+    i_sync_meip (.clk_i, .rst_ni, .serial_i (meip_i), .serial_o (irq.meip));
     sync #(.STAGES (2))
-    i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i[i]), .serial_o (irq.mtip));
+    i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq.mtip));
     sync #(.STAGES (2))
-    i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i[i]), .serial_o (irq.msip));
+    i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq.msip));
     assign irq.mcip = cl_interrupt_i[i];
 
     tcdm_req_t [TcdmPorts-1:0] tcdm_req_wo_user;
@@ -1579,15 +1559,10 @@ module cachepool_tile
       .RVF                     (RVF                        ),
       .RVD                     (RVD                        ),
       .RVV                     (RVV                        ),
-      .Xdma                    (Xdma[i]                    ),
       .AddrWidth               (AxiAddrWidth               ),
       .DataWidth               (NarrowDataWidth            ),
       .UserWidth               (AxiUserWidth               ),
-      .DMADataWidth            (AxiDataWidth               ),
-      .DMAIdWidth              (AxiIdWidthIn               ),
       .SnitchPMACfg            (SnitchPMACfg               ),
-      .DMAAxiReqFifoDepth      (DMAAxiReqFifoDepth         ),
-      .DMAReqFifoDepth         (DMAReqFifoDepth            ),
       .dreq_t                  (reqrsp_req_t               ),
       .drsp_t                  (reqrsp_rsp_t               ),
       .dreq_chan_t             (reqrsp_req_chan_t          ),
@@ -1679,7 +1654,7 @@ module cachepool_tile
     .L0_LINE_COUNT      ( 8                                                  ),
     .LINE_WIDTH         ( ICacheLineWidth                                    ),
     .LINE_COUNT         ( ICacheLineCount                                    ),
-    .SET_COUNT          ( ICacheSets                                         ),
+    .WAY_COUNT          ( ICacheSets                                         ),
     .FETCH_AW           ( AxiAddrWidth                                       ),
     .FETCH_DW           ( 32                                                 ),
     .FILL_AW            ( AxiAddrWidth                                       ),
@@ -1696,7 +1671,9 @@ module cachepool_tile
     .clk_d2_i             ( clk_i                    ),
     .rst_ni               ( rst_ni                   ),
     .enable_prefetching_i ( icache_prefetch_enable_i ),
-    .icache_events_o      ( icache_events_o          ),
+    .enable_branch_pred_i ( '0                       ),
+    .icache_l0_events_o   (                          ),
+    .icache_l1_events_o   (                          ),
     .flush_valid_i        ( flush_valid              ),
     .flush_ready_o        ( flush_ready              ),
     .inst_addr_i          ( inst_addr                ),
@@ -1707,6 +1684,8 @@ module cachepool_tile
     .inst_error_o         ( inst_error               ),
     .sram_cfg_tag_i       ( '0                       ),
     .sram_cfg_data_i      ( '0                       ),
+    .sram_cfg_out_data_o  (),
+    .sram_cfg_out_tag_o   (),
     .axi_req_o            ( wide_axi_mst_req[ICache] ),
     .axi_rsp_i            ( wide_axi_mst_rsp[ICache] )
   );
@@ -1895,16 +1874,11 @@ module cachepool_tile
   // -------------
   // Sanity Checks
   // -------------
-  // Sanity check the parameters. Not every configuration makes sense.
-  `ASSERT_INIT(CheckSuperBankSanity, NrBanks >= BanksPerSuperBank);
-  `ASSERT_INIT(CheckSuperBankFactor, (NrBanks % BanksPerSuperBank) == 0);
   `ASSERT_INIT(CheckFoldWayGroup, (EffectiveFoldWayGroup > 0) &&
     ((L1AssoPerCtrl % EffectiveFoldWayGroup) == 0));
   `ASSERT_INIT(CheckLineSplit, (NumWordPerLine % PartSplit) == 0);
   // Check that the cluster base address aligns to the TCDMSize.
   `ASSERT(ClusterBaseAddrAlign, ((TCDMSize - 1) & cluster_base_addr_i) == 0)
-  // Make sure we only have one DMA in the system.
-  `ASSERT_INIT(NumberDMA, $onehot0(Xdma))
 
 
 endmodule

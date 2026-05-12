@@ -78,6 +78,13 @@ package cachepool_pkg;
   // How many remote group ports for each tile?
   localparam int unsigned NumRemoteGroupPortCore = `ifdef RG_PORT_PER_CORE `RG_PORT_PER_CORE `else 0 `endif;
 
+  // Number of inter-group NoC router channels per tile (x in the 5-to-x concentration xbar).
+  localparam int unsigned NumNoCPortsPerTile = `ifdef NOC_PORT_PER_TILE `NOC_PORT_PER_TILE `else 1 `endif;
+
+  // Group mesh dimensions. NumGroupsY is derived; NumGroupsX must be set via config.
+  localparam int unsigned NumGroupsX = `ifdef NUM_GROUPS_X `NUM_GROUPS_X `else 1 `endif;
+  localparam int unsigned NumGroupsY = NumGroups / NumGroupsX;
+
 
   ////////////////////
   //  CLUSTER HW    //
@@ -88,6 +95,12 @@ package cachepool_pkg;
   localparam int unsigned ICacheLineWidth = 128;
   localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets      = 4;
+
+  // Group-level L2 ICache (shared read-only cache, primarily for coalescing)
+  localparam int unsigned L2ICacheLineWidth = 128;
+  localparam int unsigned L2ICacheSets      = 4;
+  localparam int unsigned L2ICacheSizeByte  = 65536;
+  localparam int unsigned L2ICacheLineCount = L2ICacheSizeByte / (L2ICacheSets * L2ICacheLineWidth / 8);
 
   // Be careful on unsigned long int passed in from configuration.
   // Currently use fixed values.
@@ -185,37 +198,62 @@ package cachepool_pkg;
   localparam int unsigned ClusterRouteIdWidth     = $clog2(NumClusterMst);
 
   /***** ID Width Topology (Tile -> Group -> Cluster) *****/
+  // TileAxiIdWidth: base iCache/DMA AXI ID bits per tile before tile-index bits are added.
+  // Determines how many outstanding refills the iCache can track (2^TileAxiIdWidth = 8).
+  // This is the "tile_local_bits" field described above.
   localparam int unsigned TileAxiIdWidth          = 3;
   localparam int unsigned GroupAxiIdWidth         = TileAxiIdWidth + $clog2(NumTiles);
   localparam int unsigned ClusterAxiIdWidth       = GroupAxiIdWidth + ClusterRouteIdWidth;
-
-  // legacy naming
+  // Alias used by the Spatz-generated wrapper and testbench templates.
   localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
-  // localparam int unsigned SpatzAxiIdInWidth       = TileAxiIdWidth;
+
   // Per-group AXI output ID width (pre multi-group mux).
+  // The +1 comes from reqrsp_to_axi, which tags each burst with one extra bit.
   localparam int unsigned GroupAxiIdOutWidth      = ClusterAxiIdWidth + 1;
+  // Bounded per-group refill ID width: uses NumTilesPerGroup (not NumTiles) so the
+  // ID space stays fixed regardless of total system size. axi_id_remap at each group
+  // output reduces GroupAxiIdOutWidth to this before the inter-group mux / future NoC.
+  // For NumGroups == 1, NumTilesPerGroup == NumTiles so this equals GroupAxiIdOutWidth.
+  localparam int unsigned WideRefillIdWidth       = TileAxiIdWidth + $clog2(NumTilesPerGroup) + ClusterRouteIdWidth + 1;
   // Cluster-level AXI output ID width: widened by multi-group mux.
-  // When NumGroups == 1, $clog2(1) == 0 so this equals GroupAxiIdOutWidth.
+  // When NumGroups == 1, $clog2(1) == 0 so this equals WideRefillIdWidth == GroupAxiIdOutWidth.
   localparam int unsigned GroupMuxIdBits          = (NumGroups > 1) ? $clog2(NumGroups) : 0;
-  localparam int unsigned SpatzAxiIdOutWidth      = GroupAxiIdOutWidth + GroupMuxIdBits;
+  localparam int unsigned SpatzAxiIdOutWidth      = WideRefillIdWidth + GroupMuxIdBits;
 
   // Fixed AXI ID width for IWC
   localparam int unsigned IwcAxiIdOutWidth        = SpatzAxiIdOutWidth + 1;
 
-  localparam int unsigned CsrAxiMstIdWidth        = ClusterAxiIdWidth;
-  localparam int unsigned CsrAxiSlvIdWidth        = ClusterAxiIdWidth + $clog2(NumTiles+1);
+  // Cluster wrapper external output AXI ID width, after the wrapper-level axi_id_remap.
+  // Reduces the fat SpatzAxiIdOutWidth presented to the DRAM controller.
+  // Must satisfy: WrapperAxiIdOutWidth >= $clog2(NumAxiMaxTrans) = $clog2(32) = 5.
+  localparam int unsigned WrapperAxiIdOutWidth       = 6;
+  // External SoC/testbench input AXI ID width (host → cluster direction).
+  // axi_id_remap in the wrapper expands these to SpatzAxiIdInWidth internally.
+  localparam int unsigned WrapperAxiIdInWidth         = 4;
+  // External narrow output AXI ID width for the UART port (cluster → SoC direction).
+  // axi_id_remap in the wrapper compresses SpatzAxiUartIdWidth to this.
+  localparam int unsigned WrapperAxiNarrowIdOutWidth  = 4;
 
-  // Base ID width 6, plus tile mux => adding clog(tile)
-  localparam int unsigned SpatzAxiNarrowIdWidth   = 6 + $clog2(NumTiles);
-  // UART ID width, with an extra xbar
+  localparam int unsigned CsrAxiMstIdWidth        = ClusterAxiIdWidth;
+  // ID width after per-master serialization before the CSR mux.
+  // axi_id_serialize at each CSR master reduces CsrAxiMstIdWidth to this,
+  // keeping the mux output (CsrAxiSlvIdWidth) bounded regardless of NumTiles.
+  // Must be > 1: axi_id_serialize internally uses axi_id_prepend which requires
+  // AxiMstPortIdWidth > MuxIdWidth (= 1 when AxiMstPortMaxUniqIds = 1).
+  localparam int unsigned CsrSerIdWidth           = 2;
+  localparam int unsigned CsrAxiSlvIdWidth        = CsrSerIdWidth + $clog2(NumTiles+1);
+
+  // Narrow AXI ID width = ClusterAxiIdWidth (same field structure, used on the narrow path).
+  localparam int unsigned SpatzAxiNarrowIdWidth   = ClusterAxiIdWidth;
+  // UART ID width: narrow path muxed across all tiles adds $clog2(NumTiles) bits.
   localparam int unsigned SpatzAxiUartIdWidth     = SpatzAxiNarrowIdWidth + $clog2(NumTiles);
 
-  // BootROM AXI ID width: wide data bus, muxed from NumTiles tile ports.
+  // BootROM AXI ID width: wide data bus, muxed from NumTilesPerGroup tile ports per group.
   // The group's axi_mst_cache slave ID width = GroupAxiIdWidth + 1
-  // (cluster passes WideIdWidthIn = SpatzAxiIdOutWidth - clog2(NumClusterMst)
-  //  = ClusterAxiIdWidth + 1 - ClusterRouteIdWidth = GroupAxiIdWidth + 1).
-  // The mux master adds $clog2(NumTiles) bits on top.
-  localparam int unsigned BootRomAxiSlvIdWidth    = GroupAxiIdWidth + 1 + $clog2(NumTiles);
+  // (cluster passes WideIdWidthIn = SpatzAxiIdOutWidth - ClusterRouteIdWidth - GroupMuxIdBits
+  //  = GroupAxiIdWidth + 1).
+  // The per-group BootROM mux master adds $clog2(NumTilesPerGroup) bits on top.
+  localparam int unsigned BootRomAxiSlvIdWidth    = GroupAxiIdWidth + 1 + $clog2(NumTilesPerGroup);
 
   /***** Tile Ports *****/
   // We have three sets of AXI ports for each tile:
@@ -253,8 +291,6 @@ package cachepool_pkg;
   // Wide AXI ports: X to DRAM (X=4 for now)
   localparam int unsigned ClusterWideOutAxiPorts   = NumL2Channel;
 
-  // TODO: multi-tile support
-  // One more from the Snitch core
 
   //////////////////
   //   L2 / DRAM  //
@@ -308,9 +344,13 @@ package cachepool_pkg;
   typedef logic [SpatzAxiUartIdWidth-1:0]       axi_uart_id_t;
 
   typedef logic [CsrAxiMstIdWidth-1:0]          axi_id_csr_mst_t;
+  typedef logic [CsrSerIdWidth-1:0]             axi_id_csr_ser_t;
   typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
 
-  typedef logic [IwcAxiIdOutWidth-1:0]          axi_id_out_iwc_t;
+  typedef logic [IwcAxiIdOutWidth-1:0]           axi_id_out_iwc_t;
+  typedef logic [WrapperAxiIdOutWidth-1:0]       axi_id_wrapper_out_t;
+  typedef logic [WrapperAxiIdInWidth-1:0]        axi_id_wrapper_in_t;
+  typedef logic [WrapperAxiNarrowIdOutWidth-1:0] axi_id_wrapper_narrow_out_t;
 
   typedef logic [BootRomAxiSlvIdWidth-1:0]      axi_bootrom_slv_id_t;
 
@@ -394,19 +434,60 @@ package cachepool_pkg;
   typedef logic [$clog2(NrTCDMPortsPerCore)-1:0] portid_t;
 
   typedef struct packed {
-    // sender core within tile
-    logic [CoreIDWidth-1:0] core_id;
-    // sender tile (globally unique)
-    logic [TileIDWidth-1:0] tile_id;
-    // outstanding request ID
-    reqid_t                 req_id;
-    // FPU path indicator
-    logic                   is_fpu;
-    // interco instance index (for demux)
-    portid_t                port_id;
+    logic [CoreIDWidth-1:0]           core_id;
+    logic [TileIDWidth-1:0]           tile_id;
+    reqid_t                           req_id;
+    logic                             is_fpu;
+    portid_t                          port_id;
+    logic [idx_width(NumGroupsX)-1:0] src_group_x;
+    logic [idx_width(NumGroupsY)-1:0] src_group_y;
+    // Globally-unique destination tile ID, set by tcdm_cache_interco for
+    // inter-group requests.  Upper bits (above $clog2(NumTilesPerGroup)) are
+    // the linear group index; lower bits are the local tile within the group.
+    logic [TileIDWidth-1:0]           dst_tile_id;
   } remote_group_user_t;
 
   `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
+
+  // XY mesh coordinates for a group. port_id selects the eject port (always 0 for single-link).
+  typedef struct packed {
+    logic [idx_width(NumGroupsX)-1:0] x;
+    logic [idx_width(NumGroupsY)-1:0] y;
+    logic                             port_id;
+  } group_xy_id_t;
+
+  // Per-group tile index used by dispatch xbar selection.
+  typedef logic [idx_width(NumTilesPerGroup)-1:0] group_tile_sel_t;
+
+  // Routing header embedded in every inter-group NoC flit.
+  typedef struct packed {
+    logic [3:0]      collective_op;
+    group_xy_id_t    src_id;
+    group_xy_id_t    dst_id;
+    group_tile_sel_t src_tile_id;
+    portid_t         src_port_id;
+    logic            last;
+  } noc_group_hdr_t;
+
+  // Inter-group NoC flit types (payload + routing header).
+  typedef struct packed {
+    remote_group_req_chan_t payload;
+    noc_group_hdr_t         hdr;
+  } noc_group_req_t;
+
+  typedef struct packed {
+    remote_group_rsp_chan_t payload;
+    noc_group_hdr_t         hdr;
+  } noc_group_rsp_t;
+
+  // Group ICache (L2 read-only cache control)
+  localparam int unsigned ROCacheNumAddrRules = 4;
+  typedef struct packed {
+    logic enable;
+    logic flush_valid;
+    axi_addr_t [ROCacheNumAddrRules-1:0] start_addr;
+    axi_addr_t [ROCacheNumAddrRules-1:0] end_addr;
+  } ro_cache_ctrl_t;
 
 
   /////////////////////
@@ -468,10 +549,18 @@ package cachepool_pkg;
   `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
   // Per-group AXI output: narrower ID (pre multi-group mux).
   `AXI_TYPEDEF_ALL(spatz_axi_group_out, axi_addr_t, axi_id_group_out_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_iwc_out, axi_addr_t, axi_id_out_iwc_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_iwc_out,     axi_addr_t, axi_id_out_iwc_t,     axi_wide_data_t, axi_wide_strb_t, axi_user_t)
+  // Wrapper-level external output type: ID narrowed from SpatzAxiIdOutWidth to WrapperAxiIdOutWidth.
+  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_out,         axi_addr_t, axi_id_wrapper_out_t,         axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  // Wrapper-level external input type: narrow ID from SoC (WrapperAxiIdInWidth → SpatzAxiIdInWidth inside).
+  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_in,          axi_addr_t, axi_id_wrapper_in_t,          axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  // Wrapper-level external narrow output type: ID compressed from SpatzAxiUartIdWidth to WrapperAxiNarrowIdOutWidth.
+  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_narrow_out,  axi_addr_t, axi_id_wrapper_narrow_out_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 
   `AXI_TYPEDEF_ALL(axi_uart,          axi_addr_t, axi_uart_id_t,        axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(axi_csr_mst,       axi_addr_t, axi_id_csr_mst_t,     axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
+  // Serialized CSR type: 1-bit ID output of axi_id_serialize, fed into the CSR mux slave ports.
+  `AXI_TYPEDEF_ALL(axi_csr_ser,       axi_addr_t, axi_id_csr_ser_t,     axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(axi_csr_slv,       axi_addr_t, axi_id_csr_slv_t,     axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   // BootROM: wide data bus (same payload as cache), slv = post-mux (widened ID)
   `AXI_TYPEDEF_ALL(axi_bootrom_slv,   axi_addr_t, axi_bootrom_slv_id_t, axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)

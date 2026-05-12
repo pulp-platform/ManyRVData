@@ -29,6 +29,9 @@ include $(CACHEPOOL_DIR)/config/$(config).mk
 # Number of groups
 num_groups ?= 1
 
+# X dimension of the group mesh (Y = num_groups / num_groups_x)
+num_groups_x ?= 1
+
 # Number of tiles
 num_tiles_per_group ?= 4
 num_tiles = $(shell echo $$(( $(num_groups) * $(num_tiles_per_group))))
@@ -40,6 +43,8 @@ num_cores_per_tile ?= 4
 num_cores ?= $(shell echo $$(( $(num_tiles) * $(num_cores_per_tile))))
 
 num_rg_ports_per_core ?= 0
+
+num_noc_ports_per_tile ?= 1
 
 # Core datawidth
 data_width ?= 32
@@ -59,9 +64,6 @@ refill_data_width ?= 128
 
 # L1 data cacheline width (in Bit)
 l1d_cacheline_width ?= 512
-
-# L1 data cache size (in KiB)
-l1d_size ?= 256
 
 # L1 data cache banking factor (how many banks per core?)
 l1d_bank_factor ?= 1
@@ -163,6 +165,15 @@ axi_user_width := $(shell echo $$(( $(axi_user_base) + $(axi_user_tile_adj) )))
 #####################
 ##  L2 Main Memory ##
 #####################
+
+# DRAM base address and size (hex: 0x8000_0000, 0x2000_0000)
+dram_addr ?= 2147483648
+dram_len  ?= 536870912
+
+# Uncached region base address and size (hex: 0xC000_0000, 0x2000_0000)
+uncached_addr ?= 3221225472
+uncached_len  ?= 536870912
+
 # L2 number of channels
 l2_channel ?= 4
 

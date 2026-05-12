@@ -400,7 +400,6 @@ int main(void) {
   const unsigned int core_id = snrt_cluster_core_idx();
 
   if (core_id == 0) {
-    l1d_init(0);
     uint32_t offset = 31U - __builtin_clz((unsigned int)L1LineWidth);
     l1d_xbar_config(offset);
   }

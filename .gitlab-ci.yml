@@ -16,7 +16,7 @@ variables:
   python: 'python3'
   python3: 'python3'
   # Config to build and test
-  CI_CONFIG: 'cachepool_fpu_512'
+  CI_CONFIG: 'cachepool_fpu_2g'
   SW_PREFIX: 'test-cachepool-'
 
 default:
@@ -43,6 +43,7 @@ build:
     - python3 -m pip install --quiet dataclasses hjson jsonref jsonschema mako termcolor
     - make init
     - make dram-build
+    - python3 -m pip install --quiet -r requirements.txt
     - make clean generate vsim config=$CI_CONFIG
   artifacts:
     when: always
@@ -52,6 +53,7 @@ build:
       - sim/work/
       # vsim wrapper scripts (exclude sim/bin/logs/ — not needed by test jobs)
       - sim/bin/cachepool_cluster.vsim
+      - sim/bin/cachepool_cluster.vsim.gui
       # DPI shared library
       - sim/work-dpi/
       # Software binaries for all kernels
@@ -76,7 +78,7 @@ test:
           - load-store_M16
           - fdotp-32b_M32768
           - gemv_M512_N128_K32
-          - fmatmul-32b_M32_N32_K32
+          - fmatmul-32b_M64_N64_K64
           - fft-32b_M1024_N16
           - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
           - byte-enable

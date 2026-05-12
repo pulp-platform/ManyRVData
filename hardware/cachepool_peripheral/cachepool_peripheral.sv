@@ -90,7 +90,7 @@ module cachepool_peripheral
 
   //////////// L1 DCache ////////////
   logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
-  logic [31:0]          cl_clint_d, cl_clint_q;
+  logic [NrCores-1:0]   cl_clint_d, cl_clint_q;
   logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
   logic [3:0]           l1d_private_d, l1d_private_q;
   addr_t                private_start_addr_d, private_start_addr_q;
@@ -173,7 +173,7 @@ module cachepool_peripheral
   end
 
   `FF(private_start_addr_q, private_start_addr_d, 32'hA000_0000, clk_i, rst_ni)
-  `FF(l1d_private_q, l1d_private_d, 4, clk_i, rst_ni)
+  `FF(l1d_private_q, l1d_private_d, 0, clk_i, rst_ni)
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);

@@ -6,13 +6,16 @@
 onerror {resume}
 quietly WaveActivateNextPane {} 0
 
-set core_path ${4}
-set name g_${1}_t_${2}_c_${3}
+quietly set core_path ${4}
+quietly set name g_${1}_t_${2}_c_${3}
 
-# Safely handle the optional 5th argument for nesting
-set parent_grp [list]
+# Build the parent group prefix list from optional args 5 (GroupWP) and 6 (tile)
+quietly set parent_grp [list]
 if {$argc > 4 && "${5}" != ""} {
-    set parent_grp [list -group ${5}]
+    quietly lappend parent_grp -group ${5}
+}
+if {$argc > 5 && "${6}" != ""} {
+    quietly lappend parent_grp -group ${6}
 }
 
 # The {*} syntax safely expands the list. 

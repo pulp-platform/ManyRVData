@@ -20,6 +20,7 @@ void l1d_xbar_config(uint32_t offset) {
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
   *cfg = offset;
+  // Flush cache before commit xbar changes
   l1d_flush();
   l1d_wait();
   l1d_xbar_commit();
@@ -98,28 +99,29 @@ void l1d_wait() {
   }
 }
 
-void l1d_spm_config (uint32_t size) {
-  // flush the cache before reconfiguration
-  l1d_flush();
-  l1d_wait();
-  // free all allocated region
-  snrt_l1alloc_reset();
-  // set the pointers
-  volatile uint32_t *cfg_size =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET);
-  volatile uint32_t *commit =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET);
-  // Make sure dummy region will not be optimized away
-  volatile double *dummy;
-  // Should be (L1_size - size) * 128
-  int cache_region = (128 - size) * 128;
-  dummy = (volatile double *)snrt_l1alloc(cache_region * sizeof(double));
-  // change size and commit the change
-  *cfg_size = size;
-  *commit   = 1;
-}
+// Used for hybrid SPM/cache, unused in CachePool now
+// void l1d_spm_config (uint32_t size) {
+//   // flush the cache before reconfiguration
+//   l1d_flush();
+//   l1d_wait();
+//   // free all allocated region
+//   snrt_l1alloc_reset();
+//   // set the pointers
+//   volatile uint32_t *cfg_size =
+//       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+//                    CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET);
+//   volatile uint32_t *commit =
+//       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+//                    CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET);
+//   // Make sure dummy region will not be optimized away
+//   volatile double *dummy;
+//   // Should be (L1_size - size) * 128
+//   int cache_region = (128 - size) * 128;
+//   dummy = (volatile double *)snrt_l1alloc(cache_region * sizeof(double));
+//   // change size and commit the change
+//   *cfg_size = size;
+//   *commit   = 1;
+// }
 
 // Used to configure the number of private cache banks per tile
 void l1d_part (uint32_t size) {

@@ -105,7 +105,6 @@ static int check_const(uint32_t *ptr, uint32_t count, uint32_t value,
 static void cache_cfg(uint32_t cid, uint32_t xbar_offset, uint32_t part) {
   if (cid == 0) {
     l1d_xbar_config(xbar_offset);
-    l1d_init(0);
     l1d_part(part);
   }
   sync_all();

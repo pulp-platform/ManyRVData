@@ -23,12 +23,6 @@ module cachepool_cc
     parameter int                          unsigned        DataWidth                = 0,
     /// User width of the buses.
     parameter int                          unsigned        UserWidth                = 0,
-    /// Data width of the AXI DMA buses.
-    parameter int                          unsigned        DMADataWidth             = 0,
-    /// Id width of the AXI DMA bus.
-    parameter int                          unsigned        DMAIdWidth               = 0,
-    parameter int                          unsigned        DMAAxiReqFifoDepth       = 0,
-    parameter int                          unsigned        DMAReqFifoDepth          = 0,
 
     parameter int                          unsigned        SpmStackDepth            = 512,
     /// Data port request type.
@@ -75,7 +69,6 @@ module cachepool_cc
     parameter bit                                          XF16ALT                  = 0,
     parameter bit                                          XF8ALT                   = 0,
     /// Enable Snitch DMA
-    parameter bit                                          Xdma                     = 0,
     parameter int                          unsigned        NumIntOutstandingLoads   = 0,
     parameter int                          unsigned        NumIntOutstandingMem     = 0,
     parameter int                          unsigned        NumSpatzOutstandingLoads = 0,
@@ -193,7 +186,7 @@ module cachepool_cc
     .VMSupport              (1'b0                  ),
     .RVE                    (RVE                   ),
     .FP_EN                  (FPEn                  ),
-    .Xdma                   (Xdma                  ),
+    .Xdma                   (1'b0                  ),
     .RVF                    (RVF                   ),
     .RVD                    (RVD                   ),
     .RVV                    (RVV                   ),

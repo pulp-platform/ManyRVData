@@ -9,7 +9,10 @@
 #########################
 
 # Number of groups
-num_groups ?= 4
+num_groups ?= 16
+
+# 4×4 mesh
+num_groups_x ?= 4
 
 # Number of tiles
 num_tiles_per_group ?= 4
@@ -27,6 +30,8 @@ num_remote_ports_per_tile ?= 1
 
 num_rg_ports_per_core ?= 1
 
+num_noc_ports_per_tile ?= 2
+
 
 ######################
 ##  CachePool Tile  ##
@@ -39,9 +44,6 @@ refill_data_width ?= 128
 
 # L1 data cacheline width (in Bit)
 l1d_cacheline_width ?= 512
-
-# L1 data cache size (in KiB)
-l1d_size ?= 256
 
 # L1 data cache banking factor (how many banks per core?)
 l1d_bank_factor ?= 1
@@ -57,18 +59,6 @@ l1d_tile_size ?= 256
 
 # L1 data cache tag width (TODO: should be calcualted)
 l1d_tag_data_width ?= 92
-
-# L1 data-bank micro-architecture (1=on, 0=off).
-# Production cache  = folded(1) + hash-way(1) + fwd-buffer(1).
-# Unfolded "conventional" cache = folded(0) + hash-way(0) + fwd-buffer(0).
-# Constraints (enforced by RTL elaboration asserts):
-#   - folded (l1d_use_folded=1) REQUIRES l1d_use_hash_way=1
-#   - fwd-buffer (l1d_use_fwd_buf=1) REQUIRES l1d_use_hash_way=1
-# l1d_fold_way_group=0 => auto (min(4, ways)).
-l1d_use_folded     ?= 1
-l1d_fold_way_group ?= 0
-l1d_use_hash_way   ?= 1
-l1d_use_fwd_buf    ?= 1
 
 ####################
 ##  CachePool CC  ##
@@ -93,7 +83,7 @@ snitch_max_trans ?= 16
 ##  L2 Main Memory ##
 #####################
 # L2 number of channels
-l2_channel ?= 4
+l2_channel ?= 16
 
 # L2 bank width (DRAM width, change with care)
 l2_bank_width ?= 512

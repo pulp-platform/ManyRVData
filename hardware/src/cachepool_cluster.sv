@@ -4,21 +4,11 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
 `include "axi/typedef.svh"
-`include "common_cells/assertions.svh"
-`include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
 `include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
-`include "reqrsp_interface/typedef.svh"
-`include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
-/// A single-tile cluster implementation for CachePool
+/// CachePool cluster: instantiates NumGroups groups connected via FlooNoC mesh,
+/// with shared L2 memory and peripheral fabric.
 module cachepool_cluster
   import cachepool_pkg::*;
   import spatz_pkg::*;
@@ -47,10 +37,6 @@ module cachepool_cluster
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
     parameter int                     unsigned               NrBanks                            = 2 * NrCores,
-    /// Size of DMA AXI buffer.
-    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
-    /// Size of DMA request fifo.
-    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -65,8 +51,6 @@ module cachepool_cluster
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
-    /// Per-core enabling of the custom `Xdma` ISA extensions.
-    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int                     unsigned               NumIntOutstandingLoads             = 0,
@@ -121,20 +105,20 @@ module cachepool_cluster
     input  logic                                  rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]           debug_req_i,
+    input  logic                                  debug_req_i,
     /// End of Computing indicator to notify the host/tb
     output logic          [3:0]                   eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic          [NrCores-1:0]           meip_i,
+    input  logic                                  meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]           mtip_i,
+    input  logic                                  mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic          [NrCores-1:0]           msip_i,
+    input  logic                                  msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
@@ -163,43 +147,16 @@ module cachepool_cluster
   // Imports
   // ---------
   import snitch_pkg::*;
-  import snitch_icache_pkg::icache_events_t;
 
   // ---------
   // Constants
   // ---------
-  /// Minimum width to hold the core number.
-  localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
-
-  // Enlarge the address width for Spatz due to cache
-  localparam int unsigned TCDMAddrWidth   = 32;
-
-  // Core Request, SoC Request
-  localparam int unsigned NrNarrowMasters = 2;
-
   localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst) - GroupMuxIdBits;
+  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - ClusterRouteIdWidth - GroupMuxIdBits;
 
   // Pre-mux AXI ID width: per-group reqrsp_to_axi output.
   // The multi-group axi_mux adds GroupMuxIdBits on top to reach WideIdWidthOut.
   localparam int unsigned WideIdWidthPreMux = WideIdWidthOut - GroupMuxIdBits;
-
-  // Cache XBar configuration struct
-  localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
-    NoSlvPorts        : NumClusterMst*NumTiles,
-    NoMstPorts        : ClusterWideOutAxiPorts,
-    MaxMstTrans       : MaxMstTrans,
-    MaxSlvTrans       : MaxSlvTrans,
-    FallThrough       : 1'b0,
-    LatencyMode       : XbarLatency,
-    AxiIdWidthSlvPorts: WideIdWidthIn,
-    AxiIdUsedSlvPorts : WideIdWidthIn,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : ClusterWideOutAxiPorts - 1,
-    default           : '0
-  };
 
   // --------
   // Typedefs
@@ -211,24 +168,19 @@ module cachepool_cluster
   typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
   typedef logic [AxiUserWidth-1:0]      user_cache_t;
 
-  // Pre-mux (per-group) AXI types: narrower ID, widened by axi_mux.
-  typedef logic [WideIdWidthPreMux-1:0] id_cache_premux_t;
+  // reqrsp_to_axi output type: full GroupAxiIdOutWidth-bit IDs (decoupled from WideIdWidthPreMux
+  // which now equals WideRefillIdWidth after per-group ID remapping).
+  typedef logic [GroupAxiIdOutWidth-1:0] id_cache_premux_t;
+  // Remapper output / mux slave input type: bounded WideRefillIdWidth-bit IDs.
+  typedef logic [WideIdWidthPreMux-1:0]  id_cache_remap_t;
 
-  `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
+  `AXI_TYPEDEF_ALL(axi_mst_cache,    addr_t, id_cache_mst_t,    data_cache_t, strb_cache_t, user_cache_t)
   // Post-mux AXI types (same as before — used for axi_cut and output).
-  `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
-  // Pre-mux AXI types (per-group reqrsp_to_axi output, input to axi_mux).
+  `AXI_TYPEDEF_ALL(axi_slv_cache,    addr_t, id_cache_slv_t,    data_cache_t, strb_cache_t, user_cache_t)
+  // reqrsp_to_axi output AXI types (full GroupAxiIdOutWidth-bit IDs).
   `AXI_TYPEDEF_ALL(axi_premux_cache, addr_t, id_cache_premux_t, data_cache_t, strb_cache_t, user_cache_t)
-
-  `REG_BUS_TYPEDEF_ALL(reg_cache, addr_t, data_cache_t, strb_cache_t)
-
-  typedef struct packed {
-    int unsigned idx;
-    addr_t start_addr;
-    addr_t end_addr;
-  } xbar_rule_t;
-
-  `SNITCH_VM_TYPEDEF(AxiAddrWidth)
+  // Remapped AXI types: WideRefillIdWidth-bit IDs, fed into the inter-group mux / future NoC.
+  `AXI_TYPEDEF_ALL(axi_remap_cache,  addr_t, id_cache_remap_t,  data_cache_t, strb_cache_t, user_cache_t)
 
   // ----------------
   // Wire Definitions
@@ -237,16 +189,18 @@ module cachepool_cluster
   // Post-mux wide AXI (one per L2 channel, merged across groups).
   axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
   axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
-  // Per-group pre-mux wide AXI (per group, per L2 channel).
+  // Per-group pre-mux wide AXI (per group, per L2 channel): full GroupAxiIdOutWidth-bit IDs.
   axi_premux_cache_req_t  [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_req;
   axi_premux_cache_resp_t [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_rsp;
+  // Per-group remapped wide AXI: WideRefillIdWidth-bit IDs, fed into the inter-group mux.
+  axi_remap_cache_req_t   [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_remap_req;
+  axi_remap_cache_resp_t  [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_remap_rsp;
   // Narrow AXI per tile (UART + Periph).
   axi_narrow_req_t     [NumTiles-1:0][1:0]          axi_out_req;
   axi_narrow_resp_t    [NumTiles-1:0][1:0]          axi_out_resp;
 
   // 3. Peripherals
   axi_addr_t                               private_start_addr;
-  icache_events_t    [NrCores-1:0]         icache_events;
   logic                                    icache_prefetch_enable;
   logic              [NrCores-1:0]         cl_interrupt;
   logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
@@ -259,6 +213,20 @@ module cachepool_cluster
   // Per-group error signals.
   logic              [NumGroups-1:0]       group_error;
 
+  // Inter-group NoC mesh signals (indexed by group, then direction, then port)
+  noc_group_req_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out_ready;
+  noc_group_req_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in_ready;
+  noc_group_rsp_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out_ready;
+  noc_group_rsp_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in_ready;
+
   // ---------------
   // CachePool Group
   // ---------------
@@ -269,78 +237,179 @@ module cachepool_cluster
 
   assign error_o = |group_error;
 
-  for (genvar g = 0; g < NumGroups; g++) begin : gen_group
-    cachepool_group_noc_wrapper #(
-      .AxiAddrWidth             ( AxiAddrWidth             ),
-      .AxiDataWidth             ( AxiDataWidth             ),
-      .AxiIdWidthIn             ( AxiIdWidthIn             ),
-      .AxiIdWidthOut            ( WideIdWidthIn            ),
-      .AxiUserWidth             ( AxiUserWidth             ),
-      .BootAddr                 ( BootAddr                 ),
-      .UartAddr                 ( UartAddr                 ),
-      .ClusterPeriphSize        ( ClusterPeriphSize        ),
-      .NrCores                  ( NumCoreGroup             ),
-      .TCDMDepth                ( TCDMDepth                ),
-      .NrBanks                  ( NrBanks / NumGroups      ),
-      .ICacheLineWidth          ( ICacheLineWidth          ),
-      .ICacheLineCount          ( ICacheLineCount          ),
-      .ICacheSets               ( ICacheSets               ),
-      .FPUImplementation        ( FPUImplementation        ),
-      .NumSpatzFPUs             ( NumSpatzFPUs             ),
-      .NumSpatzIPUs             ( NumSpatzIPUs             ),
-      .SnitchPMACfg             ( SnitchPMACfg             ),
-      .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
-      .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
-      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-      .axi_in_req_t             ( axi_in_req_t             ),
-      .axi_in_resp_t            ( axi_in_resp_t            ),
-      .axi_narrow_req_t         ( axi_narrow_req_t         ),
-      .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
-      .axi_out_req_t            ( axi_mst_cache_req_t      ),
-      .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-      .Xdma                     ( Xdma[g*NumCoreGroup +: NumCoreGroup] ),
-      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-      .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
-      .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
-      .RegisterCoreReq          ( RegisterCoreReq          ),
-      .RegisterCoreRsp          ( RegisterCoreRsp          ),
-      .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
-      .RegisterExt              ( RegisterExt              ),
-      .XbarLatency              ( XbarLatency              ),
-      .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              ),
-      .UseFoldedDataBanks       ( UseFoldedDataBanks        ),
-      .FoldWayGroup             ( FoldWayGroup              ),
-      .UseHashWaySelect         ( UseHashWaySelect         ),
-      .UseForwardingBuffer      ( UseForwardingBuffer       )
-    ) i_group (
-      .clk_i                    ( clk_i                                           ),
-      .rst_ni                   ( rst_ni                                          ),
-      .impl_i                   ( impl_i                                          ),
-      .error_o                  ( group_error[g]                                  ),
-      .debug_req_i              ( debug_req_i[g*NumCoreGroup +: NumCoreGroup]     ),
-      .meip_i                   ( meip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
-      .mtip_i                   ( mtip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
-      .msip_i                   ( msip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
-      .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
-      .cluster_base_addr_i      ( cluster_base_addr_i                             ),
-      .private_start_addr_i     ( private_start_addr                              ),
-      .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
-      .axi_narrow_rsp_i         ( axi_out_resp[g*NumTilesPerGroup +: NumTilesPerGroup]  ),
-      // DRAM refill reqrsp (post-xbar, one per L2 channel)
-      .l2_req_o                 ( l2_req[g]                                       ),
-      .l2_rsp_i                 ( l2_rsp[g]                                       ),
-      // Peripherals
-      .icache_events_o          ( icache_events[g*NumCoreGroup +: NumCoreGroup]   ),
-      .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-      .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
-      .dynamic_offset_i         ( dynamic_offset                                  ),
-      .l1d_private_i            ( l1d_private                                     ),
-      .l1d_insn_i               ( l1d_insn                                        ),
-      .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
-      .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
-      .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup])
-    );
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_group_y
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_group_x
+      // Flat group index: g = gy * NumGroupsX + gx
+      localparam int unsigned g = gy * NumGroupsX + gx;
+      cachepool_group_noc_wrapper #(
+        .AxiAddrWidth             ( AxiAddrWidth             ),
+        .AxiDataWidth             ( AxiDataWidth             ),
+        .AxiIdWidthIn             ( AxiIdWidthIn             ),
+        .AxiIdWidthOut            ( WideIdWidthIn            ),
+        .AxiUserWidth             ( AxiUserWidth             ),
+        .BootAddr                 ( BootAddr                 ),
+        .UartAddr                 ( UartAddr                 ),
+        .ClusterPeriphSize        ( ClusterPeriphSize        ),
+        .NrCores                  ( NumCoreGroup             ),
+        .TCDMDepth                ( TCDMDepth                ),
+        .NrBanks                  ( NrBanks / NumGroups      ),
+        .ICacheLineWidth          ( ICacheLineWidth          ),
+        .ICacheLineCount          ( ICacheLineCount          ),
+        .ICacheSets               ( ICacheSets               ),
+        .FPUImplementation        ( FPUImplementation        ),
+        .NumSpatzFPUs             ( NumSpatzFPUs             ),
+        .NumSpatzIPUs             ( NumSpatzIPUs             ),
+        .SnitchPMACfg             ( SnitchPMACfg             ),
+        .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+        .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+        .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+        .axi_in_req_t             ( axi_in_req_t             ),
+        .axi_in_resp_t            ( axi_in_resp_t            ),
+        .axi_narrow_req_t         ( axi_narrow_req_t         ),
+        .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+        .axi_out_req_t            ( axi_mst_cache_req_t      ),
+        .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+        .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterCoreReq          ( RegisterCoreReq          ),
+        .RegisterCoreRsp          ( RegisterCoreRsp          ),
+        .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+        .RegisterExt              ( RegisterExt              ),
+        .XbarLatency              ( XbarLatency              ),
+        .MaxMstTrans              ( MaxMstTrans              ),
+        .MaxSlvTrans              ( MaxSlvTrans              ),
+        .UseFoldedDataBanks       ( UseFoldedDataBanks       ),
+        .FoldWayGroup             ( FoldWayGroup             ),
+        .UseHashWaySelect         ( UseHashWaySelect         ),
+        .UseForwardingBuffer      ( UseForwardingBuffer      )
+      ) i_group (
+        .clk_i                    ( clk_i                                           ),
+        .rst_ni                   ( rst_ni                                          ),
+        .impl_i                   ( impl_i                                          ),
+        .error_o                  ( group_error[g]                                  ),
+        .debug_req_i              ( debug_req_i                                     ),
+        .meip_i                   ( meip_i                                          ),
+        .mtip_i                   ( mtip_i                                          ),
+        .msip_i                   ( msip_i                                          ),
+        .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+        .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
+        .cluster_base_addr_i      ( cluster_base_addr_i                             ),
+        .private_start_addr_i     ( private_start_addr                              ),
+        .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
+        .axi_narrow_rsp_i         ( axi_out_resp[g*NumTilesPerGroup +: NumTilesPerGroup]  ),
+        // DRAM refill reqrsp (post-xbar, one per L2 channel)
+        .l2_req_o                 ( l2_req[g]                                       ),
+        .l2_rsp_i                 ( l2_rsp[g]                                       ),
+        // Peripherals
+        .icache_events_o          ( /* unused */                                    ),
+        .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
+        .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
+        .dynamic_offset_i         ( dynamic_offset                                  ),
+        .l1d_private_i            ( l1d_private                                     ),
+        .l1d_insn_i               ( l1d_insn                                        ),
+        .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
+        .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
+        .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
+        .group_xy_id_i            ( group_xy_id_t'{x:       gx,
+                                                   y:       gy,
+                                                   port_id: 1'b0}                          ),
+        .noc_req_o                ( noc_req_out      [g]                                   ),
+        .noc_req_valid_o          ( noc_req_out_valid[g]                                   ),
+        .noc_req_ready_i          ( noc_req_out_ready[g]                                   ),
+        .noc_req_i                ( noc_req_in       [g]                                   ),
+        .noc_req_valid_i          ( noc_req_in_valid [g]                                   ),
+        .noc_req_ready_o          ( noc_req_in_ready [g]                                   ),
+        .noc_rsp_o                ( noc_rsp_out      [g]                                   ),
+        .noc_rsp_valid_o          ( noc_rsp_out_valid[g]                                   ),
+        .noc_rsp_ready_i          ( noc_rsp_out_ready[g]                                   ),
+        .noc_rsp_i                ( noc_rsp_in       [g]                                   ),
+        .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
+        .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   )
+      );
+    end
+  end
+
+  // ----------------------------
+  // Inter-group NoC mesh wiring
+  // ----------------------------
+
+  // East-West (horizontal) interior connections
+  for (genvar gx = 0; gx < NumGroupsX-1; gx++) begin : gen_ew_conn
+    for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_ew_conn_y
+      // East output of (gx,gy) → West input of (gx+1,gy)
+      assign noc_req_in      [gx+1 + gy*NumGroupsX][3] = noc_req_out      [gx + gy*NumGroupsX][1];
+      assign noc_req_in_valid[gx+1 + gy*NumGroupsX][3] = noc_req_out_valid[gx + gy*NumGroupsX][1];
+      assign noc_req_out_ready[gx  + gy*NumGroupsX][1] = noc_req_in_ready [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in      [gx+1 + gy*NumGroupsX][3] = noc_rsp_out      [gx + gy*NumGroupsX][1];
+      assign noc_rsp_in_valid[gx+1 + gy*NumGroupsX][3] = noc_rsp_out_valid[gx + gy*NumGroupsX][1];
+      assign noc_rsp_out_ready[gx  + gy*NumGroupsX][1] = noc_rsp_in_ready [gx+1 + gy*NumGroupsX][3];
+      // West output of (gx+1,gy) → East input of (gx,gy)
+      assign noc_req_in      [gx   + gy*NumGroupsX][1] = noc_req_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_req_in_valid[gx   + gy*NumGroupsX][1] = noc_req_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_req_out_ready[gx+1 + gy*NumGroupsX][3] = noc_req_in_ready[gx  + gy*NumGroupsX][1];
+      assign noc_rsp_in      [gx   + gy*NumGroupsX][1] = noc_rsp_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in_valid[gx   + gy*NumGroupsX][1] = noc_rsp_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_out_ready[gx+1 + gy*NumGroupsX][3] = noc_rsp_in_ready[gx  + gy*NumGroupsX][1];
+    end
+  end
+
+  // North-South (vertical) interior connections
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_ns_conn
+    for (genvar gy = 0; gy < NumGroupsY-1; gy++) begin : gen_ns_conn_y
+      // North output of (gx,gy) (dir 0) → South input of (gx,gy+1) (dir 2)
+      assign noc_req_in      [gx + (gy+1)*NumGroupsX][2] = noc_req_out      [gx + gy*NumGroupsX][0];
+      assign noc_req_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_req_out_valid[gx + gy*NumGroupsX][0];
+      assign noc_req_out_ready[gx +  gy   *NumGroupsX][0] = noc_req_in_ready[gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in      [gx + (gy+1)*NumGroupsX][2] = noc_rsp_out      [gx + gy*NumGroupsX][0];
+      assign noc_rsp_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_rsp_out_valid[gx + gy*NumGroupsX][0];
+      assign noc_rsp_out_ready[gx +  gy   *NumGroupsX][0] = noc_rsp_in_ready[gx + (gy+1)*NumGroupsX][2];
+      // South output of (gx,gy+1) (dir 2) → North input of (gx,gy) (dir 0)
+      assign noc_req_in      [gx +  gy   *NumGroupsX][0] = noc_req_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_in_valid[gx +  gy   *NumGroupsX][0] = noc_req_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_req_in_ready[gx +  gy   *NumGroupsX][0];
+      assign noc_rsp_in      [gx +  gy   *NumGroupsX][0] = noc_rsp_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in_valid[gx +  gy   *NumGroupsX][0] = noc_rsp_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_rsp_in_ready[gx +  gy   *NumGroupsX][0];
+    end
+  end
+
+  // West boundary: gx=0 has no West neighbor (dir 3)
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_west_bnd
+    assign noc_req_in      [gy*NumGroupsX][3]  = '0;
+    assign noc_req_in_valid[gy*NumGroupsX][3]  = '0;
+    assign noc_req_out_ready[gy*NumGroupsX][3] = '1;
+    assign noc_rsp_in      [gy*NumGroupsX][3]  = '0;
+    assign noc_rsp_in_valid[gy*NumGroupsX][3]  = '0;
+    assign noc_rsp_out_ready[gy*NumGroupsX][3] = '1;
+  end
+
+  // East boundary: gx=NumGroupsX-1 has no East neighbor (dir 1)
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_east_bnd
+    assign noc_req_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_req_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_req_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
+    assign noc_rsp_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_rsp_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_rsp_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
+  end
+
+  // South boundary: gy=0 has no South neighbor (dir 2)
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_south_bnd
+    assign noc_req_in      [gx][2]  = '0;
+    assign noc_req_in_valid[gx][2]  = '0;
+    assign noc_req_out_ready[gx][2] = '1;
+    assign noc_rsp_in      [gx][2]  = '0;
+    assign noc_rsp_in_valid[gx][2]  = '0;
+    assign noc_rsp_out_ready[gx][2] = '1;
+  end
+
+  // North boundary: gy=NumGroupsY-1 has no North neighbor (dir 0)
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_north_bnd
+    assign noc_req_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_req_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_req_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
+    assign noc_rsp_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_rsp_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_rsp_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
   end
 
   // -------------
@@ -348,8 +417,10 @@ module cachepool_cluster
   // -------------
 
   // Step 1: Per-group reqrsp_to_axi conversion.
-  for (genvar g = 0; g < NumGroups; g++) begin : gen_per_group_l2
-    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_per_ch
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_per_group_l2
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_per_group_l2
+      localparam int unsigned g = gy * NumGroupsX + gx;
+      for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_per_ch
       reqrsp_to_axi #(
         .MaxTrans           ( NumSpatzOutstandingLoads*2 ),
         .ID                 ( '0                         ),
@@ -372,34 +443,59 @@ module cachepool_cluster
         .axi_req_o          ( wide_axi_premux_req[g][ch] ),
         .axi_rsp_i          ( wide_axi_premux_rsp[g][ch] )
       );
+      end
     end
   end
 
   // Step 2: Per-L2-channel axi_mux across groups.
   if (NumGroups > 1) begin : gen_l2_group_mux
     for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_l2_ch_mux
-      // Collect per-group inputs for this channel.
-      axi_premux_cache_req_t  [NumGroups-1:0] l2_mux_slv_req;
-      axi_premux_cache_resp_t [NumGroups-1:0] l2_mux_slv_rsp;
+      // Per-group ID remapper: reduces GroupAxiIdOutWidth to WideRefillIdWidth before the mux.
+      // axi_id_remap preserves ID independence (unlike axi_id_serialize) for performance.
+      // AxiSlvPortMaxUniqIds = NumSpatzOutstandingLoads*2 matches the reqrsp_to_axi MaxTrans
+      // so the remapper never stalls.
+      for (genvar g = 0; g < NumGroups; g++) begin : gen_l2_mux_remap
+        axi_id_remap #(
+          .AxiSlvPortIdWidth    ( GroupAxiIdOutWidth           ),
+          .AxiSlvPortMaxUniqIds ( NumSpatzOutstandingLoads * 2 ),
+          .AxiMaxTxnsPerId      ( NumSpatzOutstandingLoads     ),
+          .AxiMstPortIdWidth    ( WideIdWidthPreMux            ),
+          .slv_req_t            ( axi_premux_cache_req_t       ),
+          .slv_resp_t           ( axi_premux_cache_resp_t      ),
+          .mst_req_t            ( axi_remap_cache_req_t        ),
+          .mst_resp_t           ( axi_remap_cache_resp_t       )
+        ) i_l2_id_remap (
+          .clk_i      ( clk_i                           ),
+          .rst_ni     ( rst_ni                           ),
+          .slv_req_i  ( wide_axi_premux_req[g][ch]       ),
+          .slv_resp_o ( wide_axi_premux_rsp[g][ch]       ),
+          .mst_req_o  ( wide_axi_remap_req[g][ch]        ),
+          .mst_resp_i ( wide_axi_remap_rsp[g][ch]        )
+        );
+      end
+
+      // Collect remapped per-group inputs for the mux.
+      axi_remap_cache_req_t  [NumGroups-1:0] l2_mux_slv_req;
+      axi_remap_cache_resp_t [NumGroups-1:0] l2_mux_slv_rsp;
 
       for (genvar g = 0; g < NumGroups; g++) begin : gen_l2_mux_connect
-        assign l2_mux_slv_req[g] = wide_axi_premux_req[g][ch];
-        assign wide_axi_premux_rsp[g][ch] = l2_mux_slv_rsp[g];
+        assign l2_mux_slv_req[g]          = wide_axi_remap_req[g][ch];
+        assign wide_axi_remap_rsp[g][ch]  = l2_mux_slv_rsp[g];
       end
 
       axi_mux #(
         .SlvAxiIDWidth ( WideIdWidthPreMux            ),
-        .slv_aw_chan_t ( axi_premux_cache_aw_chan_t   ),
+        .slv_aw_chan_t ( axi_remap_cache_aw_chan_t    ),
         .mst_aw_chan_t ( axi_slv_cache_aw_chan_t      ),
         .w_chan_t      ( axi_slv_cache_w_chan_t       ),
-        .slv_b_chan_t  ( axi_premux_cache_b_chan_t    ),
+        .slv_b_chan_t  ( axi_remap_cache_b_chan_t     ),
         .mst_b_chan_t  ( axi_slv_cache_b_chan_t       ),
-        .slv_ar_chan_t ( axi_premux_cache_ar_chan_t   ),
+        .slv_ar_chan_t ( axi_remap_cache_ar_chan_t    ),
         .mst_ar_chan_t ( axi_slv_cache_ar_chan_t      ),
-        .slv_r_chan_t  ( axi_premux_cache_r_chan_t    ),
+        .slv_r_chan_t  ( axi_remap_cache_r_chan_t     ),
         .mst_r_chan_t  ( axi_slv_cache_r_chan_t       ),
-        .slv_req_t     ( axi_premux_cache_req_t       ),
-        .slv_resp_t    ( axi_premux_cache_resp_t      ),
+        .slv_req_t     ( axi_remap_cache_req_t        ),
+        .slv_resp_t    ( axi_remap_cache_resp_t       ),
         .mst_req_t     ( axi_slv_cache_req_t          ),
         .mst_resp_t    ( axi_slv_cache_resp_t         ),
         .NoSlvPorts    ( NumGroups                    ),
@@ -513,9 +609,11 @@ module cachepool_cluster
   axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req, axi_barrier_req;
   axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp, axi_barrier_rsp;
 
-  // Spill register signals to cut the AXI feedback path
-  axi_in_req_t     axi_in_req_reg;
-  axi_in_resp_t    axi_in_resp_reg;
+  // Serialized CSR signals: one entry per tile plus one for the external axi_in port.
+  // Index [NumTiles] = axi_in_req_i, indices [NumTiles-1:0] = per-tile CSR outputs.
+  axi_csr_ser_req_t  [NumTiles:0] axi_csr_pre_mux_req;
+  axi_csr_ser_resp_t [NumTiles:0] axi_csr_pre_mux_rsp;
+
 
   for (genvar t = 0; t < NumTiles; t++) begin
     assign axi_barrier_req[t] = axi_out_req [t][ClusterPeriph];
@@ -538,24 +636,6 @@ module cachepool_cluster
   assign use_barrier = barrier_participation_mask;
   
 
-  axi_cut #(
-    .Bypass     (0                      ),
-    .aw_chan_t  (spatz_axi_in_aw_chan_t ),
-    .w_chan_t   (spatz_axi_in_w_chan_t  ),
-    .b_chan_t   (spatz_axi_in_b_chan_t  ),
-    .ar_chan_t  (spatz_axi_in_ar_chan_t ),
-    .r_chan_t   (spatz_axi_in_r_chan_t  ),
-    .axi_req_t  (spatz_axi_in_req_t     ),
-    .axi_resp_t (spatz_axi_in_resp_t    )
-  ) i_cut_ext_narrow_in (
-    .clk_i      (clk_i                  ),
-    .rst_ni     (rst_ni                 ),
-    .slv_req_i  (axi_in_req_i           ),
-    .slv_resp_o (axi_in_resp_o          ),
-    .mst_req_o  (axi_in_req_reg         ),
-    .mst_resp_i (axi_in_resp_reg        )
-  );
-
   cachepool_cluster_barrier #(
     .AddrWidth    (AxiAddrWidth       ),
     .NrPorts      (NumTiles           ),
@@ -574,19 +654,78 @@ module cachepool_cluster
     .cluster_periph_start_address_i ( tcdm_end_address  )
   );
 
+  // Per-tile CSR ID serializers: reduce CsrAxiMstIdWidth to CsrSerIdWidth before the mux
+  // so the mux output stays bounded regardless of NumTiles.
+  for (genvar t = 0; t < NumTiles; t++) begin : gen_csr_id_serialize
+    axi_id_serialize #(
+      .AxiSlvPortIdWidth      ( CsrAxiMstIdWidth        ),
+      .AxiSlvPortMaxTxns      ( 2                       ),
+      .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
+      .AxiMstPortMaxUniqIds   ( 1                       ),
+      .AxiMstPortMaxTxnsPerId ( 2                       ),
+      .AxiAddrWidth           ( AxiAddrWidth            ),
+      .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
+      .AxiUserWidth           ( SpatzAxiUserWidth       ),
+      .AtopSupport            ( 1'b0                    ),
+      .slv_req_t              ( axi_narrow_req_t        ),
+      .slv_resp_t             ( axi_narrow_resp_t       ),
+      .mst_req_t              ( axi_csr_ser_req_t       ),
+      .mst_resp_t             ( axi_csr_ser_resp_t      ),
+      // Provide one dummy entry to avoid [IdMapNumEntries-1:0] underflow when 0.
+      // Entry maps ID 0 -> 0, which is identical to the default modulo formula.
+      .IdMapNumEntries        ( 1                       ),
+      .IdMap                  ( '{'{32'd0, 32'd0}}      )
+    ) i_csr_id_serialize (
+      .clk_i      ( clk_i                   ),
+      .rst_ni     ( rst_ni                   ),
+      .slv_req_i  ( axi_core_csr_req[t]      ),
+      .slv_resp_o ( axi_core_csr_rsp[t]      ),
+      .mst_req_o  ( axi_csr_pre_mux_req[t]   ),
+      .mst_resp_i ( axi_csr_pre_mux_rsp[t]   )
+    );
+  end
+
+  // Serializer for the external axi_in port (SoC CSR access).
+  axi_id_serialize #(
+    .AxiSlvPortIdWidth      ( AxiIdWidthIn            ),
+    .AxiSlvPortMaxTxns      ( 2                       ),
+    .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
+    .AxiMstPortMaxUniqIds   ( 1                       ),
+    .AxiMstPortMaxTxnsPerId ( 2                       ),
+    .AxiAddrWidth           ( AxiAddrWidth            ),
+    .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
+    .AxiUserWidth           ( SpatzAxiUserWidth       ),
+    .AtopSupport            ( 1'b0                    ),
+    .slv_req_t              ( axi_in_req_t            ),
+    .slv_resp_t             ( axi_in_resp_t           ),
+    .mst_req_t              ( axi_csr_ser_req_t       ),
+    .mst_resp_t             ( axi_csr_ser_resp_t      ),
+    // Provide one dummy entry to avoid [IdMapNumEntries-1:0] underflow when 0.
+    // Entry maps ID 0 -> 0, which is identical to the default modulo formula.
+    .IdMapNumEntries        ( 1                       ),
+    .IdMap                  ( '{'{32'd0, 32'd0}}      )
+  ) i_csr_in_id_serialize (
+    .clk_i      ( clk_i                          ),
+    .rst_ni     ( rst_ni                          ),
+    .slv_req_i  ( axi_in_req_i                    ),
+    .slv_resp_o ( axi_in_resp_o                   ),
+    .mst_req_o  ( axi_csr_pre_mux_req[NumTiles]   ),
+    .mst_resp_i ( axi_csr_pre_mux_rsp[NumTiles]   )
+  );
+
   axi_mux #(
-    .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
-    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ),
+    .SlvAxiIDWidth ( CsrSerIdWidth          ),
+    .slv_aw_chan_t ( axi_csr_ser_aw_chan_t  ),
     .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ),
     .w_chan_t      ( axi_csr_slv_w_chan_t   ),
-    .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ),
+    .slv_b_chan_t  ( axi_csr_ser_b_chan_t   ),
     .mst_b_chan_t  ( axi_csr_slv_b_chan_t   ),
-    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ),
+    .slv_ar_chan_t ( axi_csr_ser_ar_chan_t  ),
     .mst_ar_chan_t ( axi_csr_slv_ar_chan_t  ),
-    .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ),
+    .slv_r_chan_t  ( axi_csr_ser_r_chan_t   ),
     .mst_r_chan_t  ( axi_csr_slv_r_chan_t   ),
-    .slv_req_t     ( axi_csr_mst_req_t      ),
-    .slv_resp_t    ( axi_csr_mst_resp_t     ),
+    .slv_req_t     ( axi_csr_ser_req_t      ),
+    .slv_resp_t    ( axi_csr_ser_resp_t     ),
     .mst_req_t     ( axi_csr_slv_req_t      ),
     .mst_resp_t    ( axi_csr_slv_resp_t     ),
     .NoSlvPorts    ( NumTiles + 1           ),
@@ -598,13 +737,13 @@ module cachepool_cluster
     .SpillR        ( XbarLatency[0]         ),
     .MaxWTrans     ( 2                      )
   ) i_axi_csr_mux (
-    .clk_i       ( clk_i        ),   // Clock
-    .rst_ni      ( rst_ni       ),  // Asynchronous reset active low
-    .test_i      ('0            ),  // Test Mode enable
-    .slv_reqs_i  ( {axi_in_req_reg,  axi_core_csr_req}  ),
-    .slv_resps_o ( {axi_in_resp_reg, axi_core_csr_rsp}  ),
-    .mst_req_o   ( axi_csr_req  ),
-    .mst_resp_i  ( axi_csr_rsp  )
+    .clk_i       ( clk_i                              ),
+    .rst_ni      ( rst_ni                             ),
+    .test_i      ('0                                  ),
+    .slv_reqs_i  ( axi_csr_pre_mux_req  ),
+    .slv_resps_o ( axi_csr_pre_mux_rsp  ),
+    .mst_req_o   ( axi_csr_req                        ),
+    .mst_resp_i  ( axi_csr_rsp                        )
   );
 
   axi_to_reg #(
@@ -628,30 +767,6 @@ module cachepool_cluster
     .reg_req_o          (reg_req                  ),
     .reg_rsp_i          (reg_rsp                  )
   );
-
-
-  // Event counter increments for the TCDM.
-  typedef struct packed {
-    /// Number requests going in
-    logic [$clog2(5):0] inc_accessed;
-    /// Number of requests stalled due to congestion
-    logic [$clog2(5):0] inc_congested;
-  } tcdm_events_t;
-
-  // Event counter increments for DMA.
-  typedef struct packed {
-    logic aw_stall, ar_stall, r_stall, w_stall,
-    buf_w_stall, buf_r_stall;
-    logic aw_valid, aw_ready, aw_done, aw_bw;
-    logic ar_valid, ar_ready, ar_done, ar_bw;
-    logic r_valid, r_ready, r_done, r_bw;
-    logic w_valid, w_ready, w_done, w_bw;
-    logic b_valid, b_ready, b_done;
-    logic dma_busy;
-    axi_pkg::len_t aw_len, ar_len;
-    axi_pkg::size_t aw_size, ar_size;
-    logic [$clog2(SpatzAxiNarrowDataWidth/8):0] num_bytes_written;
-  } dma_events_t;
 
   cachepool_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),

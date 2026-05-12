@@ -53,6 +53,14 @@ snrt.crt0.init_bss:
     blt       t0, t1, 1b
 2:
 
+snrt.crt0.init_vec_registers:
+    li t0, -1
+    vsetvli zero, t0, e32, m8, ta, ma
+    vmv.v.i v0, 0
+    vmv.v.i v8, 0
+    vmv.v.i v16, 0
+    vmv.v.i v24, 0
+
 snrt.crt0.init_registers:
     # Clear FP registers
     csrr    t0, misa

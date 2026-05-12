@@ -67,7 +67,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config                ?= cachepool_512
+config                ?= cachepool_fpu_2g
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -166,23 +166,26 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 ###########
 # FlooNoC #
 ###########
-FLOO_DIR  ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
-FLOO_GEN_OUTDIR	?= $(ROOT_DIR)/hardware/generated
-FLOO_CFG  ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
-FLOO_SYS  = $(subst .yml,,$(notdir $(FLOO_CFG)))
-FLOO_NOC  ?= $(addprefix $(FLOO_GEN_OUTDIR)/,$(subst .yml,_floo_noc.sv,$(notdir $(FLOO_CFG))))
+FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
+FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
+FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+FLOO_NAME     = cachepool
+FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
 
 $(info FLOO_DIR: $(FLOO_DIR))
 
 # Generates the sources for FlooNoC
 .PHONY: update-floonoc install-floogen clean-floonoc
 install-floogen:
-	$(MAKE) -C $(FLOO_DIR) install-floogen
+	pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
 $(FLOO_NOC): install-floogen $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
-	floogen -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --only-pkg
+	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
+
+clean-floonoc:
+	rm -f $(FLOO_NOC)
 
 ###########
 # DramSys #
@@ -254,6 +257,7 @@ VLOG_DEFS = -DCACHEPOOL
 
 # Cluster configuration
 VLOG_DEFS += -DNUM_GROUPS=$(num_groups)
+VLOG_DEFS += -DNUM_GROUPS_X=$(num_groups_x)
 VLOG_DEFS += -DNUM_TILES=$(num_tiles)
 VLOG_DEFS += -DNUM_CORES=$(num_cores)
 VLOG_DEFS += -DDATA_WIDTH=$(data_width)
@@ -264,11 +268,8 @@ VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 
 # L1 Data Cache
 VLOG_DEFS += -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
-VLOG_DEFS += -DL1D_SIZE=$(l1d_size)
-VLOG_DEFS += -DL1D_BANK_FACTOR=$(l1d_bank_factor)
 VLOG_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
 VLOG_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
-VLOG_DEFS += -DL1D_TILE_SIZE=$(l1d_tile_size)
 VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
 VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
 VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
@@ -280,13 +281,13 @@ VLOG_DEFS += -DL1D_USE_HASH_WAY=$(l1d_use_hash_way)
 VLOG_DEFS += -DL1D_USE_FWD_BUF=$(l1d_use_fwd_buf)
 
 # CachePool CC / core cluster
-VLOG_DEFS += -DSPATZ_FPU_EN=$(spatz_fpu_en)
 VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
 VLOG_DEFS += -DREMOTE_PORT_PER_CORE=$(num_remote_ports_per_tile)
 VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
+VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
 
 # AXI configuration
 VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
@@ -296,14 +297,12 @@ VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
 VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
 VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
 
-# Peripherals / memory map
-VLOG_DEFS += -DSTACK_ADDR=$(stack_addr)
+# Stack / SPM (boot_addr, stack_addr, periph_start_addr, uart_addr used by hjson
+# generator via environment; not consumed as SV defines)
 VLOG_DEFS += -DSTACK_HW_SIZE=$(stack_hw_size)
 VLOG_DEFS += -DSTACK_HW_DEPTH=$(stack_hw_depth)
 VLOG_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
-VLOG_DEFS += -DPERIPH_START_ADDR=$(periph_start_addr)
-VLOG_DEFS += -DBOOT_ADDR=$(boot_addr)
-VLOG_DEFS += -DUART_ADDR=$(uart_addr)
+VLOG_DEFS += -DSTACK_TOT_DEPTH=$(stack_tot_depth)
 
 VLOG_DEFS += -DENABLE_SPATZ_REQ_SCOREBOARD
 

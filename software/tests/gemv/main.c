@@ -62,8 +62,9 @@ int main() {
 
   // Allocate the matrices
   if (cid == 0) {
-    // Set xbar policy
+    // We use all-private mode for this kernel
     l1d_xbar_config(offset);
+    l1d_part(4);
   }
 
   // Reset timer
@@ -126,7 +127,11 @@ int main() {
 
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
-            printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[i], gemv_result[i]);
+            printf("Error: ID: %i Calc", i);
+            snrt_printf_float(result[i]);
+            printf(",Exp:");
+            snrt_printf_float(gemv_result[i]);
+            printf("\n");
           }
         }
       }
