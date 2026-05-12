@@ -17,6 +17,8 @@ void l1d_xbar_commit();
 void l1d_commit();
 void l1d_init(uint32_t size);
 void l1d_flush();
+void l1d_shared_flush();
+void l1d_private_flush(uint32_t tile);
 void l1d_wait();
 void l1d_spm_config (uint32_t size);
 void l1d_part (uint32_t size);
