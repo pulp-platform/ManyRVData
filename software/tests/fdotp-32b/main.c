@@ -27,7 +27,7 @@ int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
   const uint32_t cid = snrt_cluster_core_idx();
 
-  const uint32_t measure_iter = 3;
+  const uint32_t measure_iter = 1;
 
   /*** DRAM Parameters for Optimization ***/
   const uint32_t l2_interleave = 16;
@@ -56,7 +56,7 @@ int main() {
   } else {
     if (cid == 0) {
       printf("FATAL: Problem size too small!\n");
-      return 0;
+      return -2;
     }
   }
 
@@ -126,7 +126,7 @@ int main() {
     else if (lmul >= 1)
       acc = fdotp_v32b_lmul1(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
     else
-      return 0;
+      return -3;
 
     result[cid] = acc;
 
@@ -176,6 +176,10 @@ int main() {
   if (cid == 0) {
     if (fp_check(result[0], dotp_result*measure_iter)) {
       printf("Check Failed!\n");
+      printf("Calc:"); snrt_printf_float(result[0]);
+      printf(", Exp:"); snrt_printf_float((float)(dotp_result * measure_iter));
+      printf("\n");
+      return -1;
     }
   }
 
