@@ -27,17 +27,17 @@ for {set g 0} {$g < $NUM_GROUPS} {incr g} {
     do sim/scripts/vsim_group.tcl ${group_path} 5
 
     # Conditional plotting based on the group
-    if {$g == 0} {
+    if {$g <= 1} {
         # 2. Call to plot tile 0 and tile 3 for Group 0 only
-        foreach tile {0 3} {
+        foreach tile {0 1 2 3} {
             set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
-            do sim/scripts/vsim_tile.tcl $tile ${tile_path}
+            do sim/scripts/vsim_tile.tcl $tile $g ${tile_path}
             
             # 3. Plot all cores in the plotted tile
             for {set core 0} {$core < $NUM_CORES} {incr core} {
                 set core_path ${tile_path}/i_tile/gen_core[$core]
                 # Pass an empty string to indicate NO parent group
-                do sim/scripts/vsim_core.tcl 0 $tile $core ${core_path} ""
+                do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} ""
             }
         }
     } else {
@@ -47,9 +47,12 @@ for {set g 0} {$g < $NUM_GROUPS} {incr g} {
         set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
         set core_path ${tile_path}/i_tile/gen_core[$core]
         
-        # FIX: Use 'do' instead of 'source' and pass just the parent group name
         do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} "GroupWP_$g"
     }
+    # set group_wp_path   ${cluster_path}/gen_group[1]/i_group
+    # set group_path      ${group_wp_path}/i_group
+    # set tile_path ${group_path}/gen_tiles[2]/gen_tile
+    # do sim/scripts/vsim_tile.tcl 2 ${tile_path}
 }
 
 # Add DRAM waves once at the end
