@@ -253,6 +253,20 @@ module cachepool_cluster
   // Per-group error signals.
   logic              [NumGroups-1:0]       group_error;
 
+  // Inter-group NoC mesh signals (indexed by group, then direction, then port)
+  noc_group_req_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_out_ready;
+  noc_group_req_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_in_ready;
+  noc_group_rsp_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_out_ready;
+  noc_group_rsp_t [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in_valid;
+  logic           [NumGroups-1:0][3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_in_ready;
+
   // ---------------
   // CachePool Group
   // ---------------
@@ -313,6 +327,7 @@ module cachepool_cluster
       .mtip_i                   ( mtip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
       .msip_i                   ( msip_i     [g*NumCoreGroup +: NumCoreGroup]     ),
       .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+      .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
       .cluster_base_addr_i      ( cluster_base_addr_i                             ),
       .private_start_addr_i     ( private_start_addr                              ),
       .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
@@ -329,8 +344,107 @@ module cachepool_cluster
       .l1d_insn_i               ( l1d_insn                                        ),
       .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
       .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
-      .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup])
+      .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
+      .group_xy_id_i            ( group_xy_id_t'{x:       g % NumGroupsX,
+                                                 y:       g / NumGroupsX,
+                                                 port_id: 1'b0}                          ),
+      .noc_req_o                ( noc_req_out      [g]                                   ),
+      .noc_req_valid_o          ( noc_req_out_valid[g]                                   ),
+      .noc_req_ready_i          ( noc_req_out_ready[g]                                   ),
+      .noc_req_i                ( noc_req_in       [g]                                   ),
+      .noc_req_valid_i          ( noc_req_in_valid [g]                                   ),
+      .noc_req_ready_o          ( noc_req_in_ready [g]                                   ),
+      .noc_rsp_o                ( noc_rsp_out      [g]                                   ),
+      .noc_rsp_valid_o          ( noc_rsp_out_valid[g]                                   ),
+      .noc_rsp_ready_i          ( noc_rsp_out_ready[g]                                   ),
+      .noc_rsp_i                ( noc_rsp_in       [g]                                   ),
+      .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
+      .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   )
     );
+  end
+
+  // ----------------------------
+  // Inter-group NoC mesh wiring
+  // ----------------------------
+
+  // East-West (horizontal) interior connections
+  for (genvar gx = 0; gx < NumGroupsX-1; gx++) begin : gen_ew_conn
+    for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_ew_conn_y
+      // East output of (gx,gy) → West input of (gx+1,gy)
+      assign noc_req_in      [gx+1 + gy*NumGroupsX][3] = noc_req_out      [gx + gy*NumGroupsX][1];
+      assign noc_req_in_valid[gx+1 + gy*NumGroupsX][3] = noc_req_out_valid[gx + gy*NumGroupsX][1];
+      assign noc_req_out_ready[gx  + gy*NumGroupsX][1] = noc_req_in_ready [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in      [gx+1 + gy*NumGroupsX][3] = noc_rsp_out      [gx + gy*NumGroupsX][1];
+      assign noc_rsp_in_valid[gx+1 + gy*NumGroupsX][3] = noc_rsp_out_valid[gx + gy*NumGroupsX][1];
+      assign noc_rsp_out_ready[gx  + gy*NumGroupsX][1] = noc_rsp_in_ready [gx+1 + gy*NumGroupsX][3];
+      // West output of (gx+1,gy) → East input of (gx,gy)
+      assign noc_req_in      [gx   + gy*NumGroupsX][1] = noc_req_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_req_in_valid[gx   + gy*NumGroupsX][1] = noc_req_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_req_out_ready[gx+1 + gy*NumGroupsX][3] = noc_req_in_ready[gx  + gy*NumGroupsX][1];
+      assign noc_rsp_in      [gx   + gy*NumGroupsX][1] = noc_rsp_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in_valid[gx   + gy*NumGroupsX][1] = noc_rsp_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_out_ready[gx+1 + gy*NumGroupsX][3] = noc_rsp_in_ready[gx  + gy*NumGroupsX][1];
+    end
+  end
+
+  // North-South (vertical) interior connections
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_ns_conn
+    for (genvar gy = 0; gy < NumGroupsY-1; gy++) begin : gen_ns_conn_y
+      // North output of (gx,gy) (dir 0) → South input of (gx,gy+1) (dir 2)
+      assign noc_req_in      [gx + (gy+1)*NumGroupsX][2] = noc_req_out      [gx + gy*NumGroupsX][0];
+      assign noc_req_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_req_out_valid[gx + gy*NumGroupsX][0];
+      assign noc_req_out_ready[gx +  gy   *NumGroupsX][0] = noc_req_in_ready[gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in      [gx + (gy+1)*NumGroupsX][2] = noc_rsp_out      [gx + gy*NumGroupsX][0];
+      assign noc_rsp_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_rsp_out_valid[gx + gy*NumGroupsX][0];
+      assign noc_rsp_out_ready[gx +  gy   *NumGroupsX][0] = noc_rsp_in_ready[gx + (gy+1)*NumGroupsX][2];
+      // South output of (gx,gy+1) (dir 2) → North input of (gx,gy) (dir 0)
+      assign noc_req_in      [gx +  gy   *NumGroupsX][0] = noc_req_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_in_valid[gx +  gy   *NumGroupsX][0] = noc_req_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_req_in_ready[gx +  gy   *NumGroupsX][0];
+      assign noc_rsp_in      [gx +  gy   *NumGroupsX][0] = noc_rsp_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in_valid[gx +  gy   *NumGroupsX][0] = noc_rsp_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_rsp_in_ready[gx +  gy   *NumGroupsX][0];
+    end
+  end
+
+  // West boundary: gx=0 has no West neighbor (dir 3)
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_west_bnd
+    assign noc_req_in      [gy*NumGroupsX][3]  = '0;
+    assign noc_req_in_valid[gy*NumGroupsX][3]  = '0;
+    assign noc_req_out_ready[gy*NumGroupsX][3] = '1;
+    assign noc_rsp_in      [gy*NumGroupsX][3]  = '0;
+    assign noc_rsp_in_valid[gy*NumGroupsX][3]  = '0;
+    assign noc_rsp_out_ready[gy*NumGroupsX][3] = '1;
+  end
+
+  // East boundary: gx=NumGroupsX-1 has no East neighbor (dir 1)
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_east_bnd
+    assign noc_req_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_req_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_req_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
+    assign noc_rsp_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_rsp_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_rsp_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
+  end
+
+  // South boundary: gy=0 has no South neighbor (dir 2)
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_south_bnd
+    assign noc_req_in      [gx][2]  = '0;
+    assign noc_req_in_valid[gx][2]  = '0;
+    assign noc_req_out_ready[gx][2] = '1;
+    assign noc_rsp_in      [gx][2]  = '0;
+    assign noc_rsp_in_valid[gx][2]  = '0;
+    assign noc_rsp_out_ready[gx][2] = '1;
+  end
+
+  // North boundary: gy=NumGroupsY-1 has no North neighbor (dir 0)
+  for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_north_bnd
+    assign noc_req_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_req_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_req_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
+    assign noc_rsp_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_rsp_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_rsp_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
   end
 
   // -------------

@@ -692,12 +692,13 @@ module cachepool_tile
               strb:  rg_interco_out_req[flat].q.strb,
               amo:   rg_interco_out_req[flat].q.amo,
               user: '{
-                core_id: rg_interco_out_req[flat].q.user.core_id,
-                tile_id: rg_interco_out_req[flat].q.user.tile_id,
-                req_id:  rg_interco_out_req[flat].q.user.req_id,
-                is_fpu:  rg_interco_out_req[flat].q.user.is_fpu,
-                port_id: portid_t'(j),
-                default: '0
+                core_id:     rg_interco_out_req[flat].q.user.core_id,
+                tile_id:     rg_interco_out_req[flat].q.user.tile_id,
+                req_id:      rg_interco_out_req[flat].q.user.req_id,
+                is_fpu:      rg_interco_out_req[flat].q.user.is_fpu,
+                port_id:     portid_t'(j),
+                dst_tile_id: rg_interco_out_dst[flat],
+                default:     '0
               },
               default: '0
             },

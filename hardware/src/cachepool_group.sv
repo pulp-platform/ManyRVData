@@ -136,6 +136,8 @@ module cachepool_group
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
     input  logic                                  [9:0] hart_base_id_i,
+    /// Globally-unique tile ID of the first tile in this group (= group_index * NumTilesPerGroup).
+    input  logic                      [TileIDWidth-1:0] tile_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  axi_addr_t                                   cluster_base_addr_i,
@@ -190,7 +192,7 @@ module cachepool_group
   // ---------
   /// Minimum width to hold the core number.
   localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
-  localparam int unsigned TileIDWidth     = cf_math_pkg::idx_width(NumTiles);
+  // localparam int unsigned TileIDWidth     = cf_math_pkg::idx_width(NumTiles);
 
   // Per-group overrides of package-level constants that depend on NumTiles/NumCores.
   localparam int unsigned NrCoresTileLocal   = NrCores / NumTilesPerGroup;
@@ -672,13 +674,10 @@ module cachepool_group
         assign tile_remote_in_rsp_valid[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p_valid;
         assign tile_remote_in_req_ready[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
-        // Request selection: convert narrow tile_id to wide xbar index by appending
-        // core_id % NumRemotePortCore (available in the request channel user field)
         assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = local_remote_xbar_sel_t'(
             remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumRemotePortCore
           + tile_remote_out_req_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
 
-        // Response selection: recover xbar port from tile_id and core_id in response user field
         assign remote_in_sel_xbar[j][t*NumRemotePortCore+r] = local_remote_xbar_sel_t'(
             tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.tile_id * NumRemotePortCore
           + tile_remote_in_rsp_chan[j][t*NumRemotePortCore+r].user.core_id % NumRemotePortCore);
@@ -691,7 +690,7 @@ module cachepool_group
     assign hart_base_id = hart_base_id_i + t * NumCoresTile;
 
     logic [TileIDWidth-1:0] tile_id;
-    assign tile_id = t;
+    assign tile_id = tile_base_id_i + TileIDWidth'(t);
 
     if (NumRemoteGroupPortCore == 0) begin : gen_tile
       cachepool_tile #(

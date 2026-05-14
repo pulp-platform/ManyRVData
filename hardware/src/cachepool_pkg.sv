@@ -78,6 +78,13 @@ package cachepool_pkg;
   // How many remote group ports for each tile?
   localparam int unsigned NumRemoteGroupPortCore = `ifdef RG_PORT_PER_CORE `RG_PORT_PER_CORE `else 0 `endif;
 
+  // Number of inter-group NoC router channels per tile (x in the 5-to-x concentration xbar).
+  localparam int unsigned NumNoCPortsPerTile = `ifdef NOC_PORT_PER_TILE `NOC_PORT_PER_TILE `else 1 `endif;
+
+  // Group mesh dimensions. NumGroupsY is derived; NumGroupsX must be set via config.
+  localparam int unsigned NumGroupsX = `ifdef NUM_GROUPS_X `NUM_GROUPS_X `else 1 `endif;
+  localparam int unsigned NumGroupsY = NumGroups / NumGroupsX;
+
 
   ////////////////////
   //  CLUSTER HW    //
@@ -394,19 +401,51 @@ package cachepool_pkg;
   typedef logic [$clog2(NrTCDMPortsPerCore)-1:0] portid_t;
 
   typedef struct packed {
-    // sender core within tile
-    logic [CoreIDWidth-1:0] core_id;
-    // sender tile (globally unique)
-    logic [TileIDWidth-1:0] tile_id;
-    // outstanding request ID
-    reqid_t                 req_id;
-    // FPU path indicator
-    logic                   is_fpu;
-    // interco instance index (for demux)
-    portid_t                port_id;
+    logic [CoreIDWidth-1:0]           core_id;
+    logic [TileIDWidth-1:0]           tile_id;
+    reqid_t                           req_id;
+    logic                             is_fpu;
+    portid_t                          port_id;
+    logic [idx_width(NumGroupsX)-1:0] src_group_x;
+    logic [idx_width(NumGroupsY)-1:0] src_group_y;
+    // Globally-unique destination tile ID, set by tcdm_cache_interco for
+    // inter-group requests.  Upper bits (above $clog2(NumTilesPerGroup)) are
+    // the linear group index; lower bits are the local tile within the group.
+    logic [TileIDWidth-1:0]           dst_tile_id;
   } remote_group_user_t;
 
   `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
+
+  // XY mesh coordinates for a group. port_id selects the eject port (always 0 for single-link).
+  typedef struct packed {
+    logic [idx_width(NumGroupsX)-1:0] x;
+    logic [idx_width(NumGroupsY)-1:0] y;
+    logic                             port_id;
+  } group_xy_id_t;
+
+  // Per-group tile index used by dispatch xbar selection.
+  typedef logic [idx_width(NumTilesPerGroup)-1:0] group_tile_sel_t;
+
+  // Routing header embedded in every inter-group NoC flit.
+  typedef struct packed {
+    logic [3:0]      collective_op;
+    group_xy_id_t    src_id;
+    group_xy_id_t    dst_id;
+    group_tile_sel_t src_tile_id;
+    portid_t         src_port_id;
+    logic            last;
+  } noc_group_hdr_t;
+
+  // Inter-group NoC flit types (payload + routing header).
+  typedef struct packed {
+    remote_group_req_chan_t payload;
+    noc_group_hdr_t         hdr;
+  } noc_group_req_t;
+
+  typedef struct packed {
+    remote_group_rsp_chan_t payload;
+    noc_group_hdr_t         hdr;
+  } noc_group_rsp_t;
 
 
   /////////////////////
