@@ -318,24 +318,6 @@ module cachepool_group_noc_wrapper
         assign packed_req_valid[J]               = mst_xbar_req_valid[J];
         assign mst_xbar_req_ready[J]             = packed_req_ready[J];
 
-`ifndef TARGET_SYNTHESIS
-        initial begin
-          #100;
-          $display("[NOC_DBG] group(%0d,%0d) port J=%0d: dyn_off=%0d CacheBankBits=%0d TileWidth=%0d XWidth=%0d YWidth=%0d",
-            group_xy_id_i.x, group_xy_id_i.y, J,
-            dynamic_offset_i, NocCacheBankBits, NocAddrTileWidth, NocAddrXWidth, NocAddrYWidth);
-        end
-        always @(posedge clk_i) begin
-          if (packed_req_valid[J] && packed_req_ready[J]) begin
-            $display("[NOC_INJ] t=%0t dyn_off=%0d group(%0d,%0d) J=%0d addr=0x%08x dst(%0d,%0d) src(%0d,%0d)",
-              $time, dynamic_offset_i,
-              group_xy_id_i.x, group_xy_id_i.y, J,
-              mst_xbar_req[J].addr,
-              packed_req[J].hdr.dst_id.x, packed_req[J].hdr.dst_id.y,
-              packed_req[J].hdr.src_id.x, packed_req[J].hdr.src_id.y);
-          end
-        end
-`endif
       end
 
     end : gen_mst_t
@@ -443,22 +425,6 @@ module cachepool_group_noc_wrapper
                      * NumRemoteGroupPortTile
                      + eject_req[j].hdr.src_port_id);
 
-`ifndef TARGET_SYNTHESIS
-      always @(posedge clk_i) begin
-        if (eject_req_valid[j] && eject_req_ready[j]) begin
-          $display("[SLV_EJECT_OK] t=%0t group(%0d,%0d) j=%0d addr=0x%08x tile_bits=%0d sel=%0d",
-            $time, group_xy_id_i.x, group_xy_id_i.y, j,
-            eject_req[j].payload.addr,
-            eject_req[j].payload.addr[(dynamic_offset_i + NocCacheBankBits) +: NocAddrTileWidth],
-            slv_xbar_slv_sel[j]);
-        end
-        if (eject_req_valid[j] && !eject_req_ready[j]) begin
-          $display("[SLV_EJECT_STALL] t=%0t group(%0d,%0d) j=%0d addr=0x%08x sel=%0d",
-            $time, group_xy_id_i.x, group_xy_id_i.y, j,
-            eject_req[j].payload.addr, slv_xbar_slv_sel[j]);
-        end
-      end
-`endif
     end
 
     assign inject_rsp             = slv_xbar_slv_rsp;
@@ -522,20 +488,6 @@ module cachepool_group_noc_wrapper
           remote_group_rsp_from_group[SLV].q_ready;
         assign remote_group_req_to_group[SLV].p_ready    = slv_xbar_mst_rsp_ready[J];
 
-`ifndef TARGET_SYNTHESIS
-        always @(posedge clk_i) begin
-          if (slv_xbar_mst_req_valid[J] && slv_xbar_mst_req_ready[J]) begin
-            $display("[SLV_DELIVER_OK] t=%0t group(%0d,%0d) J=%0d SLV=%0d addr=0x%08x",
-              $time, group_xy_id_i.x, group_xy_id_i.y, J, SLV,
-              slv_xbar_mst_req[J].payload.addr);
-          end
-          if (slv_xbar_mst_req_valid[J] && !slv_xbar_mst_req_ready[J]) begin
-            $display("[SLV_DELIVER_STALL] t=%0t group(%0d,%0d) J=%0d SLV=%0d l1d_busy=%0b q_ready=%0b",
-              $time, group_xy_id_i.x, group_xy_id_i.y, J, SLV,
-              l1d_busy_i[t], remote_group_rsp_from_group[SLV].q_ready);
-          end
-        end
-`endif
 
         assign slv_xbar_mst_rsp[J].payload               =
           remote_group_rsp_from_group[SLV].p;

@@ -536,21 +536,5 @@ module tcdm_cache_interco #(
 
   assign mem_rsp_ready_o = mem_rsp_ready;
 
-`ifndef TARGET_SYNTHESIS
-  // DEBUG: print inter-group request handshakes with decoded group ID
-  for (genvar rg = 0; rg < NumRemoteGroupPort; rg++) begin : gen_dbg_rg
-    localparam int unsigned P = NumCache + NumRemotePort + rg;
-    always @(posedge clk_i) begin
-      if (mem_req_valid[P] && mem_req_ready[P]) begin
-        $display("[INTERCO_RG] t=%0t tile=%0d rg=%0d dyn_off=%0d addr=0x%08x tile_id_field=%0d group_id=%0d CacheBankBits=%0d LocalTileBits=%0d GroupBits=%0d",
-          $time, tile_id_i, rg, dynamic_offset_i,
-          mem_req[P].addr,
-          mem_req[P].addr[(dynamic_offset_i + CacheBankBits) +: TileIDWidth],
-          mem_req[P].addr[(dynamic_offset_i + CacheBankBits + LocalTileBits) +: (TileIDWidth - LocalTileBits)],
-          CacheBankBits, LocalTileBits, TileIDWidth - LocalTileBits);
-      end
-    end
-  end
-`endif
 
 endmodule
