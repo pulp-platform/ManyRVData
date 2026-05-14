@@ -30,6 +30,8 @@ sources:
   - hardware/src/tcdm_cache_interco.sv
   - hardware/src/tcdm_id_remapper.sv
   - hardware/src/spatz_cache_amo.sv
+  # FlooNoC
+  - hardware/generated/floo_cachepool_noc_pkg.sv
   # Memory-mapped register
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_pkg.sv
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_top.sv

@@ -166,23 +166,26 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 ###########
 # FlooNoC #
 ###########
-FLOO_DIR  ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
-FLOO_GEN_OUTDIR	?= $(ROOT_DIR)/hardware/generated
-FLOO_CFG  ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
-FLOO_SYS  = $(subst .yml,,$(notdir $(FLOO_CFG)))
-FLOO_NOC  ?= $(addprefix $(FLOO_GEN_OUTDIR)/,$(subst .yml,_floo_noc.sv,$(notdir $(FLOO_CFG))))
+FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
+FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
+FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+FLOO_NAME     = cachepool
+FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
 
 $(info FLOO_DIR: $(FLOO_DIR))
 
 # Generates the sources for FlooNoC
 .PHONY: update-floonoc install-floogen clean-floonoc
 install-floogen:
-	$(MAKE) -C $(FLOO_DIR) install-floogen
+	pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
 $(FLOO_NOC): install-floogen $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
-	floogen -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --only-pkg
+	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
+
+clean-floonoc:
+	rm -f $(FLOO_NOC)
 
 ###########
 # DramSys #
