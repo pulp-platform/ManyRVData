@@ -53,7 +53,7 @@ int verify_matrix(float *matrix, const float *checksum,
       // printf("Row: %d, Result: %x, Golden reselt: %x\n", i, print_sum, print_gold);
     }
   }
-  return -1;
+  return error;
 }
 
 int main() {
@@ -78,6 +78,7 @@ int main() {
     // All cores will access the same B
     // Scramble based on cacheline
     l1d_xbar_config(5);
+    l1d_part(4);
   }
 
   // Wait for all cores to finish
@@ -161,7 +162,11 @@ int main() {
       snrt_cluster_hw_barrier();
 
       if (cid == 0) {
-        for (uint32_t j = 0; j < num_cores; j++) {
+        if (error[0] != 0)
+          printf("Core 0 error %d\n", error[0]);
+
+        for (uint32_t j = 1; j < num_cores; j++) {
+          error[0] += error[j];
           if (error[j] != 0)
             printf("Core %d error %d\n", j, error[j]);
         }
@@ -196,6 +201,8 @@ int main() {
 
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
+  if (error[0] > 0)
+    return -1;
 
   return 0;
 }
