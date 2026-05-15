@@ -110,18 +110,18 @@ module cachepool_group
     input  logic                                        rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic                          [NrCores-1:0] debug_req_i,
+    input  logic                                        debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic                          [NrCores-1:0] meip_i,
+    input  logic                                        meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic                          [NrCores-1:0] mtip_i,
+    input  logic                                        mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic                          [NrCores-1:0] msip_i,
+    input  logic                                        msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
@@ -708,10 +708,10 @@ module cachepool_group
         .rst_ni                   ( rst_ni                                                      ),
         .impl_i                   ( impl_i                                                      ),
         .error_o                  ( error             [t]                                       ),
-        .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
-        .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
-        .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
-        .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .debug_req_i              ( debug_req_i                                                 ),
+        .meip_i                   ( meip_i                                                      ),
+        .mtip_i                   ( mtip_i                                                      ),
+        .msip_i                   ( msip_i                                                      ),
         .hart_base_id_i           ( hart_base_id                                                ),
         .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
         .tile_id_i                ( tile_id                                                     ),
@@ -797,10 +797,10 @@ module cachepool_group
         .rst_ni                   ( rst_ni                                                      ),
         .impl_i                   ( impl_i                                                      ),
         .error_o                  ( error             [t]                                       ),
-        .debug_req_i              ( debug_req_i       [t*NumCoresTile+:NumCoresTile]            ),
-        .meip_i                   ( meip_i            [t*NumCoresTile+:NumCoresTile]            ),
-        .mtip_i                   ( mtip_i            [t*NumCoresTile+:NumCoresTile]            ),
-        .msip_i                   ( msip_i            [t*NumCoresTile+:NumCoresTile]            ),
+        .debug_req_i              ( debug_req_i                                                 ),
+        .meip_i                   ( meip_i                                                      ),
+        .mtip_i                   ( mtip_i                                                      ),
+        .msip_i                   ( msip_i                                                      ),
         .hart_base_id_i           ( hart_base_id                                                ),
         .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
         .tile_id_i                ( tile_id                                                     ),

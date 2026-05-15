@@ -117,18 +117,18 @@ module cachepool_tile
     input  logic                                    rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic              [NrCores-1:0]         debug_req_i,
+    input  logic                                    debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic              [NrCores-1:0]         meip_i,
+    input  logic                                    meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic              [NrCores-1:0]         mtip_i,
+    input  logic                                    mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic              [NrCores-1:0]         msip_i,
+    input  logic                                    msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
@@ -1333,13 +1333,13 @@ module cachepool_tile
     interrupts_t irq;
 
     sync #(.STAGES (2))
-    i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i[i]), .serial_o (irq.debug));
+    i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i), .serial_o (irq.debug));
     sync #(.STAGES (2))
-    i_sync_meip (.clk_i, .rst_ni, .serial_i (meip_i[i]), .serial_o (irq.meip));
+    i_sync_meip (.clk_i, .rst_ni, .serial_i (meip_i), .serial_o (irq.meip));
     sync #(.STAGES (2))
-    i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i[i]), .serial_o (irq.mtip));
+    i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq.mtip));
     sync #(.STAGES (2))
-    i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i[i]), .serial_o (irq.msip));
+    i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq.msip));
     assign irq.mcip = cl_interrupt_i[i];
 
     tcdm_req_t [TcdmPorts-1:0] tcdm_req_wo_user;
