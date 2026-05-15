@@ -53,7 +53,7 @@ int verify_matrix(float *matrix, const float *checksum,
       // printf("Row: %d, Result: %x, Golden reselt: %x\n", i, print_sum, print_gold);
     }
   }
-  return error;
+  return -1;
 }
 
 int main() {
@@ -77,10 +77,7 @@ int main() {
     // Set xbar policy
     // All cores will access the same B
     // Scramble based on cacheline
-    // l1d_xbar_config(5);
     l1d_xbar_config(5);
-    // Init the cache
-    l1d_init(0);
   }
 
   // Wait for all cores to finish
@@ -137,7 +134,7 @@ int main() {
     } else if (kernel_size == 8) {
       matmul_8xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
     } else {
-      return -2;
+      return -1;
     }
 
     // Wait for all cores to finish

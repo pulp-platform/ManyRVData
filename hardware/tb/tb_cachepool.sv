@@ -211,6 +211,72 @@ module tb_cachepool;
     to_cluster_req = '0;
 
 
+    // Initialize L1D cache before waking up cores
+    // Step 1: Write init instruction (flush + invalidate)
+    to_cluster_req = '{
+      q: '{
+        addr   : PeriStartAddr + CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET,
+        data   : 32'h3,
+        write  : 1'b1,
+        strb   : '1,
+        amo    : reqrsp_pkg::AMONone,
+        default: '0
+      },
+      q_valid: 1'b1,
+      p_ready: 1'b0
+    };
+    `wait_for(to_cluster_rsp.q_ready);
+    to_cluster_req = '0;
+    `wait_for(to_cluster_rsp.p_valid);
+    to_cluster_req = '{p_ready: 1'b1, q: '{amo: reqrsp_pkg::AMONone, default: '0}, default: '0};
+    @(posedge clk);
+    to_cluster_req = '0;
+
+    // Step 2: Commit the instruction
+    to_cluster_req = '{
+      q: '{
+        addr   : PeriStartAddr + CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET,
+        data   : 32'h1,
+        write  : 1'b1,
+        strb   : '1,
+        amo    : reqrsp_pkg::AMONone,
+        default: '0
+      },
+      q_valid: 1'b1,
+      p_ready: 1'b0
+    };
+    `wait_for(to_cluster_rsp.q_ready);
+    to_cluster_req = '0;
+    `wait_for(to_cluster_rsp.p_valid);
+    to_cluster_req = '{p_ready: 1'b1, q: '{amo: reqrsp_pkg::AMONone, default: '0}, default: '0};
+    @(posedge clk);
+    to_cluster_req = '0;
+
+    // Step 3: Poll until flush complete
+    begin
+      automatic logic [31:0] flush_status;
+      do begin
+        to_cluster_req = '{
+          q: '{
+            addr   : PeriStartAddr + CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET,
+            write  : 1'b0,
+            strb   : '0,
+            amo    : reqrsp_pkg::AMONone,
+            default: '0
+          },
+          q_valid: 1'b1,
+          p_ready: 1'b0
+        };
+        `wait_for(to_cluster_rsp.q_ready);
+        to_cluster_req = '0;
+        `wait_for(to_cluster_rsp.p_valid);
+        flush_status = to_cluster_rsp.p.data;
+        to_cluster_req = '{p_ready: 1'b1, q: '{amo: reqrsp_pkg::AMONone, default: '0}, default: '0};
+        @(posedge clk);
+        to_cluster_req = '0;
+      end while (flush_status[0]);
+    end
+
     // Wake up cores
     debug_req = '1;
     @(posedge clk);

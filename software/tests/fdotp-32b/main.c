@@ -81,8 +81,6 @@ int main() {
   if (cid == 0) {
     // Set xbar policy
     l1d_xbar_config(l1_scramble_bits);
-    // Initialize the cache
-    l1d_init(0);
   }
 
   snrt_cluster_hw_barrier();

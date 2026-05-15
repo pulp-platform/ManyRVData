@@ -64,7 +64,6 @@ int main() {
   if (cid == 0) {
     // We use all-private mode for this kernel
     l1d_xbar_config(offset);
-    l1d_init(0);
     l1d_part(4);
   }
 

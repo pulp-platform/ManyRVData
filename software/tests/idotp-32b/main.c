@@ -51,9 +51,7 @@ int main() {
 
   if (cid == 0) {
     // Set xbar policy
-    l1d_init(0);
     l1d_xbar_config(offset);
-    // Initialize the cache
 
     printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
