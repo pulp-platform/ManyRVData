@@ -67,7 +67,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config                ?= cachepool_512
+config                ?= cachepool_fpu_2g
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm

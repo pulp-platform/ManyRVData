@@ -8,11 +8,14 @@
 ##  CachePool Cluster  ##
 #########################
 
+# Number of groups
+num_groups ?= 4
+
 # Number of tiles
-num_tiles ?= 4
+num_tiles_per_group ?= 4
 
 # Number of cores
-num_cores ?= 16
+num_cores_per_tile  ?= 4
 
 # Core datawidth
 data_width ?= 32
@@ -20,13 +23,14 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
+num_remote_ports_per_tile ?= 1
+
+num_rg_ports_per_core ?= 1
+
 
 ######################
 ##  CachePool Tile  ##
 ######################
-
-# Number of cores per CachePool tile
-num_cores_per_tile ?= 4
 
 # Refill interconnection data width
 refill_data_width ?= 128
@@ -34,7 +38,7 @@ refill_data_width ?= 128
 ##### L1 Data Cache #####
 
 # L1 data cacheline width (in Bit)
-l1d_cacheline_width ?= 256
+l1d_cacheline_width ?= 512
 
 # L1 data cache size (in KiB)
 l1d_size ?= 256
@@ -52,7 +56,7 @@ l1d_num_way ?= 4
 l1d_tile_size ?= 256
 
 # L1 data cache tag width (TODO: should be calcualted)
-l1d_tag_data_width ?= 64
+l1d_tag_data_width ?= 92
 
 ####################
 ##  CachePool CC  ##
@@ -83,7 +87,7 @@ l2_channel ?= 4
 l2_bank_width ?= 512
 
 # L2 interleaving factor (in order of bank_width)
-l2_interleave ?= 8
+l2_interleave ?= 16
 
 
 ##################
