@@ -4,19 +4,11 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
 `include "axi/typedef.svh"
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
-`include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
 `include "reqrsp_interface/typedef.svh"
 `include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
 /// Tile implementation for CachePool
 module cachepool_tile
@@ -126,8 +118,6 @@ module cachepool_tile
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
     input  logic              [NrCores-1:0]         debug_req_i,
-    /// End of Computing indicator to notify the host/tb
-    // output logic                                    eoc_o,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
     input  logic              [NrCores-1:0]         meip_i,
@@ -206,7 +196,6 @@ module cachepool_tile
   // ---------
   // TODO: Should be imported from Memory-mapped Reg
   logic [2:0] num_private_cache;
-  // half-half
   assign num_private_cache = l1d_private_i[2:0];
 
   /// Minimum width to hold the core number.
@@ -320,11 +309,6 @@ module cachepool_tile
   `AXI_TYPEDEF_ALL(axi_slv_tile_wide, addr_t, id_wide_slv_t, data_wide_t, strb_wide_t, user_wide_t)
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
-
-  `MEM_TYPEDEF_ALL(mem, tcdm_mem_addr_t, data_t, strb_t, tcdm_user_t)
-
-  `REG_BUS_TYPEDEF_ALL(reg, addr_t, data_t, strb_t)
-
 
   typedef struct packed {
     int unsigned idx;
@@ -562,7 +546,7 @@ module cachepool_tile
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
-  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
+  logic [$clog2(AxiAddrWidth)-1:0] dynamic_offset;
   assign dynamic_offset = dynamic_offset_i;
   // One entry per flat remote port: flat index = j + r*NrTCDMPortsPerCore
   // where j is the xbar index and r is the remote slot within that xbar.
@@ -813,14 +797,14 @@ module cachepool_tile
         .dynamic_offset_i     ( dynamic_offset                                     ),
         .private_start_addr_i ( private_start_addr_i                               ),
         .num_private_cache_i  ( num_private_cache                                  ),
-        .core_req_i           ({xbar_remote_group_in_req,    xbar_remote_req_gated,  cache_req        [j]}),
-        .core_rsp_ready_i     ({xbar_remote_group_in_pready, xbar_remote_in_pready,  cache_pready     [j]}),
-        .core_rsp_o           ({xbar_remote_group_in_rsp,    xbar_remote_rsp_xbar,   cache_rsp        [j]}),
-        .tile_sel_o           ( xbar_remote_req_dst                                ),
-        .remote_group_sel_o   ( xbar_remote_group_out_dst                          ),
-        .mem_req_o            ({xbar_remote_group_out_req,   xbar_remote_req_o,       cache_xbar_req   [j]}),
-        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready,  cache_xbar_pready[j]}),
-        .mem_rsp_i            ({xbar_remote_group_out_rsp,   xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
+        .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  cache_req        [j]}),
+        .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  cache_pready     [j]}),
+        .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   cache_rsp        [j]}),
+        .tile_sel_o           ( xbar_remote_req_dst                                                        ),
+        .remote_group_sel_o   ( xbar_remote_group_out_dst                                                  ),
+        .mem_req_o            ({xbar_remote_group_out_req,    xbar_remote_req_o,      cache_xbar_req   [j]}),
+        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready, cache_xbar_pready[j]}),
+        .mem_rsp_i            ({xbar_remote_group_out_rsp,    xbar_remote_rsp_i,      cache_xbar_rsp   [j]})
       );
     end else begin : gen_no_remote_group
       // No inter-group remote ports: instantiate interco without inter-group remote ports (backward-compatible).
@@ -837,20 +821,20 @@ module cachepool_tile
         .tcdm_req_chan_t       (tcdm_req_chan_t   ),
         .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
       ) i_cache_xbar (
-        .clk_i                ( clk_i                                              ),
-        .rst_ni               ( rst_ni                                             ),
-        .tile_id_i            ( tile_id_i                                          ),
-        .dynamic_offset_i     ( dynamic_offset                                     ),
-        .private_start_addr_i ( private_start_addr_i                               ),
-        .num_private_cache_i  ( num_private_cache                                  ),
-        .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
-        .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
-        .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
-        .tile_sel_o           ( xbar_remote_req_dst                                ),
-        .remote_group_sel_o   (                                                    ),
-        .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
-        .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
-        .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
+        .clk_i                ( clk_i                                         ),
+        .rst_ni               ( rst_ni                                        ),
+        .tile_id_i            ( tile_id_i                                     ),
+        .dynamic_offset_i     ( dynamic_offset                                ),
+        .private_start_addr_i ( private_start_addr_i                          ),
+        .num_private_cache_i  ( num_private_cache                             ),
+        .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]} ),
+        .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]} ),
+        .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]} ),
+        .tile_sel_o           ( xbar_remote_req_dst                           ),
+        .remote_group_sel_o   (                                               ),
+        .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}),
+        .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}),
+        .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
       );
     end
   end
@@ -958,6 +942,7 @@ module cachepool_tile
 
   localparam NumWordPerLine = L1LineWidth / DataWidth;
   localparam int unsigned WordBytes = DataWidth / 8;
+`ifndef TARGET_SYNTHESIS
   initial begin
     $display("Cache Configuration:");
     $display("  NumCtrl        : %0d", NumL1CtrlTile);
@@ -972,6 +957,7 @@ module cachepool_tile
     $display("  RefillDataWidth: %0d", RefillDataWidth);
     $display("  DynamicOffset  : %0d", dynamic_offset);
   end
+`endif
 
   // CL-offset mask: bits below dynamic_offset, verbatim in both directions.
   logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
@@ -1269,7 +1255,7 @@ module cachepool_tile
         .clk_i  (clk_i                   ),
         .rst_ni (rst_ni                  ),
         .impl_i ('0                      ),
-        .impl_o (/* unsed */             ),
+        .impl_o (/* unused */             ),
         .req_i  (l1_tag_bank_req  [cb][j]),
         .we_i   (l1_tag_bank_we   [cb][j]),
         .addr_i (l1_tag_bank_addr [cb][j]),
@@ -1300,7 +1286,7 @@ module cachepool_tile
         .clk_i  (clk_i                       ),
         .rst_ni (rst_ni                      ),
         .impl_i ('0                          ),
-        .impl_o (/* unsed */                 ),
+        .impl_o (/* unused */                 ),
         .req_i  ( l1_data_bank_req  [cb][BaseIdx]  ),
         .we_i   ( l1_data_bank_we   [cb][BaseIdx]  ),
         .addr_i ( l1_data_bank_addr [cb][BaseIdx]  ),
@@ -1324,7 +1310,7 @@ module cachepool_tile
     //     .clk_i  (clk_i                    ),
     //     .rst_ni (rst_ni                   ),
     //     .impl_i ('0                       ),
-    //     .impl_o (/* unsed */              ),
+    //     .impl_o (/* unused */              ),
     //     .req_i  (l1_data_bank_req  [cb][j]),
     //     .we_i   (l1_data_bank_we   [cb][j]),
     //     .addr_i (l1_data_bank_addr [cb][j]),

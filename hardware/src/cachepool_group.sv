@@ -4,19 +4,9 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
 `include "axi/typedef.svh"
-`include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
 `include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
-`include "reqrsp_interface/typedef.svh"
-`include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
 /// Group implementation for CachePool
 module cachepool_group
@@ -190,24 +180,9 @@ module cachepool_group
   // ---------
   // Constants
   // ---------
-  /// Minimum width to hold the core number.
-  localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
-  // localparam int unsigned TileIDWidth     = cf_math_pkg::idx_width(NumTiles);
-
   // Per-group overrides of package-level constants that depend on NumTiles/NumCores.
-  localparam int unsigned NrCoresTileLocal   = NrCores / NumTilesPerGroup;
   localparam int unsigned NumL1CacheCtrlLocal  = NrCores;
-  localparam int unsigned NumL1CtrlTileLocal  = NumL1CacheCtrlLocal / NumTilesPerGroup;
 
-  // Enlarge the address width for Spatz due to cache
-  localparam int unsigned TCDMAddrWidth   = L1AddrWidth;
-
-  // Per-tile inter-group remote port count (across all interco instances).
-
-  // Core Request, SoC Request
-  localparam int unsigned NrNarrowMasters = 2;
-
-  localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
   localparam int unsigned WideIdWidthIn   = AxiIdWidthOut;
 
 
@@ -218,21 +193,15 @@ module cachepool_group
   typedef logic [AxiDataWidth-1:0]      data_cache_t;
   typedef logic [AxiDataWidth/8-1:0]    strb_cache_t;
   typedef logic [WideIdWidthIn-1:0]     id_cache_mst_t;
-  typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
   typedef logic [AxiUserWidth-1:0]      user_cache_t;
 
   `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
-  `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
-
-  `REG_BUS_TYPEDEF_ALL(reg_cache, addr_t, data_cache_t, strb_cache_t)
 
   typedef struct packed {
     int unsigned idx;
     addr_t start_addr;
     addr_t end_addr;
   } xbar_rule_t;
-
-  `SNITCH_VM_TYPEDEF(AxiAddrWidth)
 
   // ---------------
   // CachePool Tile
@@ -362,7 +331,6 @@ module cachepool_group
 
   tile_sel_err_t [NumTilesPerGroup*NumClusterMst-1:0] tile_sel_err;
   tile_sel_t     [NumTilesPerGroup*NumClusterMst-1:0] tile_sel;
-  l2_sel_t       [ClusterWideOutAxiPorts-1:0] tile_selected;
   l2_sel_t       [ClusterWideOutAxiPorts-1:0] l2_sel;
   tile_sel_t     [NumTilesPerGroup*NumClusterMst-1:0] l2_rsp_rr;
 
@@ -574,7 +542,7 @@ module cachepool_group
     .slv_rsp_ready_i ( tile_rsp_ready ),
     .slv_sel_i       ( tile_sel[NumTilesPerGroup*NumClusterMst-1:0] ),
     .slv_rr_i        ( '0            ),
-    .slv_selected_o  ( tile_selected ),
+    .slv_selected_o  ( /* unused */  ),
     .mst_req_o       ( l2_req_chan   ),
     .mst_req_valid_o ( l2_req_valid  ),
     .mst_req_ready_i ( l2_req_ready  ),

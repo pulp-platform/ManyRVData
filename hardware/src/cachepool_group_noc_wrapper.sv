@@ -8,19 +8,6 @@
 //
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
-`include "axi/typedef.svh"
-`include "common_cells/assertions.svh"
-`include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
-`include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
-`include "reqrsp_interface/typedef.svh"
-`include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
 module cachepool_group_noc_wrapper
   import cachepool_pkg::*;
@@ -72,33 +59,33 @@ module cachepool_group_noc_wrapper
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     parameter int                     unsigned               NrSramCfg                          = 1
   ) (
-    input  logic                                        clk_i,
-    input  logic                                        rst_ni,
-    input  logic                          [NrCores-1:0] debug_req_i,
-    input  logic                          [NrCores-1:0] meip_i,
-    input  logic                          [NrCores-1:0] mtip_i,
-    input  logic                          [NrCores-1:0] msip_i,
-    input  logic                                  [9:0] hart_base_id_i,
-    input  logic                      [TileIDWidth-1:0] tile_base_id_i,
-    input  axi_addr_t                                   cluster_base_addr_i,
-    input  axi_addr_t                                   private_start_addr_i,
-    output axi_narrow_req_t   [TileNarrowAxiPorts*NumTilesPerGroup-1:0] axi_narrow_req_o,
-    input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0] axi_narrow_rsp_i,
-    output l2_req_t        [ClusterWideOutAxiPorts-1:0] l2_req_o,
-    input  l2_rsp_t        [ClusterWideOutAxiPorts-1:0] l2_rsp_i,
-    output icache_events_t                [NrCores-1:0] icache_events_o,
-    input  logic                                        icache_prefetch_enable_i,
-    input  logic                          [NrCores-1:0] cl_interrupt_i,
-    input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
-    input  logic                                  [3:0] l1d_private_i,
-    input  cache_insn_t                                 l1d_insn_i,
-    input  logic                                        l1d_insn_valid_i,
-    output logic                 [NumTilesPerGroup-1:0] l1d_insn_ready_o,
-    input  logic                 [NumTilesPerGroup-1:0] l1d_busy_i,
-    input  impl_in_t                    [NrSramCfg-1:0] impl_i,
-    output logic                                        error_o,
+    input  logic                                                          clk_i,
+    input  logic                                                          rst_ni,
+    input  logic              [NrCores-1:0]                               debug_req_i,
+    input  logic              [NrCores-1:0]                               meip_i,
+    input  logic              [NrCores-1:0]                               mtip_i,
+    input  logic              [NrCores-1:0]                               msip_i,
+    input  logic              [9:0]                                       hart_base_id_i,
+    input  logic              [TileIDWidth-1:0]                           tile_base_id_i,
+    input  axi_addr_t                                                     cluster_base_addr_i,
+    input  axi_addr_t                                                     private_start_addr_i,
+    output axi_narrow_req_t   [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_req_o,
+    input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_rsp_i,
+    output l2_req_t           [ClusterWideOutAxiPorts-1:0]                l2_req_o,
+    input  l2_rsp_t           [ClusterWideOutAxiPorts-1:0]                l2_rsp_i,
+    output icache_events_t    [NrCores-1:0]                               icache_events_o,
+    input  logic                                                          icache_prefetch_enable_i,
+    input  logic              [NrCores-1:0]                               cl_interrupt_i,
+    input  logic              [$clog2(AxiAddrWidth)-1:0]                  dynamic_offset_i,
+    input  logic              [3:0]                                       l1d_private_i,
+    input  cache_insn_t                                                   l1d_insn_i,
+    input  logic                                                          l1d_insn_valid_i,
+    output logic              [NumTilesPerGroup-1:0]                      l1d_insn_ready_o,
+    input  logic              [NumTilesPerGroup-1:0]                      l1d_busy_i,
+    input  impl_in_t          [NrSramCfg-1:0]                             impl_i,
+    output logic                                                          error_o,
     // XY coordinates of this group in the inter-group mesh
-    input  group_xy_id_t                                                          group_xy_id_i,
+    input  group_xy_id_t                                                  group_xy_id_i,
     // Inter-group req mesh: 4 directions (N=0,E=1,S=2,W=3)
     //   dim1: direction, dim2: tile*NumNoCPortsPerTile+channel
     output noc_group_req_t [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_req_o,
@@ -130,8 +117,6 @@ module cachepool_group_noc_wrapper
   // -- Struct / xbar field widths (always >= 1 to avoid zero-width ports) ------
   localparam int unsigned NocCacheBankBits  = $clog2(NrBanks);
   localparam int unsigned NocAddrTileWidth  = (NumTilesPerGroup > 1) ? $clog2(NumTilesPerGroup) : 1;
-  localparam int unsigned NocAddrXWidth     = (NumGroupsX > 1) ? $clog2(NumGroupsX) : 1;
-  localparam int unsigned NocAddrYWidth     = (NumGroupsY > 1) ? $clog2(NumGroupsY) : 1;
   // -- Actual bit counts inside dst_tile_id (can be 0 when that dimension = 1) -
   // dst_tile_id layout: [ group_y (NocGroupBitsY) | group_x (NocGroupBitsX) | local_tile (NocGroupOffset) ]
   // where NocGroupOffset = $clog2(NumTilesPerGroup) (0 when NumTilesPerGroup == 1).
@@ -167,21 +152,21 @@ module cachepool_group_noc_wrapper
   logic           [NumTilesPerGroup-1:0][NumNoCPortsPerTile-1:0][3:0] rsp_mesh_in_ready;
 
   for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_mesh_trans_t
-    for (genvar c = 0; c < NumNoCPortsPerTile; c++) begin : gen_mesh_trans_c
+    for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_mesh_trans_n
       for (genvar d = 0; d < 4; d++) begin : gen_mesh_trans_d
-        assign noc_req_o[d][t*NumNoCPortsPerTile+c]       = req_mesh_out[t][c][d];
-        assign noc_req_valid_o[d][t*NumNoCPortsPerTile+c] = req_mesh_out_valid[t][c][d];
-        assign req_mesh_out_ready[t][c][d]                 = noc_req_ready_i[d][t*NumNoCPortsPerTile+c];
-        assign req_mesh_in[t][c][d]                        = noc_req_i[d][t*NumNoCPortsPerTile+c];
-        assign req_mesh_in_valid[t][c][d]                  = noc_req_valid_i[d][t*NumNoCPortsPerTile+c];
-        assign noc_req_ready_o[d][t*NumNoCPortsPerTile+c]  = req_mesh_in_ready[t][c][d];
+        assign noc_req_o[d][t*NumNoCPortsPerTile+n]       = req_mesh_out[t][n][d];
+        assign noc_req_valid_o[d][t*NumNoCPortsPerTile+n] = req_mesh_out_valid[t][n][d];
+        assign req_mesh_out_ready[t][n][d]                 = noc_req_ready_i[d][t*NumNoCPortsPerTile+n];
+        assign req_mesh_in[t][n][d]                        = noc_req_i[d][t*NumNoCPortsPerTile+n];
+        assign req_mesh_in_valid[t][n][d]                  = noc_req_valid_i[d][t*NumNoCPortsPerTile+n];
+        assign noc_req_ready_o[d][t*NumNoCPortsPerTile+n]  = req_mesh_in_ready[t][n][d];
 
-        assign noc_rsp_o[d][t*NumNoCPortsPerTile+c]       = rsp_mesh_out[t][c][d];
-        assign noc_rsp_valid_o[d][t*NumNoCPortsPerTile+c] = rsp_mesh_out_valid[t][c][d];
-        assign rsp_mesh_out_ready[t][c][d]                 = noc_rsp_ready_i[d][t*NumNoCPortsPerTile+c];
-        assign rsp_mesh_in[t][c][d]                        = noc_rsp_i[d][t*NumNoCPortsPerTile+c];
-        assign rsp_mesh_in_valid[t][c][d]                  = noc_rsp_valid_i[d][t*NumNoCPortsPerTile+c];
-        assign noc_rsp_ready_o[d][t*NumNoCPortsPerTile+c]  = rsp_mesh_in_ready[t][c][d];
+        assign noc_rsp_o[d][t*NumNoCPortsPerTile+n]       = rsp_mesh_out[t][n][d];
+        assign noc_rsp_valid_o[d][t*NumNoCPortsPerTile+n] = rsp_mesh_out_valid[t][n][d];
+        assign rsp_mesh_out_ready[t][n][d]                 = noc_rsp_ready_i[d][t*NumNoCPortsPerTile+n];
+        assign rsp_mesh_in[t][n][d]                        = noc_rsp_i[d][t*NumNoCPortsPerTile+n];
+        assign rsp_mesh_in_valid[t][n][d]                  = noc_rsp_valid_i[d][t*NumNoCPortsPerTile+n];
+        assign noc_rsp_ready_o[d][t*NumNoCPortsPerTile+n]  = rsp_mesh_in_ready[t][n][d];
       end
     end
   end
@@ -190,7 +175,7 @@ module cachepool_group_noc_wrapper
   if (NumRemoteGroupPortCore > 0) begin : gen_noc
 
     // -----------------------------------------------------------------------
-    // Router inject/eject signals (flat 1D index j = t*NumNoCPortsPerTile+c)
+    // Router inject/eject signals (flat 1D index noc_port = t*NumNoCPortsPerTile+n)
     // -----------------------------------------------------------------------
     noc_group_req_t [NumNoCPortsGroup-1:0] packed_req;
     logic           [NumNoCPortsGroup-1:0] packed_req_valid;
@@ -253,70 +238,70 @@ module cachepool_group_noc_wrapper
           remote_group_req_from_group[t*NumRemoteGroupPortTile+p].p_ready;
       end
 
-      for (genvar c = 0; c < NumNoCPortsPerTile; c++) begin : gen_mst_eject_c
-        localparam int unsigned J = t * NumNoCPortsPerTile + c;
-        assign eject_rsp_payload[c]  = eject_rsp[J].payload;
-        assign mst_xbar_mst_sel[c]   = eject_rsp[J].hdr.src_port_id;
+      for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_mst_eject_n
+        localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
+        assign eject_rsp_payload[n]  = eject_rsp[noc_port].payload;
+        assign mst_xbar_mst_sel[n]   = eject_rsp[noc_port].hdr.src_port_id;
       end
 
       reqrsp_xbar #(
-        .NumInp          ( NumRemoteGroupPortTile  ),
+        .NumInp          ( NumRemoteGroupPortTile   ),
         .NumOut          ( NumNoCPortsPerTile       ),
         .tcdm_req_chan_t ( remote_group_req_chan_t  ),
         .tcdm_rsp_chan_t ( remote_group_rsp_chan_t  )
       ) i_noc_mst_xbar (
         .clk_i,
         .rst_ni,
-        .slv_req_i       ( mst_slv_req                           ),
-        .slv_rr_i        ( '0                                    ),
-        .slv_req_valid_i ( mst_slv_req_valid                     ),
-        .slv_req_ready_o ( mst_slv_req_ready                     ),
-        .slv_rsp_o       ( mst_slv_rsp                           ),
-        .slv_rsp_valid_o ( mst_slv_rsp_valid                     ),
-        .slv_rsp_ready_i ( mst_slv_rsp_ready                     ),
-        .slv_sel_i       ( '0                                    ),
-        .slv_selected_o  ( mst_xbar_slv_selected                 ),
+        .slv_req_i       ( mst_slv_req                                ),
+        .slv_rr_i        ( '0                                         ),
+        .slv_req_valid_i ( mst_slv_req_valid                          ),
+        .slv_req_ready_o ( mst_slv_req_ready                          ),
+        .slv_rsp_o       ( mst_slv_rsp                                ),
+        .slv_rsp_valid_o ( mst_slv_rsp_valid                          ),
+        .slv_rsp_ready_i ( mst_slv_rsp_ready                          ),
+        .slv_sel_i       ( '0                                         ),
+        .slv_selected_o  ( mst_xbar_slv_selected                      ),
         .mst_req_o       ( mst_xbar_req[t*NumNoCPortsPerTile +:
-                                        NumNoCPortsPerTile]      ),
+                                        NumNoCPortsPerTile]           ),
         .mst_req_valid_o ( mst_xbar_req_valid[t*NumNoCPortsPerTile +:
-                                              NumNoCPortsPerTile] ),
+                                              NumNoCPortsPerTile]     ),
         .mst_req_ready_i ( mst_xbar_req_ready[t*NumNoCPortsPerTile +:
-                                              NumNoCPortsPerTile] ),
-        .mst_rsp_i       ( eject_rsp_payload                     ),
-        .mst_rr_i        ( '0                                    ),
+                                              NumNoCPortsPerTile]     ),
+        .mst_rsp_i       ( eject_rsp_payload                          ),
+        .mst_rr_i        ( '0                                         ),
         .mst_rsp_valid_i ( eject_rsp_valid[t*NumNoCPortsPerTile +:
-                                           NumNoCPortsPerTile]   ),
+                                           NumNoCPortsPerTile]        ),
         .mst_rsp_ready_o ( eject_rsp_ready[t*NumNoCPortsPerTile +:
-                                           NumNoCPortsPerTile]   ),
-        .mst_sel_i       ( mst_xbar_mst_sel                      )
+                                           NumNoCPortsPerTile]        ),
+        .mst_sel_i       ( mst_xbar_mst_sel                           )
       );
 
-      for (genvar c = 0; c < NumNoCPortsPerTile; c++) begin : gen_pack_c
-        localparam int unsigned J = t * NumNoCPortsPerTile + c;
-        assign packed_req[J].hdr.collective_op   = '0;
-        assign packed_req[J].hdr.src_id         = group_xy_id_i;
+      for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_pack_n
+        localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
+        assign packed_req[noc_port].hdr.collective_op   = '0;
+        assign packed_req[noc_port].hdr.src_id          = group_xy_id_i;
         // dst_tile_id set by tcdm_cache_interco: bits [NocGroupOffset +: NocGroupBitsX] = group_x,
         // bits [(NocGroupOffset+NocGroupBitsX) +: NocGroupBitsY] = group_y.
         // When a dimension has only 1 group, no bits are consumed and the coordinate is 0.
         if (NumGroupsX > 1) begin : gen_dst_x
-          assign packed_req[J].hdr.dst_id.x =
-            mst_xbar_req[J].user.dst_tile_id[NocGroupOffset +: NocGroupBitsX];
+          assign packed_req[noc_port].hdr.dst_id.x =
+            mst_xbar_req[noc_port].user.dst_tile_id[NocGroupOffset +: NocGroupBitsX];
         end else begin : gen_dst_x
-          assign packed_req[J].hdr.dst_id.x = '0;
+          assign packed_req[noc_port].hdr.dst_id.x = '0;
         end
         if (NumGroupsY > 1) begin : gen_dst_y
-          assign packed_req[J].hdr.dst_id.y =
-            mst_xbar_req[J].user.dst_tile_id[(NocGroupOffset + NocGroupBitsX) +: NocGroupBitsY];
+          assign packed_req[noc_port].hdr.dst_id.y =
+            mst_xbar_req[noc_port].user.dst_tile_id[(NocGroupOffset + NocGroupBitsX) +: NocGroupBitsY];
         end else begin : gen_dst_y
-          assign packed_req[J].hdr.dst_id.y = '0;
+          assign packed_req[noc_port].hdr.dst_id.y = '0;
         end
-        assign packed_req[J].hdr.dst_id.port_id  = '0;
-        assign packed_req[J].hdr.src_tile_id     = group_tile_sel_t'(t);
-        assign packed_req[J].hdr.src_port_id     = mst_xbar_slv_selected[c];
-        assign packed_req[J].hdr.last            = 1'b1;
-        assign packed_req[J].payload             = mst_xbar_req[J];
-        assign packed_req_valid[J]               = mst_xbar_req_valid[J];
-        assign mst_xbar_req_ready[J]             = packed_req_ready[J];
+        assign packed_req[noc_port].hdr.dst_id.port_id  = '0;
+        assign packed_req[noc_port].hdr.src_tile_id     = group_tile_sel_t'(t);
+        assign packed_req[noc_port].hdr.src_port_id     = mst_xbar_slv_selected[n];
+        assign packed_req[noc_port].hdr.last            = 1'b1;
+        assign packed_req[noc_port].payload             = mst_xbar_req[noc_port];
+        assign packed_req_valid[noc_port]               = mst_xbar_req_valid[noc_port];
+        assign mst_xbar_req_ready[noc_port]             = packed_req_ready[noc_port];
 
       end
 
@@ -327,8 +312,8 @@ module cachepool_group_noc_wrapper
     // Per-tile per-channel req floo_router
     // -----------------------------------------------------------------------
     for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_req_router_t
-      for (genvar c = 0; c < NumNoCPortsPerTile; c++) begin : gen_req_router_c
-        localparam int unsigned J = t * NumNoCPortsPerTile + c;
+      for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_req_router_n
+        localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
         floo_router #(
           .NumRoutes       ( 5                    ),
           .NumVirtChannels ( 1                    ),
@@ -345,25 +330,25 @@ module cachepool_group_noc_wrapper
         ) i_req_router (
           .clk_i,
           .rst_ni,
-          .test_enable_i  ( 1'b0           ),
-          .xy_id_i        ( group_xy_id_i  ),
-          .id_route_map_i ( '0             ),
-          .valid_i        ( {packed_req_valid[J],
-                             req_mesh_in_valid[t][c][3:0]} ),
-          .ready_o        ( {packed_req_ready[J],
-                             req_mesh_in_ready[t][c][3:0]} ),
-          .data_i         ( {packed_req[J],
-                             req_mesh_in[t][c][3:0]}       ),
-          .credit_o       (                ),
-          .valid_o        ( {eject_req_valid[J],
-                             req_mesh_out_valid[t][c][3:0]} ),
-          .ready_i        ( {eject_req_ready[J],
-                             req_mesh_out_ready[t][c][3:0]} ),
-          .data_o         ( {eject_req[J],
-                             req_mesh_out[t][c][3:0]}       ),
-          .credit_i       ( '1             ),
-          .offload_req_o  (                ),
-          .offload_rsp_i  ( '0             )
+          .test_enable_i  ( 1'b0                            ),
+          .xy_id_i        ( group_xy_id_i                   ),
+          .id_route_map_i ( '0                              ),
+          .valid_i        ( {packed_req_valid[noc_port],
+                             req_mesh_in_valid[t][n][3:0]}  ),
+          .ready_o        ( {packed_req_ready[noc_port],
+                             req_mesh_in_ready[t][n][3:0]}  ),
+          .data_i         ( {packed_req[noc_port],
+                             req_mesh_in[t][n][3:0]}        ),
+          .credit_o       (                                 ),
+          .valid_o        ( {eject_req_valid[noc_port],
+                             req_mesh_out_valid[t][n][3:0]} ),
+          .ready_i        ( {eject_req_ready[noc_port],
+                             req_mesh_out_ready[t][n][3:0]} ),
+          .data_o         ( {eject_req[noc_port],
+                             req_mesh_out[t][n][3:0]}       ),
+          .credit_i       ( '1                              ),
+          .offload_req_o  (                                 ),
+          .offload_rsp_i  ( '0                              )
         );
       end
     end
@@ -373,8 +358,8 @@ module cachepool_group_noc_wrapper
     // Per-tile per-channel rsp floo_router
     // -----------------------------------------------------------------------
     for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_rsp_router_t
-      for (genvar c = 0; c < NumNoCPortsPerTile; c++) begin : gen_rsp_router_c
-        localparam int unsigned J = t * NumNoCPortsPerTile + c;
+      for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_rsp_router_n
+        localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
         floo_router #(
           .NumRoutes       ( 5                    ),
           .NumVirtChannels ( 1                    ),
@@ -391,25 +376,25 @@ module cachepool_group_noc_wrapper
         ) i_rsp_router (
           .clk_i,
           .rst_ni,
-          .test_enable_i  ( 1'b0           ),
-          .xy_id_i        ( group_xy_id_i  ),
-          .id_route_map_i ( '0             ),
-          .valid_i        ( {inject_rsp_valid[J],
-                             rsp_mesh_in_valid[t][c][3:0]} ),
-          .ready_o        ( {inject_rsp_ready[J],
-                             rsp_mesh_in_ready[t][c][3:0]} ),
-          .data_i         ( {inject_rsp[J],
-                             rsp_mesh_in[t][c][3:0]}       ),
-          .credit_o       (                ),
-          .valid_o        ( {eject_rsp_valid[J],
-                             rsp_mesh_out_valid[t][c][3:0]} ),
-          .ready_i        ( {eject_rsp_ready[J],
-                             rsp_mesh_out_ready[t][c][3:0]} ),
-          .data_o         ( {eject_rsp[J],
-                             rsp_mesh_out[t][c][3:0]}       ),
-          .credit_i       ( '1             ),
-          .offload_req_o  (                ),
-          .offload_rsp_i  ( '0             )
+          .test_enable_i  ( 1'b0                            ),
+          .xy_id_i        ( group_xy_id_i                   ),
+          .id_route_map_i ( '0                              ),
+          .valid_i        ( {inject_rsp_valid[noc_port],
+                             rsp_mesh_in_valid[t][n][3:0]}  ),
+          .ready_o        ( {inject_rsp_ready[noc_port],
+                             rsp_mesh_in_ready[t][n][3:0]}  ),
+          .data_i         ( {inject_rsp[noc_port],
+                             rsp_mesh_in[t][n][3:0]}        ),
+          .credit_o       (                                 ),
+          .valid_o        ( {eject_rsp_valid[noc_port],
+                             rsp_mesh_out_valid[t][n][3:0]} ),
+          .ready_i        ( {eject_rsp_ready[noc_port],
+                             rsp_mesh_out_ready[t][n][3:0]} ),
+          .data_o         ( {eject_rsp[noc_port],
+                             rsp_mesh_out[t][n][3:0]}       ),
+          .credit_i       ( '1                              ),
+          .offload_req_o  (                                 ),
+          .offload_rsp_i  ( '0                              )
         );
       end
     end
@@ -418,12 +403,12 @@ module cachepool_group_noc_wrapper
     // -----------------------------------------------------------------------
     // Slave xbar selection signals + inject_rsp ↔ slv_xbar_slv_rsp
     // -----------------------------------------------------------------------
-    for (genvar j = 0; j < NumNoCPortsGroup; j++) begin : gen_slv_sel_j
-      assign slv_xbar_slv_sel[j] = (NumTilesPerGroup == 1)
-        ? SlvXbarSelW'(eject_req[j].hdr.src_port_id)
-        : SlvXbarSelW'(eject_req[j].payload.addr[(dynamic_offset_i + NocCacheBankBits) +: NocAddrTileWidth]
+    for (genvar noc_port = 0; noc_port < NumNoCPortsGroup; noc_port++) begin : gen_slv_sel
+      assign slv_xbar_slv_sel[noc_port] = (NumTilesPerGroup == 1)
+        ? SlvXbarSelW'(eject_req[noc_port].hdr.src_port_id)
+        : SlvXbarSelW'(eject_req[noc_port].payload.addr[(dynamic_offset_i + NocCacheBankBits) +: NocAddrTileWidth]
                      * NumRemoteGroupPortTile
-                     + eject_req[j].hdr.src_port_id);
+                     + eject_req[noc_port].hdr.src_port_id);
 
     end
 
@@ -436,30 +421,30 @@ module cachepool_group_noc_wrapper
     // Slave-side group-wide dispatch xbar
     // -----------------------------------------------------------------------
     reqrsp_xbar #(
-      .NumInp          ( NumNoCPortsGroup        ),
-      .NumOut          ( NumRemoteGroupPortGroup  ),
-      .tcdm_req_chan_t ( noc_group_req_t          ),
-      .tcdm_rsp_chan_t ( noc_group_rsp_t          )
+      .NumInp          ( NumNoCPortsGroup       ),
+      .NumOut          ( NumRemoteGroupPortGroup),
+      .tcdm_req_chan_t ( noc_group_req_t        ),
+      .tcdm_rsp_chan_t ( noc_group_rsp_t        )
     ) i_noc_slv_xbar (
       .clk_i,
       .rst_ni,
-      .slv_req_i       ( eject_req             ),
-      .slv_rr_i        ( '0                    ),
+      .slv_req_i       ( eject_req              ),
+      .slv_rr_i        ( '0                     ),
       .slv_req_valid_i ( eject_req_valid        ),
       .slv_req_ready_o ( eject_req_ready        ),
-      .slv_rsp_o       ( slv_xbar_slv_rsp      ),
+      .slv_rsp_o       ( slv_xbar_slv_rsp       ),
       .slv_rsp_valid_o ( slv_xbar_slv_rsp_valid ),
       .slv_rsp_ready_i ( slv_xbar_slv_rsp_ready ),
-      .slv_sel_i       ( slv_xbar_slv_sel      ),
-      .slv_selected_o  (                       ),
-      .mst_req_o       ( slv_xbar_mst_req      ),
+      .slv_sel_i       ( slv_xbar_slv_sel       ),
+      .slv_selected_o  (                        ),
+      .mst_req_o       ( slv_xbar_mst_req       ),
       .mst_req_valid_o ( slv_xbar_mst_req_valid ),
       .mst_req_ready_i ( slv_xbar_mst_req_ready ),
-      .mst_rsp_i       ( slv_xbar_mst_rsp      ),
-      .mst_rr_i        ( '0                    ),
+      .mst_rsp_i       ( slv_xbar_mst_rsp       ),
+      .mst_rr_i        ( '0                     ),
       .mst_rsp_valid_i ( slv_xbar_mst_rsp_valid ),
       .mst_rsp_ready_o ( slv_xbar_mst_rsp_ready ),
-      .mst_sel_i       ( slv_xbar_mst_sel      )
+      .mst_sel_i       ( slv_xbar_mst_sel       )
     );
 
 
@@ -468,49 +453,48 @@ module cachepool_group_noc_wrapper
     // -----------------------------------------------------------------------
     for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_slv_deliver_t
       for (genvar p = 0; p < NumRemoteGroupPortTile; p++) begin : gen_slv_deliver_p
-        localparam int unsigned J   = t * NumRemoteGroupPortTile + p;
-        localparam int unsigned SLV = t * NumRemoteGroupPortTile + p;
+        localparam int unsigned port = t * NumRemoteGroupPortTile + p;
 
         // Placeholder response routing: route response back via the NoC channel
         // of the same tile (t). Correct cross-tile response routing is deferred.
-        assign slv_xbar_mst_sel[J] = MstXbarSelW'(t * NumNoCPortsPerTile);
+        assign slv_xbar_mst_sel[port] = MstXbarSelW'(t * NumNoCPortsPerTile);
 
         always_comb begin : proc_req_unpack
-          remote_group_req_to_group[SLV].q               = slv_xbar_mst_req[J].payload;
-          remote_group_req_to_group[SLV].q.user.src_group_x =
-            slv_xbar_mst_req[J].hdr.src_id.x;
-          remote_group_req_to_group[SLV].q.user.src_group_y =
-            slv_xbar_mst_req[J].hdr.src_id.y;
+          remote_group_req_to_group[port].q                  = slv_xbar_mst_req[port].payload;
+          remote_group_req_to_group[port].q.user.src_group_x =
+            slv_xbar_mst_req[port].hdr.src_id.x;
+          remote_group_req_to_group[port].q.user.src_group_y =
+            slv_xbar_mst_req[port].hdr.src_id.y;
         end
 
-        assign remote_group_req_to_group[SLV].q_valid    = slv_xbar_mst_req_valid[J];
-        assign slv_xbar_mst_req_ready[J]                 =
-          remote_group_rsp_from_group[SLV].q_ready;
-        assign remote_group_req_to_group[SLV].p_ready    = slv_xbar_mst_rsp_ready[J];
+        assign remote_group_req_to_group[port].q_valid    = slv_xbar_mst_req_valid[port];
+        assign slv_xbar_mst_req_ready[port]               =
+          remote_group_rsp_from_group[port].q_ready;
+        assign remote_group_req_to_group[port].p_ready    = slv_xbar_mst_rsp_ready[port];
 
 
-        assign slv_xbar_mst_rsp[J].payload               =
-          remote_group_rsp_from_group[SLV].p;
-        assign slv_xbar_mst_rsp[J].hdr.collective_op      = '0;
-        assign slv_xbar_mst_rsp[J].hdr.src_id            = group_xy_id_i;
+        assign slv_xbar_mst_rsp[port].payload             =
+          remote_group_rsp_from_group[port].p;
+        assign slv_xbar_mst_rsp[port].hdr.collective_op   = '0;
+        assign slv_xbar_mst_rsp[port].hdr.src_id          = group_xy_id_i;
         if (NumGroupsX > 1) begin : gen_rsp_dst_x
-          assign slv_xbar_mst_rsp[J].hdr.dst_id.x =
-            remote_group_rsp_from_group[SLV].p.user.tile_id[NocGroupOffset +: NocGroupBitsX];
+          assign slv_xbar_mst_rsp[port].hdr.dst_id.x      =
+            remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset +: NocGroupBitsX];
         end else begin : gen_rsp_dst_x
-          assign slv_xbar_mst_rsp[J].hdr.dst_id.x = '0;
+          assign slv_xbar_mst_rsp[port].hdr.dst_id.x      = '0;
         end
         if (NumGroupsY > 1) begin : gen_rsp_dst_y
-          assign slv_xbar_mst_rsp[J].hdr.dst_id.y =
-            remote_group_rsp_from_group[SLV].p.user.tile_id[(NocGroupOffset + NocGroupBitsX) +: NocGroupBitsY];
+          assign slv_xbar_mst_rsp[port].hdr.dst_id.y      =
+            remote_group_rsp_from_group[port].p.user.tile_id[(NocGroupOffset + NocGroupBitsX) +: NocGroupBitsY];
         end else begin : gen_rsp_dst_y
-          assign slv_xbar_mst_rsp[J].hdr.dst_id.y = '0;
+          assign slv_xbar_mst_rsp[port].hdr.dst_id.y      = '0;
         end
-        assign slv_xbar_mst_rsp[J].hdr.dst_id.port_id    = '0;
-        assign slv_xbar_mst_rsp[J].hdr.src_tile_id       = group_tile_sel_t'(t);
-        assign slv_xbar_mst_rsp[J].hdr.src_port_id       = remote_group_rsp_from_group[SLV].p.user.port_id;
-        assign slv_xbar_mst_rsp[J].hdr.last              = 1'b1;
-        assign slv_xbar_mst_rsp_valid[J]                 =
-          remote_group_rsp_from_group[SLV].p_valid;
+        assign slv_xbar_mst_rsp[port].hdr.dst_id.port_id  = '0;
+        assign slv_xbar_mst_rsp[port].hdr.src_tile_id     = group_tile_sel_t'(t);
+        assign slv_xbar_mst_rsp[port].hdr.src_port_id     = remote_group_rsp_from_group[port].p.user.port_id;
+        assign slv_xbar_mst_rsp[port].hdr.last            = 1'b1;
+        assign slv_xbar_mst_rsp_valid[port]               =
+          remote_group_rsp_from_group[port].p_valid;
       end
     end
 

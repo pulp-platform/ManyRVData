@@ -4,21 +4,11 @@
 
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
-`include "axi/assign.svh"
 `include "axi/typedef.svh"
-`include "common_cells/assertions.svh"
-`include "common_cells/registers.svh"
-`include "mem_interface/assign.svh"
-`include "mem_interface/typedef.svh"
-`include "register_interface//assign.svh"
 `include "register_interface/typedef.svh"
-`include "reqrsp_interface/assign.svh"
-`include "reqrsp_interface/typedef.svh"
-`include "snitch_vm/typedef.svh"
-`include "tcdm_interface/assign.svh"
-`include "tcdm_interface/typedef.svh"
 
-/// A single-tile cluster implementation for CachePool
+/// CachePool cluster: instantiates NumGroups groups connected via FlooNoC mesh,
+/// with shared L2 memory and peripheral fabric.
 module cachepool_cluster
   import cachepool_pkg::*;
   import spatz_pkg::*;
@@ -157,43 +147,16 @@ module cachepool_cluster
   // Imports
   // ---------
   import snitch_pkg::*;
-  import snitch_icache_pkg::icache_events_t;
 
   // ---------
   // Constants
   // ---------
-  /// Minimum width to hold the core number.
-  localparam int unsigned CoreIDWidth     = cf_math_pkg::idx_width(NrCores);
-
-  // Enlarge the address width for Spatz due to cache
-  localparam int unsigned TCDMAddrWidth   = 32;
-
-  // Core Request, SoC Request
-  localparam int unsigned NrNarrowMasters = 2;
-
   localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
   localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst) - GroupMuxIdBits;
 
   // Pre-mux AXI ID width: per-group reqrsp_to_axi output.
   // The multi-group axi_mux adds GroupMuxIdBits on top to reach WideIdWidthOut.
   localparam int unsigned WideIdWidthPreMux = WideIdWidthOut - GroupMuxIdBits;
-
-  // Cache XBar configuration struct
-  localparam axi_pkg::xbar_cfg_t CacheXbarCfg = '{
-    NoSlvPorts        : NumClusterMst*NumTiles,
-    NoMstPorts        : ClusterWideOutAxiPorts,
-    MaxMstTrans       : MaxMstTrans,
-    MaxSlvTrans       : MaxSlvTrans,
-    FallThrough       : 1'b0,
-    LatencyMode       : XbarLatency,
-    AxiIdWidthSlvPorts: WideIdWidthIn,
-    AxiIdUsedSlvPorts : WideIdWidthIn,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : ClusterWideOutAxiPorts - 1,
-    default           : '0
-  };
 
   // --------
   // Typedefs
@@ -214,16 +177,6 @@ module cachepool_cluster
   // Pre-mux AXI types (per-group reqrsp_to_axi output, input to axi_mux).
   `AXI_TYPEDEF_ALL(axi_premux_cache, addr_t, id_cache_premux_t, data_cache_t, strb_cache_t, user_cache_t)
 
-  `REG_BUS_TYPEDEF_ALL(reg_cache, addr_t, data_cache_t, strb_cache_t)
-
-  typedef struct packed {
-    int unsigned idx;
-    addr_t start_addr;
-    addr_t end_addr;
-  } xbar_rule_t;
-
-  `SNITCH_VM_TYPEDEF(AxiAddrWidth)
-
   // ----------------
   // Wire Definitions
   // ----------------
@@ -240,7 +193,6 @@ module cachepool_cluster
 
   // 3. Peripherals
   axi_addr_t                               private_start_addr;
-  icache_events_t    [NrCores-1:0]         icache_events;
   logic                                    icache_prefetch_enable;
   logic              [NrCores-1:0]         cl_interrupt;
   logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
@@ -336,7 +288,7 @@ module cachepool_cluster
       .l2_req_o                 ( l2_req[g]                                       ),
       .l2_rsp_i                 ( l2_rsp[g]                                       ),
       // Peripherals
-      .icache_events_o          ( icache_events[g*NumCoreGroup +: NumCoreGroup]   ),
+      .icache_events_o          ( /* unused */                                    ),
       .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
       .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
       .dynamic_offset_i         ( dynamic_offset                                  ),
