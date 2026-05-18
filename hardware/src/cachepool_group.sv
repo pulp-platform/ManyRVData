@@ -269,11 +269,18 @@ module cachepool_group
         assign tile_remote_in_req_ready[j][t*NumRemotePortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
         // Request selection: route to target tile's remote-in slot based on
-        // target tile ID, so that all requests to the same destination tile
-        // travel through one pipeline — preserving write-before-read ordering.
+        // SOURCE tile ID (mod NumRemotePortCore).  This is required for
+        // response routing to be consistent: tcdm_cache_interco routes
+        // responses out via (user.tile_id % NumRemotePortCore), so the
+        // request must land in the destination's slot indexed by the same
+        // value (the SOURCE tile id mod N).  If we used (target % N) here
+        // instead, the request would arrive on slot (T%N) but the response
+        // would leave on slot (S%N) — different xbar mst ports — and the
+        // xbar's request/response pairing would break, dropping responses
+        // and corrupting cache state at multi-tile configs where S%N != T%N.
         assign remote_out_sel_xbar[j][t*NumRemotePortCore+r] = remote_xbar_sel_t'(
             remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumRemotePortCore
-          + remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] % NumRemotePortCore);
+          + t % NumRemotePortCore);
 
         // Response selection: route back to source tile's remote-out slot.
         // The originator (tile_id in user field) sent on slot

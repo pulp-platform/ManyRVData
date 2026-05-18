@@ -105,13 +105,44 @@ snitch_max_trans ?= 16
 ##  AXI configuration  ##
 #########################
 
-ifeq ($(l1d_cacheline_width),512)
-  axi_user_width := 17
-else ifeq ($(l1d_cacheline_width),256)
-  axi_user_width := 18
-else ifeq ($(l1d_cacheline_width),128)
-  axi_user_width := 21
+# axi_user_width must be >= $bits(refill_user_t).
+# refill_user_t = bank_id(3) + tile_id(W) + cache_info_t(*) + burst_req_t(3),
+# where cache_info_t contains TWO copies of TileIDWidth (the field itself
+# plus a nested copy inside cache_info_t).  So adding a tile multiplies
+# idx_width(NumTiles) by 2.
+#
+# Base values below assume NumTiles=1 (idx_width=1).  We add a per-tile
+# adjustment of 2 * (idx_width(NumTiles) - 1) bits for larger configs.
+#
+# If axi_user_width is too small, the MSB of bank_id (or higher tile_id)
+# gets truncated on the AXI loopback and refill responses get routed back
+# to the wrong slv port (e.g. bank_id=4 aliases to bank_id=0, sending
+# cb=3's refill response to the icache bypass slot, making cb=3 hang).
+
+ifeq ($(num_tiles),1)
+  axi_user_tile_adj := 0
+else ifeq ($(num_tiles),2)
+  axi_user_tile_adj := 0
+else ifeq ($(num_tiles),4)
+  axi_user_tile_adj := 2
+else ifeq ($(num_tiles),8)
+  axi_user_tile_adj := 4
+else ifeq ($(num_tiles),16)
+  axi_user_tile_adj := 6
+else
+  $(error num_tiles=$(num_tiles) not handled by axi_user_width formula; add a case in config.mk)
 endif
+
+# Base widths for NumTiles=1 (= reference values, verified working).
+ifeq ($(l1d_cacheline_width),512)
+  axi_user_base := 18
+else ifeq ($(l1d_cacheline_width),256)
+  axi_user_base := 19
+else ifeq ($(l1d_cacheline_width),128)
+  axi_user_base := 22
+endif
+
+axi_user_width := $(shell echo $$(( $(axi_user_base) + $(axi_user_tile_adj) )))
 
 #####################
 ##  L2 Main Memory ##
