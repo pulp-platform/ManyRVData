@@ -143,7 +143,7 @@ int main() {
 
   if (cid == 0) {
     if (result[0] != dotp_result_golden*measure_iter) {
-      printf("Check Failed!\n");
+      printf("Check Failed!, got %d, expected %d\n", result[0], dotp_result_golden*measure_iter);
     }
 #ifdef DEBUG
     printf("gold results:%d\n", dotp_result_golden);
