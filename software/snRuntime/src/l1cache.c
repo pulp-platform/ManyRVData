@@ -20,6 +20,8 @@ void l1d_xbar_config(uint32_t offset) {
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    SPATZ_CLUSTER_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
   *cfg = offset;
+  l1d_flush();
+  l1d_wait();
   l1d_xbar_commit();
 }
 

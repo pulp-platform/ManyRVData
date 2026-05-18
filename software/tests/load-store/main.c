@@ -58,7 +58,8 @@ int main() {
 
   if (cid == 0) {
     printf("dim per core:%d\n", avl);
-    printf("a_ptr:%x, b_ptr:%x\n", a_int, b_int);
+    // printf("a_ptr:%x, b_ptr:%x\n", a_int, b_int);
+    printf("a_ptr:%x, b_ptr:%x, c_ptr:%x\n", a_int, b_int, c_int);
   }
 
   // Wait for all cores to finish
@@ -88,6 +89,7 @@ int main() {
     a_int += vlen;
     b_int += vlen;
     c_int += vlen;
+    // if (cid == 0) printf("avl:%d, vlen:%d\n", avl, vlen);
     avl -= vlen;
   } while (avl > 0);
 
@@ -126,12 +128,12 @@ int main() {
 
       if (gemm_B_dram[i] != 3) {
         // check_failed = 1;
-        printf("B[%d]Check Failed!, should be 3, read %u\n", i, gemm_A_dram[i]);
+        printf("B[%d]Check Failed!, should be 3, read %u\n", i, gemm_B_dram[i]);
       }
 
       if (gemm_C_dram[i] != 1) {
         // check_failed = 1;
-        printf("C[%d]Check Failed!, should be 1, read %u\n", i, gemm_A_dram[i]);
+        printf("C[%d]Check Failed!, should be 1, read %u\n", i, gemm_C_dram[i]);
       }
     }
 
