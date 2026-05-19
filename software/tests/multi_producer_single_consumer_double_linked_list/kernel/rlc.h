@@ -39,7 +39,7 @@ typedef struct {
 
 typedef struct {
    DlschInd dlschInd;
-   char reserve[2 *CACHE_LINE_SIZE - sizeof(DlschInd) - 4];
+   char reserve[2 * CACHE_LINE_SIZE - sizeof(DlschInd) - 4 * sizeof(uint32_t)];
    uint32_t sduNum;
    uint32_t sudBytes;
    uint32_t totalPdlLen;

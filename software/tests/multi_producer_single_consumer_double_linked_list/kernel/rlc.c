@@ -226,8 +226,17 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
 */
 #define PACKET_SIZE (PAGE_SIZE - sizeof(Node))
 
+// -- Producer / consumer core counts (configurable; overridable from build) --
+// cluster_entry assigns the first PRODUCER_CORE_NUM cores to the producer
+// role and the next CONSUMER_CORE_NUM cores to the consumer role.  Remaining
+// cores (if any) wait at the barrier.
+#ifndef PRODUCER_CORE_NUM
 #define PRODUCER_CORE_NUM 2
+#endif
+#ifndef CONSUMER_CORE_NUM
 #define CONSUMER_CORE_NUM 2
+#endif
+
 #define CPU_FREQENCY 1000000000 // 1GHz
 #define OUTPUT_DATARATE 7000000
 #define INPUT_DATARATE 7000000
@@ -340,25 +349,37 @@ static void rlc_send_pkt(const unsigned int core_id, TestDataStru *testData)
     // }
 }
 
-/* Consumer behavior (runs on core 0) */
+/* Consumer behavior: pop one node from the to-send list per iteration,
+   rate-limited so the aggregate consumer throughput equals OUTPUT_DATARATE.
+   Each of the CONSUMER_CORE_NUM consumers waits `CONSUMER_CORE_NUM *
+   PDU_SIZE * CPU / OUTPUT_DATARATE` cycles per packet so the combined
+   throughput matches OUTPUT_DATARATE (not PRODUCER_CORE_NUM, which would
+   scale incorrectly when the producer/consumer counts differ). */
 static void consumer(const unsigned int core_id) {
-    uint32_t total_cycle = PRODUCER_CORE_NUM * PDU_SIZE * CPU_FREQENCY / OUTPUT_DATARATE;
+    uint32_t total_cycle = CONSUMER_CORE_NUM * PDU_SIZE * CPU_FREQENCY / OUTPUT_DATARATE;
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
         TestDataStru dfx = {0};
         dfx.dlschInd = dlsch_ind;
         rlc_send_pkt(core_id, &dfx);
-        uint32_t start_endcycle = benchmark_get_cycle();
+        uint32_t end_timecycle = benchmark_get_cycle();
         /* calculate delay interval */
         uint32_t interval = end_timecycle - start_timecycle;
         rlc_ctx.pktdelay = interval;
         uint32_t delayCycle = (total_cycle >= interval) ? (total_cycle - interval) : 0;
         delay(delayCycle);
+
+        /* Exit when all producers are done and the list is empty */
+        if (rlc_ctx.list.sduNum == 0 &&
+            atomic_load_explicit(&producer_done, memory_order_relaxed) >= PRODUCER_CORE_NUM) {
+            break;
+        }
     }
 }
 
 /* Producer behavior (runs on cores other than 0) */
-static void producer(const unsigned int core_id) {
+/* Returns 0 on success, -1 when no more packages available. */
+static int producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     // DEBUG_PRINTF("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
     //     core_id,
@@ -371,6 +392,9 @@ static void producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
     rlc_ctx.firstSduPktRxCycle = benchmark_get_cycle();
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
+    if (new_pdcp_pkg_ptr < 0) {
+        return -1;  // No more packages
+    }
 
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     // DEBUG_PRINTF("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
@@ -391,7 +415,7 @@ static void producer(const unsigned int core_id) {
         DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
         delay(200);  /* Delay before retrying */
-        return;
+        return 0;  /* Not done, just out of memory temporarily */
     }
 
     uint32_t timer_body_0, timer_body_1;
@@ -411,7 +435,7 @@ static void producer(const unsigned int core_id) {
         unsigned int pingflag = rlc_ctx.pingFlag;
         atomic_store_explicit(&rlc_ctx.pingFlag, pingflag, memory_order_relaxed);
         atomic_store_explicit(&rlc_ctx.recvMaxByte, node->data_size, memory_order_relaxed);
-        (RcvPktHeader *)pt = ((RcvPktHeader *))((char *)node->data + sizeof(RcvPktHeader));
+        RcvPktHeader *pt = (RcvPktHeader *)((char *)node->data + sizeof(RcvPktHeader));
         /* write 64B data to Node */
         vector_memcpy32_m4_opt((pt + 1), &tmp, sizeof(RcvPktHeader));
         atomic_fetch_add_explicit(&rlc_ctx.sduNumCong, 1, memory_order_relaxed);
@@ -441,7 +465,7 @@ static void producer(const unsigned int core_id) {
     atomic_fetch_add_explicit(&rlc_ctx.recvPdcpPduBytes, node->data_size, memory_order_relaxed);
     rlc_ctx.lastRcvOrSubmitDataCyc = benchmark_get_cycle() - rlc_ctx.firstSduPktRxCycle;
 
-    atomic_fetch_add_explicit(&rlc_ctx.rcvPktNums, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&rlc_ctx.rcvPktNum, 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.rcvPktLength, node->data_size, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.enQuePktNum, 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.enQuePktLength, node->data_size, memory_order_relaxed);
@@ -456,16 +480,21 @@ static void producer(const unsigned int core_id) {
     DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
     // delay(200);  /* Delay between node productions */
-    // Set producer done flag
-    // atomic_store_explicit(&producer_done, 1, memory_order_relaxed);
+    return 0;
 }
 
 static void pkt_production_and_recycle(const unsigned int core_id)
 {
     uint32_t total_cycle = PRODUCER_CORE_NUM * PDU_SIZE * CPU_FREQENCY / INPUT_DATARATE;
+    int this_core_done = 0;
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
-        producer(core_id);
+        if (!this_core_done) {
+            if (producer(core_id) < 0) {
+                this_core_done = 1;
+                atomic_fetch_add_explicit(&producer_done, 1, memory_order_relaxed);
+            }
+        }
         if (core_id == 0) { /* ue status report runs in one core */
             ue_status_rpt(core_id);
         }
@@ -474,6 +503,15 @@ static void pkt_production_and_recycle(const unsigned int core_id)
         uint32_t interval = end_timecycle - start_timecycle;
         uint32_t delayCycle = (total_cycle >= interval) ? (total_cycle - interval) : 0;
         delay(delayCycle);
+
+        /* Exit only when THIS core has finished producing AND all other
+           producers are also done.  Without the `this_core_done` guard a
+           slow core would abandon its in-flight work the moment enough
+           OTHER cores happened to finish first. */
+        if (this_core_done &&
+            atomic_load_explicit(&producer_done, memory_order_relaxed) >= PRODUCER_CORE_NUM) {
+            break;
+        }
     }
 }
 
@@ -486,14 +524,14 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    if (core_id == 3) { /* consumer runs in one core */
-        consumer(core_id);
-    } else /* produce runs in multi core */ {
+    // Cores [0 .. PRODUCER_CORE_NUM)                              -> producer
+    // Cores [PRODUCER_CORE_NUM .. PRODUCER_CORE_NUM+CONSUMER_CORE_NUM) -> consumer
+    // Cores beyond that just wait at the barrier below.
+    if (core_id < PRODUCER_CORE_NUM) {
         pkt_production_and_recycle(core_id);
-    }/* else {
-        while (1) {}
-    }*/
-    // consumer(core_id);
+    } else if (core_id < PRODUCER_CORE_NUM + CONSUMER_CORE_NUM) {
+        consumer(core_id);
+    } /* else: spare core, fall through to barrier */
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
