@@ -910,21 +910,51 @@ module cachepool_tile
         assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
 
       end else begin : gen_no_amo
-        // Bypass AMO and registers
-        assign cache_req_valid[cb][j] = cache_xbar_req   [j][cb].q_valid;
-        assign cache_rsp_ready[cb][j] = cache_xbar_pready[j][cb];
-        assign cache_req_addr [cb][j] = cache_xbar_req   [j][cb].q.addr;
-        assign cache_req_meta [cb][j] = cache_xbar_req   [j][cb].q.user;
-        assign cache_req_write[cb][j] = cache_xbar_req   [j][cb].q.write;
-        assign cache_req_data [cb][j] = cache_xbar_req   [j][cb].q.data;
-        assign cache_req_strb [cb][j] = cache_xbar_req   [j][cb].q.strb;
+        // Spill registers to cut the L1 xbar → coalescer critical path,
+        // matching the timing budget of the Snitch AMO path above.
+        tcdm_req_t cache_req_reg;
+        tcdm_rsp_t cache_rsp_reg;
 
-        assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
-        assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
-        assign cache_xbar_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
-        assign cache_xbar_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
+        spill_register #(
+          .T      ( tcdm_req_chan_t ),
+          .Bypass ( 1'b0            )
+        ) i_spill_reg_cache_req (
+          .clk_i                                         ,
+          .rst_ni  ( rst_ni                             ),
+          .valid_i ( cache_xbar_req[j][cb].q_valid      ),
+          .ready_o ( cache_xbar_rsp[j][cb].q_ready      ),
+          .data_i  ( cache_xbar_req[j][cb].q            ),
+          .valid_o ( cache_req_reg.q_valid              ),
+          .ready_i ( cache_rsp_reg.q_ready              ),
+          .data_o  ( cache_req_reg.q                    )
+        );
 
-        assign cache_xbar_rsp[j][cb].p.write = cache_rsp_write[cb][j];
+        spill_register #(
+          .T      ( tcdm_rsp_chan_t ),
+          .Bypass ( 1'b1            )
+        ) i_spill_reg_cache_rsp (
+          .clk_i   ( clk_i                             ),
+          .rst_ni  ( rst_ni                            ),
+          .valid_i ( cache_rsp_reg.p_valid             ),
+          .ready_o ( cache_rsp_ready[cb][j]            ),
+          .data_i  ( cache_rsp_reg.p                   ),
+          .valid_o ( cache_xbar_rsp[j][cb].p_valid     ),
+          .ready_i ( cache_xbar_pready[j][cb]          ),
+          .data_o  ( cache_xbar_rsp[j][cb].p           )
+        );
+
+        assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
+        assign cache_req_addr [cb][j] = cache_req_reg.q.addr;
+        assign cache_req_meta [cb][j] = cache_req_reg.q.user;
+        assign cache_req_write[cb][j] = cache_req_reg.q.write;
+        assign cache_req_data [cb][j] = cache_req_reg.q.data;
+        assign cache_req_strb [cb][j] = cache_req_reg.q.strb;
+
+        assign cache_rsp_reg.p_valid = cache_rsp_valid[cb][j];
+        assign cache_rsp_reg.q_ready = cache_req_ready[cb][j];
+        assign cache_rsp_reg.p.data  = cache_rsp_data [cb][j];
+        assign cache_rsp_reg.p.user  = cache_rsp_meta [cb][j];
+        assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
 
       end
     end

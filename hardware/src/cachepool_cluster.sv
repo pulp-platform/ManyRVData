@@ -657,7 +657,11 @@ module cachepool_cluster
       .slv_req_t              ( axi_narrow_req_t        ),
       .slv_resp_t             ( axi_narrow_resp_t       ),
       .mst_req_t              ( axi_csr_ser_req_t       ),
-      .mst_resp_t             ( axi_csr_ser_resp_t      )
+      .mst_resp_t             ( axi_csr_ser_resp_t      ),
+      // Provide one dummy entry to avoid [IdMapNumEntries-1:0] underflow when 0.
+      // Entry maps ID 0 -> 0, which is identical to the default modulo formula.
+      .IdMapNumEntries        ( 1                       ),
+      .IdMap                  ( '{'{32'd0, 32'd0}}      )
     ) i_csr_id_serialize (
       .clk_i      ( clk_i                   ),
       .rst_ni     ( rst_ni                   ),
@@ -682,7 +686,11 @@ module cachepool_cluster
     .slv_req_t              ( axi_in_req_t            ),
     .slv_resp_t             ( axi_in_resp_t           ),
     .mst_req_t              ( axi_csr_ser_req_t       ),
-    .mst_resp_t             ( axi_csr_ser_resp_t      )
+    .mst_resp_t             ( axi_csr_ser_resp_t      ),
+    // Provide one dummy entry to avoid [IdMapNumEntries-1:0] underflow when 0.
+    // Entry maps ID 0 -> 0, which is identical to the default modulo formula.
+    .IdMapNumEntries        ( 1                       ),
+    .IdMap                  ( '{'{32'd0, 32'd0}}      )
   ) i_csr_in_id_serialize (
     .clk_i      ( clk_i                          ),
     .rst_ni     ( rst_ni                          ),
