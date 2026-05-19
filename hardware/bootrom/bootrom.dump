@@ -29,7 +29,7 @@ Disassembly of section .rodata:
 00001040 <BOOTDATA>:
     1040:	1000                	.2byte	0x1000
     1042:	0000                	.2byte	0x0
-    1044:	0020                	.2byte	0x20
+    1044:	0100                	.2byte	0x100
     1046:	0000                	.2byte	0x0
     1048:	0000                	.2byte	0x0
     104a:	0000                	.2byte	0x0
@@ -44,7 +44,7 @@ Disassembly of section .rodata:
     1062:	a000                	.2byte	0xa000
     1064:	0000                	.2byte	0x0
     1066:	0000                	.2byte	0x0
-    1068:	0008                	.2byte	0x8
+    1068:	0040                	.2byte	0x40
     106a:	0000                	.2byte	0x0
     106c:	0000                	.2byte	0x0
 	...

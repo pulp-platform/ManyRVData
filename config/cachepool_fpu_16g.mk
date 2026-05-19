@@ -9,7 +9,7 @@
 #########################
 
 # Number of groups
-num_groups ?= 4
+num_groups ?= 16
 
 # Number of tiles
 num_tiles_per_group ?= 4

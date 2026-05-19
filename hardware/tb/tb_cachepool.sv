@@ -66,18 +66,19 @@ module tb_cachepool;
   localparam NumAXISlaves = 2;
   localparam NumRules     = NumAXISlaves-1;
 
-  // Spatz wide port to SoC (currently dram)
-  spatz_axi_out_req_t  [NumL2Channel-1:0] axi_from_cluster_req;
-  spatz_axi_out_resp_t [NumL2Channel-1:0] axi_from_cluster_resp;
-  // From SoC to Spatz
-  spatz_axi_in_req_t   axi_to_cluster_req;
-  spatz_axi_in_resp_t  axi_to_cluster_resp;
+  // Spatz wide port to SoC (currently dram); IDs narrowed by wrapper-level axi_id_remap.
+  spatz_axi_wrapper_out_req_t  [NumL2Channel-1:0] axi_from_cluster_req;
+  spatz_axi_wrapper_out_resp_t [NumL2Channel-1:0] axi_from_cluster_resp;
+  // From SoC to Spatz; IDs expanded by wrapper-level axi_id_remap (WrapperAxiIdInWidth → SpatzAxiIdInWidth).
+  spatz_axi_wrapper_in_req_t   axi_to_cluster_req;
+  spatz_axi_wrapper_in_resp_t  axi_to_cluster_resp;
 
-  axi_uart_req_t   axi_uart_req;
-  axi_uart_resp_t  axi_uart_rsp;
+  // UART; IDs compressed by wrapper-level axi_id_remap (SpatzAxiUartIdWidth → WrapperAxiNarrowIdOutWidth).
+  spatz_axi_wrapper_narrow_out_req_t   axi_uart_req;
+  spatz_axi_wrapper_narrow_out_resp_t  axi_uart_rsp;
 
   // DRAM Scrambled request
-  spatz_axi_out_req_t  [NumL2Channel-1:0] axi_dram_req;
+  spatz_axi_wrapper_out_req_t  [NumL2Channel-1:0] axi_dram_req;
 
 
   /*********
@@ -141,13 +142,13 @@ module tb_cachepool;
   reqrsp_cluster_in_rsp_t to_cluster_rsp;
 
   reqrsp_to_axi #(
-    .DataWidth   (SpatzDataWidth         ),
-    .AxiUserWidth(SpatzAxiUserWidth      ),
-    .UserWidth   ($bits(tcdm_user_t)     ),
-    .axi_req_t   (spatz_axi_in_req_t     ),
-    .axi_rsp_t   (spatz_axi_in_resp_t    ),
-    .reqrsp_req_t(reqrsp_cluster_in_req_t),
-    .reqrsp_rsp_t(reqrsp_cluster_in_rsp_t)
+    .DataWidth   (SpatzDataWidth                    ),
+    .AxiUserWidth(SpatzAxiUserWidth                 ),
+    .UserWidth   ($bits(tcdm_user_t)                ),
+    .axi_req_t   (spatz_axi_wrapper_in_req_t        ),
+    .axi_rsp_t   (spatz_axi_wrapper_in_resp_t       ),
+    .reqrsp_req_t(reqrsp_cluster_in_req_t           ),
+    .reqrsp_rsp_t(reqrsp_cluster_in_rsp_t          )
   ) i_reqrsp_to_axi (
     .clk_i       (clk                ),
     .rst_ni      (rst_n              ),
@@ -293,8 +294,8 @@ module tb_cachepool;
   **********/
 
   axi_uart #(
-    .axi_req_t (axi_uart_req_t ),
-    .axi_resp_t(axi_uart_resp_t)
+    .axi_req_t (spatz_axi_wrapper_narrow_out_req_t ),
+    .axi_resp_t(spatz_axi_wrapper_narrow_out_resp_t)
   ) i_axi_uart (
     .clk_i     (clk               ),
     .rst_ni    (rst_n             ),
@@ -380,19 +381,19 @@ module tb_cachepool;
 
   for (genvar mem = 0; mem < NumL2Channel; mem++) begin: gen_dram
     axi_dram_sim #(
-      .BASE         ( DramBase                  ),
-      .DRAMType     ( DramType                  ),
-      .AxiAddrWidth ( SpatzAxiAddrWidth         ),
-      .AxiDataWidth ( SpatzAxiDataWidth         ),
-      .AxiIdWidth   ( SpatzAxiIdOutWidth        ),
-      .AxiUserWidth ( SpatzAxiUserWidth         ),
-      .axi_req_t    ( spatz_axi_out_req_t       ),
-      .axi_resp_t   ( spatz_axi_out_resp_t      ),
-      .axi_ar_t     ( spatz_axi_out_ar_chan_t   ),
-      .axi_r_t      ( spatz_axi_out_r_chan_t    ),
-      .axi_aw_t     ( spatz_axi_out_aw_chan_t   ),
-      .axi_w_t      ( spatz_axi_out_w_chan_t    ),
-      .axi_b_t      ( spatz_axi_out_b_chan_t    )
+      .BASE         ( DramBase                           ),
+      .DRAMType     ( DramType                           ),
+      .AxiAddrWidth ( SpatzAxiAddrWidth                  ),
+      .AxiDataWidth ( SpatzAxiDataWidth                  ),
+      .AxiIdWidth   ( WrapperAxiIdOutWidth               ),
+      .AxiUserWidth ( SpatzAxiUserWidth                  ),
+      .axi_req_t    ( spatz_axi_wrapper_out_req_t        ),
+      .axi_resp_t   ( spatz_axi_wrapper_out_resp_t       ),
+      .axi_ar_t     ( spatz_axi_wrapper_out_ar_chan_t    ),
+      .axi_r_t      ( spatz_axi_wrapper_out_r_chan_t     ),
+      .axi_aw_t     ( spatz_axi_wrapper_out_aw_chan_t    ),
+      .axi_w_t      ( spatz_axi_wrapper_out_w_chan_t     ),
+      .axi_b_t      ( spatz_axi_wrapper_out_b_chan_t     )
     ) i_axi_dram_sim (
       .clk_i        ( clk                       ),
       .rst_ni       ( rst_n                     ),

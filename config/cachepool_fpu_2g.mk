@@ -81,7 +81,7 @@ snitch_max_trans ?= 16
 ##  L2 Main Memory ##
 #####################
 # L2 number of channels
-l2_channel ?= 4
+l2_channel ?= 8
 
 # L2 bank width (DRAM width, change with care)
 l2_bank_width ?= 512

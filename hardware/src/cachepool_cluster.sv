@@ -152,7 +152,7 @@ module cachepool_cluster
   // Constants
   // ---------
   localparam int unsigned WideIdWidthOut  = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - $clog2(NumClusterMst) - GroupMuxIdBits;
+  localparam int unsigned WideIdWidthIn   = WideIdWidthOut - ClusterRouteIdWidth - GroupMuxIdBits;
 
   // Pre-mux AXI ID width: per-group reqrsp_to_axi output.
   // The multi-group axi_mux adds GroupMuxIdBits on top to reach WideIdWidthOut.
@@ -168,14 +168,19 @@ module cachepool_cluster
   typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
   typedef logic [AxiUserWidth-1:0]      user_cache_t;
 
-  // Pre-mux (per-group) AXI types: narrower ID, widened by axi_mux.
-  typedef logic [WideIdWidthPreMux-1:0] id_cache_premux_t;
+  // reqrsp_to_axi output type: full GroupAxiIdOutWidth-bit IDs (decoupled from WideIdWidthPreMux
+  // which now equals WideRefillIdWidth after per-group ID remapping).
+  typedef logic [GroupAxiIdOutWidth-1:0] id_cache_premux_t;
+  // Remapper output / mux slave input type: bounded WideRefillIdWidth-bit IDs.
+  typedef logic [WideIdWidthPreMux-1:0]  id_cache_remap_t;
 
-  `AXI_TYPEDEF_ALL(axi_mst_cache, addr_t, id_cache_mst_t, data_cache_t, strb_cache_t, user_cache_t)
+  `AXI_TYPEDEF_ALL(axi_mst_cache,    addr_t, id_cache_mst_t,    data_cache_t, strb_cache_t, user_cache_t)
   // Post-mux AXI types (same as before — used for axi_cut and output).
-  `AXI_TYPEDEF_ALL(axi_slv_cache, addr_t, id_cache_slv_t, data_cache_t, strb_cache_t, user_cache_t)
-  // Pre-mux AXI types (per-group reqrsp_to_axi output, input to axi_mux).
+  `AXI_TYPEDEF_ALL(axi_slv_cache,    addr_t, id_cache_slv_t,    data_cache_t, strb_cache_t, user_cache_t)
+  // reqrsp_to_axi output AXI types (full GroupAxiIdOutWidth-bit IDs).
   `AXI_TYPEDEF_ALL(axi_premux_cache, addr_t, id_cache_premux_t, data_cache_t, strb_cache_t, user_cache_t)
+  // Remapped AXI types: WideRefillIdWidth-bit IDs, fed into the inter-group mux / future NoC.
+  `AXI_TYPEDEF_ALL(axi_remap_cache,  addr_t, id_cache_remap_t,  data_cache_t, strb_cache_t, user_cache_t)
 
   // ----------------
   // Wire Definitions
@@ -184,9 +189,12 @@ module cachepool_cluster
   // Post-mux wide AXI (one per L2 channel, merged across groups).
   axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
   axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
-  // Per-group pre-mux wide AXI (per group, per L2 channel).
+  // Per-group pre-mux wide AXI (per group, per L2 channel): full GroupAxiIdOutWidth-bit IDs.
   axi_premux_cache_req_t  [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_req;
   axi_premux_cache_resp_t [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_premux_rsp;
+  // Per-group remapped wide AXI: WideRefillIdWidth-bit IDs, fed into the inter-group mux.
+  axi_remap_cache_req_t   [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_remap_req;
+  axi_remap_cache_resp_t  [NumGroups-1:0][ClusterWideOutAxiPorts-1:0] wide_axi_remap_rsp;
   // Narrow AXI per tile (UART + Periph).
   axi_narrow_req_t     [NumTiles-1:0][1:0]          axi_out_req;
   axi_narrow_resp_t    [NumTiles-1:0][1:0]          axi_out_resp;
@@ -434,28 +442,52 @@ module cachepool_cluster
   // Step 2: Per-L2-channel axi_mux across groups.
   if (NumGroups > 1) begin : gen_l2_group_mux
     for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_l2_ch_mux
-      // Collect per-group inputs for this channel.
-      axi_premux_cache_req_t  [NumGroups-1:0] l2_mux_slv_req;
-      axi_premux_cache_resp_t [NumGroups-1:0] l2_mux_slv_rsp;
+      // Per-group ID remapper: reduces GroupAxiIdOutWidth to WideRefillIdWidth before the mux.
+      // axi_id_remap preserves ID independence (unlike axi_id_serialize) for performance.
+      // AxiSlvPortMaxUniqIds = NumSpatzOutstandingLoads*2 matches the reqrsp_to_axi MaxTrans
+      // so the remapper never stalls.
+      for (genvar g = 0; g < NumGroups; g++) begin : gen_l2_mux_remap
+        axi_id_remap #(
+          .AxiSlvPortIdWidth    ( GroupAxiIdOutWidth           ),
+          .AxiSlvPortMaxUniqIds ( NumSpatzOutstandingLoads * 2 ),
+          .AxiMaxTxnsPerId      ( NumSpatzOutstandingLoads     ),
+          .AxiMstPortIdWidth    ( WideIdWidthPreMux            ),
+          .slv_req_t            ( axi_premux_cache_req_t       ),
+          .slv_resp_t           ( axi_premux_cache_resp_t      ),
+          .mst_req_t            ( axi_remap_cache_req_t        ),
+          .mst_resp_t           ( axi_remap_cache_resp_t       )
+        ) i_l2_id_remap (
+          .clk_i      ( clk_i                           ),
+          .rst_ni     ( rst_ni                           ),
+          .slv_req_i  ( wide_axi_premux_req[g][ch]       ),
+          .slv_resp_o ( wide_axi_premux_rsp[g][ch]       ),
+          .mst_req_o  ( wide_axi_remap_req[g][ch]        ),
+          .mst_resp_i ( wide_axi_remap_rsp[g][ch]        )
+        );
+      end
+
+      // Collect remapped per-group inputs for the mux.
+      axi_remap_cache_req_t  [NumGroups-1:0] l2_mux_slv_req;
+      axi_remap_cache_resp_t [NumGroups-1:0] l2_mux_slv_rsp;
 
       for (genvar g = 0; g < NumGroups; g++) begin : gen_l2_mux_connect
-        assign l2_mux_slv_req[g] = wide_axi_premux_req[g][ch];
-        assign wide_axi_premux_rsp[g][ch] = l2_mux_slv_rsp[g];
+        assign l2_mux_slv_req[g]          = wide_axi_remap_req[g][ch];
+        assign wide_axi_remap_rsp[g][ch]  = l2_mux_slv_rsp[g];
       end
 
       axi_mux #(
         .SlvAxiIDWidth ( WideIdWidthPreMux            ),
-        .slv_aw_chan_t ( axi_premux_cache_aw_chan_t   ),
+        .slv_aw_chan_t ( axi_remap_cache_aw_chan_t    ),
         .mst_aw_chan_t ( axi_slv_cache_aw_chan_t      ),
         .w_chan_t      ( axi_slv_cache_w_chan_t       ),
-        .slv_b_chan_t  ( axi_premux_cache_b_chan_t    ),
+        .slv_b_chan_t  ( axi_remap_cache_b_chan_t     ),
         .mst_b_chan_t  ( axi_slv_cache_b_chan_t       ),
-        .slv_ar_chan_t ( axi_premux_cache_ar_chan_t   ),
+        .slv_ar_chan_t ( axi_remap_cache_ar_chan_t    ),
         .mst_ar_chan_t ( axi_slv_cache_ar_chan_t      ),
-        .slv_r_chan_t  ( axi_premux_cache_r_chan_t    ),
+        .slv_r_chan_t  ( axi_remap_cache_r_chan_t     ),
         .mst_r_chan_t  ( axi_slv_cache_r_chan_t       ),
-        .slv_req_t     ( axi_premux_cache_req_t       ),
-        .slv_resp_t    ( axi_premux_cache_resp_t      ),
+        .slv_req_t     ( axi_remap_cache_req_t        ),
+        .slv_resp_t    ( axi_remap_cache_resp_t       ),
         .mst_req_t     ( axi_slv_cache_req_t          ),
         .mst_resp_t    ( axi_slv_cache_resp_t         ),
         .NoSlvPorts    ( NumGroups                    ),
@@ -569,6 +601,11 @@ module cachepool_cluster
   axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req, axi_barrier_req;
   axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp, axi_barrier_rsp;
 
+  // Serialized CSR signals: one entry per tile plus one for the external axi_in port.
+  // Index [NumTiles] = axi_in_req_i, indices [NumTiles-1:0] = per-tile CSR outputs.
+  axi_csr_ser_req_t  [NumTiles:0] axi_csr_pre_mux_req;
+  axi_csr_ser_resp_t [NumTiles:0] axi_csr_pre_mux_rsp;
+
 
   for (genvar t = 0; t < NumTiles; t++) begin
     assign axi_barrier_req[t] = axi_out_req [t][ClusterPeriph];
@@ -604,20 +641,70 @@ module cachepool_cluster
     .cluster_periph_start_address_i ( tcdm_end_address  )
   );
 
+  // Per-tile CSR ID serializers: reduce CsrAxiMstIdWidth to CsrSerIdWidth before the mux
+  // so the mux output stays bounded regardless of NumTiles.
+  for (genvar t = 0; t < NumTiles; t++) begin : gen_csr_id_serialize
+    axi_id_serialize #(
+      .AxiSlvPortIdWidth      ( CsrAxiMstIdWidth        ),
+      .AxiSlvPortMaxTxns      ( 2                       ),
+      .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
+      .AxiMstPortMaxUniqIds   ( 1                       ),
+      .AxiMstPortMaxTxnsPerId ( 2                       ),
+      .AxiAddrWidth           ( AxiAddrWidth            ),
+      .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
+      .AxiUserWidth           ( SpatzAxiUserWidth       ),
+      .AtopSupport            ( 1'b0                    ),
+      .slv_req_t              ( axi_narrow_req_t        ),
+      .slv_resp_t             ( axi_narrow_resp_t       ),
+      .mst_req_t              ( axi_csr_ser_req_t       ),
+      .mst_resp_t             ( axi_csr_ser_resp_t      )
+    ) i_csr_id_serialize (
+      .clk_i      ( clk_i                   ),
+      .rst_ni     ( rst_ni                   ),
+      .slv_req_i  ( axi_core_csr_req[t]      ),
+      .slv_resp_o ( axi_core_csr_rsp[t]      ),
+      .mst_req_o  ( axi_csr_pre_mux_req[t]   ),
+      .mst_resp_i ( axi_csr_pre_mux_rsp[t]   )
+    );
+  end
+
+  // Serializer for the external axi_in port (SoC CSR access).
+  axi_id_serialize #(
+    .AxiSlvPortIdWidth      ( AxiIdWidthIn            ),
+    .AxiSlvPortMaxTxns      ( 2                       ),
+    .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
+    .AxiMstPortMaxUniqIds   ( 1                       ),
+    .AxiMstPortMaxTxnsPerId ( 2                       ),
+    .AxiAddrWidth           ( AxiAddrWidth            ),
+    .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
+    .AxiUserWidth           ( SpatzAxiUserWidth       ),
+    .AtopSupport            ( 1'b0                    ),
+    .slv_req_t              ( axi_in_req_t            ),
+    .slv_resp_t             ( axi_in_resp_t           ),
+    .mst_req_t              ( axi_csr_ser_req_t       ),
+    .mst_resp_t             ( axi_csr_ser_resp_t      )
+  ) i_csr_in_id_serialize (
+    .clk_i      ( clk_i                          ),
+    .rst_ni     ( rst_ni                          ),
+    .slv_req_i  ( axi_in_req_i                    ),
+    .slv_resp_o ( axi_in_resp_o                   ),
+    .mst_req_o  ( axi_csr_pre_mux_req[NumTiles]   ),
+    .mst_resp_i ( axi_csr_pre_mux_rsp[NumTiles]   )
+  );
 
   axi_mux #(
-    .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
-    .slv_aw_chan_t ( axi_csr_mst_aw_chan_t  ),
+    .SlvAxiIDWidth ( CsrSerIdWidth          ),
+    .slv_aw_chan_t ( axi_csr_ser_aw_chan_t  ),
     .mst_aw_chan_t ( axi_csr_slv_aw_chan_t  ),
     .w_chan_t      ( axi_csr_slv_w_chan_t   ),
-    .slv_b_chan_t  ( axi_csr_mst_b_chan_t   ),
+    .slv_b_chan_t  ( axi_csr_ser_b_chan_t   ),
     .mst_b_chan_t  ( axi_csr_slv_b_chan_t   ),
-    .slv_ar_chan_t ( axi_csr_mst_ar_chan_t  ),
+    .slv_ar_chan_t ( axi_csr_ser_ar_chan_t  ),
     .mst_ar_chan_t ( axi_csr_slv_ar_chan_t  ),
-    .slv_r_chan_t  ( axi_csr_mst_r_chan_t   ),
+    .slv_r_chan_t  ( axi_csr_ser_r_chan_t   ),
     .mst_r_chan_t  ( axi_csr_slv_r_chan_t   ),
-    .slv_req_t     ( axi_csr_mst_req_t      ),
-    .slv_resp_t    ( axi_csr_mst_resp_t     ),
+    .slv_req_t     ( axi_csr_ser_req_t      ),
+    .slv_resp_t    ( axi_csr_ser_resp_t     ),
     .mst_req_t     ( axi_csr_slv_req_t      ),
     .mst_resp_t    ( axi_csr_slv_resp_t     ),
     .NoSlvPorts    ( NumTiles + 1           ),
@@ -632,8 +719,8 @@ module cachepool_cluster
     .clk_i       ( clk_i                              ),
     .rst_ni      ( rst_ni                             ),
     .test_i      ('0                                  ),
-    .slv_reqs_i  ( {axi_in_req_i,  axi_core_csr_req}  ),
-    .slv_resps_o ( {axi_in_resp_o, axi_core_csr_rsp}  ),
+    .slv_reqs_i  ( axi_csr_pre_mux_req  ),
+    .slv_resps_o ( axi_csr_pre_mux_rsp  ),
     .mst_req_o   ( axi_csr_req                        ),
     .mst_resp_i  ( axi_csr_rsp                        )
   );

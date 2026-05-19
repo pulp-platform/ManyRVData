@@ -89,7 +89,7 @@ module cachepool_peripheral
 
   //////////// L1 DCache ////////////
   logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
-  logic [31:0]          cl_clint_d, cl_clint_q;
+  logic [NrCores-1:0]   cl_clint_d, cl_clint_q;
   logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
   logic [3:0]           l1d_private_d, l1d_private_q;
   addr_t                private_start_addr_d, private_start_addr_q;
