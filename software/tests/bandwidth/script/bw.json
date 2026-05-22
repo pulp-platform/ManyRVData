@@ -1,0 +1,17 @@
+// Parameters for CachePool Random-Load Bandwidth Benchmark
+//
+// M    : elements in data_dram (4096 int32 = 16 KB; exceeds default L1 to
+//        force DRAM refills on random accesses)
+// round: measurement rounds per core; must be divisible by 4
+// prec : element width in bits (32 = int)
+// core : active cores (matches default cluster: 4 tiles × 4 cores = 16)
+// step : load granularity in elements = v_len for lmul=4, VLEN=512
+//        (4 × 512/32 = 64 elements per vle32.v)
+
+{
+    M:     4096,
+    round: 64,
+    prec:  32,
+    core:  16,
+    step:  64
+}
