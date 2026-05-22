@@ -100,17 +100,24 @@ ${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc
 	echo 'return 0' >> $@
 
 # Wrapper script & GUI script
+# The generated scripts derive ROOT_DIR from their own location at runtime so
+# that they remain portable across different checkout paths (CI runners, moved
+# repos). All absolute paths baked in by make are replaced by a single sed pass.
 define QUESTASIM
 	${VSIM} -c -do "source $<; quit" | tee $(dir $<)vsim.log
 	@! grep -P "Errors: [1-9]*," $(dir $<)vsim.log
 	@mkdir -p $(SIMBIN_DIR) $(SIMBIN_DIR)/logs
-	@echo "#!/bin/bash" > $(SIMBIN_DIR)/cachepool_cluster.vsim
+	@echo '#!/bin/bash' > $(SIMBIN_DIR)/cachepool_cluster.vsim
+	@echo 'ROOT_DIR="$$(cd "$$(dirname "$$(readlink -f "$$0")")/../.." && pwd)"' >> $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "run -a" -work ${WORK_DIR} -c -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" $1 +permissive-off ++$$1 +PRELOAD=$$1' >> $(SIMBIN_DIR)/cachepool_cluster.vsim
+	@sed -i 's|$(CACHEPOOL_DIR)|$${ROOT_DIR}|g' $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@chmod +x $(SIMBIN_DIR)/cachepool_cluster.vsim
-	@echo "#!/bin/bash" > $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
+	@echo '#!/bin/bash' > $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
+	@echo 'ROOT_DIR="$$(cd "$$(dirname "$$(readlink -f "$$0")")/../.." && pwd)"' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 	@echo '${VSIM} +permissive ${VSIM_FLAGS} -do "log -r /*; source ${WAVE_FILE}; run -a" -work ${WORK_DIR} -ldflags "-Wl,-rpath,${GCC_LIB} -L${FESVR}/lib -lfesvr_vsim -lutil" $1 +permissive-off ++$$1 +PRELOAD=$$1' >> $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
+	@sed -i 's|$(CACHEPOOL_DIR)|$${ROOT_DIR}|g' $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 	@chmod +x $(SIMBIN_DIR)/cachepool_cluster.vsim.gui
 endef
 

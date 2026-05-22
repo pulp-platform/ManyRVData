@@ -1,0 +1,8 @@
+# Python packages required for hardware code generation (make generate).
+# dataclasses is a stdlib backport needed on Python 3.6; it is a no-op on 3.7+.
+dataclasses
+hjson
+jsonref
+jsonschema
+mako
+termcolor
