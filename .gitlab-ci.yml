@@ -8,7 +8,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
   APPS: "tests"
-  PATH: '/home/gitlabci/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:/home/gitlabci/.local/bin'
+  PATH: '$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:$HOME/.local/bin'
   OBJCACHE: ''
   CC:  '/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc'
   CXX: '/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++'
@@ -20,7 +20,7 @@ variables:
   SW_PREFIX: 'test-cachepool-'
 
 default:
-  tags: [dolent]
+  tags: [shared]
 
 stages:
   - build
