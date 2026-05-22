@@ -16,7 +16,7 @@ module cachepool_tile
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
-  import snitch_icache_pkg::icache_events_t;
+  import snitch_icache_pkg::icache_l1_events_t;
   #(
     /// Width of physical address.
     parameter int                     unsigned               AxiAddrWidth                       = 48,
@@ -163,7 +163,7 @@ module cachepool_tile
     input  remote_group_req_t [TotRGPorts:0] remote_group_req_i,
     output remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_o,
     /// Peripheral signals
-    output icache_events_t    [NrCores-1:0]         icache_events_o,
+    output icache_l1_events_t [NrCores-1:0]         icache_events_o,
     input  logic                                    icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]         cl_interrupt_i,
     input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
@@ -400,7 +400,7 @@ module cachepool_tile
 
   core_events_t [NrCores-1:0] core_events;
 
-  snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events;
+  // snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events;
 
   // 4. Memory Subsystem (Core side).
   reqrsp_req_t [NrCores-1:0] core_req, filtered_core_req;
@@ -1474,7 +1474,7 @@ module cachepool_tile
     .L0_LINE_COUNT      ( 8                                                  ),
     .LINE_WIDTH         ( ICacheLineWidth                                    ),
     .LINE_COUNT         ( ICacheLineCount                                    ),
-    .SET_COUNT          ( ICacheSets                                         ),
+    .WAY_COUNT          ( ICacheSets                                         ),
     .FETCH_AW           ( AxiAddrWidth                                       ),
     .FETCH_DW           ( 32                                                 ),
     .FILL_AW            ( AxiAddrWidth                                       ),
@@ -1491,7 +1491,9 @@ module cachepool_tile
     .clk_d2_i             ( clk_i                    ),
     .rst_ni               ( rst_ni                   ),
     .enable_prefetching_i ( icache_prefetch_enable_i ),
-    .icache_events_o      ( icache_events_o          ),
+    .enable_branch_pred_i ( '0                       ),
+    .icache_l0_events_o   (                          ),
+    .icache_l1_events_o   (                          ),
     .flush_valid_i        ( flush_valid              ),
     .flush_ready_o        ( flush_ready              ),
     .inst_addr_i          ( inst_addr                ),
@@ -1502,6 +1504,8 @@ module cachepool_tile
     .inst_error_o         ( inst_error               ),
     .sram_cfg_tag_i       ( '0                       ),
     .sram_cfg_data_i      ( '0                       ),
+    .sram_cfg_out_data_o  (),
+    .sram_cfg_out_tag_o   (),
     .axi_req_o            ( wide_axi_mst_req[ICache] ),
     .axi_rsp_i            ( wide_axi_mst_rsp[ICache] )
   );

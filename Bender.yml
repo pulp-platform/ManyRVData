@@ -10,14 +10,14 @@ dependencies:
   axi_riscv_atomics:   { git: "https://github.com/pulp-platform/axi_riscv_atomics.git",  version: 0.7.0                }
   common_cells:        { git: "https://github.com/pulp-platform/common_cells.git",       version: 1.28.0               }
   FPnew:               { git: "https://github.com/pulp-platform/cvfpu.git",              rev:     pulp-v0.1.3          }
-  idma:                { git: "https://github.com/pulp-platform/iDMA.git",               version: 0.4.2                }
   register_interface:  { git: "https://github.com/pulp-platform/register_interface.git", version: 0.3.8                }
   riscv-dbg:           { git: "https://github.com/pulp-platform/riscv-dbg.git",          version: 0.7.0                }
   tech_cells_generic:  { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11               }
   Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/cachepool_dev  }
-  spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b        }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool            }
   floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                 }
+  cluster_icache:      { git: "https://github.com/pulp-platform/cluster_icache.git",     rev:     main                 }
+  spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b        }
 
 workspace:
   checkout_dir: "./hardware/deps"
@@ -38,12 +38,14 @@ sources:
   - hardware/cachepool_peripheral/cachepool_peripheral.sv
   # Bootrom
   - hardware/bootrom/bootrom.sv
-  # Barrier
-  - hardware/src/cachepool_tile_barrier.sv
-  - hardware/src/cachepool_cluster_barrier.sv
   # Level 1
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
+  # Barrier
+  - hardware/src/cachepool_tile_barrier.sv
+  - hardware/src/cachepool_cluster_barrier.sv
+  # ICache
+  - hardware/src/axi_hier_interco.sv
   # Level 2
   - hardware/src/cachepool_tile.sv
   # Level 3

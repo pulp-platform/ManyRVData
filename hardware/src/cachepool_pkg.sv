@@ -96,6 +96,12 @@ package cachepool_pkg;
   localparam int unsigned ICacheLineCount = 128;
   localparam int unsigned ICacheSets      = 4;
 
+  // Group-level L2 ICache (shared read-only cache, primarily for coalescing)
+  localparam int unsigned L2ICacheLineWidth = 128;
+  localparam int unsigned L2ICacheSets      = 4;
+  localparam int unsigned L2ICacheSizeByte  = 65536;
+  localparam int unsigned L2ICacheLineCount = L2ICacheSizeByte / (L2ICacheSets * L2ICacheLineWidth / 8);
+
   // Be careful on unsigned long int passed in from configuration.
   // Currently use fixed values.
   localparam int unsigned TCDMStartAddr   = 32'hBFFF_F800;
@@ -479,8 +485,8 @@ package cachepool_pkg;
   typedef struct packed {
     logic enable;
     logic flush_valid;
-    logic [ROCacheNumAddrRules-1:0][AddrWidth-1:0] start_addr;
-    logic [ROCacheNumAddrRules-1:0][AddrWidth-1:0] end_addr;
+    axi_addr_t [ROCacheNumAddrRules-1:0] start_addr;
+    axi_addr_t [ROCacheNumAddrRules-1:0] end_addr;
   } ro_cache_ctrl_t;
 
 

@@ -15,7 +15,7 @@ module cachepool_group_noc_wrapper
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
-  import snitch_icache_pkg::icache_events_t;
+  import snitch_icache_pkg::icache_l1_events_t;
   #(
     parameter int                     unsigned               AxiAddrWidth                       = 48,
     parameter int                     unsigned               AxiDataWidth                       = 512,
@@ -70,7 +70,7 @@ module cachepool_group_noc_wrapper
     input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_rsp_i,
     output l2_req_t           [ClusterWideOutAxiPorts-1:0]                l2_req_o,
     input  l2_rsp_t           [ClusterWideOutAxiPorts-1:0]                l2_rsp_i,
-    output icache_events_t    [NrCores-1:0]                               icache_events_o,
+    output icache_l1_events_t [NrCores-1:0]                               icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]                               cl_interrupt_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]                  dynamic_offset_i,

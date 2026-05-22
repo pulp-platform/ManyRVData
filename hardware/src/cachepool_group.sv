@@ -14,7 +14,7 @@ module cachepool_group
   import spatz_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
-  import snitch_icache_pkg::icache_events_t;
+  import snitch_icache_pkg::icache_l1_events_t;
   #(
     /// Width of physical address.
     parameter int unsigned                              AxiAddrWidth              = 48,
@@ -136,7 +136,7 @@ module cachepool_group
     input  l2_rsp_t        [ClusterWideOutAxiPorts-1:0] l2_rsp_i,
 
     /// Peripheral signals
-    output icache_events_t                [NrCores-1:0] icache_events_o,
+    output icache_l1_events_t             [NrCores-1:0] icache_events_o,
     input  logic                                        icache_prefetch_enable_i,
     input  logic                          [NrCores-1:0] cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
@@ -302,9 +302,14 @@ module cachepool_group
   cache_trans_req_t [NumL1CacheCtrlLocal-1:0] cache_refill_req;
   cache_trans_rsp_t [NumL1CacheCtrlLocal-1:0] cache_refill_rsp;
 
-  // cache_core_req/rsp: icache-bypass path, one per tile (from axi_to_reqrsp)
-  cache_trans_req_t [NumTilesPerGroup-1:0] cache_core_req;
-  cache_trans_rsp_t [NumTilesPerGroup-1:0] cache_core_rsp;
+  // L2 Group ICache AXI master output (from axi_hier_interco)
+  axi_mst_cache_req_t  axi_l2icache_mst_req;
+  axi_mst_cache_resp_t axi_l2icache_mst_rsp;
+  // L2 Group ICache reqrsp output (to xbar port 0)
+  cache_trans_req_t    cache_l2icache_req;
+  cache_trans_rsp_t    cache_l2icache_rsp;
+  // L2 Group ICache control (hardwired)
+  ro_cache_ctrl_t      l2icache_ctrl;
 
   // Flat xbar input channels: NumTilesPerGroup * NumClusterMst ports
   cache_trans_req_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_req_chan;
@@ -339,34 +344,69 @@ module cachepool_group
   end
 
   // ---------------------
-  // axi_to_reqrsp: TileMem (icache-bypass) path, one per tile
+  // L2 Group ICache: 4-to-1 AXI mux + read-only cache + ID remap
   // ---------------------
-  for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_axi_converter
-    axi_to_reqrsp #(
-      .axi_req_t    ( axi_mst_cache_req_t       ),
-      .axi_rsp_t    ( axi_mst_cache_resp_t      ),
-      .AddrWidth    ( AxiAddrWidth              ),
-      .DataWidth    ( AxiDataWidth              ),
-      .UserWidth    ( $bits(refill_user_t)      ),
-      .IdWidth      ( AxiIdWidthIn              ),
-      .BufDepth     ( NumSpatzOutstandingLoads  ),
-      .reqrsp_req_t ( cache_trans_req_t         ),
-      .reqrsp_rsp_t ( cache_trans_rsp_t         )
-    ) i_axi2reqrsp (
-      .clk_i        ( clk_i                     ),
-      .rst_ni       ( rst_ni                    ),
-      .busy_o       (                           ),
-      .axi_req_i    ( axi_tile_mem_req[t]  ),
-      .axi_rsp_o    ( axi_tile_mem_rsp[t]  ),
-      .reqrsp_req_o ( cache_core_req[t]         ),
-      .reqrsp_rsp_i ( cache_core_rsp[t]         )
-    );
+  always_comb begin
+    l2icache_ctrl               = '0;
+    l2icache_ctrl.enable        = 1'b1;
+    l2icache_ctrl.flush_valid   = 1'b0;
+    l2icache_ctrl.start_addr[0] = DramAddr;
+    l2icache_ctrl.end_addr[0]   = DramAddr + DramSize;
   end
+
+  axi_hier_interco #(
+    .NumSlvPorts    ( NumTilesPerGroup      ),
+    .NumMstPorts    ( 1                     ),
+    .Radix          ( NumTilesPerGroup      ),
+    .EnableCache    ( 1                     ),
+    .CacheLineWidth ( L2ICacheLineWidth     ),
+    .CacheSizeByte  ( L2ICacheSizeByte      ),
+    .CacheSets      ( L2ICacheSets          ),
+    .AddrWidth      ( AxiAddrWidth          ),
+    .DataWidth      ( AxiDataWidth          ),
+    .SlvIdWidth     ( WideIdWidthIn         ),
+    .MstIdWidth     ( WideIdWidthIn         ),
+    .UserWidth      ( AxiUserWidth          ),
+    .slv_req_t      ( axi_mst_cache_req_t   ),
+    .slv_resp_t     ( axi_mst_cache_resp_t  ),
+    .mst_req_t      ( axi_mst_cache_req_t   ),
+    .mst_resp_t     ( axi_mst_cache_resp_t  )
+  ) i_l2icache_interco (
+    .clk_i           ( clk_i                ),
+    .rst_ni          ( rst_ni               ),
+    .test_i          ( 1'b0                 ),
+    .ro_cache_ctrl_i ( l2icache_ctrl        ),
+    .slv_req_i       ( axi_tile_mem_req     ),
+    .slv_resp_o      ( axi_tile_mem_rsp     ),
+    .mst_req_o       ( axi_l2icache_mst_req ),
+    .mst_resp_i      ( axi_l2icache_mst_rsp )
+  );
+
+  // Single axi_to_reqrsp for the L2 ICache master output
+  axi_to_reqrsp #(
+    .axi_req_t    ( axi_mst_cache_req_t      ),
+    .axi_rsp_t    ( axi_mst_cache_resp_t     ),
+    .AddrWidth    ( AxiAddrWidth             ),
+    .DataWidth    ( AxiDataWidth             ),
+    .UserWidth    ( $bits(refill_user_t)     ),
+    .IdWidth      ( WideIdWidthIn            ),
+    .BufDepth     ( NumSpatzOutstandingLoads ),
+    .reqrsp_req_t ( cache_trans_req_t        ),
+    .reqrsp_rsp_t ( cache_trans_rsp_t        )
+  ) i_l2icache_axi2reqrsp (
+    .clk_i        ( clk_i                ),
+    .rst_ni       ( rst_ni               ),
+    .busy_o       (                      ),
+    .axi_req_i    ( axi_l2icache_mst_req ),
+    .axi_rsp_o    ( axi_l2icache_mst_rsp ),
+    .reqrsp_req_o ( cache_l2icache_req   ),
+    .reqrsp_rsp_i ( cache_l2icache_rsp   )
+  );
 
   // ---------------------
   // Wiring: assemble flat xbar input from icache-bypass and refill paths
   // ---------------------
-  // Port layout per tile: p=0 -> icache-bypass (cache_core_req),
+  // Port layout per tile: p=0 -> L2 ICache output (t=0) or unused (t>0),
   //                       p=1..NumL1CtrlTile -> refill (cache_refill_req)
   localparam int unsigned ReqrspPortsTile = NumL1CtrlTile + 1;
   always_comb begin
@@ -376,16 +416,23 @@ module cachepool_group
         automatic int unsigned refill_idx = t * NumL1CtrlTile   + p - 1;
 
         if (p == 0) begin
-          // icache-bypass path
-          tile_req_chan  [xbar_idx]              = cache_core_req[t].q;
-          tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_core_req[t].q.addr);
-          tile_req_valid [xbar_idx]              = cache_core_req[t].q_valid;
-          cache_core_rsp [t].q_ready             = tile_req_ready[xbar_idx];
+          if (t == 0) begin
+            // L2 ICache output → xbar port 0
+            tile_req_chan  [xbar_idx]              = cache_l2icache_req.q;
+            tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_l2icache_req.q.addr);
+            tile_req_valid [xbar_idx]              = cache_l2icache_req.q_valid;
+            cache_l2icache_rsp.q_ready             = tile_req_ready[xbar_idx];
 
-          cache_core_rsp [t].p                   = tile_rsp_chan [xbar_idx];
-          cache_core_rsp [t].p_valid             = tile_rsp_valid[xbar_idx];
-          tile_rsp_ready [xbar_idx]              = cache_core_req[t].p_ready;
-          tile_req_chan  [xbar_idx].user.tile_id  = t;
+            cache_l2icache_rsp.p                   = tile_rsp_chan [xbar_idx];
+            cache_l2icache_rsp.p_valid             = tile_rsp_valid[xbar_idx];
+            tile_rsp_ready [xbar_idx]              = cache_l2icache_req.p_ready;
+            tile_req_chan  [xbar_idx].user.tile_id  = '0;
+          end else begin
+            // unused icache-bypass ports (tiles 1-3)
+            tile_req_chan  [xbar_idx]  = '0;
+            tile_req_valid [xbar_idx]  = 1'b0;
+            tile_rsp_ready [xbar_idx]  = 1'b0;
+          end
         end else begin
           // refill path
           tile_req_chan  [xbar_idx]              = cache_refill_req[refill_idx].q;
