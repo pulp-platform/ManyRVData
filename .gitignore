@@ -32,3 +32,9 @@ hardware/deps/*
 *.tdb
 util/lint/sg_projects
 util/lint/tmp
+hardware/bootrom/bootdata.cc
+hardware/bootrom/bootdata_bootrom.cc
+hardware/bootrom/bootrom.bin
+hardware/bootrom/bootrom.dump
+hardware/bootrom/bootrom.elf
+hardware/bootrom/bootrom.sv
