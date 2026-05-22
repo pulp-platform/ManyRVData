@@ -39,8 +39,8 @@ build:
     - echo "Using CXX=$CXX"
     - test -x "$CC"
     - test -x "$CXX"
-    - conda activate /home/dishen/.conda/envs/terapool_noc
     - make quick-tool
+    - pip install --quiet hjson jsonref mako termcolor
     - make init
     - make dram-build
     - make clean generate vsim config=$CI_CONFIG
