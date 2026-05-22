@@ -37,10 +37,6 @@ module cachepool_cluster
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
     parameter int                     unsigned               NrBanks                            = 2 * NrCores,
-    /// Size of DMA AXI buffer.
-    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
-    /// Size of DMA request fifo.
-    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -55,8 +51,6 @@ module cachepool_cluster
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
-    /// Per-core enabling of the custom `Xdma` ISA extensions.
-    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int                     unsigned               NumIntOutstandingLoads             = 0,
@@ -237,90 +231,91 @@ module cachepool_cluster
 
   assign error_o = |group_error;
 
-  for (genvar g = 0; g < NumGroups; g++) begin : gen_group
-    cachepool_group_noc_wrapper #(
-      .AxiAddrWidth             ( AxiAddrWidth             ),
-      .AxiDataWidth             ( AxiDataWidth             ),
-      .AxiIdWidthIn             ( AxiIdWidthIn             ),
-      .AxiIdWidthOut            ( WideIdWidthIn            ),
-      .AxiUserWidth             ( AxiUserWidth             ),
-      .BootAddr                 ( BootAddr                 ),
-      .UartAddr                 ( UartAddr                 ),
-      .ClusterPeriphSize        ( ClusterPeriphSize        ),
-      .NrCores                  ( NumCoreGroup             ),
-      .TCDMDepth                ( TCDMDepth                ),
-      .NrBanks                  ( NrBanks / NumGroups      ),
-      .ICacheLineWidth          ( ICacheLineWidth          ),
-      .ICacheLineCount          ( ICacheLineCount          ),
-      .ICacheSets               ( ICacheSets               ),
-      .FPUImplementation        ( FPUImplementation        ),
-      .NumSpatzFPUs             ( NumSpatzFPUs             ),
-      .NumSpatzIPUs             ( NumSpatzIPUs             ),
-      .SnitchPMACfg             ( SnitchPMACfg             ),
-      .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
-      .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
-      .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-      .axi_in_req_t             ( axi_in_req_t             ),
-      .axi_in_resp_t            ( axi_in_resp_t            ),
-      .axi_narrow_req_t         ( axi_narrow_req_t         ),
-      .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
-      .axi_out_req_t            ( axi_mst_cache_req_t      ),
-      .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-      .Xdma                     ( Xdma[g*NumCoreGroup +: NumCoreGroup] ),
-      .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-      .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
-      .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
-      .RegisterCoreReq          ( RegisterCoreReq          ),
-      .RegisterCoreRsp          ( RegisterCoreRsp          ),
-      .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
-      .RegisterExt              ( RegisterExt              ),
-      .XbarLatency              ( XbarLatency              ),
-      .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              )
-    ) i_group (
-      .clk_i                    ( clk_i                                           ),
-      .rst_ni                   ( rst_ni                                          ),
-      .impl_i                   ( impl_i                                          ),
-      .error_o                  ( group_error[g]                                  ),
-      .debug_req_i              ( debug_req_i                                     ),
-      .meip_i                   ( meip_i                                          ),
-      .mtip_i                   ( mtip_i                                          ),
-      .msip_i                   ( msip_i                                          ),
-      .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
-      .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
-      .cluster_base_addr_i      ( cluster_base_addr_i                             ),
-      .private_start_addr_i     ( private_start_addr                              ),
-      .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
-      .axi_narrow_rsp_i         ( axi_out_resp[g*NumTilesPerGroup +: NumTilesPerGroup]  ),
-      // DRAM refill reqrsp (post-xbar, one per L2 channel)
-      .l2_req_o                 ( l2_req[g]                                       ),
-      .l2_rsp_i                 ( l2_rsp[g]                                       ),
-      // Peripherals
-      .icache_events_o          ( /* unused */                                    ),
-      .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-      .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
-      .dynamic_offset_i         ( dynamic_offset                                  ),
-      .l1d_private_i            ( l1d_private                                     ),
-      .l1d_insn_i               ( l1d_insn                                        ),
-      .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
-      .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
-      .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
-      .group_xy_id_i            ( group_xy_id_t'{x:       g % NumGroupsX,
-                                                 y:       g / NumGroupsX,
-                                                 port_id: 1'b0}                          ),
-      .noc_req_o                ( noc_req_out      [g]                                   ),
-      .noc_req_valid_o          ( noc_req_out_valid[g]                                   ),
-      .noc_req_ready_i          ( noc_req_out_ready[g]                                   ),
-      .noc_req_i                ( noc_req_in       [g]                                   ),
-      .noc_req_valid_i          ( noc_req_in_valid [g]                                   ),
-      .noc_req_ready_o          ( noc_req_in_ready [g]                                   ),
-      .noc_rsp_o                ( noc_rsp_out      [g]                                   ),
-      .noc_rsp_valid_o          ( noc_rsp_out_valid[g]                                   ),
-      .noc_rsp_ready_i          ( noc_rsp_out_ready[g]                                   ),
-      .noc_rsp_i                ( noc_rsp_in       [g]                                   ),
-      .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
-      .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   )
-    );
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_group_y
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_group_x
+      // Flat group index: g = gy * NumGroupsX + gx
+      localparam int unsigned g = gy * NumGroupsX + gx;
+      cachepool_group_noc_wrapper #(
+        .AxiAddrWidth             ( AxiAddrWidth             ),
+        .AxiDataWidth             ( AxiDataWidth             ),
+        .AxiIdWidthIn             ( AxiIdWidthIn             ),
+        .AxiIdWidthOut            ( WideIdWidthIn            ),
+        .AxiUserWidth             ( AxiUserWidth             ),
+        .BootAddr                 ( BootAddr                 ),
+        .UartAddr                 ( UartAddr                 ),
+        .ClusterPeriphSize        ( ClusterPeriphSize        ),
+        .NrCores                  ( NumCoreGroup             ),
+        .TCDMDepth                ( TCDMDepth                ),
+        .NrBanks                  ( NrBanks / NumGroups      ),
+        .ICacheLineWidth          ( ICacheLineWidth          ),
+        .ICacheLineCount          ( ICacheLineCount          ),
+        .ICacheSets               ( ICacheSets               ),
+        .FPUImplementation        ( FPUImplementation        ),
+        .NumSpatzFPUs             ( NumSpatzFPUs             ),
+        .NumSpatzIPUs             ( NumSpatzIPUs             ),
+        .SnitchPMACfg             ( SnitchPMACfg             ),
+        .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
+        .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
+        .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
+        .axi_in_req_t             ( axi_in_req_t             ),
+        .axi_in_resp_t            ( axi_in_resp_t            ),
+        .axi_narrow_req_t         ( axi_narrow_req_t         ),
+        .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
+        .axi_out_req_t            ( axi_mst_cache_req_t      ),
+        .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
+        .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterCoreReq          ( RegisterCoreReq          ),
+        .RegisterCoreRsp          ( RegisterCoreRsp          ),
+        .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
+        .RegisterExt              ( RegisterExt              ),
+        .XbarLatency              ( XbarLatency              ),
+        .MaxMstTrans              ( MaxMstTrans              ),
+        .MaxSlvTrans              ( MaxSlvTrans              )
+      ) i_group (
+        .clk_i                    ( clk_i                                           ),
+        .rst_ni                   ( rst_ni                                          ),
+        .impl_i                   ( impl_i                                          ),
+        .error_o                  ( group_error[g]                                  ),
+        .debug_req_i              ( debug_req_i                                     ),
+        .meip_i                   ( meip_i                                          ),
+        .mtip_i                   ( mtip_i                                          ),
+        .msip_i                   ( msip_i                                          ),
+        .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+        .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
+        .cluster_base_addr_i      ( cluster_base_addr_i                             ),
+        .private_start_addr_i     ( private_start_addr                              ),
+        .axi_narrow_req_o         ( axi_out_req [g*NumTilesPerGroup +: NumTilesPerGroup]  ),
+        .axi_narrow_rsp_i         ( axi_out_resp[g*NumTilesPerGroup +: NumTilesPerGroup]  ),
+        // DRAM refill reqrsp (post-xbar, one per L2 channel)
+        .l2_req_o                 ( l2_req[g]                                       ),
+        .l2_rsp_i                 ( l2_rsp[g]                                       ),
+        // Peripherals
+        .icache_events_o          ( /* unused */                                    ),
+        .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
+        .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
+        .dynamic_offset_i         ( dynamic_offset                                  ),
+        .l1d_private_i            ( l1d_private                                     ),
+        .l1d_insn_i               ( l1d_insn                                        ),
+        .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
+        .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
+        .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
+        .group_xy_id_i            ( group_xy_id_t'{x:       gx,
+                                                   y:       gy,
+                                                   port_id: 1'b0}                          ),
+        .noc_req_o                ( noc_req_out      [g]                                   ),
+        .noc_req_valid_o          ( noc_req_out_valid[g]                                   ),
+        .noc_req_ready_i          ( noc_req_out_ready[g]                                   ),
+        .noc_req_i                ( noc_req_in       [g]                                   ),
+        .noc_req_valid_i          ( noc_req_in_valid [g]                                   ),
+        .noc_req_ready_o          ( noc_req_in_ready [g]                                   ),
+        .noc_rsp_o                ( noc_rsp_out      [g]                                   ),
+        .noc_rsp_valid_o          ( noc_rsp_out_valid[g]                                   ),
+        .noc_rsp_ready_i          ( noc_rsp_out_ready[g]                                   ),
+        .noc_rsp_i                ( noc_rsp_in       [g]                                   ),
+        .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
+        .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   )
+      );
+    end
   end
 
   // ----------------------------
@@ -412,8 +407,10 @@ module cachepool_cluster
   // -------------
 
   // Step 1: Per-group reqrsp_to_axi conversion.
-  for (genvar g = 0; g < NumGroups; g++) begin : gen_per_group_l2
-    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_per_ch
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_per_group_l2
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_per_group_l2
+      localparam int unsigned g = gy * NumGroupsX + gx;
+      for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_per_ch
       reqrsp_to_axi #(
         .MaxTrans           ( NumSpatzOutstandingLoads*2 ),
         .ID                 ( '0                         ),
@@ -436,6 +433,7 @@ module cachepool_cluster
         .axi_req_o          ( wide_axi_premux_req[g][ch] ),
         .axi_rsp_i          ( wide_axi_premux_rsp[g][ch] )
       );
+      end
     end
   end
 
@@ -754,30 +752,6 @@ module cachepool_cluster
     .reg_req_o          (reg_req                  ),
     .reg_rsp_i          (reg_rsp                  )
   );
-
-
-  // Event counter increments for the TCDM.
-  typedef struct packed {
-    /// Number requests going in
-    logic [$clog2(5):0] inc_accessed;
-    /// Number of requests stalled due to congestion
-    logic [$clog2(5):0] inc_congested;
-  } tcdm_events_t;
-
-  // Event counter increments for DMA.
-  typedef struct packed {
-    logic aw_stall, ar_stall, r_stall, w_stall,
-    buf_w_stall, buf_r_stall;
-    logic aw_valid, aw_ready, aw_done, aw_bw;
-    logic ar_valid, ar_ready, ar_done, ar_bw;
-    logic r_valid, r_ready, r_done, r_bw;
-    logic w_valid, w_ready, w_done, w_bw;
-    logic b_valid, b_ready, b_done;
-    logic dma_busy;
-    axi_pkg::len_t aw_len, ar_len;
-    axi_pkg::size_t aw_size, ar_size;
-    logic [$clog2(SpatzAxiNarrowDataWidth/8):0] num_bytes_written;
-  } dma_events_t;
 
   cachepool_peripheral #(
     .AddrWidth     (AxiAddrWidth    ),

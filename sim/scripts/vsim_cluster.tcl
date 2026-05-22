@@ -5,7 +5,7 @@
 # Create group for Cluster
 onerror {resume}
 
-set cluster_path $1
+quietly set cluster_path $1
 
 add wave -noupdate -group Cluster -group CSR ${cluster_path}/i_cachepool_cluster_peripheral/*
 

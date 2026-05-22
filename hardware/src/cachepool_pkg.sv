@@ -285,8 +285,6 @@ package cachepool_pkg;
   // Wide AXI ports: X to DRAM (X=4 for now)
   localparam int unsigned ClusterWideOutAxiPorts   = NumL2Channel;
 
-  // TODO: multi-tile support
-  // One more from the Snitch core
 
   //////////////////
   //   L2 / DRAM  //
@@ -475,6 +473,15 @@ package cachepool_pkg;
     remote_group_rsp_chan_t payload;
     noc_group_hdr_t         hdr;
   } noc_group_rsp_t;
+
+  // Group ICache (L2 read-only cache control)
+  localparam int unsigned ROCacheNumAddrRules = 4;
+  typedef struct packed {
+    logic enable;
+    logic flush_valid;
+    logic [ROCacheNumAddrRules-1:0][AddrWidth-1:0] start_addr;
+    logic [ROCacheNumAddrRules-1:0][AddrWidth-1:0] end_addr;
+  } ro_cache_ctrl_t;
 
 
   /////////////////////

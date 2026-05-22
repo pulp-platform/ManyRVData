@@ -38,10 +38,6 @@ module cachepool_group
     parameter int unsigned                              ClusterPeriphSize         = 64,
     /// Number of TCDM Banks.
     parameter int unsigned                              NrBanks                   = 2 * NrCores,
-    /// Size of DMA AXI buffer.
-    parameter int unsigned                              DMAAxiReqFifoDepth        = 3,
-    /// Size of DMA request fifo.
-    parameter int unsigned                              DMAReqFifoDepth           = 3,
     /// Width of a single icache line.
     parameter     unsigned                              ICacheLineWidth           = 0,
     /// Number of icache lines per set.
@@ -55,8 +51,6 @@ module cachepool_group
     /// Spatz FPU/IPU Configuration
     parameter int unsigned                              NumSpatzFPUs              = 4,
     parameter int unsigned                              NumSpatzIPUs              = 1,
-    /// Per-core enabling of the custom `Xdma` ISA extensions.
-    parameter bit                         [NrCores-1:0] Xdma                      = '{default: '0},
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int unsigned                              NumIntOutstandingLoads    = 0,
@@ -689,12 +683,9 @@ module cachepool_group
         .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
         .axi_out_req_t            ( axi_mst_cache_req_t      ),
         .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-        .Xdma                     ( Xdma                     ),
         .TileIDWidth              ( TileIDWidth              ),
         .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
-        .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-        .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
@@ -778,12 +769,9 @@ module cachepool_group
         .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
         .axi_out_req_t            ( axi_mst_cache_req_t      ),
         .axi_out_resp_t           ( axi_mst_cache_resp_t     ),
-        .Xdma                     ( Xdma                     ),
         .TileIDWidth              ( TileIDWidth              ),
         .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
-        .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-        .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),

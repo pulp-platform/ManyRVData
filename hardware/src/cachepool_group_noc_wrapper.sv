@@ -28,12 +28,9 @@ module cachepool_group_noc_wrapper
     parameter int                     unsigned               TCDMDepth                          = 1024,
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     parameter int                     unsigned               NrBanks                            = 2 * NrCores,
-    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
-    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
     parameter int                     unsigned               ICacheLineWidth                    = 0,
     parameter int                     unsigned               ICacheLineCount                    = 0,
     parameter int                     unsigned               ICacheSets                         = 0,
-    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     parameter fpu_implementation_t                           FPUImplementation                  = fpu_implementation_t'(0),
     parameter int                     unsigned               NumSpatzFPUs                       = 1,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
@@ -154,15 +151,16 @@ module cachepool_group_noc_wrapper
   for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_mesh_trans_t
     for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_mesh_trans_n
       for (genvar d = 0; d < 4; d++) begin : gen_mesh_trans_d
-        assign noc_req_o[d][t*NumNoCPortsPerTile+n]       = req_mesh_out[t][n][d];
-        assign noc_req_valid_o[d][t*NumNoCPortsPerTile+n] = req_mesh_out_valid[t][n][d];
+        // Mute the channel when not valid for debugging
+        assign noc_req_o[d][t*NumNoCPortsPerTile+n]        = req_mesh_out_valid[t][n][d] ? req_mesh_out[t][n][d] : '0;
+        assign noc_req_valid_o[d][t*NumNoCPortsPerTile+n]  = req_mesh_out_valid[t][n][d];
         assign req_mesh_out_ready[t][n][d]                 = noc_req_ready_i[d][t*NumNoCPortsPerTile+n];
         assign req_mesh_in[t][n][d]                        = noc_req_i[d][t*NumNoCPortsPerTile+n];
         assign req_mesh_in_valid[t][n][d]                  = noc_req_valid_i[d][t*NumNoCPortsPerTile+n];
         assign noc_req_ready_o[d][t*NumNoCPortsPerTile+n]  = req_mesh_in_ready[t][n][d];
 
-        assign noc_rsp_o[d][t*NumNoCPortsPerTile+n]       = rsp_mesh_out[t][n][d];
-        assign noc_rsp_valid_o[d][t*NumNoCPortsPerTile+n] = rsp_mesh_out_valid[t][n][d];
+        assign noc_rsp_o[d][t*NumNoCPortsPerTile+n]        = rsp_mesh_out_valid[t][n][d] ? rsp_mesh_out[t][n][d] : '0;
+        assign noc_rsp_valid_o[d][t*NumNoCPortsPerTile+n]  = rsp_mesh_out_valid[t][n][d];
         assign rsp_mesh_out_ready[t][n][d]                 = noc_rsp_ready_i[d][t*NumNoCPortsPerTile+n];
         assign rsp_mesh_in[t][n][d]                        = noc_rsp_i[d][t*NumNoCPortsPerTile+n];
         assign rsp_mesh_in_valid[t][n][d]                  = noc_rsp_valid_i[d][t*NumNoCPortsPerTile+n];
@@ -244,6 +242,17 @@ module cachepool_group_noc_wrapper
         assign mst_xbar_mst_sel[n]   = eject_rsp[noc_port].hdr.src_port_id;
       end
 
+      // Static port-to-NoC-channel mapping: each flat port p has xbar index
+      // j = p % NrTCDMPortsPerCore, and is steered to NoC channel j % NumNoCPortsPerTile.
+      // Spatz ports (j=0..NrTCDMPortsPerCore-2) divide evenly across channels;
+      // Snitch (j=NrTCDMPortsPerCore-1) maps by the same modulo.
+      localparam int unsigned NocMstSelWidth = (NumNoCPortsPerTile > 1)
+                                               ? $clog2(NumNoCPortsPerTile) : 1;
+      logic [NumRemoteGroupPortTile-1:0][NocMstSelWidth-1:0] noc_mst_sel;
+      for (genvar p = 0; p < NumRemoteGroupPortTile; p++) begin : gen_noc_mst_sel
+        assign noc_mst_sel[p] = NocMstSelWidth'((p % NrTCDMPortsPerCore) % NumNoCPortsPerTile);
+      end
+
       reqrsp_xbar #(
         .NumInp          ( NumRemoteGroupPortTile   ),
         .NumOut          ( NumNoCPortsPerTile       ),
@@ -259,7 +268,7 @@ module cachepool_group_noc_wrapper
         .slv_rsp_o       ( mst_slv_rsp                                ),
         .slv_rsp_valid_o ( mst_slv_rsp_valid                          ),
         .slv_rsp_ready_i ( mst_slv_rsp_ready                          ),
-        .slv_sel_i       ( '0                                         ),
+        .slv_sel_i       ( noc_mst_sel                                ),
         .slv_selected_o  ( mst_xbar_slv_selected                      ),
         .mst_req_o       ( mst_xbar_req[t*NumNoCPortsPerTile +:
                                         NumNoCPortsPerTile]           ),
@@ -544,9 +553,6 @@ module cachepool_group_noc_wrapper
     .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
     .axi_out_req_t            ( axi_out_req_t            ),
     .axi_out_resp_t           ( axi_out_resp_t           ),
-    .Xdma                     ( Xdma                     ),
-    .DMAAxiReqFifoDepth       ( DMAAxiReqFifoDepth       ),
-    .DMAReqFifoDepth          ( DMAReqFifoDepth          ),
     .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
     .RegisterCoreReq          ( RegisterCoreReq          ),
     .RegisterCoreRsp          ( RegisterCoreRsp          ),

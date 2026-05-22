@@ -6,9 +6,11 @@ onerror {resume}
 quietly WaveActivateNextPane {} 0
 
 # --- Configuration Variables ---
-set cluster_path    /tb_cachepool/i_cluster_wrapper/i_cluster
-set NUM_GROUPS      4  ;# Change this variable to match your total number of groups
-set NUM_CORES       4  ;# Assuming 4 cores per tile based on original script
+quietly set cluster_path    /tb_cachepool/i_cluster_wrapper/i_cluster
+quietly set NUM_GROUPS      4  ;# Total number of groups
+quietly set NUM_GROUPS_X    2  ;# X dimension of group mesh (NUM_GROUPS_Y = NUM_GROUPS / NUM_GROUPS_X)
+quietly set NUM_TILES       4  ;# Tiles per group
+quietly set NUM_CORES       4  ;# Cores per tile
 
 # Add the cluster probe
 add wave /tb_cachepool/cluster_probe
@@ -16,43 +18,34 @@ add wave /tb_cachepool/cluster_probe
 # Cluster
 do sim/scripts/vsim_cluster.tcl ${cluster_path}
 
-# Iterate through all groups
+# Iterate through all groups using 2D coordinates
 for {set g 0} {$g < $NUM_GROUPS} {incr g} {
-    set group_wp_path   ${cluster_path}/gen_group[$g]/i_group
-    set group_path      ${group_wp_path}/i_group
+    quietly set gx [expr {$g % $NUM_GROUPS_X}]
+    quietly set gy [expr {$g / $NUM_GROUPS_X}]
+    quietly set group_wp_path   ${cluster_path}/gen_group_y[${gy}]/gen_group_x[${gx}]/i_group
+    quietly set group_path      ${group_wp_path}/i_group
+    quietly set gwp_name        "GroupWP_x${gx}_y${gy}"
 
-    # 1. Plot all GroupWP levels of all groups
-    add wave -noupdate -group "GroupWP_$g" ${group_wp_path}/* 
+    # 1. Plot GroupWP signals for this group (always, all groups)
+    add wave -noupdate -group "${gwp_name}" ${group_wp_path}/*
 
-    do sim/scripts/vsim_group.tcl ${group_path} 5
+    # 2. Plot Group-level signals nested inside GroupWP (always, all groups)
+    do sim/scripts/vsim_group.tcl ${group_path} 5 "${gwp_name}"
 
-    # Conditional plotting based on the group
-    if {$g <= 1} {
-        # 2. Call to plot tile 0 and tile 3 for Group 0 only
-        foreach tile {0 1 2 3} {
-            set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
-            do sim/scripts/vsim_tile.tcl $tile $g ${tile_path}
-            
-            # 3. Plot all cores in the plotted tile
+    # 3. Plot all tiles and cores for the diagonal groups: (0,0) always,
+    #    and (1,1) if the mesh has at least 2 columns and 2 rows
+    if {($gx == 0 && $gy == 0) || ($gx == 1 && $gy == 1 && $NUM_GROUPS_X >= 2)} {
+        for {set tile 0} {$tile < $NUM_TILES} {incr tile} {
+            quietly set tile_path ${group_path}/gen_tiles[${tile}]/gen_tile
+            do sim/scripts/vsim_tile.tcl $tile $g ${tile_path} "${gwp_name}"
+
+            # 4. Plot all cores grouped under their tile
             for {set core 0} {$core < $NUM_CORES} {incr core} {
-                set core_path ${tile_path}/i_tile/gen_core[$core]
-                # Pass an empty string to indicate NO parent group
-                do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} ""
+                quietly set core_path ${tile_path}/i_tile/gen_core[${core}]
+                do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} "${gwp_name}" "tile[${tile}]"
             }
         }
-    } else {
-        # 4. Plot core 0 in tile 0 of other groups
-        set tile 0
-        set core 0
-        set tile_path ${group_path}/gen_tiles[$tile]/gen_tile
-        set core_path ${tile_path}/i_tile/gen_core[$core]
-        
-        do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} "GroupWP_$g"
     }
-    # set group_wp_path   ${cluster_path}/gen_group[1]/i_group
-    # set group_path      ${group_wp_path}/i_group
-    # set tile_path ${group_path}/gen_tiles[2]/gen_tile
-    # do sim/scripts/vsim_tile.tcl 2 ${tile_path}
 }
 
 # Add DRAM waves once at the end

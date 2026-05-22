@@ -11,6 +11,9 @@
 # Number of groups
 num_groups ?= 16
 
+# 4×4 mesh
+num_groups_x ?= 4
+
 # Number of tiles
 num_tiles_per_group ?= 4
 
@@ -27,6 +30,8 @@ num_remote_ports_per_tile ?= 1
 
 num_rg_ports_per_core ?= 1
 
+num_noc_ports_per_tile ?= 2
+
 
 ######################
 ##  CachePool Tile  ##
@@ -39,9 +44,6 @@ refill_data_width ?= 128
 
 # L1 data cacheline width (in Bit)
 l1d_cacheline_width ?= 512
-
-# L1 data cache size (in KiB)
-l1d_size ?= 256
 
 # L1 data cache banking factor (how many banks per core?)
 l1d_bank_factor ?= 1

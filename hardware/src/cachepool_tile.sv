@@ -40,10 +40,6 @@ module cachepool_tile
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
     parameter int                     unsigned               NrBanks                            = 2 * NrCores,
-    /// Size of DMA AXI buffer.
-    parameter int                     unsigned               DMAAxiReqFifoDepth                 = 3,
-    /// Size of DMA request fifo.
-    parameter int                     unsigned               DMAReqFifoDepth                    = 3,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -58,8 +54,6 @@ module cachepool_tile
     /// Spatz FPU/IPU Configuration
     parameter int                     unsigned               NumSpatzFPUs                       = 4,
     parameter int                     unsigned               NumSpatzIPUs                       = 1,
-    /// Per-core enabling of the custom `Xdma` ISA extensions.
-    parameter bit                              [NrCores-1:0] Xdma                               = '{default: '0},
     /// Tile ID Width
     parameter int                     unsigned               TileIDWidth                        = 0,
     /// Number of dedicated inter-group remote ports per xbar plane.
@@ -1385,15 +1379,10 @@ module cachepool_tile
       .RVF                     (RVF                        ),
       .RVD                     (RVD                        ),
       .RVV                     (RVV                        ),
-      .Xdma                    (Xdma[i]                    ),
       .AddrWidth               (AxiAddrWidth               ),
       .DataWidth               (NarrowDataWidth            ),
       .UserWidth               (AxiUserWidth               ),
-      .DMADataWidth            (AxiDataWidth               ),
-      .DMAIdWidth              (WideIdWidthIn              ),
       .SnitchPMACfg            (SnitchPMACfg               ),
-      .DMAAxiReqFifoDepth      (DMAAxiReqFifoDepth         ),
-      .DMAReqFifoDepth         (DMAReqFifoDepth            ),
       .dreq_t                  (reqrsp_req_t               ),
       .drsp_t                  (reqrsp_rsp_t               ),
       .dreq_chan_t             (reqrsp_req_chan_t          ),
@@ -1701,12 +1690,7 @@ module cachepool_tile
   // -------------
   // Sanity Checks
   // -------------
-  // Sanity check the parameters. Not every configuration makes sense.
-  `ASSERT_INIT(CheckSuperBankSanity, NrBanks >= BanksPerSuperBank);
-  `ASSERT_INIT(CheckSuperBankFactor, (NrBanks % BanksPerSuperBank) == 0);
   // Check that the cluster base address aligns to the TCDMSize.
   `ASSERT(ClusterBaseAddrAlign, ((TCDMSize - 1) & cluster_base_addr_i) == 0)
-  // Make sure we only have one DMA in the system.
-  `ASSERT_INIT(NumberDMA, $onehot0(Xdma))
 
 endmodule

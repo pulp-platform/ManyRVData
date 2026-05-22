@@ -98,9 +98,6 @@ module cachepool_cluster_wrapper
     // Cluster internally uses the fat output type; the wrapper remaps it.
     .axi_out_req_t            (spatz_axi_out_req_t      ),
     .axi_out_resp_t           (spatz_axi_out_resp_t     ),
-    .Xdma                     (4'h0                     ),
-    .DMAAxiReqFifoDepth       (3                        ),
-    .DMAReqFifoDepth          (3                        ),
     .RegisterOffloadRsp       (1                        ),
     .RegisterCoreReq          (1                        ),
     .RegisterCoreRsp          (1                        ),
