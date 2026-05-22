@@ -40,7 +40,7 @@ build:
     - test -x "$CC"
     - test -x "$CXX"
     - make quick-tool
-    - pip install --quiet hjson jsonref mako termcolor
+    - python3 -m pip install --quiet hjson jsonref mako termcolor
     - make init
     - make dram-build
     - make clean generate vsim config=$CI_CONFIG
