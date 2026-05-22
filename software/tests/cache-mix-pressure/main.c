@@ -60,7 +60,13 @@ int main() {
   if (scalar_active) {
     uint8_t *base = &pressure_buf[SCALAR_CORE * REGION_BYTES];
     for (uint32_t it = 0; it < ITERS; it++) {
-      const uint32_t win = (it * 64u + cid * 7u) % (REGION_BYTES - 64u);
+      // Keep `win` 4-byte aligned: Snitch raises a misaligned
+      // load/store exception for unaligned uint32_t accesses and
+      // there's no exception handler installed in this runtime, so
+      // an unaligned `win` would put core 1+ in a trap loop.  The
+      // multiplier 28 = 7*4 preserves the original "varied per-core
+      // offset" intent while staying 4-aligned.
+      const uint32_t win = (it * 64u + cid * 28u) % (REGION_BYTES - 64u);
       volatile uint32_t *sw = (volatile uint32_t *)(base + win + 32u);
       const uint32_t w = scalar_mix(sig ^ it);
       *sw = w;
@@ -71,7 +77,8 @@ int main() {
   } else if (vector_active) {
     uint8_t *base = &pressure_buf[VECTOR_CORE * REGION_BYTES];
     for (uint32_t it = 0; it < ITERS; it++) {
-      const uint32_t win = (it * 64u + cid * 7u) % (REGION_BYTES - 64u);
+      // Same alignment requirement as the scalar branch above.
+      const uint32_t win = (it * 64u + cid * 28u) % (REGION_BYTES - 64u);
       vec_store_u32((uint32_t *)(base + win));
       for (uint32_t j = 0; j < VEC_LEN; j++) {
         volatile uint32_t *wp = (volatile uint32_t *)(base + win + j * 4U);
