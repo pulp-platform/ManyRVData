@@ -545,8 +545,10 @@ module cachepool_tile
 
   // Used to determine the mapping policy between different cache banks.
   // Set through CSR
-  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset;
-  assign dynamic_offset = dynamic_offset_i;
+  logic [$clog2(TCDMAddrWidth)-1:0] dynamic_offset_d, dynamic_offset_q;
+  `FF(dynamic_offset_q, dynamic_offset_d, '0)
+  assign dynamic_offset_d = dynamic_offset_i;
+
   // One entry per flat remote port: flat index = j + r*NrTCDMPortsPerCore
   // where j is the xbar index and r is the remote slot within that xbar.
   logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
@@ -626,19 +628,19 @@ module cachepool_tile
       .tcdm_req_chan_t       (tcdm_req_chan_t   ),
       .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
     ) i_cache_xbar (
-      .clk_i                ( clk_i                                              ),
-      .rst_ni               ( rst_ni                                             ),
-      .tile_id_i            ( tile_id_i                                          ),
-      .dynamic_offset_i     ( dynamic_offset                                     ),
-      .private_start_addr_i ( private_start_addr_i                               ),
-      .num_private_cache_i  ( num_private_cache                                  ),
-      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
-      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
-      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
-      .tile_sel_o           ( xbar_remote_req_dst                                ),
-      .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}    ),
-      .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}    ),
-      .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]}    )
+      .clk_i                ( clk_i                                         ),
+      .rst_ni               ( rst_ni                                        ),
+      .tile_id_i            ( tile_id_i                                     ),
+      .dynamic_offset_i     ( dynamic_offset_q                              ),
+      .private_start_addr_i ( private_start_addr_i                          ),
+      .num_private_cache_i  ( num_private_cache                             ),
+      .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]} ),
+      .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]} ),
+      .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]} ),
+      .tile_sel_o           ( xbar_remote_req_dst                           ),
+      .mem_req_o            ({xbar_remote_req_o,      cache_xbar_req   [j]} ),
+      .mem_rsp_ready_o      ({xbar_remote_out_pready, cache_xbar_pready[j]} ),
+      .mem_rsp_i            ({xbar_remote_rsp_i,      cache_xbar_rsp   [j]} )
     );
   end
 
@@ -713,21 +715,56 @@ module cachepool_tile
         assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
 
       end else begin : gen_no_amo
-        // Bypass AMO and registers
-        assign cache_req_valid[cb][j] = cache_xbar_req   [j][cb].q_valid;
-        assign cache_rsp_ready[cb][j] = cache_xbar_pready[j][cb];
-        assign cache_req_addr [cb][j] = cache_xbar_req   [j][cb].q.addr;
-        assign cache_req_meta [cb][j] = cache_xbar_req   [j][cb].q.user;
-        assign cache_req_write[cb][j] = cache_xbar_req   [j][cb].q.write;
-        assign cache_req_data [cb][j] = cache_xbar_req   [j][cb].q.data;
-        assign cache_req_strb [cb][j] = cache_xbar_req   [j][cb].q.strb;
+        // Spill register decoupling between xbar side and cache side.
+        tcdm_req_t cache_req_reg;
+        tcdm_rsp_t cache_rsp_reg;
 
-        assign cache_xbar_rsp[j][cb].p_valid = cache_rsp_valid[cb][j];
-        assign cache_xbar_rsp[j][cb].q_ready = cache_req_ready[cb][j];
-        assign cache_xbar_rsp[j][cb].p.data  = cache_rsp_data [cb][j];
-        assign cache_xbar_rsp[j][cb].p.user  = cache_rsp_meta [cb][j];
+        // Extra wire for half-handshake: q_ready feedback from the response-side
+        // spill register's downstream consumer back to the request-side spill
+        // register's ready_i input.
+        logic cache_req_ready_w;
 
-        assign cache_xbar_rsp[j][cb].p.write = cache_rsp_write[cb][j];
+        spill_register #(
+          .T      ( tcdm_req_chan_t ),
+          .Bypass ( 1'b0            )
+        ) i_spill_reg_cache_req (
+          .clk_i   ( clk_i                            ),
+          .rst_ni  ( rst_ni                           ),
+          .valid_i ( cache_xbar_req   [j][cb].q_valid ),
+          .ready_o ( cache_xbar_rsp   [j][cb].q_ready ),
+          .data_i  ( cache_xbar_req   [j][cb].q       ),
+          .valid_o ( cache_req_reg.q_valid            ),
+          .ready_i ( cache_req_ready_w                ),
+          .data_o  ( cache_req_reg.q                  )
+        );
+
+        spill_register #(
+          .T      ( tcdm_rsp_chan_t ),
+          .Bypass ( 1'b1            )
+        ) i_spill_reg_cache_rsp (
+          .clk_i   ( clk_i                            ),
+          .rst_ni  ( rst_ni                           ),
+          .valid_i ( cache_rsp_reg.p_valid            ),
+          .ready_o ( cache_rsp_ready  [cb][j]         ),
+          .data_i  ( cache_rsp_reg.p                  ),
+          .valid_o ( cache_xbar_rsp   [j][cb].p_valid ),
+          .ready_i ( cache_xbar_pready[j][cb]         ),
+          .data_o  ( cache_xbar_rsp   [j][cb].p       )
+        );
+
+        assign cache_req_ready_w      = cache_req_ready[cb][j];
+
+        assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
+        assign cache_req_addr [cb][j] = cache_req_reg.q.addr;
+        assign cache_req_meta [cb][j] = cache_req_reg.q.user;
+        assign cache_req_write[cb][j] = cache_req_reg.q.write;
+        assign cache_req_data [cb][j] = cache_req_reg.q.data;
+        assign cache_req_strb [cb][j] = cache_req_reg.q.strb;
+
+        assign cache_rsp_reg.p_valid  = cache_rsp_valid[cb][j];
+        assign cache_rsp_reg.p.data   = cache_rsp_data [cb][j];
+        assign cache_rsp_reg.p.user   = cache_rsp_meta [cb][j];
+        assign cache_rsp_reg.p.write  = cache_rsp_write[cb][j];
 
       end
     end
@@ -757,12 +794,12 @@ module cachepool_tile
     $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
     $display("  CoalFactor     : %0d", L1CoalFactor);
     $display("  RefillDataWidth: %0d", RefillDataWidth);
-    $display("  DynamicOffset  : %0d", dynamic_offset);
+    $display("  DynamicOffset  : %0d", dynamic_offset_q);
   end
 
-  // CL-offset mask: bits below dynamic_offset, verbatim in both directions.
+  // CL-offset mask: bits below dynamic_offset_q, verbatim in both directions.
   logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
-  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset) - 1;
+  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset_q) - 1;
 
   cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
   burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
@@ -1031,14 +1068,14 @@ module cachepool_tile
 
         rot_field = addr_rot >> (SpatzAxiAddrWidth - refill_bits_to_rotate);
 
-        upper     = (addr_rot >> dynamic_offset)
+        upper     = (addr_rot >> dynamic_offset_q)
                   & ((SpatzAxiAddrWidth'(1) << (SpatzAxiAddrWidth
-                                                - dynamic_offset
+                                                - dynamic_offset_q
                                                 - refill_bits_to_rotate)) - 1);
 
         cache_refill_req_o[cb].q.addr = lower
-                                      | (rot_field << dynamic_offset)
-                                      | (upper     << (dynamic_offset
+                                      | (rot_field << dynamic_offset_q)
+                                      | (upper     << (dynamic_offset_q
                                                        + refill_bits_to_rotate));
       end
     end

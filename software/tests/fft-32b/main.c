@@ -162,7 +162,8 @@ int main() {
           }
         }
 
-        printf ("r:%d,i:%d\n", rerror, ierror);
+        if ((rerror + ierror) > 0)
+          printf ("Error: r:%d,i:%d\n", rerror, ierror);
       }
     }
 

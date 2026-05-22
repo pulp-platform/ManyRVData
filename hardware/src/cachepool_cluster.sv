@@ -860,6 +860,9 @@ module cachepool_cluster
   axi_narrow_req_t  [NumTiles-1:0] axi_core_csr_req, axi_barrier_req;
   axi_narrow_resp_t [NumTiles-1:0] axi_core_csr_rsp, axi_barrier_rsp;
 
+  // Spill register signals to cut the AXI feedback path
+  axi_in_req_t     axi_in_req_reg;
+  axi_in_resp_t    axi_in_resp_reg;
 
   for (genvar t = 0; t < NumTiles; t++) begin
     assign axi_barrier_req[t] = axi_out_req [t][ClusterPeriph];
@@ -876,6 +879,24 @@ module cachepool_cluster
   logic [NumTiles-1:0] use_barrier;
   // TODO: Connect to CSR
   assign use_barrier = {NumTiles{1'b1}};
+
+  axi_cut #(
+    .Bypass     (0                      ),
+    .aw_chan_t  (spatz_axi_in_aw_chan_t ),
+    .w_chan_t   (spatz_axi_in_w_chan_t  ),
+    .b_chan_t   (spatz_axi_in_b_chan_t  ),
+    .ar_chan_t  (spatz_axi_in_ar_chan_t ),
+    .r_chan_t   (spatz_axi_in_r_chan_t  ),
+    .axi_req_t  (spatz_axi_in_req_t     ),
+    .axi_resp_t (spatz_axi_in_resp_t    )
+  ) i_cut_ext_narrow_in (
+    .clk_i      (clk_i                  ),
+    .rst_ni     (rst_ni                 ),
+    .slv_req_i  (axi_in_req_i           ),
+    .slv_resp_o (axi_in_resp_o          ),
+    .mst_req_o  (axi_in_req_reg         ),
+    .mst_resp_i (axi_in_resp_reg        )
+  );
 
   cachepool_cluster_barrier #(
     .AddrWidth    (AxiAddrWidth       ),
@@ -894,7 +915,6 @@ module cachepool_cluster
     .barrier_i                      ( use_barrier       ),
     .cluster_periph_start_address_i ( tcdm_end_address  )
   );
-
 
   axi_mux #(
     .SlvAxiIDWidth ( CsrAxiMstIdWidth       ),
@@ -923,8 +943,8 @@ module cachepool_cluster
     .clk_i       ( clk_i        ),   // Clock
     .rst_ni      ( rst_ni       ),  // Asynchronous reset active low
     .test_i      ('0            ),  // Test Mode enable
-    .slv_reqs_i  ( {axi_in_req_i,  axi_core_csr_req}  ),
-    .slv_resps_o ( {axi_in_resp_o, axi_core_csr_rsp}  ),
+    .slv_reqs_i  ( {axi_in_req_reg,  axi_core_csr_req}  ),
+    .slv_resps_o ( {axi_in_resp_reg, axi_core_csr_rsp}  ),
     .mst_req_o   ( axi_csr_req  ),
     .mst_resp_i  ( axi_csr_rsp  )
   );
