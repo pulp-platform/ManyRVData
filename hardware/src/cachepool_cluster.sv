@@ -408,7 +408,8 @@ module cachepool_cluster
       .RegisterExt              ( RegisterExt              ),
       .XbarLatency              ( XbarLatency              ),
       .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              )
+      .MaxSlvTrans              ( MaxSlvTrans              ),
+      .UseHashWaySelect         ( UseHashWaySelect         )
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
