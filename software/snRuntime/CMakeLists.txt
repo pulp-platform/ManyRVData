@@ -64,7 +64,6 @@ set(sources
     src/team.c
     src/alloc.c
     src/interrupt.c
-    src/perf_cnt.c
     src/l1cache.c
 )
 
@@ -74,24 +73,6 @@ set(standalone_snitch_sources
     src/platforms/standalone/putchar.c
 )
 
-# Sources only compatible with the LLVM toolchain
-if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
-    set(sources
-        ${sources}
-        # OpenMP support
-        src/omp/omp.c
-        src/omp/kmp.c
-        src/omp/eu.c
-        src/dm.c
-    )
-    # Check if static OpenMP runtime is requested
-    if(OMPSTATIC_NUMTHREADS GREATER 0)
-        message(STATUS "Using ${OMPSTATIC_NUMTHREADS} threads for optimized OpenMP runtime")
-        add_compile_definitions(OMPSTATIC_NUMTHREADS=${OMPSTATIC_NUMTHREADS})
-    else()
-        message(STATUS "Generic OpenMP runtime")
-    endif()
-endif()
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # Build all runtimes
@@ -125,13 +106,11 @@ add_snitch_test(tls tests/tls.c)
 add_snitch_test(simple tests/simple.c)
 add_snitch_test(varargs_1 tests/varargs_1.c)
 add_snitch_test(varargs_2 tests/varargs_2.c)
-add_snitch_test(barrier tests/barrier.c)
-add_snitch_test(fence_i tests/fence_i.c)
-add_snitch_test(interrupt-local tests/interrupt-local.c)
 add_snitch_test(printf_simple tests/printf_simple.c)
 
 # RTL only tests
 if(SNITCH_RUNTIME STREQUAL "snRuntime-cluster")
-    add_snitch_test(dma_simple tests/dma_simple.c)
     add_snitch_test(atomics tests/atomics.c)
+    add_snitch_test(dram_alloc tests/dram_alloc.c)
+    add_snitch_test(fence tests/fence.c)
 endif()

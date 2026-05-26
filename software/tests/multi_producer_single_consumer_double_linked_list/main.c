@@ -35,12 +35,11 @@ int main(void) {
     const unsigned int core_id = snrt_cluster_core_idx();
 
 
-    if (core_id == 0) {
-        // Set xbar policy
-        l1d_flush();
-        uint32_t offset = 31 - __builtin_clz(L1LineWidth);
-        l1d_xbar_config(offset); // cacheline interleaving
+    // Set xbar policy (all cores)
+    uint32_t offset = 31 - __builtin_clz(L1LineWidth);
+    l1d_xbar_config(offset); // cacheline interleaving
 
+    if (core_id == 0) {
         // Initalize the thread saft printf
         debug_print_lock_init();
 
@@ -59,8 +58,6 @@ int main(void) {
         sent_llist_lock = 0;
         mcs_lock_init(&tosend_llist_lock_2);
         mcs_lock_init(&sent_llist_lock_2);
-    } else {
-        delay(100*(64/L1LineWidth)); // Ensure core 0 finishes initialization first
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);

@@ -185,7 +185,7 @@ int main() {
         volatile uint32_t* l1_a =
             snrt_l1alloc(NUM_TCDM_LOCATIONS * sizeof(uint32_t));
         volatile uint32_t* l3_a =
-            snrt_l3alloc(NUM_SPM_LOCATIONS * sizeof(uint32_t));
+            snrt_malloc(NUM_SPM_LOCATIONS * sizeof(uint32_t));
 
         // In TCDM
         uint32_t tcdm_atomics[NUM_TCDM_LOCATIONS];

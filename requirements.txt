@@ -6,3 +6,6 @@ jsonref
 jsonschema
 mako
 termcolor
+# CPU-only torch for data generation scripts (gen_data.py in software/tests/)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch

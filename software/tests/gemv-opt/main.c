@@ -101,11 +101,8 @@ int main() {
   // offset bits in unit of byte (address)
   uint32_t offset = 31 - __builtin_clz(m_core * elem_width/8);
 
-  // Allocate the matrices
-  if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(offset);
-  }
+  // Set xbar policy
+  l1d_xbar_config(offset);
 
   /*** DRAM Parameters for Optimization ***/
   const uint32_t l2_interleave = 16;

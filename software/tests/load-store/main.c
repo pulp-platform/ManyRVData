@@ -21,8 +21,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include DATAHEADER
-
 // -----------------------------------------------------------------------------
 // Memory layout
 // -----------------------------------------------------------------------------
@@ -48,6 +46,26 @@
 #define ELEM_BYTES       sizeof(uint32_t)
 #define ELEMS_PER_CL     (CACHELINE_BYTES / ELEM_BYTES)
 #define TEST_CLS         4              // cachelines per core per test
+
+// -----------------------------------------------------------------------------
+// Static test arrays
+// -----------------------------------------------------------------------------
+// Total elements = max_cores * TEST_CLS * ELEMS_PER_CL.
+// Default config: 16 cores * 4 CL * 16 elem/CL = 1024.
+// A/B/C are placed in the private region; D is placed in the shared region.
+#define LOAD_STORE_TOTAL_ELEMS 262144
+
+// Private region: default boundary puts these addresses in the private partition
+static uint32_t gemm_A_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 1};
+static uint32_t gemm_B_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 2};
+static uint32_t gemm_C_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 3};
+
+// Shared region: default boundary puts this address in the shared partition
+static uint32_t gemm_D_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".data")))    = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 4};
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -102,39 +120,28 @@ static int check_const(uint32_t *ptr, uint32_t count, uint32_t value,
 }
 
 // Cache configuration: offset + invalidate + set partition.
-static void cache_cfg(uint32_t cid, uint32_t xbar_offset, uint32_t part) {
-  if (cid == 0) {
-    l1d_xbar_config(xbar_offset);
-    l1d_part(part);
-  }
-  sync_all();
+// Must be called by all cores.
+static void cache_cfg(uint32_t xbar_offset, uint32_t part) {
+  l1d_xbar_config(xbar_offset);
+  l1d_part(part);
 }
 
 // Flush all banks and wait for completion.
-static void cache_flush_all(uint32_t cid) {
-  if (cid == 0) {
-    l1d_flush();
-    l1d_wait();
-  }
-  sync_all();
+// Must be called by all cores.
+static void cache_flush_all() {
+  l1d_cluster_flush();
 }
 
 // Flush private banks of selected tiles (one-hot mask) and wait.
-static void cache_flush_private(uint32_t cid, uint32_t tile_mask) {
-  if (cid == 0) {
-    l1d_private_flush(tile_mask);
-    l1d_wait();
-  }
-  sync_all();
+// Must be called by all cores.
+static void cache_flush_private(uint64_t tile_mask) {
+  l1d_cluster_private_flush(tile_mask);
 }
 
 // Flush shared banks of all tiles and wait.
-static void cache_flush_shared(uint32_t cid) {
-  if (cid == 0) {
-    l1d_shared_flush();
-    l1d_wait();
-  }
-  sync_all();
+// Must be called by all cores.
+static void cache_flush_shared() {
+  l1d_cluster_shared_flush();
 }
 
 // Set partition boundary address.
@@ -142,7 +149,6 @@ static void cache_set_boundary(uint32_t cid, uint32_t addr) {
   if (cid == 0) {
     l1d_addr(addr);
   }
-  sync_all();
 }
 
 // Print PASS/FAIL for a named test.
@@ -160,14 +166,14 @@ int main() {
   const uint32_t num_tiles = snrt_cluster_tile_num();
   const uint32_t cid       = snrt_cluster_core_idx();
 
-  const uint32_t dim_core  = gemm_l.M / num_cores;
+  const uint32_t dim_core  = LOAD_STORE_TOTAL_ELEMS / num_cores;
   const uint32_t test_len  = cls_to_elems(TEST_CLS);  // per core, short
 
   // xbar offset: size of per-core region in address bits
   const uint32_t local_offset = 31 - __builtin_clz(dim_core * sizeof(uint32_t));
 
-  // One-hot mask covering all tiles
-  const uint32_t all_tiles = (1u << num_tiles) - 1u;
+  // One-hot mask covering all tiles (uint64_t supports up to 64 tiles)
+  const uint64_t all_tiles = (UINT64_C(1) << num_tiles) - 1;
 
   // Per-core pointers into each array
   uint32_t *a_ptr = gemm_A_dram + dim_core * cid;  // private, value 1
@@ -210,13 +216,13 @@ int main() {
     // Source: B (value 2) for even modes, C (value 3) for odd modes.
     uint32_t *src = (exp == 2) ? b_ptr : c_ptr;
 
-    cache_cfg(cid, local_offset, part);
+    cache_cfg(local_offset, part);
 
     // All cores copy in parallel into their slice of gemm_A.
     stream_copy_vec(a_ptr, src, test_len);
     sync_all();
 
-    cache_flush_all(cid);
+    cache_flush_all();
 
     if (cid == 0) {
       uint32_t fail_idx, fail_val;
@@ -249,7 +255,7 @@ int main() {
 
   if (cid == 0) printf("\n=== Part 2: Private flush isolation ===\n");
 
-  cache_cfg(cid, local_offset, 2);
+  cache_cfg(local_offset, 2);
   cache_set_boundary(cid, BOUNDARY_DEFAULT);
 
   // Step 2: populate private (gemm_A, value 2 from previous test) and shared
@@ -260,7 +266,7 @@ int main() {
   sync_all();
 
   // Step 3: flush private only.
-  cache_flush_private(cid, all_tiles);
+  cache_flush_private(all_tiles);
 
   if (cid == 0) printf("Private flushed. Raising boundary...\n");
 
@@ -270,15 +276,15 @@ int main() {
   // Step 5: write value 3 into gemm_A via shared banks, flush to DRAM.
   stream_copy_vec(a_ptr, c_ptr, test_len);
   sync_all();
-  cache_flush_all(cid);
+  cache_flush_all();
 
   // Step 6: restore boundary, reload gemm_A, flush, check.
   cache_set_boundary(cid, BOUNDARY_DEFAULT);
-  cache_cfg(cid, local_offset, 2);
+  cache_cfg(local_offset, 2);
 
   stream_load(a_ptr, test_len);
   sync_all();
-  cache_flush_all(cid);
+  cache_flush_all();
 
   if (cid == 0) {
     uint32_t fail_idx, fail_val;
@@ -314,7 +320,7 @@ int main() {
 
   if (cid == 0) printf("\n=== Part 3: Shared flush isolation ===\n");
 
-  cache_cfg(cid, local_offset, 2);
+  cache_cfg(local_offset, 2);
   cache_set_boundary(cid, BOUNDARY_DEFAULT);
 
   // Step 2: populate private (gemm_A) and shared (gemm_D) into cache.
@@ -324,7 +330,7 @@ int main() {
   sync_all();
 
   // Step 3: flush shared only.
-  cache_flush_shared(cid);
+  cache_flush_shared();
 
   if (cid == 0) printf("Shared flushed. Lowering boundary...\n");
 
@@ -334,15 +340,15 @@ int main() {
   // Step 5: write value 2 into gemm_D via private banks, flush to DRAM.
   stream_copy_vec(d_ptr, b_ptr, test_len);
   sync_all();
-  cache_flush_private(cid, all_tiles);
+  cache_flush_private(all_tiles);
 
   // Step 6: restore boundary, reload gemm_D, flush, check.
   cache_set_boundary(cid, BOUNDARY_DEFAULT);
-  cache_cfg(cid, local_offset, 2);
+  cache_cfg(local_offset, 2);
 
   stream_load(d_ptr, test_len);
   sync_all();
-  cache_flush_all(cid);
+  cache_flush_all();
 
   if (cid == 0) {
     uint32_t fail_idx, fail_val;

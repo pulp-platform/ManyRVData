@@ -127,6 +127,7 @@ add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 1024 128 32)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 32 32 32)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 64 64 64)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 128 128 128)
+add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 1024 32 32)
 
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 256 4)
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 1024 4)
@@ -137,6 +138,6 @@ add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 8192)
 add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 32768)
 
 
-add_spatz_test_oneParam(load-store load-store/main.c 16)
+add_spatz_test_zeroParam(load-store load-store/main.c)
 
 add_spatz_test_zeroParam(bandwidth bandwidth/main.c)

@@ -45,13 +45,6 @@ typedef struct snrt_slice {
 
 /// Peripherals to the Snitch SoC
 struct snrt_peripherals {
-    volatile uint32_t *wakeup;
-    uint32_t *perf_counters;
-    /**
-     * @brief Cluster-local CLINT
-     *
-     */
-    volatile uint32_t *cl_clint;
 };
 
 /// Barrier to use with snrt_barrier
@@ -73,24 +66,13 @@ extern struct snrt_peripherals *snrt_peripherals();
 extern uint32_t snrt_global_core_base_hartid();
 extern uint32_t snrt_global_core_idx();
 extern uint32_t snrt_global_core_num();
-extern uint32_t snrt_global_compute_core_idx();
-extern uint32_t snrt_global_compute_core_num();
-extern uint32_t snrt_global_dm_core_idx();
-extern uint32_t snrt_global_dm_core_num();
 extern uint32_t snrt_cluster_core_base_hartid();
 extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
 extern uint32_t snrt_cluster_tile_idx();
 extern uint32_t snrt_cluster_tile_num();
-extern uint32_t snrt_cluster_compute_core_idx();
-extern uint32_t snrt_cluster_compute_core_num();
-extern uint32_t snrt_cluster_dm_core_idx();
-extern uint32_t snrt_cluster_dm_core_num();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
-extern int snrt_is_compute_core();
-extern int snrt_is_dm_core();
-extern void snrt_wakeup(uint32_t mask);
 
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
@@ -157,8 +139,9 @@ static inline uint32_t __attribute__((pure)) snrt_hartid() {
 //================================================================================
 extern void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off);
 extern void *snrt_l1alloc(size_t size);
-extern void *snrt_l3alloc(size_t size);
 extern void snrt_l1alloc_reset();
+extern void *snrt_malloc(size_t size);
+extern void  snrt_free(void *ptr);
 
 //================================================================================
 // Interrupt functions
@@ -220,6 +203,24 @@ extern void snrt_int_clint_set(uint32_t reg_off, uint32_t mask);
 extern void snrt_int_sw_poll(void);
 extern void snrt_int_cluster_clr(uint32_t mask);
 extern void snrt_int_cluster_set(uint32_t mask);
+
+/**
+ * @brief Memory fence: drain Snitch's scalar LSU and Spatz's outstanding
+ *        memory operations before subsequent instructions issue.
+ */
+static inline void snrt_fence() { asm volatile("fence" ::: "memory"); }
+
+/**
+ * @brief Snitch-only fence: drain Snitch's scalar LSU only.
+ *        Uses the fence.i opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_snitch() { asm volatile("fence.i" ::: "memory"); }
+
+/**
+ * @brief Spatz-only fence: drain Spatz's outstanding memory operations only.
+ *        Uses the sfence.vma opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_spatz() { asm volatile("sfence.vma" ::: "memory"); }
 
 /**
  * @brief Put the hart into wait for interrupt state

@@ -78,12 +78,8 @@ int main() {
   // Notice scrambling here is in bytes
   const uint32_t l1_scramble_bits = 31 - __builtin_clz(elem_per_round*32/8);
 
-  if (cid == 0) {
-    // Set xbar policy
-    l1d_xbar_config(l1_scramble_bits);
-  }
-
-  snrt_cluster_hw_barrier();
+  // Set xbar policy
+  l1d_xbar_config(l1_scramble_bits);
 
   // Now for all cores, it will execute #elem_per_round# data each round
   // And then jump #elem_per_round*num_cores# elements in address for next round
@@ -127,6 +123,9 @@ int main() {
       return -3;
 
     result[cid] = acc;
+
+    // Make sure spatz has finished writing
+    snrt_fence_spatz();
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();

@@ -39,7 +39,7 @@ int main() {
   spin_lock (&lock, 20);
 
   // Each core print its core id
-  printf("Tile%d, Core%d:hello\n", tid, cid);
+  printf("T%d,C%d: Hello\n", tid, cid);
 
   // Add cid to the result
   result += cid;

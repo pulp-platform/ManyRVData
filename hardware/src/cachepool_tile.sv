@@ -113,72 +113,72 @@ module cachepool_tile
     localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
   ) (
     /// System clock.
-    input  logic                                    clk_i,
+    input  logic                                          clk_i,
     /// Asynchronous active high reset. This signal is assumed to be _async_.
-    input  logic                                    rst_ni,
+    input  logic                                          rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic                                    debug_req_i,
+    input  logic                                          debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic                                    meip_i,
+    input  logic                                          meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic                                    mtip_i,
+    input  logic                                          mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic                                    msip_i,
+    input  logic                                          msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic              [9:0]                 hart_base_id_i,
+    input  logic              [9:0]                       hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  axi_addr_t                               cluster_base_addr_i,
+    input  axi_addr_t                                     cluster_base_addr_i,
     /// Tile ID, internal ID, the base is always 0, in theory should not change during use
-    input  remote_tile_sel_t                        tile_id_i,
+    input  remote_tile_sel_t                              tile_id_i,
     /// Partitioning address
-    input  axi_addr_t                               private_start_addr_i,
+    input  axi_addr_t                                     private_start_addr_i,
     /// AXI Narrow out-port (UART/Peripheral)
-    output axi_narrow_req_t   [1:0]                 axi_out_req_o,
-    input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
+    output axi_narrow_req_t   [1:0]                       axi_out_req_o,
+    input  axi_narrow_resp_t  [1:0]                       axi_out_resp_i,
     /// Cache Refill ports
-    output cache_trans_req_t  [NumL1CtrlTile-1:0]       cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]       cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CtrlTile-1:0]         cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]         cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
-    output axi_out_req_t      [TileNarrowAxiPorts-1:0]  axi_wide_req_o,
-    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]  axi_wide_rsp_i,
+    output axi_out_req_t      [TileNarrowAxiPorts-1:0]    axi_wide_req_o,
+    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]    axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
-    output tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_o,
-    output remote_tile_sel_t  [NumRemotePortTile-1:0]   remote_req_dst_o,
-    input  tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_i,
-    input  logic              [NumRemotePortTile-1:0]   remote_rsp_ready_i,
+    output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
+    output remote_tile_sel_t  [NumRemotePortTile-1:0]     remote_req_dst_o,
+    input  tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_i,
+    input  logic              [NumRemotePortTile-1:0]     remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
-    input  tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_i,
-    output tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_o,
-    output logic              [NumRemotePortTile-1:0]   remote_rsp_ready_o,
+    input  tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_i,
+    output tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_o,
+    output logic              [NumRemotePortTile-1:0]     remote_rsp_ready_o,
     /// Inter-group remote access ports (to other groups).
     /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
     /// where j is the interco instance and r is the inter-group remote slot.
     /// Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
     /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
-    output remote_group_req_t [TotRGPorts:0] remote_group_req_o,
-    input  remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_i,
+    output remote_group_req_t [TotRGPorts:0]              remote_group_req_o,
+    input  remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_i,
     /// Inter-group remote access ports (from other groups)
-    input  remote_group_req_t [TotRGPorts:0] remote_group_req_i,
-    output remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_o,
+    input  remote_group_req_t [TotRGPorts:0]              remote_group_req_i,
+    output remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_o,
     /// Peripheral signals
-    output icache_l1_events_t [NrCores-1:0]         icache_events_o,
-    input  logic                                    icache_prefetch_enable_i,
-    input  logic              [NrCores-1:0]         cl_interrupt_i,
-    input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
-    input  cache_insn_t                             l1d_insn_i,
-    input  logic              [3:0]                 l1d_private_i,
-    input  logic                                    l1d_insn_valid_i,
-    output logic                                    l1d_insn_ready_o,
-    input  logic                                    l1d_busy_i,
+    output icache_l1_events_t [NrCores-1:0]               icache_events_o,
+    input  logic                                          icache_prefetch_enable_i,
+    input  logic              [NrCores-1:0]               cl_interrupt_i,
+    input  logic              [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_i,
+    input  cache_insn_t                                   l1d_insn_i,
+    input  logic              [$clog2(NumL1CtrlTile):0]   l1d_private_i,
+    input  logic                                          l1d_insn_valid_i,
+    output logic                                          l1d_insn_ready_o,
+    input  logic                                          l1d_busy_i,
 
 
 
@@ -196,8 +196,8 @@ module cachepool_tile
   // Constants
   // ---------
   // TODO: Should be imported from Memory-mapped Reg
-  logic [2:0] num_private_cache;
-  assign num_private_cache = l1d_private_i[2:0];
+  logic   [$clog2(NumL1CtrlTile):0] num_private_cache;
+  assign num_private_cache = l1d_private_i  [$clog2(NumL1CtrlTile):0];
 
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
@@ -420,6 +420,12 @@ module cachepool_tile
 
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
+  // Post-xbar gated copies.
+  // cache_ctrl_req : xbar output with q_valid suppressed during flush.
+  // cache_bank_rsp : raw response from the bank/AMO stage; q_ready is gated before
+  //                  being returned to the interco as cache_xbar_rsp.
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
 
   tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
   tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
@@ -519,16 +525,14 @@ module cachepool_tile
   always_comb begin : cache_flush_protection
     for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
       /***** REQ *****/
-      // Wire to Cache outputs
       unmerge_req[j].q       = tcdm_req[j].q;
-      // invalidate the request when cache is busy
-      unmerge_req[j].q_valid = tcdm_req[j].q_valid && !l1d_busy_i;
+      unmerge_req[j].q_valid = tcdm_req[j].q_valid;
       unmerge_pready[j]      = 1'b1;
 
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
       tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
-      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !l1d_busy_i;
+      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready;
     end
 
   end
@@ -555,19 +559,15 @@ module cachepool_tile
   // where j is the xbar index and r is the remote slot within that xbar.
   logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
 
-  // Flush protection for remote ports.
-  //
-  // During a flush (l1d_busy_i) remote tiles must be fully stalled:
-  //   - q_valid gated : stops new requests being presented to the xbar
-  //   - q_ready gated : stops the xbar accepting a request that is already
-  //                     sitting at the input (spill register would otherwise
-  //                     pop it, and the transaction would be lost because the
-  //                     cache is unavailable)
-  //   - remote_in_pready gated : stops response-ready from propagating back,
-  //                     preventing in-flight completions during the flush window
+  // Intra-group remote port wiring.
+  // q_valid and q_ready for incoming requests are passed through without gating:
+  // the after-xbar flush gate (cache_xbar_flush_gate) provides the authoritative
+  // protection at the cache bank boundary and naturally back-pressures through
+  // the interco to the remote sender.
+  // response-ready (remote_in_pready) is still gated to prevent draining in-flight
+  // completions during the flush window.
 
   tcdm_req_t [NumRemotePortTile-1:0] remote_req_gated;
-  // Intermediate response signals from the xbar before q_ready gating.
   tcdm_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
@@ -575,14 +575,10 @@ module cachepool_tile
       for (int r = 0; r < NumRemotePortCore; r++) begin
         automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
-        // Gate q_valid: prevent new requests entering the xbar.
         remote_req_gated[flat].q       = remote_req_i[flat].q;
-        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid && !l1d_busy_i;
+        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid;
 
-        // Pass the full xbar response through, then gate only q_ready so the
-        // remote tile cannot complete a handshake during a flush.
         remote_rsp_o[flat]         = remote_rsp_xbar[flat];
-        remote_rsp_o[flat].q_ready = remote_rsp_xbar[flat].q_ready && !l1d_busy_i;
 
         // Gate response-ready back to us: prevent draining completions
         // of requests that arrived just before the flush.
@@ -623,7 +619,10 @@ module cachepool_tile
           automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
           // -----------------------------------------------------------
-          // Incoming: REQRSP → TCDM conversion + flush gating → interco
+          // Incoming: REQRSP → TCDM conversion → interco
+          // q_valid and q_ready are passed through without gating; the
+          // after-xbar flush gate (cache_xbar_flush_gate) is the authoritative
+          // protection point and naturally back-pressures through the interco.
           // -----------------------------------------------------------
           rg_interco_in_req[flat] = '{
             q: '{
@@ -641,7 +640,7 @@ module cachepool_tile
               },
               default: '0
             },
-            q_valid: remote_group_req_i[flat].q_valid && !l1d_busy_i,
+            q_valid: remote_group_req_i[flat].q_valid,
             default: '0
           };
 
@@ -661,7 +660,7 @@ module cachepool_tile
               default: '0
             },
             p_valid: rg_interco_in_rsp[flat].p_valid,
-            q_ready: rg_interco_in_rsp[flat].q_ready && !l1d_busy_i,
+            q_ready: rg_interco_in_rsp[flat].q_ready,
             default: '0
           };
 
@@ -859,9 +858,9 @@ module cachepool_tile
         ) i_cache_amo (
           .clk_i            (clk_i                    ),
           .rst_ni           (rst_ni                   ),
-          .core_req_i       (cache_xbar_req   [j][cb] ),
+          .core_req_i       (cache_ctrl_req   [j][cb] ),
           .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
-          .core_rsp_o       (cache_xbar_rsp   [j][cb] ),
+          .core_rsp_o       (cache_bank_rsp   [j][cb] ),
           .mem_req_o        (cache_amo_req    [cb]    ),
           .mem_rsp_ready_o  (cache_amo_pready [cb]    ),
           .mem_rsp_i        (cache_amo_rsp    [cb]    )
@@ -928,9 +927,9 @@ module cachepool_tile
         ) i_spill_reg_cache_req (
           .clk_i   ( clk_i                            ),
           .rst_ni  ( rst_ni                           ),
-          .valid_i ( cache_xbar_req   [j][cb].q_valid ),
-          .ready_o ( cache_xbar_rsp   [j][cb].q_ready ),
-          .data_i  ( cache_xbar_req   [j][cb].q       ),
+          .valid_i ( cache_ctrl_req[j][cb].q_valid    ),
+          .ready_o ( cache_bank_rsp[j][cb].q_ready    ),
+          .data_i  ( cache_ctrl_req[j][cb].q          ),
           .valid_o ( cache_req_reg.q_valid            ),
           .ready_i ( cache_req_ready_w                ),
           .data_o  ( cache_req_reg.q                  )
@@ -945,9 +944,9 @@ module cachepool_tile
           .valid_i ( cache_rsp_reg.p_valid            ),
           .ready_o ( cache_rsp_ready  [cb][j]         ),
           .data_i  ( cache_rsp_reg.p                  ),
-          .valid_o ( cache_xbar_rsp   [j][cb].p_valid ),
+          .valid_o ( cache_bank_rsp[j][cb].p_valid    ),
           .ready_i ( cache_xbar_pready[j][cb]         ),
-          .data_o  ( cache_xbar_rsp   [j][cb].p       )
+          .data_o  ( cache_bank_rsp[j][cb].p          )
         );
 
         assign cache_req_ready_w      = cache_req_ready[cb][j];
@@ -964,6 +963,21 @@ module cachepool_tile
         assign cache_rsp_reg.p.user   = cache_rsp_meta [cb][j];
         assign cache_rsp_reg.p.write  = cache_rsp_write[cb][j];
 
+      end
+    end
+  end
+
+  // Post-xbar flush gate (applied uniformly across all ports).
+  // Suppresses q_valid going into the bank so no new cache accesses are processed
+  // while a flush is in progress, and gates q_ready going back to the interco so the
+  // xbar cannot dequeue a buffered request that is already sitting at its output.
+  always_comb begin : cache_xbar_flush_gate
+    for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+      for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
+        cache_ctrl_req[j][cb]         = cache_xbar_req[j][cb];
+        cache_ctrl_req[j][cb].q_valid = cache_xbar_req[j][cb].q_valid && !l1d_busy_i;
+        cache_xbar_rsp[j][cb]         = cache_bank_rsp[j][cb];
+        cache_xbar_rsp[j][cb].q_ready = cache_bank_rsp[j][cb].q_ready && !l1d_busy_i;
       end
     end
   end
@@ -1143,7 +1157,7 @@ module cachepool_tile
       .UseHashWaySelect (UseHashWaySelect   ),
       .UseForwardingBuffer (UseForwardingBuffer ),
       .BankFactor       (L1BankFactor       ),
-      .LogDebug         (0                  ),
+      // .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),
@@ -1661,7 +1675,7 @@ module cachepool_tile
     .FILL_DW            ( AxiDataWidth                                       ),
     .EARLY_LATCH        ( 0                                                  ),
     .L0_EARLY_TAG_WIDTH ( snitch_pkg::PAGE_SHIFT - $clog2(ICacheLineWidth/8) ),
-    .ISO_CROSSING       ( 1'b0                                               ),
+    .ISO_CROSSING       ( 1'b1                                               ),
     .axi_req_t          ( axi_mst_tile_wide_req_t                            ),
     .axi_rsp_t          ( axi_mst_tile_wide_resp_t                           ),
     .sram_cfg_data_t    ( impl_in_t                                          ),

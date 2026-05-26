@@ -147,7 +147,7 @@ $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -195,7 +195,7 @@ VSIM_FLAGS :=
 VSIM_BENDER =
 
 .PHONY: dram-build
-dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
+dram-build: $(DRAMSYS_PATH)/README.md dram-config
 	cd $(DRAMSYS_PATH) && \
 	if [ ! -d "build" ]; then \
 		mkdir build && cd build; \
@@ -296,6 +296,8 @@ VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
 VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
 VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
 VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
+# DRAM type string for DRAMSys (passed as a quoted SV string literal)
+VLOG_DEFS += -DDRAM_TYPE='"$(dram_type)"'
 
 # Stack / SPM (boot_addr, stack_addr, periph_start_addr, uart_addr used by hjson
 # generator via environment; not consumed as SV defines)
@@ -317,41 +319,79 @@ include sim/sim.mk
 # SW #
 ######
 
+#####################
+## Data Generation  ##
+#####################
+
+TESTS_DIR := $(SOFTWARE_DIR)/tests
+
+# Auto-discover every test that has a script/gen_data.py.
+# Convention: script/data_<params>.json → data/data_<params>.h
+# Adding a new test or a new data variant needs no Makefile changes:
+#   - new test:    drop gen_data.py + data_<params>.json into its script/ dir
+#   - new variant: add data_<params>.json to an existing test's script/ dir
+DATA_TESTS := $(patsubst $(TESTS_DIR)/%/script/gen_data.py,%, \
+                $(wildcard $(TESTS_DIR)/*/script/gen_data.py))
+
+define gen_data_rules
+$(1)_DATA    := $$(patsubst $(TESTS_DIR)/$(1)/script/data_%.json, \
+                             $(TESTS_DIR)/$(1)/data/data_%.h, \
+                             $$(wildcard $(TESTS_DIR)/$(1)/script/data_*.json))
+ALL_GEN_DATA += $$($(1)_DATA)
+
+$(TESTS_DIR)/$(1)/data/data_%.h: \
+    $(TESTS_DIR)/$(1)/script/data_%.json \
+    $(TESTS_DIR)/$(1)/script/gen_data.py
+	$$(PYTHON) $(TESTS_DIR)/$(1)/script/gen_data.py -c $$<
+endef
+
+$(foreach test,$(DATA_TESTS),$(eval $(call gen_data_rules,$(test))))
+
+# bandwidth: always outputs data/data.h (fixed name); handled separately.
+BANDWIDTH_DATA := $(TESTS_DIR)/bandwidth/data/data.h
+ALL_GEN_DATA   += $(BANDWIDTH_DATA)
+
+$(BANDWIDTH_DATA): $(TESTS_DIR)/bandwidth/script/data.json \
+                   $(TESTS_DIR)/bandwidth/script/gen_data.py
+	$(PYTHON) $(TESTS_DIR)/bandwidth/script/gen_data.py -c $<
+
+.PHONY: gen-data
+gen-data: $(ALL_GEN_DATA)
+
+.PHONY: clean.data
+clean.data:
+	rm -f $(ALL_GEN_DATA)
+
 .PHONY: clean.sw
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
+# Common CMake flags shared by sw and vsim targets.
+# vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
+SW_CMAKE_FLAGS = \
+  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
+  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
+  -DRUNTIME_DIR=${SOFTWARE_DIR} \
+  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
+  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
+  -DGCC_PATH=${GCC_INSTALL_DIR} \
+  -DPYTHON=${PYTHON} \
+  -DBUILD_TESTS=ON
+
 .PHONY: sw
-sw: generate bootrom clean.sw
-	echo ${SOFTWARE_DIR}
+sw: generate bootrom gen-data
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} .. && $(MAKE)
 
 .PHONY: vsim
-vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
-	echo ${SOFTWARE_DIR}
+vsim: generate bootrom gen-data dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
 	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
+	  .. && $(MAKE)
 
 .PHONY: clean
-clean: clean.sw clean.vsim
+clean: clean.sw clean.vsim clean.data
 	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
@@ -394,6 +434,9 @@ help:
 	@echo "*generate*:       generate the Spatz package and opcodes, and the cluster config HJSON"
 	@echo "*cache-init*:     source the insitu-cache environment (requires bender checkout)"
 	@echo "*bootrom*:        compile and generate the bootrom SystemVerilog module"
+	@echo "*update-floonoc*: regenerate FlooNoC package from FLOO_CFG (run after changing group count)"
+	@echo "*install-floogen*: install the floogen Python tool (required by update-floonoc)"
+	@echo "*clean-floonoc*:  remove the generated FlooNoC package"
 	@echo ""
 	@echo "DRAMSys:"
 	@echo ""

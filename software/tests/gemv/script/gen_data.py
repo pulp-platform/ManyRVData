@@ -76,17 +76,17 @@ def emit_gemv_layer(name="gemv", **kwargs):
     dtype = ctypes[str(kwargs["prec"])]
     if dtype != "char":
         layer_str += (
-            f'static {dtype} {name}_A_dram [{m} * {n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_A_dram [{m} * {n}] __attribute__((section(".pdcp_src"))) = '
             + array_to_cstr(mat_A)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_B_dram [{n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_B_dram [{n}] __attribute__((section(".pdcp_src"))) = '
             + array_to_cstr(vec_B)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_result [{m}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_result [{m}] __attribute__((section(".pdcp_src"))) = '
             + array_to_cstr(result)
             + ";\n\n\n"
         )

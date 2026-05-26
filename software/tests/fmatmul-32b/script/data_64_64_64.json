@@ -5,9 +5,11 @@
 // Parameters for a GEMM
 
 {
-    kernel: "GEMV"
-    M: 128,
-    N: 128,
+    kernel: "GEMM"
+    M: 64,
+    N: 64,
+    K: 64,
+    alpha: 0,
     transpose_A: false,
     transpose_B: false,
     prec: 32,

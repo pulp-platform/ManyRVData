@@ -22,6 +22,25 @@ endif
 
 include $(CACHEPOOL_DIR)/config/$(config).mk
 
+#####################
+##  DRAM Type       ##
+#####################
+
+# DRAM type used by DRAMSys and to auto-set refill_data_width.
+# Supported values: DDR3, DDR4, LPDDR4, HBM2
+dram_type ?= HBM2
+
+# Auto-derive default refill data width from dram_type.
+# HBM variants: 512b (3600*16/1000 = 57.6B/cyc)
+# DDR variants: 128b (1866*8/1000 = 15B/cyc)
+ifeq ($(dram_type),HBM2)
+  refill_data_width_default := 512
+else ifeq ($(dram_type),LPDDR4)
+  refill_data_width_default := 256
+else
+  refill_data_width_default := 128
+endif
+
 #########################
 ##  CachePool Cluster  ##
 #########################
@@ -57,8 +76,8 @@ addr_width ?= 32
 ##  CachePool Tile  ##
 ######################
 
-# Refill interconnection data width
-refill_data_width ?= 128
+# Refill interconnection data width (auto-derived from dram_type; override in flavor files)
+refill_data_width ?= $(refill_data_width_default)
 
 ##### L1 Data Cache #####
 
