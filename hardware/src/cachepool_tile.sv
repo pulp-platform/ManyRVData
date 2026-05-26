@@ -106,72 +106,72 @@ module cachepool_tile
     localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
   ) (
     /// System clock.
-    input  logic                                    clk_i,
+    input  logic                                          clk_i,
     /// Asynchronous active high reset. This signal is assumed to be _async_.
-    input  logic                                    rst_ni,
+    input  logic                                          rst_ni,
     /// Per-core debug request signal. Asserting this signals puts the
     /// corresponding core into debug mode. This signal is assumed to be _async_.
-    input  logic                                    debug_req_i,
+    input  logic                                          debug_req_i,
     /// Machine external interrupt pending. Usually those interrupts come from a
     /// platform-level interrupt controller. This signal is assumed to be _async_.
-    input  logic                                    meip_i,
+    input  logic                                          meip_i,
     /// Machine timer interrupt pending. Usually those interrupts come from a
     /// core-local interrupt controller such as a timer/RTC. This signal is
     /// assumed to be _async_.
-    input  logic                                    mtip_i,
+    input  logic                                          mtip_i,
     /// Core software interrupt pending. Usually those interrupts come from
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
-    input  logic                                    msip_i,
+    input  logic                                          msip_i,
     /// First hartid of the cluster. Cores of a cluster are monotonically
     /// increasing without a gap, i.e., a cluster with 8 cores and a
     /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic              [9:0]                 hart_base_id_i,
+    input  logic              [9:0]                       hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
-    input  axi_addr_t                               cluster_base_addr_i,
+    input  axi_addr_t                                     cluster_base_addr_i,
     /// Tile ID, internal ID, the base is always 0, in theory should not change during use
-    input  remote_tile_sel_t                        tile_id_i,
+    input  remote_tile_sel_t                              tile_id_i,
     /// Partitioning address
-    input  axi_addr_t                               private_start_addr_i,
+    input  axi_addr_t                                     private_start_addr_i,
     /// AXI Narrow out-port (UART/Peripheral)
-    output axi_narrow_req_t   [1:0]                 axi_out_req_o,
-    input  axi_narrow_resp_t  [1:0]                 axi_out_resp_i,
+    output axi_narrow_req_t   [1:0]                       axi_out_req_o,
+    input  axi_narrow_resp_t  [1:0]                       axi_out_resp_i,
     /// Cache Refill ports
-    output cache_trans_req_t  [NumL1CtrlTile-1:0]       cache_refill_req_o,
-    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]       cache_refill_rsp_i,
+    output cache_trans_req_t  [NumL1CtrlTile-1:0]         cache_refill_req_o,
+    input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]         cache_refill_rsp_i,
     /// Wide AXI ports to cluster level
-    output axi_out_req_t      [TileNarrowAxiPorts-1:0]  axi_wide_req_o,
-    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]  axi_wide_rsp_i,
+    output axi_out_req_t      [TileNarrowAxiPorts-1:0]    axi_wide_req_o,
+    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]    axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
-    output tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_o,
-    output remote_tile_sel_t  [NumRemotePortTile-1:0]   remote_req_dst_o,
-    input  tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_i,
-    input  logic              [NumRemotePortTile-1:0]   remote_rsp_ready_i,
+    output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
+    output remote_tile_sel_t  [NumRemotePortTile-1:0]     remote_req_dst_o,
+    input  tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_i,
+    input  logic              [NumRemotePortTile-1:0]     remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
-    input  tcdm_req_t         [NumRemotePortTile-1:0]   remote_req_i,
-    output tcdm_rsp_t         [NumRemotePortTile-1:0]   remote_rsp_o,
-    output logic              [NumRemotePortTile-1:0]   remote_rsp_ready_o,
+    input  tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_i,
+    output tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_o,
+    output logic              [NumRemotePortTile-1:0]     remote_rsp_ready_o,
     /// Inter-group remote access ports (to other groups).
     /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
     /// where j is the interco instance and r is the inter-group remote slot.
     /// Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
     /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
-    output remote_group_req_t [TotRGPorts:0] remote_group_req_o,
-    input  remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_i,
+    output remote_group_req_t [TotRGPorts:0]              remote_group_req_o,
+    input  remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_i,
     /// Inter-group remote access ports (from other groups)
-    input  remote_group_req_t [TotRGPorts:0] remote_group_req_i,
-    output remote_group_rsp_t [TotRGPorts:0] remote_group_rsp_o,
+    input  remote_group_req_t [TotRGPorts:0]              remote_group_req_i,
+    output remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_o,
     /// Peripheral signals
-    output icache_l1_events_t [NrCores-1:0]         icache_events_o,
-    input  logic                                    icache_prefetch_enable_i,
-    input  logic              [NrCores-1:0]         cl_interrupt_i,
-    input  logic [$clog2(AxiAddrWidth)-1:0]         dynamic_offset_i,
-    input  cache_insn_t                             l1d_insn_i,
-    input  logic              [3:0]                 l1d_private_i,
-    input  logic                                    l1d_insn_valid_i,
-    output logic                                    l1d_insn_ready_o,
-    input  logic                                    l1d_busy_i,
+    output icache_l1_events_t [NrCores-1:0]               icache_events_o,
+    input  logic                                          icache_prefetch_enable_i,
+    input  logic              [NrCores-1:0]               cl_interrupt_i,
+    input  logic              [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_i,
+    input  cache_insn_t                                   l1d_insn_i,
+    input  logic              [3:0]                       l1d_private_i,
+    input  logic                                          l1d_insn_valid_i,
+    output logic                                          l1d_insn_ready_o,
+    input  logic                                          l1d_busy_i,
 
 
 

@@ -13,11 +13,11 @@ CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cac
 | Level | Module | Description |
 |-------|--------|-------------|
 | 1 | Core Complex (CC) | One 32-bit Snitch + one Spatz RVV accelerator |
-| 2 | Tile | 4 CCs + 4 × 64 KiB 4-way InSitu-Cache banks |
-| 3 | Group | 4 Tiles connected via crossbar |
-| 4 | Cluster (WIP) | Multiple Groups connected via NoC (currently one Group) |
+| 2 | Tile | 4 CCs + 4 × InSitu-Cache banks |
+| 3 | Group | 4 Tiles connected via crossbar + shared L2 ICache |
+| 4 | Cluster | Multiple Groups connected via FlooNoC XY mesh |
 
-All tiles in a cluster share one unified L1 cache, interleaved across cache banks. The bank-selection offset is configurable at runtime via `l1d_xbar_config(...)`.
+All tiles across all groups share one unified L1 data cache, interleaved across cache banks. The bank-selection offset is configurable at runtime via `l1d_xbar_config(...)`.
 
 ## Requirements
 
@@ -68,10 +68,10 @@ make dram-build CMAKE=/path/to/cmake-3.28.x CC=/path/to/gcc-11.2 CXX=/path/to/g+
 ### Generate Required RTL
 
 Some RTL components (e.g., package headers) must be generated prior to simulation.
-Generation requires specifying a **configuration**. If none is provided, the default is `cachepool_512`.
+Generation requires specifying a **configuration**. If none is provided, the default is `cachepool_2g`.
 
 ```bash
-make generate config=cachepool_fpu_512
+make generate config=cachepool_fpu_2g
 ```
 
 ### Build the BootROM
@@ -79,7 +79,7 @@ make generate config=cachepool_fpu_512
 The BootROM is built separately from the RTL generation step:
 
 ```bash
-make bootrom config=cachepool_fpu_512
+make bootrom config=cachepool_fpu_2g
 ```
 
 ### Compilation and Simulation
@@ -87,13 +87,13 @@ make bootrom config=cachepool_fpu_512
 #### Build Software Only
 
 ```bash
-make sw config=cachepool_fpu_512
+make sw config=cachepool_fpu_2g
 ```
 
 #### Build Hardware + Software (QuestaSim)
 
 ```bash
-make vsim config=cachepool_fpu_512
+make vsim config=cachepool_fpu_2g
 ```
 
 #### Run the Simulation
@@ -125,7 +125,7 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 
 1. Edit `configs.sh` to list the desired configurations and kernels:
 
-       CONFIGS="cachepool_fpu_512 cachepool_fpu_256 cachepool_fpu_128"
+       CONFIGS="cachepool_fpu_2g cachepool_fpu_4g"
        KERNELS="fdotp-32b_M32768 ffft-64b_M16384 fmatmul-64b_M2048"
        PREFIX="test-cachepool-"
        ROOT_PATH=../..
@@ -147,10 +147,10 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 Example directory after a run:
 
     logs/20251028-1230/
-    ├── cachepool_fpu_512_fdotp-32b_M32768.log
-    ├── cachepool_fpu_512_fdotp-32b_M32768_pm/
-    ├── cachepool_fpu_512_summary.txt
-    ├── cachepool_fpu_256_summary.txt
+    ├── cachepool_fpu_2g_fdotp-32b_M32768.log
+    ├── cachepool_fpu_2g_fdotp-32b_M32768_pm/
+    ├── cachepool_fpu_2g_summary.txt
+    ├── cachepool_fpu_4g_summary.txt
     └── ...
 
 Each run includes:
@@ -170,46 +170,45 @@ This setup allows quick reproducible benchmarks with all results neatly organize
 Usage:
 
 ```bash
-python3 check_ci.py logs/latest/cachepool_fpu_512_load-store.log
+python3 check_ci.py logs/latest/cachepool_fpu_2g_load-store.log
 ```
 
 Exit code 0 means all tests passed; exit code 1 means at least one failure was detected. On failure the offending lines and their line numbers are printed for manual inspection.
 
 ## Configurations
 
-All hardware knobs live in **`config/config.mk`** (and flavor files it includes). The default configuration is **4 tiles, 16 cores**.
+All hardware knobs live in **`config/config.mk`** (and flavor files it includes). The default configuration is **2 groups, 4 tiles/group, 4 cores/tile = 32 cores total**.
 
-| Flavor file | Description |
-|-------------|-------------|
-| `cachepool.mk` | No floating-point support |
-| `cachepool_fpu.mk` | Enables single/half precision in the Spatz vector core |
+Configuration names encode the number of groups and whether the FPU is enabled:
 
-Available named configurations (passed as `config=<name>`):
-
-| Name | Cacheline | FPU |
-|------|-----------|-----|
-| `cachepool_512` | 512b | No |
-| `cachepool_128` | 128b | No |
-| `cachepool_fpu_512` | 512b | Yes |
-| `cachepool_fpu_256` | 256b | Yes |
-| `cachepool_fpu_128` | 128b | Yes |
+| Name | Groups | Mesh | FPU | Cores |
+|------|--------|------|-----|-------|
+| `cachepool_2g` | 2 | 1×2 | No | 32 |
+| `cachepool_fpu_2g` | 2 | 1×2 | Yes | 32 |
+| `cachepool_4g` | 4 | 2×2 | No | 64 |
+| `cachepool_fpu_4g` | 4 | 2×2 | Yes | 64 |
+| `cachepool_fpu_16g` | 16 | 4×4 | Yes | 256 |
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)
 - `config/config.mk` (source of truth)
 
-To switch flavors, set `config=<name>` (or export `CACHEPOOL_CONFIGURATION=<name>`), then rebuild:
+Multi-group configurations also require a FlooNoC topology file (e.g. `config/floonoc_cachepool_4g.yml`). After changing the group count, regenerate the FlooNoC package:
+
+```bash
+make update-floonoc
+```
+
+To switch configurations, always clean first:
 
 ```bash
 make clean
-make generate config=cachepool_fpu_512
+make generate config=cachepool_fpu_2g
 ```
-
-> `make clean` is recommended when changing configurations.
 
 ### How configuration flows
 
-1. **`config/config.mk`** defines all parameters (e.g., `num_tiles`, `num_cores`, `l1d_cacheline_width`, `axi_user_width`, addresses, etc.). Derived values (like `axi_user_width`) are pre-computed so tools receive integers, not expressions.
+1. **`config/config.mk`** defines all parameters (e.g., `num_groups`, `num_groups_x`, `num_tiles_per_group`, `num_cores_per_tile`, `l1d_cacheline_width`, `axi_user_width`, etc.). Derived values are pre-computed so tools receive integers, not expressions.
 2. `make generate` calls the Python generator to produce **`config/cachepool.hjson`** from the template.
 3. The Makefile passes the same values to **QuestaSim** via `VLOG_DEFS`, keeping RTL, sim, and HJSON in sync.
 
@@ -319,7 +318,7 @@ Cluster peripherals (including the BootROM and memory-mapped registers) are inst
 SpyGlass lint (optional):
 
 ```bash
-make lint config=cachepool_fpu_512
+make lint config=cachepool_fpu_2g
 ```
 
 ---
@@ -328,6 +327,7 @@ make lint config=cachepool_fpu_512
 
 - To see the exact macros passed to vlog, check `VLOG_DEFS` in the Makefile and `sim/work/compile.vsim.tcl`.
 - If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
-- Use `make clean` when switching flavors/configs to prevent stale build artifacts.
+- When changing the number of groups, run `make update-floonoc` to regenerate the FlooNoC package before `make generate`.
+- Use `make clean` when switching configs to prevent stale build artifacts.
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
 - Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_flush()` or the appropriate partition flush) before reconfiguring.

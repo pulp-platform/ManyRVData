@@ -46,7 +46,7 @@ build:
     - make clean generate vsim config=$CI_CONFIG
   artifacts:
     when: always
-    expire_in: 1 day
+    expire_in: 2h
     paths:
       # QuestaSim compiled work library
       - sim/work/
@@ -90,7 +90,7 @@ test:
     - python3 util/auto-benchmark/check-ci.py test_${KERNEL}.log
   artifacts:
     when: always
-    expire_in: 1 day
+    expire_in: 1 week
     paths:
       # Full simulation log
       - test_*.log
