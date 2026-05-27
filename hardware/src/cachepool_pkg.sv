@@ -481,7 +481,7 @@ package cachepool_pkg;
   } noc_group_rsp_t;
 
   // Group ICache (L2 read-only cache control)
-  localparam int unsigned ROCacheNumAddrRules = 4;
+  localparam int unsigned ROCacheNumAddrRules = 1;
   typedef struct packed {
     logic enable;
     logic flush_valid;
