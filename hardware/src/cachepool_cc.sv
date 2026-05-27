@@ -449,6 +449,10 @@ module cachepool_cc
 `ifndef TARGET_SYNTHESIS
     logic [SpatzSbPorts-1:0][63:0]                             last_progress_time_q;
     logic [SpatzSbPorts-1:0][63:0]                             last_warn_time_q;
+    // Loop indices hoisted out of always blocks (debug-only).
+    int unsigned                                               sb_log_pp;
+    int unsigned                                               wdog_p;
+    int unsigned                                               wdog_ii;
 `endif
 
     `FFARN(req_id_q,      req_id_d,      '0, clk_i, rst_ni)
@@ -497,6 +501,34 @@ module cachepool_cc
     end : gen_port
 
 `ifndef TARGET_SYNTHESIS
+    // Verbose push/pop log (gated by +spatz_sb_verbose plusarg).
+    // Useful for debugging the exact request/response sequence on a port.
+    // Each event prints time, port, side, req_id, addr (push only).
+    bit sb_verbose_log = 1'b0;
+    initial begin
+      sb_verbose_log = $test$plusargs("spatz_sb_verbose");
+    end
+    always_ff @(posedge clk_i) begin
+      if (rst_ni && sb_verbose_log) begin
+        for (sb_log_pp = 0; sb_log_pp < SpatzSbPorts; sb_log_pp++) begin
+          if (req_fire[sb_log_pp]) begin
+            $display("[SPATZ-SB-LOG %0t %m] port=%0d PUSH  req_id=0x%02h addr=0x%08h global_id=%0d write=%0b",
+                     $time, sb_log_pp, req_idx[sb_log_pp], spatz_mem_req[sb_log_pp].addr,
+                     req_id_q[sb_log_pp], spatz_mem_req[sb_log_pp].write);
+          end
+          if (rsp_fire[sb_log_pp]) begin
+            $display("[SPATZ-SB-LOG %0t %m] port=%0d POP   rsp_id=0x%02h slot_valid_pre=%0b slot_addr_pre=0x%08h slot_gid_pre=%0d rsp_data=0x%08h rsp_write=%0b",
+                     $time, sb_log_pp, rsp_idx[sb_log_pp],
+                     sb_q[sb_log_pp][rsp_idx[sb_log_pp]].valid,
+                     sb_q[sb_log_pp][rsp_idx[sb_log_pp]].addr,
+                     sb_q[sb_log_pp][rsp_idx[sb_log_pp]].global_id,
+                     spatz_mem_rsp[sb_log_pp].data,
+                     spatz_mem_rsp[sb_log_pp].write);
+          end
+        end
+      end
+    end
+
     // SVA: a request must not push to a slot that is already valid (would
     // mean Spatz reused a user.req_id while a previous one with the same
     // id was still in flight -- a protocol violation).
@@ -533,23 +565,23 @@ module cachepool_cc
           last_progress_time_q <= '0;
           last_warn_time_q     <= '0;
         end else begin
-          for (int unsigned p = 0; p < SpatzSbPorts; p++) begin
-            if (rsp_fire[p] || outstanding_q[p] == 32'd0) begin
-              last_progress_time_q[p] <= 64'($time);
-              last_warn_time_q[p]     <= 64'($time);
+          for (wdog_p = 0; wdog_p < SpatzSbPorts; wdog_p++) begin
+            if (rsp_fire[wdog_p] || outstanding_q[wdog_p] == 32'd0) begin
+              last_progress_time_q[wdog_p] <= 64'($time);
+              last_warn_time_q[wdog_p]     <= 64'($time);
             end
-            if (outstanding_q[p] != 32'd0 &&
-                (64'($time) - last_progress_time_q[p]) > SpatzReqScoreboardWdogPs &&
-                (64'($time) - last_warn_time_q[p])     > SpatzReqScoreboardWdogPs) begin
-              last_warn_time_q[p] <= 64'($time);
+            if (outstanding_q[wdog_p] != 32'd0 &&
+                (64'($time) - last_progress_time_q[wdog_p]) > SpatzReqScoreboardWdogPs &&
+                (64'($time) - last_warn_time_q[wdog_p])     > SpatzReqScoreboardWdogPs) begin
+              last_warn_time_q[wdog_p] <= 64'($time);
               $display("[%0t] [SPATZ-SB %m port %0d] STUCK: req_cnt=%0d rsp_cnt=%0d outstanding=%0d (entries below indexed by user.req_id)",
-                       $time, p, req_id_q[p], rsp_id_q[p], outstanding_q[p]);
-              for (int unsigned ii = 0; ii < SpatzSbDepth; ii++) begin
-                if (sb_q[p][ii].valid) begin
+                       $time, wdog_p, req_id_q[wdog_p], rsp_id_q[wdog_p], outstanding_q[wdog_p]);
+              for (wdog_ii = 0; wdog_ii < SpatzSbDepth; wdog_ii++) begin
+                if (sb_q[wdog_p][wdog_ii].valid) begin
                   $display("    user.req_id=0x%02h global_id=%0d addr=0x%08h write=%0b issued@%0t (age=%0t)",
-                           ii, sb_q[p][ii].global_id, sb_q[p][ii].addr, sb_q[p][ii].write,
-                           sb_q[p][ii].issue_time,
-                           64'($time) - sb_q[p][ii].issue_time);
+                           wdog_ii, sb_q[wdog_p][wdog_ii].global_id, sb_q[wdog_p][wdog_ii].addr, sb_q[wdog_p][wdog_ii].write,
+                           sb_q[wdog_p][wdog_ii].issue_time,
+                           64'($time) - sb_q[wdog_p][wdog_ii].issue_time);
                 end
               end
             end
@@ -1146,6 +1178,83 @@ module cachepool_cc
 
   `ASSERT_INIT(BootAddrAligned, BootAddr[1:0] == 2'b00)
 
+  // ---------------------------------------------------------------------
+  // Probe D: targeted address watcher at the Spatz boundary.
+  // Off by default; enable with +spatz_write_watch plusarg.
+  // ---------------------------------------------------------------------
+  bit spatz_write_watch_en = 1'b0;
+  initial spatz_write_watch_en = $test$plusargs("spatz_write_watch");
+
+  // Loop indices hoisted out of always/final blocks (debug-only).
+  int unsigned dbg_swwatch_p;
+  int unsigned dbg_wabal_p;
+  int unsigned dbg_wabal_fp;
+
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && spatz_write_watch_en) begin
+      for (dbg_swwatch_p = 0; dbg_swwatch_p < TCDMPorts; dbg_swwatch_p++) begin
+        if (tcdm_req_o[dbg_swwatch_p].q_valid && tcdm_rsp_i[dbg_swwatch_p].q_ready && tcdm_req_o[dbg_swwatch_p].q.write) begin
+          if (tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001308 ||
+              tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001700 ||
+              tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001730) begin
+            $display("[SPATZ-WRITE-WATCH %0t %m port %0d] addr=0x%08h data=0x%08h strb=0x%h user_tile=%0d user_core=%0d user_req=0x%h",
+                     $time, dbg_swwatch_p, tcdm_req_o[dbg_swwatch_p].q.addr, tcdm_req_o[dbg_swwatch_p].q.data,
+                     tcdm_req_o[dbg_swwatch_p].q.strb,
+                     tcdm_req_o[dbg_swwatch_p].q.user.tile_id, tcdm_req_o[dbg_swwatch_p].q.user.core_id,
+                     tcdm_req_o[dbg_swwatch_p].q.user.req_id);
+          end
+        end
+      end
+    end
+  end
+
+  // ---------------------------------------------------------------------
+  // Probe C: per-port write-ack balance at the cachepool_cc <-> tile interface
+  // (req side) AND at the FIFO push/pop level (downstream of tile interface).
+  // ---------------------------------------------------------------------
+  logic [TCDMPorts-1:0][63:0] cc_wreq_n;
+  logic [TCDMPorts-1:0][63:0] cc_wack_n;
+  logic [TCDMPorts-1:0][63:0] cc_wfifo_push_n;
+  logic [TCDMPorts-1:0][63:0] cc_wfifo_pop_n;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      cc_wreq_n       <= '0;
+      cc_wack_n       <= '0;
+      cc_wfifo_push_n <= '0;
+      cc_wfifo_pop_n  <= '0;
+    end else begin
+      for (dbg_wabal_p = 0; dbg_wabal_p < TCDMPorts; dbg_wabal_p++) begin
+        if (tcdm_req_o[dbg_wabal_p].q_valid && tcdm_rsp_i[dbg_wabal_p].q_ready && tcdm_req_o[dbg_wabal_p].q.write)
+          cc_wreq_n[dbg_wabal_p] <= cc_wreq_n[dbg_wabal_p] + 64'd1;
+        if (tcdm_rsp_i[dbg_wabal_p].p_valid && tcdm_rsp_i[dbg_wabal_p].p.write)
+          cc_wack_n[dbg_wabal_p] <= cc_wack_n[dbg_wabal_p] + 64'd1;
+        // FIFO push side: any p_valid pushes; count those with write=1
+        if (dbg_wabal_p < NumMemPortsPerSpatz) begin  // only Spatz ports have FIFO
+          if (spatz_mem_rsp_push[dbg_wabal_p] && tcdm_rsp_i[dbg_wabal_p].p.write)
+            cc_wfifo_push_n[dbg_wabal_p] <= cc_wfifo_push_n[dbg_wabal_p] + 64'd1;
+          if (spatz_mem_rsp_pop[dbg_wabal_p] && spatz_mem_fifo[dbg_wabal_p].write)
+            cc_wfifo_pop_n[dbg_wabal_p] <= cc_wfifo_pop_n[dbg_wabal_p] + 64'd1;
+        end
+      end
+    end
+  end
+
+  final begin
+    for (dbg_wabal_fp = 0; dbg_wabal_fp < TCDMPorts; dbg_wabal_fp++) begin
+      if (cc_wreq_n[dbg_wabal_fp] != cc_wack_n[dbg_wabal_fp]) begin
+        $error("[CC-WR-BAL %m port %0d] req-rsp IMBALANCE  wreq=%0d wack=%0d diff=%0d",
+               dbg_wabal_fp, cc_wreq_n[dbg_wabal_fp], cc_wack_n[dbg_wabal_fp],
+               cc_wreq_n[dbg_wabal_fp] - cc_wack_n[dbg_wabal_fp]);
+      end
+      if (dbg_wabal_fp < NumMemPortsPerSpatz &&
+          cc_wfifo_push_n[dbg_wabal_fp] != cc_wfifo_pop_n[dbg_wabal_fp]) begin
+        $error("[CC-WR-BAL %m port %0d] FIFO push-pop IMBALANCE  push_w=%0d pop_w=%0d  diff=%0d  (writes stuck in spatz_rsp_fifo)",
+               dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
+               cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp]);
+      end
+    end
+  end
 `endif
 
 endmodule
