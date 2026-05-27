@@ -1108,7 +1108,7 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .BankFactor       (L1BankFactor       ),
-      .LogDebug         (0                  ),
+      // .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),
@@ -1481,7 +1481,7 @@ module cachepool_tile
     .FILL_DW            ( AxiDataWidth                                       ),
     .EARLY_LATCH        ( 0                                                  ),
     .L0_EARLY_TAG_WIDTH ( snitch_pkg::PAGE_SHIFT - $clog2(ICacheLineWidth/8) ),
-    .ISO_CROSSING       ( 1'b0                                               ),
+    .ISO_CROSSING       ( 1'b1                                               ),
     .axi_req_t          ( axi_mst_tile_wide_req_t                            ),
     .axi_rsp_t          ( axi_mst_tile_wide_resp_t                           ),
     .sram_cfg_data_t    ( impl_in_t                                          ),
