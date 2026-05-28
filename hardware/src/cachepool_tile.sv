@@ -413,6 +413,12 @@ module cachepool_tile
 
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
+  // Post-xbar gated copies.
+  // cache_ctrl_req : xbar output with q_valid suppressed during flush.
+  // cache_bank_rsp : raw response from the bank/AMO stage; q_ready is gated before
+  //                  being returned to the interco as cache_xbar_rsp.
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
 
   tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
   tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
@@ -512,16 +518,14 @@ module cachepool_tile
   always_comb begin : cache_flush_protection
     for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
       /***** REQ *****/
-      // Wire to Cache outputs
       unmerge_req[j].q       = tcdm_req[j].q;
-      // invalidate the request when cache is busy
-      unmerge_req[j].q_valid = tcdm_req[j].q_valid && !l1d_busy_i;
+      unmerge_req[j].q_valid = tcdm_req[j].q_valid;
       unmerge_pready[j]      = 1'b1;
 
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
       tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
-      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready && !l1d_busy_i;
+      tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready;
     end
 
   end
@@ -546,19 +550,15 @@ module cachepool_tile
   // where j is the xbar index and r is the remote slot within that xbar.
   logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
 
-  // Flush protection for remote ports.
-  //
-  // During a flush (l1d_busy_i) remote tiles must be fully stalled:
-  //   - q_valid gated : stops new requests being presented to the xbar
-  //   - q_ready gated : stops the xbar accepting a request that is already
-  //                     sitting at the input (spill register would otherwise
-  //                     pop it, and the transaction would be lost because the
-  //                     cache is unavailable)
-  //   - remote_in_pready gated : stops response-ready from propagating back,
-  //                     preventing in-flight completions during the flush window
+  // Intra-group remote port wiring.
+  // q_valid and q_ready for incoming requests are passed through without gating:
+  // the after-xbar flush gate (cache_xbar_flush_gate) provides the authoritative
+  // protection at the cache bank boundary and naturally back-pressures through
+  // the interco to the remote sender.
+  // response-ready (remote_in_pready) is still gated to prevent draining in-flight
+  // completions during the flush window.
 
   tcdm_req_t [NumRemotePortTile-1:0] remote_req_gated;
-  // Intermediate response signals from the xbar before q_ready gating.
   tcdm_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
@@ -566,14 +566,10 @@ module cachepool_tile
       for (int r = 0; r < NumRemotePortCore; r++) begin
         automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
-        // Gate q_valid: prevent new requests entering the xbar.
         remote_req_gated[flat].q       = remote_req_i[flat].q;
-        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid && !l1d_busy_i;
+        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid;
 
-        // Pass the full xbar response through, then gate only q_ready so the
-        // remote tile cannot complete a handshake during a flush.
         remote_rsp_o[flat]         = remote_rsp_xbar[flat];
-        remote_rsp_o[flat].q_ready = remote_rsp_xbar[flat].q_ready && !l1d_busy_i;
 
         // Gate response-ready back to us: prevent draining completions
         // of requests that arrived just before the flush.
@@ -614,7 +610,10 @@ module cachepool_tile
           automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
           // -----------------------------------------------------------
-          // Incoming: REQRSP → TCDM conversion + flush gating → interco
+          // Incoming: REQRSP → TCDM conversion → interco
+          // q_valid and q_ready are passed through without gating; the
+          // after-xbar flush gate (cache_xbar_flush_gate) is the authoritative
+          // protection point and naturally back-pressures through the interco.
           // -----------------------------------------------------------
           rg_interco_in_req[flat] = '{
             q: '{
@@ -632,7 +631,7 @@ module cachepool_tile
               },
               default: '0
             },
-            q_valid: remote_group_req_i[flat].q_valid && !l1d_busy_i,
+            q_valid: remote_group_req_i[flat].q_valid,
             default: '0
           };
 
@@ -652,7 +651,7 @@ module cachepool_tile
               default: '0
             },
             p_valid: rg_interco_in_rsp[flat].p_valid,
-            q_ready: rg_interco_in_rsp[flat].q_ready && !l1d_busy_i,
+            q_ready: rg_interco_in_rsp[flat].q_ready,
             default: '0
           };
 
@@ -850,9 +849,9 @@ module cachepool_tile
         ) i_cache_amo (
           .clk_i            (clk_i                    ),
           .rst_ni           (rst_ni                   ),
-          .core_req_i       (cache_xbar_req   [j][cb] ),
+          .core_req_i       (cache_ctrl_req   [j][cb] ),
           .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
-          .core_rsp_o       (cache_xbar_rsp   [j][cb] ),
+          .core_rsp_o       (cache_bank_rsp   [j][cb] ),
           .mem_req_o        (cache_amo_req    [cb]    ),
           .mem_rsp_ready_o  (cache_amo_pready [cb]    ),
           .mem_rsp_i        (cache_amo_rsp    [cb]    )
@@ -915,9 +914,9 @@ module cachepool_tile
         ) i_spill_reg_cache_req (
           .clk_i                                         ,
           .rst_ni  ( rst_ni                             ),
-          .valid_i ( cache_xbar_req[j][cb].q_valid      ),
-          .ready_o ( cache_xbar_rsp[j][cb].q_ready      ),
-          .data_i  ( cache_xbar_req[j][cb].q            ),
+          .valid_i ( cache_ctrl_req[j][cb].q_valid      ),
+          .ready_o ( cache_bank_rsp[j][cb].q_ready      ),
+          .data_i  ( cache_ctrl_req[j][cb].q            ),
           .valid_o ( cache_req_reg.q_valid              ),
           .ready_i ( cache_rsp_reg.q_ready              ),
           .data_o  ( cache_req_reg.q                    )
@@ -932,9 +931,9 @@ module cachepool_tile
           .valid_i ( cache_rsp_reg.p_valid             ),
           .ready_o ( cache_rsp_ready[cb][j]            ),
           .data_i  ( cache_rsp_reg.p                   ),
-          .valid_o ( cache_xbar_rsp[j][cb].p_valid     ),
+          .valid_o ( cache_bank_rsp[j][cb].p_valid     ),
           .ready_i ( cache_xbar_pready[j][cb]          ),
-          .data_o  ( cache_xbar_rsp[j][cb].p           )
+          .data_o  ( cache_bank_rsp[j][cb].p           )
         );
 
         assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
@@ -950,6 +949,21 @@ module cachepool_tile
         assign cache_rsp_reg.p.user  = cache_rsp_meta [cb][j];
         assign cache_rsp_reg.p.write = cache_rsp_write[cb][j];
 
+      end
+    end
+  end
+
+  // Post-xbar flush gate (applied uniformly across all ports).
+  // Suppresses q_valid going into the bank so no new cache accesses are processed
+  // while a flush is in progress, and gates q_ready going back to the interco so the
+  // xbar cannot dequeue a buffered request that is already sitting at its output.
+  always_comb begin : cache_xbar_flush_gate
+    for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+      for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
+        cache_ctrl_req[j][cb]         = cache_xbar_req[j][cb];
+        cache_ctrl_req[j][cb].q_valid = cache_xbar_req[j][cb].q_valid && !l1d_busy_i;
+        cache_xbar_rsp[j][cb]         = cache_bank_rsp[j][cb];
+        cache_xbar_rsp[j][cb].q_ready = cache_bank_rsp[j][cb].q_ready && !l1d_busy_i;
       end
     end
   end

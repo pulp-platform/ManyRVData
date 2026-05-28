@@ -38,6 +38,7 @@
 //   NumRemoteGroupPort == 0.
 
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 
 module tcdm_cache_interco #(
   /// Number of Tiles ('>= 1')
@@ -63,6 +64,8 @@ module tcdm_cache_interco #(
   /// tile ID which encodes both group and tile-within-group:
   ///   tile_id = {group_id, local_tile_id}
   parameter int unsigned TileIDWidth          = 32'd1,
+  /// DRAM base address, used to check if we get illegal access
+  parameter int unsigned DramBaseAddr         = 32'h8000_0000,
   /// Number of tiles within a single group.
   /// Used to extract the group portion from the address tile field:
   ///   group_id = addr_tile_bits / NumTilesPerGroup
@@ -526,5 +529,21 @@ module tcdm_cache_interco #(
 
   assign mem_rsp_ready_o = mem_rsp_ready;
 
+  // -------------------------------------------------------------------------
+  // Assertions
+  // -------------------------------------------------------------------------
+`ifndef TARGET_SYNTHESIS
+  // This is used to ensure we will not have illegal visits to DRAM
+  // This kind of error can be latent in the system until the entry is evicted
+  for (genvar x = 0; x < TotInPorts; x++) begin : gen_addr_assert
+    CoreReqAddrAboveDram: assert property (
+      @(posedge clk_i) disable iff (!rst_ni !== '0)
+      core_req_i[x].q_valid |-> core_req_i[x].q.addr >= addr_t'(DramBaseAddr)
+    ) else begin
+      $error("[%m] port %0d: addr 0x%08x is below DramBaseAddr 0x%08x",
+             x, core_req_i[x].q.addr, DramBaseAddr);
+    end
+  end
+`endif
 
 endmodule
