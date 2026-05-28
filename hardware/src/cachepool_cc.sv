@@ -1178,6 +1178,7 @@ module cachepool_cc
 
   `ASSERT_INIT(BootAddrAligned, BootAddr[1:0] == 2'b00)
 
+`ifndef TARGET_SYNTHESIS
   // ---------------------------------------------------------------------
   // Probe D: targeted address watcher at the Spatz boundary.
   // Off by default; enable with +spatz_write_watch plusarg.
@@ -1268,6 +1269,7 @@ module cachepool_cc
       end
     end
   end
+`endif // TARGET_SYNTHESIS
 `endif
 
 endmodule

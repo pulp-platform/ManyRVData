@@ -803,6 +803,7 @@ module cachepool_tile
   // Folded mode already shrinks request window to part-width; keep coalescer in
   // equal-window mode to avoid response lane remap corner cases.
   localparam int unsigned EffectiveCoalFactor = UseSkewedFolded ? 1 : L1CoalFactor;
+`ifndef TARGET_SYNTHESIS
   initial begin
     $display("Cache Configuration:");
     $display("  NumCtrl        : %0d", NumL1CtrlTile);
@@ -819,6 +820,7 @@ module cachepool_tile
     $display("  RefillDataWidth: %0d", RefillDataWidth);
     $display("  DynamicOffset  : %0d", dynamic_offset_q);
   end
+`endif
 
   // CL-offset mask: bits below dynamic_offset_q, verbatim in both directions.
   logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
