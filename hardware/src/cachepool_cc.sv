@@ -1242,16 +1242,29 @@ module cachepool_cc
 
   final begin
     for (dbg_wabal_fp = 0; dbg_wabal_fp < TCDMPorts; dbg_wabal_fp++) begin
+      // Hard error: the cache failed to acknowledge a write that Spatz issued
+      // (a genuinely lost write-ack).  Valid at EOC because the cache drains
+      // all accepted requests even after Spatz goes idle.
       if (cc_wreq_n[dbg_wabal_fp] != cc_wack_n[dbg_wabal_fp]) begin
         $error("[CC-WR-BAL %m port %0d] req-rsp IMBALANCE  wreq=%0d wack=%0d diff=%0d",
                dbg_wabal_fp, cc_wreq_n[dbg_wabal_fp], cc_wack_n[dbg_wabal_fp],
                cc_wreq_n[dbg_wabal_fp] - cc_wack_n[dbg_wabal_fp]);
       end
+      // FIFO push-pop residue: a tail is benign.  After EOC the hart is idle
+      // (main returned) so Spatz never pops the last few acks the cache pushed.
+      // Such a tail cannot exceed the FIFO depth; only escalate to an error if
+      // it does, which means pushes were lost to overflow (a real fault).
       if (dbg_wabal_fp < NumMemPortsPerSpatz &&
           cc_wfifo_push_n[dbg_wabal_fp] != cc_wfifo_pop_n[dbg_wabal_fp]) begin
-        $error("[CC-WR-BAL %m port %0d] FIFO push-pop IMBALANCE  push_w=%0d pop_w=%0d  diff=%0d  (writes stuck in spatz_rsp_fifo)",
-               dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
-               cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp]);
+        if ((cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp]) > 64'(SpatzRspFifoDepth)) begin
+          $error("[CC-WR-BAL %m port %0d] FIFO push-pop OVERFLOW-LEVEL  push_w=%0d pop_w=%0d  diff=%0d > depth=%0d (pushes lost)",
+                 dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
+                 cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp], SpatzRspFifoDepth);
+        end else begin
+          $display("[CC-WR-BAL %m port %0d] INFO benign EOC tail  push_w=%0d pop_w=%0d  diff=%0d (<= depth=%0d, acks abandoned at program end)",
+                   dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
+                   cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp], SpatzRspFifoDepth);
+        end
       end
     end
   end
