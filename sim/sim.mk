@@ -82,7 +82,7 @@ ${SIM_DIR}/${DPI_LIB}/cachepool_dpi.so: ${dpi_target}
 # -----------------
 ${WORK_DIR}/${FESVR_VERSION}_unzip:
 	mkdir -p $(dir $@)
-	wget -O $(dir $@)/${FESVR_VERSION} https://github.com/riscv/riscv-isa-sim/tarball/${FESVR_VERSION}
+	curl -fL -o $(dir $@)/${FESVR_VERSION} https://github.com/riscv/riscv-isa-sim/tarball/${FESVR_VERSION}
 	tar xfm $(dir $@)${FESVR_VERSION} --strip-components=1 -C $(dir $@)
 	touch $@
 
