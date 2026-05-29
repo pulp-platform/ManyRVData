@@ -734,13 +734,19 @@ module cachepool_cluster
     ) i_reqrsp2axi  (
       .clk_i        (clk_i                ),
       .rst_ni       (rst_ni               ),
-      .user_i       (l2_req[ch].q.user    ),
+      // refill_user_t (UserWidth) <= AxiUserWidth (asserted below); explicit
+      // zero-extend to the AxiUserWidth port to keep the widths matched.
+      .user_i       (AxiUserWidth'(l2_req[ch].q.user)),
       .reqrsp_req_i (l2_req[ch]           ),
       .reqrsp_rsp_o (l2_rsp[ch]           ),
       .axi_req_o    (wide_axi_slv_req[ch] ),
       .axi_rsp_i    (wide_axi_slv_rsp[ch] )
     );
   end
+
+  // The refill user struct carried over the cache->L2 AXI must fit in the AXI
+  // user field; the user_i zero-extend above relies on this never truncating.
+  `ASSERT_INIT(CheckAxiUserFitsRefillUser, AxiUserWidth >= $bits(refill_user_t))
 
 
   // -------------

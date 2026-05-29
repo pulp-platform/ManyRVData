@@ -61,6 +61,17 @@ waive -rule "W416"
 # Assert not synthesizable
 waive -rule "SYNTH_5064"
 
+# W123 "read but never set" on coalescer_resp/bypass_resp in cachepool_cache_ctrl:
+# FALSE POSITIVE. Both are the slv_rsp_o OUTPUT of i_bypass_xbar (reqrsp_xbar),
+# bound via the '{bypass_resp, coalescer_resp} array-of-struct aggregate. The xbar
+# drives slv_rsp_o fully (reqrsp_xbar.sv: assign slv_rsp_o[port] = core_rsp[port]),
+# so .data/.meta/.write ARE set; SpyGlass W123 cannot trace the driver through the
+# aggregate port binding. Scoped to the DU so genuine W123 elsewhere still report.
+waive -du "cachepool_cache_ctrl" -rule "W123"
+# W123 on decoder_req_i.* in spatz_decoder: third-party Spatz dep, not owned/modified
+# here (per instruction). Scoped to the DU so our-RTL W123 still report.
+waive -du "spatz_decoder" -rule "W123"
+
 # Set lint_rtl goal and run
 current_goal lint/lint_rtl
 run_goal

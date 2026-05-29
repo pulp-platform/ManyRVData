@@ -105,19 +105,31 @@ snitch_max_trans ?= 16
 ##  AXI configuration  ##
 #########################
 
-# axi_user_width must be >= $bits(refill_user_t).
-# refill_user_t = bank_id(3) + tile_id(W) + cache_info_t(*) + burst_req_t(3),
-# where cache_info_t contains TWO copies of TileIDWidth (the field itself
-# plus a nested copy inside cache_info_t).  So adding a tile multiplies
-# idx_width(NumTiles) by 2.
+# axi_user_width sets the AXI 'user' field that carries refill_user_t over the
+# cache->L2 AXI.  Hard requirement: axi_user_width >= $bits(refill_user_t).
+# This floor is now enforced in RTL by ASSERT_INIT(CheckAxiUserFitsRefillUser)
+# in cachepool_cluster.sv, and the cluster zero-extends refill_user_t onto the
+# (wider) AXI user port at the reqrsp_to_axi call site.
 #
-# Base values below assume NumTiles=1 (idx_width=1).  We add a per-tile
-# adjustment of 2 * (idx_width(NumTiles) - 1) bits for larger configs.
+#   refill_user_t = bank_id(BankIDWidth) + tile_id(TileIDWidth)
+#                 + cache_info_t + burst_req_t
+#   cache_info_t  = {for_write_pend, depth, way}   -- NOTE: NO tile_id inside.
 #
-# If axi_user_width is too small, the MSB of bank_id (or higher tile_id)
-# gets truncated on the AXI loopback and refill responses get routed back
-# to the wrong slv port (e.g. bank_id=4 aliases to bank_id=0, sending
-# cb=3's refill response to the icache bypass slot, making cb=3 hang).
+# So refill_user_t carries TileIDWidth exactly ONCE.  The values below are
+# deliberately conservative headroom, not an exact fit: the per-tile adjustment
+# adds 2*(idx_width(NumTiles)-1) bits, and cachepool_pkg.sv:163 then adds a
+# further clog2(NumTiles) (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles)),
+# so the tile term ends up over-provisioned.  This is harmless: no RTL reads any
+# AXI user bit above $bits(refill_user_t)-1.
+# (An earlier version of this comment claimed cache_info_t held a second
+#  TileIDWidth copy and therefore doubled idx_width(NumTiles) -- it does not;
+#  the 2x factor is just slack, kept as-is for headroom.)
+#
+# Do NOT let axi_user_width drop below $bits(refill_user_t): the MSB of bank_id
+# (or higher tile_id) would be truncated on the AXI loopback and refill
+# responses would route back to the wrong slv port (e.g. bank_id=4 aliases to
+# bank_id=0, sending cb=3's refill response to the icache bypass slot, making
+# cb=3 hang).  The ASSERT_INIT above catches this at elaboration.
 
 ifeq ($(num_tiles),1)
   axi_user_tile_adj := 0
