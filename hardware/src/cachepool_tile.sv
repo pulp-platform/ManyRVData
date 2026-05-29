@@ -1144,8 +1144,10 @@ module cachepool_tile
       logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_req;
       logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_we;
       folded_bank_addr_t   [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0] part_addr;
-      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankDataWidth-1:0] part_wdata;
-      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankByteCount-1:0] part_be;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankDataWidth-1:0]
+          part_wdata;
+      logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankByteCount-1:0]
+          part_be;
 
       // -- Per-way, per-column write contention (loop-free) --
       // For way W and column col, "another way writes at col" is true
@@ -1179,7 +1181,8 @@ module cachepool_tile
         for (genvar way = 0; way < EffectiveFoldWayGroup; way++) begin : gen_skew_ways
           localparam int unsigned WayIdx = group * EffectiveFoldWayGroup + way;
           for (genvar part = 0; part < PartSplit; part++) begin : gen_skew_parts
-            localparam int unsigned ColIdx = group * EffectiveFoldWayGroup + ((way + part) % EffectiveFoldWayGroup);
+            localparam int unsigned ColIdx =
+                group * EffectiveFoldWayGroup + ((way + part) % EffectiveFoldWayGroup);
             for (genvar bank_sel = 0; bank_sel < L1BankFactor; bank_sel++) begin : gen_skew_banks
               localparam int unsigned BankBase = bank_sel * NumWordPerLine + part * WordsPerPart;
               assign part_req[ColIdx][bank_sel][part] =
@@ -1187,7 +1190,8 @@ module cachepool_tile
               assign part_we[ColIdx][bank_sel][part] =
                   |l1_data_bank_we [cb][WayIdx * NumDataBankPerWay + BankBase +: WordsPerPart];
               assign part_addr[ColIdx][bank_sel][part] =
-                  folded_bank_addr_t'((l1_data_bank_addr[cb][WayIdx * NumDataBankPerWay + BankBase] * PartSplit) + part);
+                  folded_bank_addr_t'((l1_data_bank_addr[cb][WayIdx * NumDataBankPerWay + BankBase]
+                                       * PartSplit) + part);
 
               for (genvar w = 0; w < WordsPerPart; w++) begin : gen_part_words
                 localparam int unsigned FlatIdx = WayIdx * NumDataBankPerWay + BankBase + w;
@@ -1291,8 +1295,10 @@ module cachepool_tile
           logic [BankByteCount-1:0] bank_be;
           logic [BankDataWidth-1:0] bank_rdata;
 
-          assign bank_req = |l1_data_bank_req[cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
-          assign bank_we  = |l1_data_bank_we [cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
+          assign bank_req =
+              |l1_data_bank_req[cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
+          assign bank_we  =
+              |l1_data_bank_we [cb][way*NumDataBankPerWay + bank*WordsPerPart +: WordsPerPart];
           assign bank_addr = l1_data_bank_addr[cb][way*NumDataBankPerWay + bank*WordsPerPart];
 
           for (genvar g = 0; g < WordsPerPart; g++) begin : gen_group_words
@@ -1711,7 +1717,8 @@ module cachepool_tile
         if (tcdm_req[k].q_valid && tcdm_rsp[k].q_ready) begin
           automatic logic [31:0] a = tcdm_req[k].q.addr;
           if (a >= tracer_addr_lo[31:0] && a <= tracer_addr_hi[31:0]) begin
-            $display("[TRACER %m] t=%0t  core=%0d port=%0d  addr=0x%0h  %s  data=0x%0h  strb=0x%0h  user=0x%0h",
+            $display({"[TRACER %m] t=%0t  core=%0d port=%0d  addr=0x%0h  %s  ",
+                      "data=0x%0h  strb=0x%0h  user=0x%0h"},
                      $time, k / NrTCDMPortsPerCore, k % NrTCDMPortsPerCore,
                      a,
                      tcdm_req[k].q.write ? "WRITE" : "READ ",
@@ -1812,13 +1819,15 @@ module cachepool_tile
           mm_rsps_seen++;
           if (mm_q[k].size() == 0) begin
             mm_orphan_rsp++;
-            $error("[MM %m port=%0d] ORPHAN_RSP  t=%0t  rsp_data=0x%0h  write=%0b  (no outstanding req in FIFO)",
+            $error({"[MM %m port=%0d] ORPHAN_RSP  t=%0t  rsp_data=0x%0h  ",
+                    "write=%0b  (no outstanding req in FIFO)"},
                    k, $time, tcdm_rsp[k].p.data, tcdm_rsp[k].p.write);
           end else begin
             automatic mm_outstanding_t e = mm_q[k].pop_front();
             if (e.is_write != tcdm_rsp[k].p.write) begin
               mm_type_mismatch++;
-              $error("[MM %m port=%0d] TYPE_MISMATCH  t=%0t  addr=0x%0h  req_was_write=%0b rsp.write=%0b",
+              $error({"[MM %m port=%0d] TYPE_MISMATCH  t=%0t  addr=0x%0h  ",
+                      "req_was_write=%0b rsp.write=%0b"},
                      k, $time, e.addr, e.is_write, tcdm_rsp[k].p.write);
             end else if (!e.is_write) begin
               // Read response: compare per byte
@@ -1827,7 +1836,8 @@ module cachepool_tile
                   mm_bytes_checked++;
                   if (tcdm_rsp[k].p.data[b*8 +: 8] !== e.expected_data[b*8 +: 8]) begin
                     mm_data_mismatch++;
-                    $error("[MM %m port=%0d] DATA_MISMATCH  t=%0t  addr=0x%0h  byte=%0d  expected=0x%02h  got=0x%02h",
+                    $error({"[MM %m port=%0d] DATA_MISMATCH  t=%0t  addr=0x%0h  ",
+                            "byte=%0d  expected=0x%02h  got=0x%02h"},
                            k, $time, e.addr, b,
                            e.expected_data[b*8 +: 8],
                            tcdm_rsp[k].p.data[b*8 +: 8]);
@@ -1845,12 +1855,14 @@ module cachepool_tile
 
   final begin
     if (mm_enable) begin
-      $display("[MM %m] ============================ Memory-Model Summary ============================");
+      $display({"[MM %m] ============================ Memory-Model Summary ",
+                "============================"});
       $display("[MM %m]   Writes seen     : %0d", mm_writes_seen);
       $display("[MM %m]   Reads  seen     : %0d", mm_reads_seen);
       $display("[MM %m]   Rsps   seen     : %0d", mm_rsps_seen);
       $display("[MM %m]   Bytes checked   : %0d", mm_bytes_checked);
-      $display("[MM %m]   Bytes unknown   : %0d (read addrs never previously written via TCDM)", mm_bytes_unknown);
+      $display({"[MM %m]   Bytes unknown   : %0d ",
+                "(read addrs never previously written via TCDM)"}, mm_bytes_unknown);
       $display("[MM %m]   Data mismatches : %0d", mm_data_mismatch);
       $display("[MM %m]   Type mismatches : %0d", mm_type_mismatch);
       $display("[MM %m]   Orphan rsps     : %0d", mm_orphan_rsp);
@@ -1859,7 +1871,8 @@ module cachepool_tile
       else
         $display("[MM %m]   STATUS: FAIL (%0d violations)",
                  mm_data_mismatch + mm_type_mismatch + mm_orphan_rsp);
-      $display("[MM %m] ===============================================================================");
+      $display({"[MM %m] ========================================",
+                "======================================="});
     end
   end
 `endif

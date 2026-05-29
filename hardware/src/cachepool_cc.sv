@@ -506,18 +506,22 @@ module cachepool_cc
     // Each event prints time, port, side, req_id, addr (push only).
     bit sb_verbose_log = 1'b0;
     initial begin
+      // verilog_lint: waive plusarg-assignment
       sb_verbose_log = $test$plusargs("spatz_sb_verbose");
     end
     always_ff @(posedge clk_i) begin
       if (rst_ni && sb_verbose_log) begin
         for (sb_log_pp = 0; sb_log_pp < SpatzSbPorts; sb_log_pp++) begin
           if (req_fire[sb_log_pp]) begin
-            $display("[SPATZ-SB-LOG %0t %m] port=%0d PUSH  req_id=0x%02h addr=0x%08h global_id=%0d write=%0b",
+            $display({"[SPATZ-SB-LOG %0t %m] port=%0d PUSH  req_id=0x%02h ",
+                      "addr=0x%08h global_id=%0d write=%0b"},
                      $time, sb_log_pp, req_idx[sb_log_pp], spatz_mem_req[sb_log_pp].addr,
                      req_id_q[sb_log_pp], spatz_mem_req[sb_log_pp].write);
           end
           if (rsp_fire[sb_log_pp]) begin
-            $display("[SPATZ-SB-LOG %0t %m] port=%0d POP   rsp_id=0x%02h slot_valid_pre=%0b slot_addr_pre=0x%08h slot_gid_pre=%0d rsp_data=0x%08h rsp_write=%0b",
+            $display({"[SPATZ-SB-LOG %0t %m] port=%0d POP   rsp_id=0x%02h ",
+                      "slot_valid_pre=%0b slot_addr_pre=0x%08h slot_gid_pre=%0d ",
+                      "rsp_data=0x%08h rsp_write=%0b"},
                      $time, sb_log_pp, rsp_idx[sb_log_pp],
                      sb_q[sb_log_pp][rsp_idx[sb_log_pp]].valid,
                      sb_q[sb_log_pp][rsp_idx[sb_log_pp]].addr,
@@ -538,7 +542,8 @@ module cachepool_cc
         req_fire[p] |-> !sb_q[p][req_idx[p]].valid;
       endproperty
       sba_no_dup_push: assert property (p_no_dup_push)
-        else $error("[SPATZ-SB %m port %0d] DUP-PUSH: req_id=0x%h slot already valid (prior global_id=%0d addr=0x%08h)",
+        else $error({"[SPATZ-SB %m port %0d] DUP-PUSH: req_id=0x%h slot already ",
+                     "valid (prior global_id=%0d addr=0x%08h)"},
                     p, req_idx[p],
                     sb_q[p][req_idx[p]].global_id,
                     sb_q[p][req_idx[p]].addr);
@@ -551,7 +556,8 @@ module cachepool_cc
         rsp_fire[p] |-> sb_q[p][rsp_idx[p]].valid;
       endproperty
       sba_pop_was_valid: assert property (p_pop_was_valid)
-        else $error("[SPATZ-SB %m port %0d] STRAY-RSP: rsp_id=0x%h has no matching outstanding request",
+        else $error({"[SPATZ-SB %m port %0d] STRAY-RSP: rsp_id=0x%h ",
+                     "has no matching outstanding request"},
                     p, rsp_idx[p]);
     end
 
@@ -574,12 +580,15 @@ module cachepool_cc
                 (64'($time) - last_progress_time_q[wdog_p]) > SpatzReqScoreboardWdogPs &&
                 (64'($time) - last_warn_time_q[wdog_p])     > SpatzReqScoreboardWdogPs) begin
               last_warn_time_q[wdog_p] <= 64'($time);
-              $display("[%0t] [SPATZ-SB %m port %0d] STUCK: req_cnt=%0d rsp_cnt=%0d outstanding=%0d (entries below indexed by user.req_id)",
+              $display({"[%0t] [SPATZ-SB %m port %0d] STUCK: req_cnt=%0d rsp_cnt=%0d ",
+                        "outstanding=%0d (entries below indexed by user.req_id)"},
                        $time, wdog_p, req_id_q[wdog_p], rsp_id_q[wdog_p], outstanding_q[wdog_p]);
               for (wdog_ii = 0; wdog_ii < SpatzSbDepth; wdog_ii++) begin
                 if (sb_q[wdog_p][wdog_ii].valid) begin
-                  $display("    user.req_id=0x%02h global_id=%0d addr=0x%08h write=%0b issued@%0t (age=%0t)",
-                           wdog_ii, sb_q[wdog_p][wdog_ii].global_id, sb_q[wdog_p][wdog_ii].addr, sb_q[wdog_p][wdog_ii].write,
+                  $display({"    user.req_id=0x%02h global_id=%0d addr=0x%08h ",
+                            "write=%0b issued@%0t (age=%0t)"},
+                           wdog_ii, sb_q[wdog_p][wdog_ii].global_id,
+                           sb_q[wdog_p][wdog_ii].addr, sb_q[wdog_p][wdog_ii].write,
                            sb_q[wdog_p][wdog_ii].issue_time,
                            64'($time) - sb_q[wdog_p][wdog_ii].issue_time);
                 end
@@ -1184,6 +1193,7 @@ module cachepool_cc
   // Off by default; enable with +spatz_write_watch plusarg.
   // ---------------------------------------------------------------------
   bit spatz_write_watch_en = 1'b0;
+  // verilog_lint: waive plusarg-assignment
   initial spatz_write_watch_en = $test$plusargs("spatz_write_watch");
 
   // Loop indices hoisted out of always/final blocks (debug-only).
@@ -1194,14 +1204,18 @@ module cachepool_cc
   always_ff @(posedge clk_i) begin
     if (rst_ni && spatz_write_watch_en) begin
       for (dbg_swwatch_p = 0; dbg_swwatch_p < TCDMPorts; dbg_swwatch_p++) begin
-        if (tcdm_req_o[dbg_swwatch_p].q_valid && tcdm_rsp_i[dbg_swwatch_p].q_ready && tcdm_req_o[dbg_swwatch_p].q.write) begin
+        if (tcdm_req_o[dbg_swwatch_p].q_valid && tcdm_rsp_i[dbg_swwatch_p].q_ready &&
+            tcdm_req_o[dbg_swwatch_p].q.write) begin
           if (tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001308 ||
               tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001700 ||
               tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001730) begin
-            $display("[SPATZ-WRITE-WATCH %0t %m port %0d] addr=0x%08h data=0x%08h strb=0x%h user_tile=%0d user_core=%0d user_req=0x%h",
-                     $time, dbg_swwatch_p, tcdm_req_o[dbg_swwatch_p].q.addr, tcdm_req_o[dbg_swwatch_p].q.data,
+            $display({"[SPATZ-WRITE-WATCH %0t %m port %0d] addr=0x%08h data=0x%08h ",
+                      "strb=0x%h user_tile=%0d user_core=%0d user_req=0x%h"},
+                     $time, dbg_swwatch_p, tcdm_req_o[dbg_swwatch_p].q.addr,
+                     tcdm_req_o[dbg_swwatch_p].q.data,
                      tcdm_req_o[dbg_swwatch_p].q.strb,
-                     tcdm_req_o[dbg_swwatch_p].q.user.tile_id, tcdm_req_o[dbg_swwatch_p].q.user.core_id,
+                     tcdm_req_o[dbg_swwatch_p].q.user.tile_id,
+                     tcdm_req_o[dbg_swwatch_p].q.user.core_id,
                      tcdm_req_o[dbg_swwatch_p].q.user.req_id);
           end
         end
@@ -1226,7 +1240,8 @@ module cachepool_cc
       cc_wfifo_pop_n  <= '0;
     end else begin
       for (dbg_wabal_p = 0; dbg_wabal_p < TCDMPorts; dbg_wabal_p++) begin
-        if (tcdm_req_o[dbg_wabal_p].q_valid && tcdm_rsp_i[dbg_wabal_p].q_ready && tcdm_req_o[dbg_wabal_p].q.write)
+        if (tcdm_req_o[dbg_wabal_p].q_valid && tcdm_rsp_i[dbg_wabal_p].q_ready &&
+            tcdm_req_o[dbg_wabal_p].q.write)
           cc_wreq_n[dbg_wabal_p] <= cc_wreq_n[dbg_wabal_p] + 64'd1;
         if (tcdm_rsp_i[dbg_wabal_p].p_valid && tcdm_rsp_i[dbg_wabal_p].p.write)
           cc_wack_n[dbg_wabal_p] <= cc_wack_n[dbg_wabal_p] + 64'd1;
@@ -1257,12 +1272,15 @@ module cachepool_cc
       // it does, which means pushes were lost to overflow (a real fault).
       if (dbg_wabal_fp < NumMemPortsPerSpatz &&
           cc_wfifo_push_n[dbg_wabal_fp] != cc_wfifo_pop_n[dbg_wabal_fp]) begin
-        if ((cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp]) > 64'(SpatzRspFifoDepth)) begin
-          $error("[CC-WR-BAL %m port %0d] FIFO push-pop OVERFLOW-LEVEL  push_w=%0d pop_w=%0d  diff=%0d > depth=%0d (pushes lost)",
+        if ((cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp])
+            > 64'(SpatzRspFifoDepth)) begin
+          $error({"[CC-WR-BAL %m port %0d] FIFO push-pop OVERFLOW-LEVEL  ",
+                  "push_w=%0d pop_w=%0d  diff=%0d > depth=%0d (pushes lost)"},
                  dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
                  cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp], SpatzRspFifoDepth);
         end else begin
-          $display("[CC-WR-BAL %m port %0d] INFO benign EOC tail  push_w=%0d pop_w=%0d  diff=%0d (<= depth=%0d, acks abandoned at program end)",
+          $display({"[CC-WR-BAL %m port %0d] INFO benign EOC tail  push_w=%0d ",
+                    "pop_w=%0d  diff=%0d (<= depth=%0d, acks abandoned at program end)"},
                    dbg_wabal_fp, cc_wfifo_push_n[dbg_wabal_fp], cc_wfifo_pop_n[dbg_wabal_fp],
                    cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp], SpatzRspFifoDepth);
         end
