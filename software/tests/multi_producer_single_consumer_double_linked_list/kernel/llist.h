@@ -38,6 +38,12 @@ static inline void spin_lock(spinlock_t *lock, int cycle) {
 }
 
 static inline void spin_unlock(volatile int *lock, int cycle) {
+   // Release fence: with commit-accurate write responses (cache Option A),
+   // `fence` drains all prior stores to COMMIT (lsu_empty) before the unlock
+   // store becomes visible, so a later core that acquires the lock sees the
+   // critical-section data. (Snitch ignores the .rl AMO bit, hence an explicit
+   // fence rather than amoswap.w.rl.)
+   asm volatile ("fence rw, rw" ::: "memory");
    asm volatile (
        "amoswap.w zero, zero, %0"
        : "+A" (*lock)
