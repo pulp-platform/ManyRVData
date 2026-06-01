@@ -445,7 +445,7 @@ module tcdm_cache_interco #(
   int unsigned dbg_sb_o;
   int unsigned dbg_sb_c;
 
-  always_ff @(posedge clk_i) begin
+  always_ff @(posedge clk_i or negedge rst_ni) begin
     if (rst_ni && xbar_write_watch_en) begin
       for (dbg_xwwatch_p = 0; dbg_xwwatch_p < NumCache + NumRemotePort; dbg_xwwatch_p++) begin
         if (mem_req_valid[dbg_xwwatch_p] && mem_req_ready[dbg_xwwatch_p] &&

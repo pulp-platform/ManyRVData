@@ -49,6 +49,10 @@ sources:
   - hardware/src/cachepool_cluster.sv
   # Level 4
   - hardware/tb/cachepool_cluster_wrapper.sv
+  # sim-only verification IP (bind-attached; excluded from synth/lint)
+  - target: simulation
+    files:
+    - hardware/src/verif/cachepool_tile_tcdm_checker.sv
   # testbench
   - target: cachepool_test
     files:
