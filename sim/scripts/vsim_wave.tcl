@@ -20,21 +20,22 @@ do sim/scripts/vsim_cluster.tcl ${cluster_path}
 
 # Iterate through all groups using 2D coordinates
 for {set g 0} {$g < $NUM_GROUPS} {incr g} {
-    quietly set gx [expr {$g % $NUM_GROUPS_X}]
-    quietly set gy [expr {$g / $NUM_GROUPS_X}]
+    quietly set gy [expr {$g % $NUM_GROUPS_X}]
+    quietly set gx [expr {$g / $NUM_GROUPS_X}]
     quietly set group_wp_path   ${cluster_path}/gen_group_y[${gy}]/gen_group_x[${gx}]/i_group
     quietly set group_path      ${group_wp_path}/i_group
-    quietly set gwp_name        "GroupWP_x${gx}_y${gy}"
+    quietly set gwp_name        "GroupWP_Y${gy}_X${gx}"
 
     # 1. Plot GroupWP signals for this group (always, all groups)
     add wave -noupdate -group "${gwp_name}" ${group_wp_path}/*
+
 
     # 2. Plot Group-level signals nested inside GroupWP (always, all groups)
     do sim/scripts/vsim_group.tcl ${group_path} 5 "${gwp_name}"
 
     # 3. Plot all tiles and cores for the diagonal groups: (0,0) always,
     #    and (1,1) if the mesh has at least 2 columns and 2 rows
-    if {($gx == 0 && $gy == 0) || ($gx == 1 && $gy == 1 && $NUM_GROUPS_X >= 2)} {
+    if {($gx == 0 && $gy == 0) || ($gx == 0 && $gy == 1 && $NUM_GROUPS_X >= 2)} {
         for {set tile 0} {$tile < $NUM_TILES} {incr tile} {
             quietly set tile_path ${group_path}/gen_tiles[${tile}]/gen_tile
             do sim/scripts/vsim_tile.tcl $tile $g ${tile_path} "${gwp_name}"

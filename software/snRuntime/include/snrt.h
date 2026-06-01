@@ -154,8 +154,9 @@ static inline uint32_t __attribute__((pure)) snrt_hartid() {
 //================================================================================
 extern void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off);
 extern void *snrt_l1alloc(size_t size);
-extern void *snrt_l3alloc(size_t size);
 extern void snrt_l1alloc_reset();
+extern void *snrt_malloc(size_t size);
+extern void  snrt_free(void *ptr);
 
 //================================================================================
 // Interrupt functions
