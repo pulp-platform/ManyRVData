@@ -115,7 +115,9 @@ module cachepool_tile
     parameter bit                                            UseFoldedDataBanks               = 1'b1,
     parameter int                     unsigned               FoldWayGroup                     = 0,
     /// Use hash-based way selection (1 way per lookup, no LRU).
-    parameter bit                                            UseHashWaySelect                 = 1'b0
+    parameter bit                                            UseHashWaySelect                 = 1'b0,
+    /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
+    parameter bit                                            UseForwardingBuffer              = 1'b1
   ) (
     /// System clock.
     input  logic                                    clk_i,
@@ -948,6 +950,7 @@ module cachepool_tile
       .SetAssociativity (L1AssoPerCtrl      ),
       .DataPartSplit    (PartSplit          ),
       .UseHashWaySelect (UseHashWaySelect   ),
+      .UseForwardingBuffer (UseForwardingBuffer ),
       .BankFactor       (L1BankFactor       ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type

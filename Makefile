@@ -251,6 +251,12 @@ VLOG_DEFS += -DL1D_TILE_SIZE=$(l1d_tile_size)
 VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
 VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
 VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
+# L1 data-bank micro-architecture knobs (1=on/0=off). Production = folded(1) +
+# hash-way(1) + fwd-buffer(1). Unfolded conventional = folded(0)+hash(0)+fwd(0).
+VLOG_DEFS += -DL1D_USE_FOLDED=$(l1d_use_folded)
+VLOG_DEFS += -DL1D_FOLD_WAY_GROUP=$(l1d_fold_way_group)
+VLOG_DEFS += -DL1D_USE_HASH_WAY=$(l1d_use_hash_way)
+VLOG_DEFS += -DL1D_USE_FWD_BUF=$(l1d_use_fwd_buf)
 
 # CachePool CC / core cluster
 VLOG_DEFS += -DSPATZ_FPU_EN=$(spatz_fpu_en)

@@ -111,7 +111,9 @@ module cachepool_cluster
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
     parameter bit                                            UseFoldedDataBanks               = 1'b1,
     parameter int                     unsigned               FoldWayGroup                     = 0,
-    parameter bit                                            UseHashWaySelect                 = 1'b1
+    parameter bit                                            UseHashWaySelect                 = 1'b1,
+    /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
+    parameter bit                                            UseForwardingBuffer              = 1'b1
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -409,7 +411,10 @@ module cachepool_cluster
       .XbarLatency              ( XbarLatency              ),
       .MaxMstTrans              ( MaxMstTrans              ),
       .MaxSlvTrans              ( MaxSlvTrans              ),
-      .UseHashWaySelect         ( UseHashWaySelect         )
+      .UseFoldedDataBanks       ( UseFoldedDataBanks        ),
+      .FoldWayGroup             ( FoldWayGroup              ),
+      .UseHashWaySelect         ( UseHashWaySelect         ),
+      .UseForwardingBuffer      ( UseForwardingBuffer       )
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
@@ -508,7 +513,8 @@ module cachepool_cluster
       .MaxSlvTrans              ( MaxSlvTrans               ),
       .UseFoldedDataBanks       ( UseFoldedDataBanks        ),
       .FoldWayGroup             ( FoldWayGroup              ),
-      .UseHashWaySelect         ( UseHashWaySelect          )
+      .UseHashWaySelect         ( UseHashWaySelect          ),
+      .UseForwardingBuffer      ( UseForwardingBuffer       )
     ) i_tile (
       .clk_i                    ( clk_i                     ),
       .rst_ni                   ( rst_ni                    ),

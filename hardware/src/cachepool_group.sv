@@ -112,7 +112,9 @@ module cachepool_group
     parameter bit                                       UseFoldedDataBanks        = 1'b1,
     parameter int unsigned                              FoldWayGroup              = 0,
     /// Use hash-based way selection (1 way per lookup, no LRU).
-    parameter bit                                       UseHashWaySelect          = 1'b1
+    parameter bit                                       UseHashWaySelect          = 1'b1,
+    /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
+    parameter bit                                       UseForwardingBuffer       = 1'b1
   ) (
     /// System clock.
     input  logic                                        clk_i,
@@ -344,7 +346,8 @@ module cachepool_group
       .MaxSlvTrans              ( MaxSlvTrans              ),
       .UseFoldedDataBanks       ( UseFoldedDataBanks       ),
       .FoldWayGroup             ( FoldWayGroup             ),
-      .UseHashWaySelect         ( UseHashWaySelect         )
+      .UseHashWaySelect         ( UseHashWaySelect         ),
+      .UseForwardingBuffer      ( UseForwardingBuffer      )
     ) i_tile (
       .clk_i                    ( clk_i                                                       ),
       .rst_ni                   ( rst_ni                                                      ),
