@@ -30,7 +30,7 @@ _snrt_exit:
     la        t1, tohost
     sw        t0, 0(t1)
     mv        s0, t0
-    call      l1d_flush
+    # call      l1d_flush
     mv        a0, s0
     call      set_eoc
 1:  ret

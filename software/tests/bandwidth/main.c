@@ -64,16 +64,14 @@ int main() {
   // traffic on the inter-tile xbar.
   const uint32_t scramble_bits = 6;
 
-  if (cid == 0) {
-    l1d_xbar_config(scramble_bits);
-    // Fully shared
-    l1d_part(4);
+  l1d_xbar_config(scramble_bits);
+  // Fully shared
+  l1d_part(4);
 #ifdef DEBUG
+  if (cid == 0) {
     printf("scramble_bits=%u v_len=%u\n", scramble_bits, v_len);
-#endif
   }
-
-  snrt_cluster_hw_barrier();
+#endif
 
   // -----------------------------------------------------------------------
   // Phase 1: warmup — fill L1 cache with all of data_dram.

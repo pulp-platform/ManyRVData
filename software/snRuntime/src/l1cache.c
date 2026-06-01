@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <l1cache.h>
+#include <snrt.h>
 
 void l1d_xbar_config(uint32_t offset) {
   // The input will give the starting bit to select the cache bank
@@ -16,14 +17,20 @@ void l1d_xbar_config(uint32_t offset) {
   // granularity cannot be less than cacheline width
   offset = (offset > 6) ? offset : 6;
 
-  uint32_t *cfg =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
-  *cfg = offset;
-  // Flush cache before commit xbar changes
-  l1d_flush();
-  l1d_wait();
-  l1d_xbar_commit();
+  // All cores fence and sync before reconfiguration
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    uint32_t *cfg =
+        (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                     CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
+    *cfg = offset;
+    // Flush cache before committing xbar changes
+    l1d_flush();
+    l1d_wait();
+    l1d_xbar_commit();
+  }
+  snrt_cluster_hw_barrier();
 }
 
 
@@ -89,6 +96,42 @@ void l1d_shared_flush() {
   l1d_commit();
 }
 
+// Cluster-wide flush: all cores fence and sync, core 0 issues the flush instruction.
+// Must be called by all cores in the cluster.
+void l1d_cluster_flush() {
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    l1d_flush();
+    l1d_wait();
+  }
+  snrt_cluster_hw_barrier();
+}
+
+// Cluster-wide private flush: all cores fence and sync, core 0 issues the flush instruction.
+// Must be called by all cores in the cluster.
+void l1d_cluster_private_flush(uint32_t tile) {
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    l1d_private_flush(tile);
+    l1d_wait();
+  }
+  snrt_cluster_hw_barrier();
+}
+
+// Cluster-wide shared flush: all cores fence and sync, core 0 issues the flush instruction.
+// Must be called by all cores in the cluster.
+void l1d_cluster_shared_flush() {
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    l1d_shared_flush();
+    l1d_wait();
+  }
+  snrt_cluster_hw_barrier();
+}
+
 void l1d_wait() {
   volatile uint32_t *busy =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
@@ -125,15 +168,19 @@ void l1d_wait() {
 
 // Used to configure the number of private cache banks per tile
 void l1d_part (uint32_t size) {
-  // flush the cache before reconfiguration
-  l1d_flush();
-  l1d_wait();
-  // set the pointers
-  volatile uint32_t *cfg_private =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
-  *cfg_private = size;
-  l1d_commit();
+  // All cores fence and sync before reconfiguration
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    l1d_flush();
+    l1d_wait();
+    volatile uint32_t *cfg_private =
+        (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                     CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
+    *cfg_private = size;
+    l1d_commit();
+  }
+  snrt_cluster_hw_barrier();
 }
 
 // Configure the starting address mapping to the private partition

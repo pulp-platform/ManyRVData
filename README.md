@@ -21,7 +21,7 @@ All tiles across all groups share one unified L1 data cache, interleaved across 
 
 ## Requirements
 
-- Linux environment with: `make`, `git`, `python3`, `wget`, `curl`
+- Linux environment with: `make`, `git`, `python3`, `curl`
 - **CMake ≥ 3.28**, **GCC/G++ ≥ 11.2**
 - **QuestaSim** (tested with `questa-2023.4`)
 - Optional: SpyGlass for lint

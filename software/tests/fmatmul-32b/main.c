@@ -72,17 +72,11 @@ int main() {
   unsigned int p_start, p_end;
   unsigned int kernel_size;
 
-
-  if (cid == 0) {
-    // Set xbar policy
-    // All cores will access the same B
-    // Scramble based on cacheline
-    l1d_xbar_config(5);
-    l1d_part(4);
-  }
-
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
+  // Set xbar policy
+  // All cores will access the same B
+  // Scramble based on cacheline
+  l1d_xbar_config(5);
+  l1d_part(4);
 
   a = gemm_A_dram;
   b = gemm_B_dram;

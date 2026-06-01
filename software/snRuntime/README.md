@@ -1,48 +1,198 @@
-# Snitch Runtime Library
+# snRuntime — CachePool Software Runtime
 
-This library implements a minimal runtime for Snitch systems, which is responsible for the following:
+This library is the bare-metal software runtime for the CachePool manycore system. It is derived from the upstream Snitch runtime and extended with CachePool-specific cache management and peripheral APIs.
 
-- Detecting the hardware configuration (cores, clusters, ISA extensions, TCDM)
-- Passing a descriptor struct to the executable
-- Synchronization across cores and clusters
-- Team-based multithreading and work splitting
+## Folder Structure
 
-## General Runtime
+```
+snRuntime/
+├── include/          # Public headers — include these in application code
+│   ├── snrt.h            # Master header: topology, barriers, DMA, allocation
+│   ├── l1cache.h         # CachePool L1 data cache management API
+│   ├── cachepool_peripheral.h  # Register offsets for the cluster peripheral
+│   ├── perf_cnt.h        # Performance counter API
+│   ├── team.h            # Team/cluster descriptor structs
+│   ├── interface.h       # Hardware interface definitions
+│   ├── debug.h           # Debug printf helpers
+│   ├── dm.h              # Data-mover (DMA) low-level interface
+│   ├── eu.h              # Execution unit (work dispatch) interface
+│   ├── kmp.h             # OpenMP KMP interface
+│   └── omp.h             # OpenMP runtime interface
+├── src/              # Runtime implementation
+│   ├── start.S           # Entry point (hart 0 boots, others wait for IPI)
+│   ├── team.c            # Team/topology initialisation
+│   ├── barrier.c         # Hardware and software barrier implementations
+│   ├── l1cache.c         # CachePool L1 cache management (flush, partition, xbar)
+│   ├── alloc.c           # L1 TCDM bump allocator + DRAM linked-list allocator
+│   ├── memcpy.c          # Optimised memcpy
+│   ├── perf_cnt.c        # Performance counter helpers
+│   ├── printf.c          # Lightweight printf (wraps vendor/printf.c)
+│   ├── dm.c / dma.c      # DMA engine helpers
+│   ├── interrupt.c       # Interrupt initialisation
+│   └── platforms/        # Platform-specific startup and putchar
+├── tests/            # Self-contained runtime unit tests
+├── vendor/           # Third-party sources (printf, riscv-opcodes)
+└── link/             # Linker script template (common.ld.in)
+```
 
-The general runtime (`libsnRuntime`) relies on a bootloader or operating system to load the executable. This usually requires virtual memory to map the segments to the correct addresses. The general runtime does not provide any startup code in this scenario, but is more like a regular library providing some useful API.
+## Key API
 
-## Bare Runtime
+### Topology (`snrt.h`)
 
-The bare runtimes (`libsnRuntime-<platform>`) assumes that the executable it is being linked into will run in a bare-metal fashion with no convenient bootloader or virtual memory setup. For this scenario, the runtime provides the `_start` symbol and implements a basic crt0.
+```c
+uint32_t snrt_cluster_core_idx();    // Core index within the cluster (0-based)
+uint32_t snrt_cluster_core_num();    // Total cores in the cluster
+uint32_t snrt_cluster_tile_idx();    // Tile index within the cluster
+uint32_t snrt_cluster_tile_num();    // Number of tiles in the cluster
+int      snrt_is_compute_core();     // Non-zero if this is a compute (non-DMA) core
+```
 
-## Usage
+### Synchronisation (`snrt.h`)
 
-The runtime library can be compiled as follows:
+```c
+void snrt_cluster_hw_barrier();      // Hardware barrier: stalls until all cluster cores arrive
+void snrt_cluster_sw_barrier();      // Software barrier (polling)
+void snrt_global_barrier();          // Cluster-to-cluster barrier
+```
 
-    mkdir build
-    cd build
-    cmake ..
-    make
+### L1 Data Cache — CachePool-specific (`l1cache.h`)
 
-The tests can be executed as follows:
+All **cluster-wide** functions must be called by **every core** in the cluster. They
+internally issue a `fence`, a hardware barrier, execute the operation on core 0 only,
+and then issue a final barrier before returning. The low-level single-core variants
+(without the `_cluster_` prefix) are for use inside the runtime or in single-core
+contexts only.
 
-    make test
+#### Cluster-wide flush (recommended for application code)
 
-Interesting CMake options that can be set via `-D<option>=<value>`:
+```c
+void l1d_cluster_flush();                      // Flush all banks in all tiles
+void l1d_cluster_shared_flush();               // Flush shared banks only
+void l1d_cluster_private_flush(uint32_t tile); // Flush private banks of selected tiles (one-hot mask)
+```
 
-- `CMAKE_TOOLCHAIN_FILE`: The compiler toolchain configuration to use. Acceptable values:
-    - `toolchain-gcc` for a GNU tolchain
-    - `toolchain-llvm` for a LLVM/Clang toolchain (coming soon)
-    - Your own custom `<toolchain>.cmake` file; see `../cmake/toolchain-gcc.cmake` for reference
-- `MEM_DRAM_ORIGIN`/`MEM_DRAM_SIZE`: Base address and size of the external memory used for shared data and program memory
+#### Cache configuration (cluster-wide)
 
-## Adding a new entry to the device-tree
+```c
+// Set the crossbar interleaving offset (in bits).
+// Granularity is clamped to >= log2(cacheline_bytes).
+// Example: l1d_xbar_config(6) for 512-bit cachelines (6 = log2(64)).
+void l1d_xbar_config(uint32_t offset);
 
-On the example of adding a CLINT device:
+// Set the number of private banks per tile (0=all-shared … 4=all-private).
+void l1d_part(uint32_t size);
+```
 
-1. Add member `clint_base` to the `snrt_cluster_bootdata` struct in `start_cluster.c`
-2. Add the same member to the `BootData` struct in `tb_lib.hh`
-3. Add an enrty of the device in the cluster configuration `cluster.default.hjson`
-4. Add the same member to the `bootdata.cc.tpl` template and get the value from the member added in 3.
-5. Generate the bootdata.cc file by running cluster-gen `make cluster_gen`
-6. The value is now available at boot in `bootdata->clint_base`
+#### Address boundary and polling
+
+```c
+// Set the private/shared address boundary (default 0xA000_0000).
+// Addresses >= boundary are private; addresses < boundary are shared.
+// Requires a flush before changing while valid data is cached.
+void l1d_addr(uint32_t addr);
+
+// Poll the peripheral until the current flush instruction completes.
+// Used by the low-level flush functions; not normally needed in application code.
+void l1d_wait();
+```
+
+#### Cache initialisation (called once at boot, single-core)
+
+```c
+// Invalidate all cache banks (insn = 2'b11). Called from start_snitch.S.
+void l1d_init(uint32_t size);
+```
+
+### Performance Counters (`perf_cnt.h`) *TODO: REMOVE*
+
+```c
+void     snrt_start_perf_counter(enum snrt_perf_cnt, enum snrt_perf_cnt_type, uint32_t hart_id);
+void     snrt_stop_perf_counter(enum snrt_perf_cnt);
+void     snrt_reset_perf_counter(enum snrt_perf_cnt);
+uint32_t snrt_get_perf_counter(enum snrt_perf_cnt);
+```
+
+Counter types include cycles, TCDM accesses, TCDM congestion, FPU issues, retired
+instructions, DMA bandwidth events, and ICache statistics.
+
+### Memory Allocation (`snrt.h`)
+
+Two allocators are provided for different memory regions.
+
+**L1 TCDM — bump allocator** (no free support):
+
+```c
+void *snrt_l1alloc(size_t size);   // Bump-allocate from cluster TCDM scratchpad
+void  snrt_l1alloc_reset();        // Reclaim all L1 allocations at once
+```
+
+**DRAM — linked-list allocator** (single-core, supports free + coalescing):
+
+```c
+void *snrt_malloc(size_t size);    // Allocate from DRAM; payload rounded up to 64 B
+void  snrt_free(void *ptr);        // Free and coalesce with following free blocks
+```
+
+Both the block header and the payload are cacheline-aligned (64 bytes). A request for
+any size — even 1 byte — allocates a minimum of 64 bytes of payload. The allocator
+must be called by a **single core only**; it is not thread-safe by design since
+allocation is expected to happen in single-core initialisation phases.
+
+The heap begins at `_edram + l3off` (set in `snrt_alloc_init`) and grows upward.
+Block headers (64 bytes each) are stored in DRAM immediately before their payloads
+and are accessed through the L1 cache like any other data.
+
+### DMA (`snrt.h`) *TODO: REMOVE*
+
+```c
+snrt_dma_txid_t snrt_dma_start_1d(void *dst, const void *src, size_t size);
+snrt_dma_txid_t snrt_dma_start_2d(void *dst, const void *src, size_t size,
+                                   size_t dst_stride, size_t src_stride, size_t repeat);
+void snrt_dma_wait(snrt_dma_txid_t tid);
+void snrt_dma_wait_all();
+```
+
+## Typical Initialisation Pattern
+
+```c
+#include <snrt.h>
+#include <l1cache.h>
+
+int main() {
+    const uint32_t cid = snrt_cluster_core_idx();
+
+    // Configure cache xbar and partition — must be called by ALL cores.
+    l1d_xbar_config(6);   // interleave at cacheline granularity
+    l1d_part(0);          // all-shared
+
+    // Single-core init: allocate buffers, set up data structures.
+    if (cid == 0) {
+        float *buf = (float *)snrt_malloc(N * sizeof(float));
+        // ... populate buf, other setup ...
+    }
+    snrt_cluster_hw_barrier();
+
+    // ... parallel computation ...
+
+    // Flush before reading results back — must be called by ALL cores.
+    l1d_cluster_flush();
+
+    if (cid == 0) {
+        // ... verify results ...
+    }
+    snrt_cluster_hw_barrier();
+
+    return 0;
+}
+```
+
+## Notes
+
+- The `fence` instruction only drains Snitch's scalar LSU. Spatz (RVV) memory
+  operations are tracked separately via `acc_mem_cnt` in the Snitch core. Application
+  code should ensure all vector operations have retired before calling any flush.
+- Changing the partition mode (`l1d_part`) or the address boundary (`l1d_addr`) while
+  valid data is cached requires a flush first.
+- The `start_snitch.S` platform startup calls `l1d_flush` (single-core, invalidate)
+  on the boot core before handing off to `main`. Application code does not need to
+  call `l1d_init` manually.

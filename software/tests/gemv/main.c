@@ -60,12 +60,9 @@ int main() {
 
   uint32_t offset = 31 - __builtin_clz(m_core * sizeof(T));
 
-  // Allocate the matrices
-  if (cid == 0) {
-    // We use all-private mode for this kernel
-    l1d_xbar_config(offset);
-    l1d_part(4);
-  }
+  // We use all-private mode for this kernel
+  l1d_xbar_config(offset);
+  l1d_part(4);
 
   // Reset timer
   unsigned int timer_start, timer_end, timer, timer_iter1;
@@ -119,12 +116,18 @@ int main() {
       stop_kernel();
 
       if (i == 0) {
-        l1d_flush();
-        l1d_wait();
-
         timer = timer_temp;
         timer_iter1 = timer;
+      }
+    }
 
+    // All cores flush before first-iteration verification
+    if (i == 0) {
+      l1d_cluster_flush();
+    }
+
+    if (cid == 0) {
+      if (i == 0) {
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
             printf("Error: ID: %i Calc", i);
@@ -135,8 +138,6 @@ int main() {
           }
         }
       }
-    } else {
-      cachepool_wait(10);
     }
 
     snrt_cluster_hw_barrier();
