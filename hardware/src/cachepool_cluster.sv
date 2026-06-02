@@ -107,7 +107,13 @@ module cachepool_cluster
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
-    parameter int                     unsigned               NrSramCfg                          = 1
+    parameter int                     unsigned               NrSramCfg                          = 1,
+    /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
+    parameter bit                                            UseFoldedDataBanks               = 1'b1,
+    parameter int                     unsigned               FoldWayGroup                     = 0,
+    parameter bit                                            UseHashWaySelect                 = 1'b1,
+    /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
+    parameter bit                                            UseForwardingBuffer              = 1'b1
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -404,7 +410,11 @@ module cachepool_cluster
       .RegisterExt              ( RegisterExt              ),
       .XbarLatency              ( XbarLatency              ),
       .MaxMstTrans              ( MaxMstTrans              ),
-      .MaxSlvTrans              ( MaxSlvTrans              )
+      .MaxSlvTrans              ( MaxSlvTrans              ),
+      .UseFoldedDataBanks       ( UseFoldedDataBanks        ),
+      .FoldWayGroup             ( FoldWayGroup              ),
+      .UseHashWaySelect         ( UseHashWaySelect         ),
+      .UseForwardingBuffer      ( UseForwardingBuffer       )
     ) i_group (
       .clk_i                    ( clk_i                    ),
       .rst_ni                   ( rst_ni                   ),
@@ -500,7 +510,11 @@ module cachepool_cluster
       .RegisterExt              ( RegisterExt               ),
       .XbarLatency              ( XbarLatency               ),
       .MaxMstTrans              ( MaxMstTrans               ),
-      .MaxSlvTrans              ( MaxSlvTrans               )
+      .MaxSlvTrans              ( MaxSlvTrans               ),
+      .UseFoldedDataBanks       ( UseFoldedDataBanks        ),
+      .FoldWayGroup             ( FoldWayGroup              ),
+      .UseHashWaySelect         ( UseHashWaySelect          ),
+      .UseForwardingBuffer      ( UseForwardingBuffer       )
     ) i_tile (
       .clk_i                    ( clk_i                     ),
       .rst_ni                   ( rst_ni                    ),
@@ -726,13 +740,19 @@ module cachepool_cluster
     ) i_reqrsp2axi  (
       .clk_i        (clk_i                ),
       .rst_ni       (rst_ni               ),
-      .user_i       (l2_req[ch].q.user    ),
+      // refill_user_t (UserWidth) <= AxiUserWidth (asserted below); explicit
+      // zero-extend to the AxiUserWidth port to keep the widths matched.
+      .user_i       (AxiUserWidth'(l2_req[ch].q.user)),
       .reqrsp_req_i (l2_req[ch]           ),
       .reqrsp_rsp_o (l2_rsp[ch]           ),
       .axi_req_o    (wide_axi_slv_req[ch] ),
       .axi_rsp_i    (wide_axi_slv_rsp[ch] )
     );
   end
+
+  // The refill user struct carried over the cache->L2 AXI must fit in the AXI
+  // user field; the user_i zero-extend above relies on this never truncating.
+  `ASSERT_INIT(CheckAxiUserFitsRefillUser, AxiUserWidth >= $bits(refill_user_t))
 
 
   // -------------

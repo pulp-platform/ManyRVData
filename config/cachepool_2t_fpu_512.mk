@@ -1,24 +1,29 @@
-# Copyright 2025 ETH Zurich and University of Bologna.
+# Copyright 2026 ETH Zurich and University of Bologna.
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 
-# Author: Diyou Shen, ETH Zurich
+# 2-tile / 8-core FPU variant of cachepool_fpu_512.
+# Bisect point between 1t/4c (works) and 4t/16c (broken) to isolate
+# whether the bug is in the inter-tile (group-level) xbar at all, or
+# only at 4t.
 
 #########################
 ##  CachePool Cluster  ##
 #########################
 
 # Number of tiles
-num_tiles ?= 1
+num_tiles ?= 2
 
 # Number of cores
-num_cores ?= 4
+num_cores ?= 8
 
 # Core datawidth
 data_width ?= 32
 
 # Core addrwidth
 addr_width ?= 32
+
+num_remote_ports_per_tile ?= 1
 
 
 ######################
@@ -48,32 +53,20 @@ l1d_coal_window ?= 2
 # L1 data cache number of ways per
 l1d_num_way ?= 4
 
-# L1 data cache size **per tile** (KiB)
+# L1 data cache size per tile (KiB)
 l1d_tile_size ?= 256
 
 # L1 data cache tag width (TODO: should be calcualted)
 l1d_tag_data_width ?= 92
 
-# L1 data-bank micro-architecture (1=on, 0=off).
-# Production cache  = folded(1) + hash-way(1) + fwd-buffer(1).
-# Unfolded "conventional" cache = folded(0) + hash-way(0) + fwd-buffer(0).
-# Constraints (enforced by RTL elaboration asserts):
-#   - folded (l1d_use_folded=1) REQUIRES l1d_use_hash_way=1
-#   - fwd-buffer (l1d_use_fwd_buf=1) REQUIRES l1d_use_hash_way=1
-# l1d_fold_way_group=0 => auto (min(4, ways)).
-l1d_use_folded     ?= 1
-l1d_fold_way_group ?= 0
-l1d_use_hash_way   ?= 1
-l1d_use_fwd_buf    ?= 1
-
 ####################
 ##  CachePool CC  ##
 ####################
 # Spatz fpu support?
-spatz_fpu_en ?= 0
+spatz_fpu_en ?= 1
 
 # Spatz number of FPU
-spatz_num_fpu ?= 0
+spatz_num_fpu ?= 4
 
 # Spatz number of IPU
 spatz_num_ipu ?= 4

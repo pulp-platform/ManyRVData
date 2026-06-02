@@ -242,17 +242,16 @@ static void consumer(const unsigned int core_id) {
             // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
             // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
             // vector_memcpy32_1360B_opt(node->tgt, node->data);
-            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, rlc_ctx.vtNext);
+            // Atomically allocate a unique RLC sequence number for this PDU and
+            // use it as the header. fetch_add returns the pre-increment value,
+            // so each consumer gets a distinct SN (safe for multiple consumers).
+            uint32_t sn = atomic_fetch_add_explicit(&rlc_ctx.vtNext, 1, memory_order_relaxed);
+            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, sn);
             // timer_mv_1 = benchmark_get_cycle();
 
-            // Update the RLC struct variables
-            // atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,                  memory_order_relaxed);
-            // atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size,    memory_order_relaxed);
-            rlc_ctx.pduWithoutPoll += 1;
-            rlc_ctx.byteWithoutPoll += node->data_size;
-            // Increment the next available RLC sequence number
-            rlc_ctx.vtNext += 1;
-            // atomic_fetch_add_explicit(&rlc_ctx.vtNext,          1,                  memory_order_relaxed);
+            // Update the RLC stats atomically (shared across multiple consumers).
+            atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,               memory_order_relaxed);
+            atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size, memory_order_relaxed);
 
 
             // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -395,14 +394,11 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    if (core_id >= 2) {
+    if (core_id < 2) {
         consumer(core_id);
-    } else /*if (core_id == 0)*/ {
+    } else {
         producer(core_id);
-    }/* else {
-        while (1) {}
-    }*/
-    // consumer(core_id);
+    }
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 

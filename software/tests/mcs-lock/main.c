@@ -188,12 +188,14 @@ int main(void) {
         spin_unlock(&test_spin_lock, 0);
 #endif
 
-    if(core_id != 0) {
-        while(1){}
-    }
-
     // Wait for all cores to finish
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
+
+    // (Previously non-zero cores spun in while(1) here and the second
+    // barrier below then dead-locked core 0 — it waited for cores 1+ to
+    // reach the barrier, but they were trapped in the infinite loop.
+    // Just let every core return; the runtime's _snrt_exit triggers
+    // set_eoc only on core 0 anyway, and the other cores halt cleanly.)
 
     return 0;
 }

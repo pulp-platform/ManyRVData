@@ -60,7 +60,6 @@ waive -rule "FlopEConst"
 waive -rule "W416"
 # Assert not synthesizable
 waive -rule "SYNTH_5064"
-
 # Set lint_rtl goal and run
 current_goal lint/lint_rtl
 run_goal

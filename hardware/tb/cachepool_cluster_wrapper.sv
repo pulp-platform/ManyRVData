@@ -18,6 +18,13 @@ module cachepool_cluster_wrapper
   parameter int unsigned AxiUserWidth  = SpatzAxiUserWidth,
   parameter int unsigned AxiInIdWidth  = SpatzAxiIdInWidth,
   parameter int unsigned AxiOutIdWidth = SpatzAxiIdOutWidth,
+  // L1 data-bank / way-select / forwarding-buffer knobs.  Defaulted from the
+  // config macros (set in config/*.mk -> Makefile VLOG_DEFS); fall back to the
+  // production combination (folded + hash + fwd-buffer) when a macro is unset.
+  parameter bit          UseFoldedDataBanks  = `ifdef L1D_USE_FOLDED   `L1D_USE_FOLDED   `else 1'b1 `endif,
+  parameter int unsigned FoldWayGroup        = `ifdef L1D_FOLD_WAY_GROUP `L1D_FOLD_WAY_GROUP `else 0 `endif,
+  parameter bit          UseHashWaySelect    = `ifdef L1D_USE_HASH_WAY `L1D_USE_HASH_WAY `else 1'b1 `endif,
+  parameter bit          UseForwardingBuffer = `ifdef L1D_USE_FWD_BUF  `L1D_USE_FWD_BUF  `else 1'b1 `endif,
 
   parameter type axi_in_resp_t         = spatz_axi_in_resp_t,
   parameter type axi_in_req_t          = spatz_axi_in_req_t,
@@ -90,7 +97,11 @@ module cachepool_cluster_wrapper
     .RegisterExt              (1                        ),
     .XbarLatency              (axi_pkg::CUT_ALL_PORTS   ),
     .MaxMstTrans              (NumAxiMaxTrans           ),
-    .MaxSlvTrans              (NumAxiMaxTrans           )
+    .MaxSlvTrans              (NumAxiMaxTrans           ),
+    .UseFoldedDataBanks       (UseFoldedDataBanks       ),
+    .FoldWayGroup             (FoldWayGroup             ),
+    .UseHashWaySelect         (UseHashWaySelect         ),
+    .UseForwardingBuffer      (UseForwardingBuffer      )
   ) i_cluster (
     .clk_i                    ,
     .rst_ni                   ,

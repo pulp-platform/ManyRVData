@@ -28,6 +28,9 @@ static inline void printf_lock_acquire(volatile int *lock) {
 }
 
 static inline void printf_lock_release(volatile int *lock) {
+    // Release fence (cache Option A): drain prior stores to COMMIT before the
+    // unlock store is visible (see spin_unlock in llist.h).
+    asm volatile ("fence rw, rw" ::: "memory");
     asm volatile (
         "amoswap.w zero, zero, %0"
         : "+A" (*lock)
