@@ -2,26 +2,36 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-// Tests snrt_fence() as the release barrier in a spinlock critical section.
+// Tests snrt_fence(), snrt_fence_snitch(), and snrt_fence_spatz() as the
+// release barrier in a spinlock critical section.
 //
-// With acc_mem_stall relaxed to the rollover guard only, snrt_fence() is the
-// sole mechanism that orders Spatz (vector) stores before the lock release.
-// Without the fence, the AMO unlock can fire while Spatz stores are still
-// in flight, and the next lock holder reads stale data.
+// With acc_mem_stall relaxed to the rollover guard only, an explicit fence is
+// the sole mechanism that orders stores before the lock release.  Without it,
+// the AMO unlock can fire while stores are still in flight, and the next lock
+// holder reads stale data.
 //
 // Shared DRAM buffers are allocated by core 0 via snrt_malloc and broadcast
 // through static globals.  Requires at least 2 cores and Spatz (RVV) support.
 //
-// T1: Scalar stores in critical section.
+// T1: Scalar stores — full fence (snrt_fence).
 //     Each core acquires the lock, increments a shared counter, calls
 //     snrt_fence(), releases the lock.  After all cores finish, core 0
 //     checks counter == num_cores.
 //
-// T2: Spatz vector stores in critical section.
+// T2: Spatz vector stores — full fence (snrt_fence).
 //     Each core acquires the lock, vector-loads the shared accumulator,
 //     adds its own core id to every element (vadd.vx), vector-stores back,
 //     calls snrt_fence(), releases the lock.  After all cores finish, core 0
 //     checks every element equals num_cores*(num_cores-1)/2.
+//
+// T3: Scalar stores — Snitch-only fence (snrt_fence_snitch).
+//     Same as T1 but uses snrt_fence_snitch(), which drains the Snitch LSU
+//     only.  Sufficient to order scalar stores before the AMO unlock.
+//
+// T4: Spatz vector stores — Spatz-only fence (snrt_fence_spatz).
+//     Same as T2 but uses snrt_fence_spatz(), which drains Spatz memory
+//     operations only.  Sufficient to order vector stores before the AMO
+//     unlock.
 
 #include <snrt.h>
 #include <stdint.h>
@@ -42,6 +52,18 @@ static inline void cs_lock(volatile uint32_t *lock) {
 // AMO unlock fires, guaranteeing stores are visible to the next lock holder.
 static inline void cs_unlock(volatile uint32_t *lock) {
     snrt_fence();
+    asm volatile("amoswap.w zero, zero, %0" : "+A"(*lock));
+}
+
+// snrt_fence_snitch() drains the Snitch LSU only — sufficient for scalar stores.
+static inline void cs_unlock_snitch(volatile uint32_t *lock) {
+    snrt_fence_snitch();
+    asm volatile("amoswap.w zero, zero, %0" : "+A"(*lock));
+}
+
+// snrt_fence_spatz() drains Spatz operations only — sufficient for vector stores.
+static inline void cs_unlock_spatz(volatile uint32_t *lock) {
+    snrt_fence_spatz();
     asm volatile("amoswap.w zero, zero, %0" : "+A"(*lock));
 }
 
@@ -92,6 +114,52 @@ int main() {
         asm volatile("vse32.v v0, (%0)" :: "r"(g_vec_sum) : "memory");
     }
     cs_unlock(g_lock);
+
+    snrt_cluster_hw_barrier();
+
+    if (cid == 0) {
+        uint32_t expected = (num_cores * (num_cores - 1)) / 2;
+        for (int i = 0; i < N_VEC; i++) {
+            if (g_vec_sum[i] != expected) nerrors++;
+        }
+        // Re-arm for T3
+        *g_counter = 0;
+        *g_lock    = 0;
+    }
+    snrt_cluster_hw_barrier();
+
+    // -----------------------------------------------------------------------
+    // T3: Scalar counter increment — Snitch-only fence
+    // snrt_fence_snitch() is sufficient to order scalar (Snitch LSU) stores.
+    // -----------------------------------------------------------------------
+    cs_lock(g_lock);
+    (*g_counter)++;
+    cs_unlock_snitch(g_lock);
+
+    snrt_cluster_hw_barrier();
+
+    if (cid == 0) {
+        if (*g_counter != num_cores) nerrors++;
+        // Re-arm for T4
+        for (int i = 0; i < N_VEC; i++) g_vec_sum[i] = 0;
+        *g_lock = 0;
+    }
+    snrt_cluster_hw_barrier();
+
+    // -----------------------------------------------------------------------
+    // T4: Vector accumulate — Spatz-only fence
+    // snrt_fence_spatz() is sufficient to order Spatz vector stores.
+    // Each core adds its cid to every element; expected sum = n*(n-1)/2.
+    // -----------------------------------------------------------------------
+    cs_lock(g_lock);
+    {
+        size_t vl;
+        asm volatile("vsetvli %0, %1, e32, m1, ta, ma" : "=r"(vl) : "r"(N_VEC));
+        asm volatile("vle32.v v0, (%0)" :: "r"(g_vec_sum) : "memory");
+        asm volatile("vadd.vx v0, v0, %0" :: "r"(cid) : "memory");
+        asm volatile("vse32.v v0, (%0)" :: "r"(g_vec_sum) : "memory");
+    }
+    cs_unlock_spatz(g_lock);
 
     snrt_cluster_hw_barrier();
 

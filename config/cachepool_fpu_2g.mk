@@ -38,7 +38,7 @@ num_noc_ports_per_tile ?= 1
 ######################
 
 # Refill interconnection data width
-refill_data_width ?= 128
+refill_data_width ?= 512
 
 ##### L1 Data Cache #####
 
@@ -83,7 +83,7 @@ snitch_max_trans ?= 16
 ##  L2 Main Memory ##
 #####################
 # L2 number of channels
-l2_channel ?= 8
+l2_channel ?= 4
 
 # L2 bank width (DRAM width, change with care)
 l2_bank_width ?= 512

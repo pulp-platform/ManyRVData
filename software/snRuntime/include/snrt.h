@@ -226,6 +226,18 @@ extern void snrt_int_cluster_set(uint32_t mask);
 static inline void snrt_fence() { asm volatile("fence" ::: "memory"); }
 
 /**
+ * @brief Snitch-only fence: drain Snitch's scalar LSU only.
+ *        Uses the fence.i opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_snitch() { asm volatile("fence.i" ::: "memory"); }
+
+/**
+ * @brief Spatz-only fence: drain Spatz's outstanding memory operations only.
+ *        Uses the sfence.vma opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_spatz() { asm volatile("sfence.vma" ::: "memory"); }
+
+/**
  * @brief Put the hart into wait for interrupt state
  *
  */

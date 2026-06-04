@@ -46,7 +46,7 @@ package cachepool_pkg;
   localparam int unsigned NumIntOutstandingMem     = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
   localparam int unsigned NumSpatzOutstandingLoads = `ifdef SPATZ_MAX_TRANS  `SPATZ_MAX_TRANS `else 0 `endif;
 
-  localparam int unsigned NumAxiMaxTrans           = 32;
+  localparam int unsigned NumAxiMaxTrans           = 64;
 
   ///////////////////
   //  TILE CONFIG  //
@@ -97,7 +97,7 @@ package cachepool_pkg;
   localparam int unsigned ICacheSets      = 4;
 
   // Group-level L2 ICache (shared read-only cache, primarily for coalescing)
-  localparam int unsigned L2ICacheLineWidth = 128;
+  localparam int unsigned L2ICacheLineWidth = 512;
   localparam int unsigned L2ICacheSets      = 4;
   localparam int unsigned L2ICacheSizeByte  = 65536;
   localparam int unsigned L2ICacheLineCount = L2ICacheSizeByte / (L2ICacheSets * L2ICacheLineWidth / 8);
@@ -226,7 +226,7 @@ package cachepool_pkg;
   // Cluster wrapper external output AXI ID width, after the wrapper-level axi_id_remap.
   // Reduces the fat SpatzAxiIdOutWidth presented to the DRAM controller.
   // Must satisfy: WrapperAxiIdOutWidth >= $clog2(NumAxiMaxTrans) = $clog2(32) = 5.
-  localparam int unsigned WrapperAxiIdOutWidth       = 6;
+  localparam int unsigned WrapperAxiIdOutWidth        = 6;
   // External SoC/testbench input AXI ID width (host → cluster direction).
   // axi_id_remap in the wrapper expands these to SpatzAxiIdInWidth internally.
   localparam int unsigned WrapperAxiIdInWidth         = 4;
@@ -299,7 +299,7 @@ package cachepool_pkg;
   localparam int unsigned L2BankWidth    = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
   localparam int unsigned L2BankBeWidth  = L2BankWidth / 8;
 
-  parameter               DramType       = "DDR4"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
+  parameter               DramType       = "HBM2"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
   parameter  int unsigned DramBase       = 32'h8000_0000;
 
   // One more for UART?
