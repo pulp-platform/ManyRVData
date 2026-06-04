@@ -220,6 +220,12 @@ extern void snrt_int_cluster_clr(uint32_t mask);
 extern void snrt_int_cluster_set(uint32_t mask);
 
 /**
+ * @brief Memory fence: drain Snitch's scalar LSU and Spatz's outstanding
+ *        memory operations before subsequent instructions issue.
+ */
+static inline void snrt_fence() { asm volatile("fence" ::: "memory"); }
+
+/**
  * @brief Put the hart into wait for interrupt state
  *
  */

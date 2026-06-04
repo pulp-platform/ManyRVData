@@ -188,9 +188,9 @@ int main() {
 
 ## Notes
 
-- The `fence` instruction only drains Snitch's scalar LSU. Spatz (RVV) memory
-  operations are tracked separately via `acc_mem_cnt` in the Snitch core. Application
-  code should ensure all vector operations have retired before calling any flush.
+- `snrt_fence()` drains both Snitch's scalar LSU and Spatz's outstanding memory
+  operations (`acc_mem_cnt_q`). Call it before a hardware barrier or before reading
+  back results written by a vector kernel.
 - Changing the partition mode (`l1d_part`) or the address boundary (`l1d_addr`) while
   valid data is cached requires a flush first.
 - The `start_snitch.S` platform startup calls `l1d_flush` (single-core, invalidate)
