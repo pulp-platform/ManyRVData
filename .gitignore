@@ -25,16 +25,18 @@ mems
 *.o
 install
 .projectBender.lock
-Bender.lock
 logs
 bin
 hardware/deps/*
 *.tdb
 util/lint/sg_projects
 util/lint/tmp
+# Bootrom auto-generated files
 hardware/bootrom/bootdata.cc
 hardware/bootrom/bootdata_bootrom.cc
 hardware/bootrom/bootrom.bin
 hardware/bootrom/bootrom.dump
 hardware/bootrom/bootrom.elf
 hardware/bootrom/bootrom.sv
+# Configuration auto-generated files
+config/cachepool.hjson
