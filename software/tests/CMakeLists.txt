@@ -53,6 +53,8 @@ macro(add_spatz_test_threeParam name file param1 param2 param3)
 endmacro()
 
 
+
+
 # Benchmark library
 add_library(benchmark benchmark/benchmark.c)
 add_library(spin_lock benchmark/spin_lock.c)
@@ -84,6 +86,8 @@ set(SNITCH_TEST_PREFIX cachepool-)
 
 ## RLC
 add_spatz_test_zeroParam(spin-lock spin-lock/main.c)
+add_spatz_test_zeroParam(partial_barrier partial_barrier/main.c)# SOCMIPO
+add_spatz_test_zeroParam(partial_barrier_benchmark partial_barrier_benchmark/main.c)# SOCMIPO
 add_spatz_test_zeroParam(mcs-lock mcs-lock/main.c)
 add_spatz_test_zeroParam(byte-enable byte-enable/main.c)
 add_spatz_test_zeroParam(cache-line-rw-smoke cache-line-rw-smoke/main.c)

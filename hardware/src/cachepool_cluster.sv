@@ -895,10 +895,15 @@ module cachepool_cluster
   assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
   assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
 
+  
+
 
   logic [NumTiles-1:0] use_barrier;
   // TODO: Connect to CSR
-  assign use_barrier = {NumTiles{1'b1}};
+  //assign use_barrier = {NumTiles{1'b1}}; // for now all is set to 1
+  logic [NumTiles-1:0] barrier_participation_mask;
+  assign use_barrier = barrier_participation_mask;
+  
 
   axi_cut #(
     .Bypass     (0                      ),
@@ -1043,7 +1048,8 @@ module cachepool_cluster
     .l1d_insn_o               (l1d_insn              ),
     .l1d_insn_valid_o         (l1d_insn_valid        ),
     .l1d_insn_ready_i         (l1d_insn_ready        ),
-    .l1d_busy_o               (l1d_busy              )
+    .l1d_busy_o               (l1d_busy              ),
+    .barrier_participation_mask_o (barrier_participation_mask)
   );
 
 endmodule

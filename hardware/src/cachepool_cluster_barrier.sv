@@ -31,7 +31,7 @@ module cachepool_cluster_barrier
   output axi_req_t    [NrPorts-1:0]  axi_mst_req_o,
   input  axi_rsp_t    [NrPorts-1:0]  axi_mst_rsp_i,
 
-  input  logic        [NrPorts-1:0]  barrier_i,
+  input  logic        [NrPorts-1:0]  barrier_i, // participation barrier
   input  addr_t                      cluster_periph_start_address_i
 );
 
@@ -45,7 +45,13 @@ module cachepool_cluster_barrier
   // FSM State of the barrier
   barrier_state_e [NrPorts-1:0] state_d,   state_q;
   // the tiles participate in global barrier
+
+  // (SOCMIP) PARTICIPATION MASK!
+  // (SOCMIP) map to hw then control in sw
   logic           [NrPorts-1:0] barrier_d, barrier_q;
+
+  addr_t barrier_participation_mask_addr;
+  assign barrier_participation_mask_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_OFFSET;
 
   // Infomation stored for response generation
   typedef struct packed {
