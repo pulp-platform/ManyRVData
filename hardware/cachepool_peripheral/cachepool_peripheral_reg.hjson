@@ -274,6 +274,19 @@
             name: "COMMIT",
             desc: "Commit the xbar offset configurations."
         }]
+    },
+        {
+        name: "HW_BARRIER_PARTICIPATION_MASK",
+        desc: '''Hardware barrier participation mask register. This register determines the tiles that are
+        implicated in a barrier. Allows partial barrier implementation.'''
+        swaccess: "rw",
+        hwaccess: "hro",
+        resval: "15",
+        fields: [{
+            bits: "3:0",
+            name: "HW_BARRIER_PARTICIPATION_MASK",
+            desc: "Hardware barrier participation mask register."
+        }]
     }
   ]
 }

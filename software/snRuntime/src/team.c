@@ -108,6 +108,11 @@ uint32_t _snrt_barrier_reg_ptr() {
     return _snrt_team_current->root->barrier_reg_ptr;
 }
 
+// Socmipo
+uint32_t _snrt_barrier_participation_mask_reg_ptr() {
+    return _snrt_team_current->root->barrier_participation_mask_reg_ptr;
+}
+
 snrt_slice_t snrt_global_memory() {
     return _snrt_team_current->root->global_mem;
 }
