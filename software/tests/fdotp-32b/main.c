@@ -124,6 +124,9 @@ int main() {
 
     result[cid] = acc;
 
+    // Make sure spatz has finished writing
+    snrt_fence_spatz();
+
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 

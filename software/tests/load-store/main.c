@@ -21,8 +21,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include DATAHEADER
-
 // -----------------------------------------------------------------------------
 // Memory layout
 // -----------------------------------------------------------------------------
@@ -48,6 +46,26 @@
 #define ELEM_BYTES       sizeof(uint32_t)
 #define ELEMS_PER_CL     (CACHELINE_BYTES / ELEM_BYTES)
 #define TEST_CLS         4              // cachelines per core per test
+
+// -----------------------------------------------------------------------------
+// Static test arrays
+// -----------------------------------------------------------------------------
+// Total elements = max_cores * TEST_CLS * ELEMS_PER_CL.
+// Default config: 16 cores * 4 CL * 16 elem/CL = 1024.
+// A/B/C are placed in the private region; D is placed in the shared region.
+#define LOAD_STORE_TOTAL_ELEMS 1024
+
+// Private region: default boundary puts these addresses in the private partition
+static uint32_t gemm_A_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 1};
+static uint32_t gemm_B_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 2};
+static uint32_t gemm_C_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".pdcp_src"))) = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 3};
+
+// Shared region: default boundary puts this address in the shared partition
+static uint32_t gemm_D_dram[LOAD_STORE_TOTAL_ELEMS]
+    __attribute__((section(".data")))    = {[0 ... LOAD_STORE_TOTAL_ELEMS - 1] = 4};
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -148,7 +166,7 @@ int main() {
   const uint32_t num_tiles = snrt_cluster_tile_num();
   const uint32_t cid       = snrt_cluster_core_idx();
 
-  const uint32_t dim_core  = gemm_l.M / num_cores;
+  const uint32_t dim_core  = LOAD_STORE_TOTAL_ELEMS / num_cores;
   const uint32_t test_len  = cls_to_elems(TEST_CLS);  // per core, short
 
   // xbar offset: size of per-core region in address bits
