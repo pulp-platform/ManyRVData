@@ -373,7 +373,7 @@ sw: generate bootrom gen-data clean.sw
 	  -DBUILD_TESTS=ON .. && $(MAKE)
 
 .PHONY: vsim
-vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
+vsim: generate bootrom gen-data dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
