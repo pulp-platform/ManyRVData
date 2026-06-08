@@ -74,6 +74,17 @@ l1d_tile_size ?= 256
 # L1 data cache tag width (TODO: should be calcualted)
 l1d_tag_data_width ?= 52
 
+# L1 data-bank organization knobs (folded banks + hash-way select + forwarding
+# buffer).  Default to the production combination so every config builds; the
+# cluster-wrapper RTL passes these through `+define+L1D_*` macros (an UNSET knob
+# would emit an empty `+define+` and break elaboration).  A flavor .mk may
+# override via `?=`.  Constraints: folded REQUIRES hash-way; fwd-buffer REQUIRES
+# hash-way.  l1d_fold_way_group=0 => auto (min(4, ways)).
+l1d_use_folded     ?= 1
+l1d_fold_way_group ?= 0
+l1d_use_hash_way   ?= 1
+l1d_use_fwd_buf    ?= 1
+
 ### Derieved parameters, do NOT change ###
 # L1 data cache number of banks per tile
 l1d_num_banks := $(shell echo $$(( $(num_cores_per_tile) * $(l1d_num_way) * $(l1d_bank_factor) )))
