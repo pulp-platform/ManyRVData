@@ -37,9 +37,6 @@ num_noc_ports_per_tile ?= 1
 ##  CachePool Tile  ##
 ######################
 
-# Refill interconnection data width
-refill_data_width ?= 128
-
 ##### L1 Data Cache #####
 
 # L1 data cacheline width (in Bit)
@@ -82,6 +79,9 @@ snitch_max_trans ?= 16
 #####################
 ##  L2 Main Memory ##
 #####################
+# DRAM type (selects DRAMSys config and sets default refill_data_width)
+dram_type ?= HBM2
+
 # L2 number of channels
 l2_channel ?= 4
 

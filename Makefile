@@ -290,6 +290,8 @@ VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
 VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
 VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
 VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
+# DRAM type string for DRAMSys (passed as a quoted SV string literal)
+VLOG_DEFS += -DDRAM_TYPE='"$(dram_type)"'
 
 # Stack / SPM (boot_addr, stack_addr, periph_start_addr, uart_addr used by hjson
 # generator via environment; not consumed as SV defines)

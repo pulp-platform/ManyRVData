@@ -299,7 +299,8 @@ package cachepool_pkg;
   localparam int unsigned L2BankWidth    = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
   localparam int unsigned L2BankBeWidth  = L2BankWidth / 8;
 
-  parameter               DramType       = "HBM2"; // "DDR4", "DDR3", "HBM2", "LPDDR4"
+  // Supported values (must match DRAMSys config names): DDR3, DDR4, LPDDR4, HBM2
+  parameter string        DramType       = `ifdef DRAM_TYPE `DRAM_TYPE `else "DDR4" `endif;
   parameter  int unsigned DramBase       = 32'h8000_0000;
 
   // One more for UART?
