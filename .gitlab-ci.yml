@@ -74,7 +74,7 @@ test:
     matrix:
       - KERNEL:
           - spin-lock
-          - load-store_M16
+          - load-store
           - fdotp-32b_M32768
           - gemv_M512_N128_K32
           - fmatmul-32b_M64_N64_K64
