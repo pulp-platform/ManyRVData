@@ -71,7 +71,7 @@ packages:
     - common_verification
     - register_interface
   insitu-cache:
-    revision: 9d233059473c1fb0a3f97a90423bc1e85d7cd79a
+    revision: e5a16e0d21e9bfd3934ef6fd56be1b94042a8658
     version: null
     source:
       Git: https://github.com/pulp-platform/Insitu-Cache.git
