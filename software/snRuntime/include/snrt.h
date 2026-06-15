@@ -45,8 +45,6 @@ typedef struct snrt_slice {
 
 /// Peripherals to the Snitch SoC
 struct snrt_peripherals {
-    volatile uint32_t *wakeup;
-    uint32_t *perf_counters;
 };
 
 /// Barrier to use with snrt_barrier
@@ -68,24 +66,13 @@ extern struct snrt_peripherals *snrt_peripherals();
 extern uint32_t snrt_global_core_base_hartid();
 extern uint32_t snrt_global_core_idx();
 extern uint32_t snrt_global_core_num();
-extern uint32_t snrt_global_compute_core_idx();
-extern uint32_t snrt_global_compute_core_num();
-extern uint32_t snrt_global_dm_core_idx();
-extern uint32_t snrt_global_dm_core_num();
 extern uint32_t snrt_cluster_core_base_hartid();
 extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
 extern uint32_t snrt_cluster_tile_idx();
 extern uint32_t snrt_cluster_tile_num();
-extern uint32_t snrt_cluster_compute_core_idx();
-extern uint32_t snrt_cluster_compute_core_num();
-extern uint32_t snrt_cluster_dm_core_idx();
-extern uint32_t snrt_cluster_dm_core_num();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
-extern int snrt_is_compute_core();
-extern int snrt_is_dm_core();
-extern void snrt_wakeup(uint32_t mask);
 
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
