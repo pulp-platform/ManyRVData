@@ -74,36 +74,6 @@ uint32_t snrt_cluster_core_num() {
     return _snrt_team_current->root->cluster_core_num;
 }
 
-uint32_t snrt_cluster_compute_core_idx() {
-    // TODO: Actually derive this from the device tree!
-    return snrt_cluster_core_idx();
-}
-
-uint32_t snrt_cluster_compute_core_num() {
-    // TODO: Actually derive this from the device tree!
-    return snrt_cluster_core_num() - 1;
-}
-
-uint32_t snrt_cluster_dm_core_idx() {
-    // TODO: Actually derive this from the device tree!
-    return snrt_cluster_core_num() - 1;
-}
-
-uint32_t snrt_cluster_dm_core_num() {
-    // TODO: Actually derive this from the device tree!
-    return 1;
-}
-
-int snrt_is_compute_core() {
-    // TODO: Actually derive this from the device tree!
-    return snrt_cluster_core_idx() < snrt_cluster_core_num() - 1;
-}
-
-int snrt_is_dm_core() {
-    // TODO: Actually derive this from the device tree!
-    return !snrt_is_compute_core();
-}
-
 uint32_t _snrt_barrier_reg_ptr() {
     return _snrt_team_current->root->barrier_reg_ptr;
 }
@@ -116,4 +86,3 @@ snrt_slice_t snrt_cluster_memory() {
     return _snrt_team_current->root->cluster_mem;
 }
 
-void snrt_wakeup(uint32_t mask) { *snrt_peripherals()->wakeup = mask; }
