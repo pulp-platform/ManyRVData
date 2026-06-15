@@ -40,3 +40,9 @@ hardware/bootrom/bootrom.elf
 hardware/bootrom/bootrom.sv
 # Configuration auto-generated files
 config/cachepool.hjson
+
+sim.sh
+CLAUDE.md
+scratchpad.txt
+claude_doc
+temp
