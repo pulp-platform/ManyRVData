@@ -7,7 +7,7 @@
 package cachepool_peripheral_reg_pkg;
 
   // Param list
-  parameter int NumPerfCounters = 2;
+  parameter int NumTileSelRegs = 2;
 
   // Address widths within the block
   parameter int BlockAw = 7;
@@ -15,20 +15,6 @@ package cachepool_peripheral_reg_pkg;
   ////////////////////////////
   // Typedefs for registers //
   ////////////////////////////
-
-  typedef struct packed {
-    logic [9:0] q;
-  } cachepool_peripheral_reg2hw_hart_select_mreg_t;
-
-  typedef struct packed {
-    logic [31:0] q;
-    logic        qe;
-  } cachepool_peripheral_reg2hw_cl_clint_set_reg_t;
-
-  typedef struct packed {
-    logic [31:0] q;
-    logic        qe;
-  } cachepool_peripheral_reg2hw_cl_clint_clear_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
@@ -64,7 +50,7 @@ package cachepool_peripheral_reg_pkg;
 
   typedef struct packed {
     logic [31:0] q;
-  } cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_reg_t;
+  } cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_mreg_t;
 
   typedef struct packed {
     logic        q;
@@ -115,18 +101,15 @@ package cachepool_peripheral_reg_pkg;
 
   // Register -> HW type
   typedef struct packed {
-    cachepool_peripheral_reg2hw_hart_select_mreg_t [1:0] hart_select; // [275:256]
-    cachepool_peripheral_reg2hw_cl_clint_set_reg_t cl_clint_set; // [255:223]
-    cachepool_peripheral_reg2hw_cl_clint_clear_reg_t cl_clint_clear; // [222:190]
-    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [189:158]
-    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [157:157]
-    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [156:156]
-    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [155:124]
-    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [123:92]
-    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [91:88]
-    cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [87:78]
-    cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [77:76]
-    cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_reg_t cfg_l1d_tile_sel; // [75:44]
+    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [221:190]
+    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [189:189]
+    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [188:188]
+    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [187:156]
+    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [155:124]
+    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [123:120]
+    cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [119:110]
+    cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [109:108]
+    cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_mreg_t [1:0] cfg_l1d_tile_sel; // [107:44]
     cachepool_peripheral_reg2hw_l1d_spm_commit_reg_t l1d_spm_commit; // [43:43]
     cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t l1d_insn_commit; // [42:42]
     cachepool_peripheral_reg2hw_l1d_private_reg_t l1d_private; // [41:38]
@@ -145,40 +128,31 @@ package cachepool_peripheral_reg_pkg;
   } cachepool_peripheral_hw2reg_t;
 
   // Register offsets
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HART_SELECT_0_OFFSET = 7'h 0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HART_SELECT_1_OFFSET = 7'h 4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CL_CLINT_SET_OFFSET = 7'h 8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_OFFSET = 7'h c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET = 7'h 10;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 7'h 14;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET = 7'h 18;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET = 7'h 1c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 7'h 20;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 7'h 24;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET = 7'h 28;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET = 7'h 2c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_OFFSET = 7'h 30;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 7'h 34;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 7'h 38;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 7'h 3c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET = 7'h 40;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET = 7'h 44;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET = 7'h 48;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 7'h 4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET = 7'h 0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 7'h 4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET = 7'h 8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET = 7'h c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 7'h 10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 7'h 14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET = 7'h 18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET = 7'h 1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET = 7'h 20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET = 7'h 24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 7'h 28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 7'h 2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 7'h 30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET = 7'h 34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET = 7'h 38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET = 7'h 3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 7'h 40;
 
   // Reset values for hwext registers and their fields
-  parameter logic [31:0] CACHEPOOL_PERIPHERAL_CL_CLINT_SET_RESVAL = 32'h 0;
-  parameter logic [31:0] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_RESVAL = 32'h 0;
   parameter logic [31:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_RESVAL = 32'h 0;
   parameter logic [0:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_RESVAL = 1'h 0;
   parameter logic [0:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_RESVAL = 1'h 0;
 
   // Register index
   typedef enum int {
-    CACHEPOOL_PERIPHERAL_HART_SELECT_0,
-    CACHEPOOL_PERIPHERAL_HART_SELECT_1,
-    CACHEPOOL_PERIPHERAL_CL_CLINT_SET,
-    CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR,
     CACHEPOOL_PERIPHERAL_HW_BARRIER,
     CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE,
     CACHEPOOL_PERIPHERAL_SPATZ_STATUS,
@@ -187,7 +161,8 @@ package cachepool_peripheral_reg_pkg;
     CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT,
     CACHEPOOL_PERIPHERAL_CFG_L1D_SPM,
     CACHEPOOL_PERIPHERAL_CFG_L1D_INSN,
-    CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL,
+    CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0,
+    CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1,
     CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT,
     CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT,
     CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS,
@@ -198,27 +173,24 @@ package cachepool_peripheral_reg_pkg;
   } cachepool_peripheral_id_e;
 
   // Register width information to check illegal writes
-  parameter logic [3:0] CACHEPOOL_PERIPHERAL_PERMIT [20] = '{
-    4'b 0011, // index[ 0] CACHEPOOL_PERIPHERAL_HART_SELECT_0
-    4'b 0011, // index[ 1] CACHEPOOL_PERIPHERAL_HART_SELECT_1
-    4'b 1111, // index[ 2] CACHEPOOL_PERIPHERAL_CL_CLINT_SET
-    4'b 1111, // index[ 3] CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR
-    4'b 1111, // index[ 4] CACHEPOOL_PERIPHERAL_HW_BARRIER
-    4'b 0001, // index[ 5] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE
-    4'b 0001, // index[ 6] CACHEPOOL_PERIPHERAL_SPATZ_STATUS
-    4'b 1111, // index[ 7] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE
-    4'b 1111, // index[ 8] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL
-    4'b 0001, // index[ 9] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT
-    4'b 0011, // index[10] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM
-    4'b 0001, // index[11] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN
-    4'b 1111, // index[12] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL
-    4'b 0001, // index[13] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT
-    4'b 0001, // index[14] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT
-    4'b 0001, // index[15] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS
-    4'b 0001, // index[16] CACHEPOOL_PERIPHERAL_L1D_PRIVATE
-    4'b 1111, // index[17] CACHEPOOL_PERIPHERAL_L1D_ADDR
-    4'b 0001, // index[18] CACHEPOOL_PERIPHERAL_XBAR_OFFSET
-    4'b 0001  // index[19] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
+  parameter logic [3:0] CACHEPOOL_PERIPHERAL_PERMIT [17] = '{
+    4'b 1111, // index[ 0] CACHEPOOL_PERIPHERAL_HW_BARRIER
+    4'b 0001, // index[ 1] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE
+    4'b 0001, // index[ 2] CACHEPOOL_PERIPHERAL_SPATZ_STATUS
+    4'b 1111, // index[ 3] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE
+    4'b 1111, // index[ 4] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL
+    4'b 0001, // index[ 5] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT
+    4'b 0011, // index[ 6] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM
+    4'b 0001, // index[ 7] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN
+    4'b 1111, // index[ 8] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0
+    4'b 1111, // index[ 9] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1
+    4'b 0001, // index[10] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT
+    4'b 0001, // index[11] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT
+    4'b 0001, // index[12] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS
+    4'b 0001, // index[13] CACHEPOOL_PERIPHERAL_L1D_PRIVATE
+    4'b 1111, // index[14] CACHEPOOL_PERIPHERAL_L1D_ADDR
+    4'b 0001, // index[15] CACHEPOOL_PERIPHERAL_XBAR_OFFSET
+    4'b 0001  // index[16] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
   };
 
 endpackage

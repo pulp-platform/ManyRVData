@@ -70,19 +70,23 @@ void l1d_flush() {
   l1d_commit();
 }
 
-// Flush private partitions in input tiles (onehot)
-void l1d_private_flush(uint32_t tile) {
+// Flush private partitions in selected tiles.
+// tile is a one-hot bitmask: bit i selects tile i.
+// Bits 0-31 go to register 0, bits 32-63 to register 1.
+void l1d_private_flush(uint64_t tile) {
   uint32_t *insn =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET);
-  // 2'b00 stands for flush all
   *insn = 0;
 
-  uint32_t *tile_reg =
+  uint32_t *tile_lo =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_REG_OFFSET);
-  // 2'b00 stands for flush all
-  *tile_reg = tile;
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_REG_OFFSET);
+  uint32_t *tile_hi =
+      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                   CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_REG_OFFSET);
+  *tile_lo = (uint32_t)(tile);
+  *tile_hi = (uint32_t)(tile >> 32);
   l1d_commit();
 }
 
@@ -110,7 +114,7 @@ void l1d_cluster_flush() {
 
 // Cluster-wide private flush: all cores fence and sync, core 0 issues the flush instruction.
 // Must be called by all cores in the cluster.
-void l1d_cluster_private_flush(uint32_t tile) {
+void l1d_cluster_private_flush(uint64_t tile) {
   asm volatile("fence" ::: "memory");
   snrt_cluster_hw_barrier();
   if (snrt_cluster_core_idx() == 0) {
