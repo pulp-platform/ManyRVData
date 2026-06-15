@@ -196,7 +196,6 @@ module cachepool_cluster
   // 3. Peripherals
   axi_addr_t                               private_start_addr;
   logic                                    icache_prefetch_enable;
-  logic              [NrCores-1:0]         cl_interrupt;
   logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
   logic              [3:0]                 l1d_private;
   cache_insn_t                             l1d_insn;
@@ -292,7 +291,7 @@ module cachepool_cluster
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
         .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-        .cl_interrupt_i           ( cl_interrupt [g*NumCoreGroup +: NumCoreGroup]   ),
+        .cl_interrupt_i           ( '0                                              ),
         .dynamic_offset_i         ( dynamic_offset                                  ),
         .l1d_private_i            ( l1d_private                                     ),
         .l1d_insn_i               ( l1d_insn                                        ),
@@ -759,8 +758,7 @@ module cachepool_cluster
     .NumTiles      (NumTiles        ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
-    .cache_insn_t  (cache_insn_t    ),
-    .NrCores       (NrCores         )
+    .cache_insn_t  (cache_insn_t    )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    (clk_i                 ),
     .rst_ni                   (rst_ni                ),
@@ -771,7 +769,6 @@ module cachepool_cluster
     .tcdm_start_address_i     (tcdm_start_address    ),
     .tcdm_end_address_i       (tcdm_end_address      ),
     .icache_prefetch_enable_o (icache_prefetch_enable),
-    .cl_clint_o               (cl_interrupt          ),
     .cluster_hart_base_id_i   (hart_base_id_i        ),
     .cluster_probe_o          (cluster_probe_o       ),
     .dynamic_offset_o         (dynamic_offset        ),

@@ -18,8 +18,6 @@ module cachepool_peripheral
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,
-  // Nr of course in the cluster
-  parameter logic [31:0] NrCores       = 0,
   /// Derived parameter *Do not override*
   parameter type addr_t = logic [AddrWidth-1:0],
   parameter type spm_size_t = logic [SPMWidth-1:0]
@@ -35,7 +33,6 @@ module cachepool_peripheral
   input  addr_t                      tcdm_end_address_i,
   output addr_t                      private_start_addr_o,
   output logic                       icache_prefetch_enable_o,
-  output logic [NrCores-1:0]         cl_clint_o,
   output logic                       cluster_probe_o,
   input  logic [9:0]                 cluster_hart_base_id_i,
   /// For cache xbar dynamic configuration
@@ -88,8 +85,6 @@ module cachepool_peripheral
 
 
   //////////// L1 DCache ////////////
-  logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
-  logic [NrCores-1:0]   cl_clint_d, cl_clint_q;
   logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
   logic [3:0]           l1d_private_d, l1d_private_q;
   addr_t                private_start_addr_d, private_start_addr_q;
@@ -126,6 +121,16 @@ module cachepool_peripheral
   assign l1d_private_o        = l1d_private_q;
   assign private_start_addr_o = private_start_addr_q;
 
+  // Concatenate all tile-select register words into one wide vector and slice
+  // to NumTiles.  Unused upper bits (for small configs) are optimised away.
+  localparam int unsigned NumTileSelWords = cachepool_peripheral_reg_pkg::NumTileSelRegs;
+  logic [NumTileSelWords*32-1:0] tile_sel_raw;
+  always_comb begin : tile_sel_concat
+    for (int i = 0; i < NumTileSelWords; i++) begin
+      tile_sel_raw[i*32 +: 32] = reg2hw.cfg_l1d_tile_sel[i].q;
+    end
+  end
+
   // Cache Flush Controller
   // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is
   // issued an instruction and cleared when tile t returns ready.
@@ -151,7 +156,7 @@ module cachepool_peripheral
         // For non-private modes (shared/all/init), tile_sel is forced to '1.
         l1d_insn_o.insn     = reg2hw.cfg_l1d_insn.q;
         l1d_insn_o.tile_sel = (reg2hw.cfg_l1d_insn.q == 2'b00)
-                            ? reg2hw.cfg_l1d_tile_sel.q[NumTiles-1:0]
+                            ? tile_sel_raw[NumTiles-1:0]
                             : {NumTiles{1'b1}};
         l1d_insn_valid_o    = 1'b1;
         // Lock only the tiles that will receive the instruction.
@@ -177,19 +182,6 @@ module cachepool_peripheral
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
   // assign l1d_busy_o = (l1d_lock_q != '0);
-
-  // Wake-up logic: Bits in cl_clint_q can be set/cleared with writes to
-  // cl_clint_set/cl_clint_clear
-  always_comb begin
-    cl_clint_d = cl_clint_q;
-    if (reg2hw.cl_clint_set.qe) begin
-      cl_clint_d = cl_clint_q | reg2hw.cl_clint_set.q;
-    end else if (reg2hw.cl_clint_clear.qe) begin
-      cl_clint_d = cl_clint_q & ~reg2hw.cl_clint_clear.q;
-    end
-  end
-  `FF(cl_clint_q, cl_clint_d, '0, clk_i, rst_ni)
-  assign cl_clint_o = cl_clint_q[NrCores-1:0];
 
   // Enable icache prefetch
   assign icache_prefetch_enable_o = reg2hw.icache_prefetch_enable.q;

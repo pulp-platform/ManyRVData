@@ -134,7 +134,7 @@ static void cache_flush_all() {
 
 // Flush private banks of selected tiles (one-hot mask) and wait.
 // Must be called by all cores.
-static void cache_flush_private(uint32_t tile_mask) {
+static void cache_flush_private(uint64_t tile_mask) {
   l1d_cluster_private_flush(tile_mask);
 }
 
@@ -172,8 +172,8 @@ int main() {
   // xbar offset: size of per-core region in address bits
   const uint32_t local_offset = 31 - __builtin_clz(dim_core * sizeof(uint32_t));
 
-  // One-hot mask covering all tiles
-  const uint32_t all_tiles = (1u << num_tiles) - 1u;
+  // One-hot mask covering all tiles (uint64_t supports up to 64 tiles)
+  const uint64_t all_tiles = (UINT64_C(1) << num_tiles) - 1;
 
   // Per-core pointers into each array
   uint32_t *a_ptr = gemm_A_dram + dim_core * cid;  // private, value 1

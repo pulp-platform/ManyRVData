@@ -47,11 +47,6 @@ typedef struct snrt_slice {
 struct snrt_peripherals {
     volatile uint32_t *wakeup;
     uint32_t *perf_counters;
-    /**
-     * @brief Cluster-local CLINT
-     *
-     */
-    volatile uint32_t *cl_clint;
 };
 
 /// Barrier to use with snrt_barrier
