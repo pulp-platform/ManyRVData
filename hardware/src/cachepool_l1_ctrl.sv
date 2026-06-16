@@ -418,8 +418,8 @@ module cachepool_l1_ctrl
     l1_req[1].tid         = core_req_i[SnitchPort].q_valid ? l1_cache_req[SnitchPort].tid : '0;
   end
 
-  assign l1_req_valid[1]              = core_req_i[SnitchPort].q_valid;
-  assign cache_req_ready[SnitchPort]  = l1_req_ready[1];
+  assign l1_req_valid[1]            = core_req_i[SnitchPort].q_valid;
+  assign cache_req_ready[SnitchPort] = l1_req_ready[1];
 
   ///////////////////////////////
   // Spatz response scatter     //
