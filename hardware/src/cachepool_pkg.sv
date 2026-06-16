@@ -108,7 +108,7 @@ package cachepool_pkg;
   // Group-level L2 ICache (shared read-only cache, primarily for coalescing)
   localparam int unsigned L2ICacheLineWidth = 512;
   localparam int unsigned L2ICacheSets      = 4;
-  localparam int unsigned L2ICacheSizeByte  = 65536;
+  localparam int unsigned L2ICacheSizeByte  = 8192;
   localparam int unsigned L2ICacheLineCount = L2ICacheSizeByte / (L2ICacheSets * L2ICacheLineWidth / 8);
 
   // Be careful on unsigned long int passed in from configuration.
