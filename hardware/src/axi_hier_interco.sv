@@ -232,7 +232,7 @@ module axi_hier_interco
         .AxiDataWidth (DataWidth     ),
         .AxiIdWidth   (IntIdWidth    ),
         .AxiUserWidth (UserWidth     ),
-        .MaxTrans     (32'd16        ),
+        .MaxTrans     (32'd8         ),
         .NrAddrRules  (NrAddrRules   ),
         .SerialLookup (0             ),
         .slv_req_t    (int_req_t     ),
