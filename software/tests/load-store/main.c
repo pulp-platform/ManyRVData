@@ -53,7 +53,7 @@
 // Total elements = max_cores * TEST_CLS * ELEMS_PER_CL.
 // Default config: 16 cores * 4 CL * 16 elem/CL = 1024.
 // A/B/C are placed in the private region; D is placed in the shared region.
-#define LOAD_STORE_TOTAL_ELEMS 1024
+#define LOAD_STORE_TOTAL_ELEMS 262144
 
 // Private region: default boundary puts these addresses in the private partition
 static uint32_t gemm_A_dram[LOAD_STORE_TOTAL_ELEMS]

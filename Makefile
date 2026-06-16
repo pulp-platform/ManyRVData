@@ -147,7 +147,7 @@ $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -195,7 +195,7 @@ VSIM_FLAGS :=
 VSIM_BENDER =
 
 .PHONY: dram-build
-dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
+dram-build: $(DRAMSYS_PATH)/README.md dram-config
 	cd $(DRAMSYS_PATH) && \
 	if [ ! -d "build" ]; then \
 		mkdir build && cd build; \
@@ -358,34 +358,29 @@ clean.data:
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
+# Common CMake flags shared by sw and vsim targets.
+# vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
+SW_CMAKE_FLAGS = \
+  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
+  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
+  -DRUNTIME_DIR=${SOFTWARE_DIR} \
+  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
+  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
+  -DGCC_PATH=${GCC_INSTALL_DIR} \
+  -DPYTHON=${PYTHON} \
+  -DBUILD_TESTS=ON
+
 .PHONY: sw
-sw: generate bootrom gen-data clean.sw
-	echo ${SOFTWARE_DIR}
+sw: generate bootrom gen-data
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} .. && $(MAKE)
 
 .PHONY: vsim
 vsim: generate bootrom gen-data dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
-	echo ${SOFTWARE_DIR}
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
 	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
+	  .. && $(MAKE)
 
 .PHONY: clean
 clean: clean.sw clean.vsim clean.data
