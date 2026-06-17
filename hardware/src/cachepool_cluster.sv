@@ -194,14 +194,14 @@ module cachepool_cluster
   axi_narrow_resp_t    [NumTiles-1:0][1:0]          axi_out_resp;
 
   // 3. Peripherals
-  axi_addr_t                               private_start_addr;
-  logic                                    icache_prefetch_enable;
-  logic [$clog2(L1AddrWidth)-1:0]          dynamic_offset;
-  logic              [3:0]                 l1d_private;
-  cache_insn_t                             l1d_insn;
-  logic                                    l1d_insn_valid;
-  logic              [NumTiles-1:0]        l1d_insn_ready;
-  logic              [NumTiles-1:0]        l1d_busy;
+  axi_addr_t                                private_start_addr;
+  logic                                     icache_prefetch_enable;
+  logic         [$clog2(L1AddrWidth)-1:0]   dynamic_offset;
+  cache_insn_t                              l1d_insn;
+  logic                                     l1d_insn_valid;
+  logic         [NumTiles-1:0]              l1d_insn_ready;
+  logic         [NumTiles-1:0]              l1d_busy;
+  logic         [$clog2(NumL1CtrlTile):0]   l1d_private;
 
   // Per-group error signals.
   logic              [NumGroups-1:0]       group_error;
