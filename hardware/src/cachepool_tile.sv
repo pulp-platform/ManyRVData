@@ -9,11 +9,13 @@
 `include "common_cells/registers.svh"
 `include "reqrsp_interface/typedef.svh"
 `include "snitch_vm/typedef.svh"
+`include "hpdcache_typedef.svh"
 
 /// Tile implementation for CachePool
 module cachepool_tile
   import cachepool_pkg::*;
   import spatz_pkg::*;
+  import hpdcache_pkg::*;
   import fpnew_pkg::fpu_implementation_t;
   import snitch_pma_pkg::snitch_pma_t;
   import snitch_icache_pkg::icache_l1_events_t;
@@ -290,11 +292,114 @@ module cachepool_tile
 
   typedef logic [$clog2(L1NumSet)-1:0] tcdm_bank_addr_t;
 
-  // The metadata type used to restore the information from req to rsp
+  ////////////////////////////////////////////
+  // Private L1 (LP1) HPDcache config & types //
+  ////////////////////////////////////////////
+  // Per-core private L1 data cache (HPDcache, write-through, no coherence).
+  // It coalesces the core's Spatz TCDM lanes; its mem interface is the
+  // cacheline-wide downstream (l2_req) that feeds the shared L2 through the
+  // collapsed tile interco. Config/types defined here and passed to
+  // cachepool_l1_ctrl as parameters.
+
+  // Spatz coalescer geometry
+  localparam int unsigned NrLP1CoalInputs      = NrTCDMPortsPerCore - 1;          // Spatz lanes
+  localparam int unsigned LP1ExtPorts          = NrLP1CoalInputs;
+  localparam int unsigned LP1WordWidth         = 128;                             // HPDcache word width
+  localparam int unsigned LP1NrBitsCoalOffset  = $clog2(LP1WordWidth/DataWidth);  // coalescer offset_t width
+  localparam int unsigned LP1NumWordOffsetBits = $clog2(LP1WordWidth/DataWidth);  // tid word-offset field
+  localparam int unsigned LP1CoalInfoWidth     = LP1ExtPorts + LP1ExtPorts*LP1NrBitsCoalOffset;
+  localparam int unsigned LP1ReqIdWidth        = $clog2(NumSpatzOutstandingLoads);
+  localparam int unsigned LP1TidWidth          = CoreIDWidth + LP1ReqIdWidth + 2 + LP1CoalInfoWidth; // +2: is_fpu, write
+  localparam int unsigned LP1NrRequesters      = 2;                               // Snitch + Spatz(coalesced)
+
+  localparam hpdcache_pkg::hpdcache_user_cfg_t HPDcacheUserCfg = '{
+      nRequesters:        LP1NrRequesters,
+      paWidth:            32,
+      wordWidth:          LP1WordWidth,
+      sets:               64,            // TODO: 32 sets => 8KB/core target (currently 16KB)
+      ways:               4,
+      clWords:            4,
+      reqWords:           1,
+      reqTransIdWidth:    LP1TidWidth + LP1NumWordOffsetBits,
+      reqSrcIdWidth:      1,             // selects requester port (0 Spatz / 1 Snitch)
+      victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_PLRU,
+      dataWaysPerRamWord: 1,
+      dataSetsPerRam:     64,
+      dataRamByteEnable:  1'b1,
+      accessWords:        4,
+      mshrSets:           8,
+      mshrWays:           4,
+      mshrWaysPerRamWord: 4,
+      mshrSetsPerRam:     8,
+      mshrRamByteEnable:  1'b1,
+      mshrUseRegbank:     1'b1,
+      cbufEntries:        2,
+      refillCoreRspFeedthrough: 1'b1,
+      refillFifoDepth:    2,
+      wbufDirEntries:     4,
+      wbufDataEntries:    4,
+      wbufWords:          4,
+      wbufTimecntWidth:   3,
+      rtabEntries:        4,
+      flushEntries:       2,
+      flushFifoDepth:     2,
+      memAddrWidth:       L1AddrWidth,
+      memIdWidth:         LP1TidWidth,
+      memDataWidth:       L1LineWidth,
+      wtEn:               1'b1,          // write-through
+      wbEn:               1'b0,
+      lowLatency:         1'b1,
+      eccEn:              1'b0,
+      eccScrubberEn:      1'b0
+  };
+  localparam hpdcache_pkg::hpdcache_cfg_t HPDcacheCfg = hpdcacheBuildConfig(HPDcacheUserCfg);
+
+  // The metadata type used to restore the information from req to rsp.
+  // (extended with `amo` for the private-L1 datapath)
   typedef struct packed {
-    tcdm_user_t user;
-    logic       write;
+    tcdm_user_t       user;
+    logic             write;
+    hpdcache_req_op_t amo;
   } tcdm_meta_t;
+
+  // HPDcache request-side typedefs
+  typedef logic [HPDcacheCfg.tagWidth-1:0]                  hpdcache_tag_t;
+  typedef logic [HPDcacheCfg.u.wordWidth-1:0]               hpdcache_data_word_t;
+  typedef logic [HPDcacheCfg.u.wordWidth/8-1:0]             hpdcache_data_be_t;
+  typedef logic [HPDcacheCfg.reqOffsetWidth-1:0]            hpdcache_req_offset_t;
+  typedef hpdcache_data_word_t [HPDcacheCfg.u.reqWords-1:0] hpdcache_req_data_t;
+  typedef hpdcache_data_be_t   [HPDcacheCfg.u.reqWords-1:0] hpdcache_req_be_t;
+  typedef logic [HPDcacheCfg.u.reqSrcIdWidth-1:0]           hpdcache_req_sid_t;
+  typedef logic [HPDcacheCfg.u.reqTransIdWidth-1:0]         hpdcache_req_tid_t;
+  `HPDCACHE_TYPEDEF_REQ_T(hpdcache_req_t, hpdcache_req_offset_t, hpdcache_req_data_t,
+                          hpdcache_req_be_t, hpdcache_req_sid_t, hpdcache_req_tid_t, hpdcache_tag_t);
+  `HPDCACHE_TYPEDEF_RSP_T(hpdcache_rsp_t, hpdcache_req_data_t, hpdcache_req_sid_t, hpdcache_req_tid_t);
+  typedef logic [HPDcacheCfg.u.wbufTimecntWidth-1:0]       hpdcache_wbuf_timecnt_t;
+
+  // HPDcache memory-side typedefs (L1 -> L2 mem channels)
+  typedef logic [HPDcacheCfg.u.memAddrWidth-1:0]           hpdcache_mem_addr_t;
+  typedef logic [HPDcacheCfg.u.memIdWidth-1:0]             hpdcache_mem_id_t;
+  typedef logic [HPDcacheCfg.u.memDataWidth-1:0]           hpdcache_mem_data_t;
+  typedef logic [HPDcacheCfg.u.memDataWidth/8-1:0]         hpdcache_mem_be_t;
+  `HPDCACHE_TYPEDEF_MEM_REQ_T(hpdcache_mem_req_t, hpdcache_mem_addr_t, hpdcache_mem_id_t);
+  `HPDCACHE_TYPEDEF_MEM_RESP_R_T(hpdcache_mem_resp_r_t, hpdcache_mem_id_t, hpdcache_mem_data_t);
+  `HPDCACHE_TYPEDEF_MEM_REQ_W_T(hpdcache_mem_req_w_t, hpdcache_mem_data_t, hpdcache_mem_be_t);
+  `HPDCACHE_TYPEDEF_MEM_RESP_W_T(hpdcache_mem_resp_w_t, hpdcache_mem_id_t);
+
+  // Spatz request coalescer types. downstream_info_t MUST match
+  // par_coalescer_top's internal struct exactly:
+  //   { down_id_t id; logic[ExtPorts] hitmap; offset_t[ExtPorts] ofsts;
+  //     info_t[ExtPorts] infos; logic bypass_coalescer }
+  // with down_id_t = logic, offset_t = logic[$clog2(Down/Up)-1:0], info_t = tcdm_meta_t.
+  typedef logic [LP1NrBitsCoalOffset-1:0]  lp1_offset_t;
+  typedef logic [LP1NumWordOffsetBits-1:0] word_offset_t;
+  typedef struct packed {
+    logic                          id;
+    logic        [LP1ExtPorts-1:0] hitmap;
+    lp1_offset_t [LP1ExtPorts-1:0] ofsts;
+    tcdm_meta_t  [LP1ExtPorts-1:0] infos;
+    logic                          bypass_coalescer;
+  } downstream_info_t;
 
   // Regbus peripherals.
   `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)

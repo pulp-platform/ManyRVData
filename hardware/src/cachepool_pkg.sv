@@ -63,8 +63,17 @@ package cachepool_pkg;
   // 4 ports from Spatz + 1 shared port from Snitch/FPU
   localparam int unsigned NrTCDMPortsPerCore  = 5;
 
-  // How many remote ports for each tile in total?
-  localparam int unsigned NumRemotePortTile   = NumRemotePortCore * NrTCDMPortsPerCore;
+  // Number of L1->L2 interco / remote-NoC planes.
+  // Historically the tile fabric was replicated once per core TCDM port
+  // (NrTCDMPortsPerCore planes). With the per-core private L1, each core
+  // coalesces its NrTCDMPortsPerCore ports into ONE cacheline-wide downstream,
+  // so the interco / remote NoC collapses to a single plane. This param
+  // decouples the NoC plane count from the core port count.
+  localparam int unsigned NumL2Plane          = 1;
+
+  // How many remote ports for each tile in total? (one remote slot per plane)
+  // localparam int unsigned NumRemotePortTile   = NumRemotePortCore * NrTCDMPortsPerCore;
+  localparam int unsigned NumRemotePortTile   = NumRemotePortCore * NumL2Plane;
 
   ////////////////////
   //  GROUP CONFIG  //
@@ -388,6 +397,11 @@ package cachepool_pkg;
   typedef logic [L1AddrWidth-1:0]                         narrow_addr_t;
   typedef logic [SPMAddrWidth-1:0]                        spm_addr_t;
 
+  // Cacheline-wide TCDM payload for the private-L1 -> shared-L2 downstream path
+  // (and the remote / inter-group NoC that carries it). One beat per cacheline.
+  typedef logic [L1LineWidth-1:0]                         cacheline_data_t;
+  typedef logic [L1LineWidth/8-1:0]                       cacheline_strb_t;
+
   typedef struct packed {
     logic        is_burst;
     burst_len_t  burst_len;
@@ -448,7 +462,10 @@ package cachepool_pkg;
     logic [TileIDWidth-1:0]           dst_tile_id;
   } remote_group_user_t;
 
-  `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
+  // Inter-group remote (FlooNoC) payload carries cacheline-wide L1->L2 traffic.
+  // (was: narrow_data_t / narrow_strb_t for the old 32b core->L2 path)
+  // `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
+  `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, cacheline_data_t, cacheline_strb_t, remote_group_user_t)
 
   // XY mesh coordinates for a group. port_id selects the eject port (always 0 for single-link).
   typedef struct packed {
@@ -540,9 +557,13 @@ package cachepool_pkg;
   // REQRSP: cache transaction (same payload type as L2 in current code)
   `REQRSP_TYPEDEF_ALL (cache_trans, axi_addr_t, axi_wide_data_t, axi_wide_strb_t, refill_user_t)
 
-  // TCDM req/rsp bus => core to L1
+  // TCDM req/rsp bus => core to L1 (narrow, 32b)
   `TCDM_TYPEDEF_ALL(tcdm, narrow_addr_t, narrow_data_t, narrow_strb_t, tcdm_user_t)
   `TCDM_TYPEDEF_ALL(spm,  spm_addr_t,    narrow_data_t, narrow_strb_t, tcdm_user_t)
+
+  // TCDM req/rsp bus => private L1 to shared L2 (cacheline-wide). Used by the
+  // collapsed tile interco and the remote NoC that carries L1->L2 traffic.
+  `TCDM_TYPEDEF_ALL(tcdm_cacheline, narrow_addr_t, cacheline_data_t, cacheline_strb_t, tcdm_user_t)
 
   // AXI typedef bundles
   `AXI_TYPEDEF_ALL(spatz_axi_narrow,  axi_addr_t, axi_narrow_id_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
