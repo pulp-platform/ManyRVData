@@ -309,7 +309,7 @@ module cachepool_tile
   localparam int unsigned LP1NumWordOffsetBits = $clog2(LP1WordWidth/DataWidth);  // tid word-offset field
   localparam int unsigned LP1CoalInfoWidth     = LP1ExtPorts + LP1ExtPorts*LP1NrBitsCoalOffset;
   localparam int unsigned LP1ReqIdWidth        = $clog2(NumSpatzOutstandingLoads);
-  localparam int unsigned LP1TidWidth          = CoreIDWidth + LP1ReqIdWidth + 2 + LP1CoalInfoWidth; // +2: is_fpu, write
+  localparam int unsigned LP1TidWidth          = CoreIDWidth + TileIDWidth + LP1ReqIdWidth + 2 + LP1CoalInfoWidth; // +2: is_fpu, write; tile_id+core_id round-tripped
   localparam int unsigned LP1NrRequesters      = 2;                               // Snitch + Spatz(coalesced)
 
   localparam hpdcache_pkg::hpdcache_user_cfg_t HPDcacheUserCfg = '{
@@ -528,6 +528,18 @@ module cachepool_tile
   tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
   tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
 
+  // ---- Private L1 (LP1) -> shared L1/L2 downstream (cacheline-wide) ----
+  // One private L1 per core; its single mem-side downstream feeds the collapsed
+  // tile interco towards the shared cache (named L1 in this file). lp1_l1_req_unique
+  // tags a per-core id (core_id, req_id+=c) so the shared L1 round-trips it
+  // (recovered in the LP1 ctrl as req_id - core_id).
+  tcdm_cacheline_req_t [NumL1CtrlTile-1:0] lp1_l1_req, lp1_l1_req_unique;
+  tcdm_cacheline_rsp_t [NumL1CtrlTile-1:0] lp1_l1_rsp;
+  logic                [NumL1CtrlTile-1:0] lp1_l1_rsp_ready;
+
+  tcdm_req_t  [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_req_transposed;
+  tcdm_rsp_t  [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_transposed;
+  logic       [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] lp1_cache_rsp_ready, lp1_cache_req_ready;
 
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
@@ -620,21 +632,27 @@ module cachepool_tile
   logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
   logic  [NumL1CtrlTile-1:0] cache_amo_pready;
 
+  // ----------------------------------------------------------------------------
+  // [LP1] Old core<->interco bridge, replaced by the per-core private L1.
+  // The cores now drive their TCDM ports into cachepool_l1_ctrl (gen_lp1_cache);
+  // the LP1 downstream (lp1_l1_req_unique) feeds the collapsed interco. The old
+  // unmerge / cache_req reshape below is superseded and commented out.
+  // ----------------------------------------------------------------------------
   always_comb begin : cache_flush_protection
     for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
       /***** REQ *****/
       unmerge_req[j].q       = tcdm_req[j].q;
       unmerge_req[j].q_valid = tcdm_req[j].q_valid;
       unmerge_pready[j]      = 1'b1;
-
+  
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
       tcdm_rsp[j].p_valid = unmerge_rsp[j].p_valid;
       tcdm_rsp[j].q_ready = unmerge_rsp[j].q_ready;
     end
-
+  
   end
-
+  
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
     for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin
       always_comb begin
@@ -643,7 +661,132 @@ module cachepool_tile
         cache_pready[j][cb] = unmerge_pready[cb*NrTCDMPortsPerCore+j];
         unmerge_rsp [cb*NrTCDMPortsPerCore+j] = cache_rsp     [j][cb];
       end
+  
+    end
+  end
 
+  for (genvar i = 0; i < NumLP1CacheCtrl; i++) begin : gen_lp1_cache_transpose
+    for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_lp1_cache_transpose_signals
+      assign cache_req_transposed[i][j] = cache_req[j][i];
+
+      assign cache_rsp[j][i].p_valid    = cache_rsp_transposed[i][j].p_valid;
+      assign cache_rsp[j][i].p.data     = cache_rsp_transposed[i][j].p.data;
+      assign cache_rsp[j][i].p.user     = cache_rsp_transposed[i][j].p.user;
+      assign cache_rsp[j][i].p.write    = cache_rsp_transposed[i][j].p.write;
+      
+      assign cache_rsp[j][i].q_ready    = lp1_cache_req_ready[i][j];
+      assign lp1_cache_rsp_ready[i][j]  = cache_pready[j][i];
+    end
+  end
+
+  // ----------------------------------------------------------------------------
+  // [LP1] Per-core private L1 data cache (HPDcache, write-through, no coherence).
+  // Core side: the core's NrTCDMPortsPerCore TCDM ports (Spatz lanes [0..N-2] +
+  // Snitch [N-1]). The LP1 coalesces/translates internally and exposes ONE
+  // cacheline-wide downstream (lp1_l1_req / lp1_l1_rsp) to the shared L1/L2.
+  // The core is always ready to accept responses (matches the legacy
+  // unmerge_pready = 1'b1 convention), so core_rsp_ready_i is tied high.
+  // ----------------------------------------------------------------------------
+  for (genvar c = 0; c < NumLP1CacheCtrl; c++) begin : gen_lp1_cache
+    cachepool_l1_ctrl #(
+      .NrTCDMPortsPerCore   (NrTCDMPortsPerCore     ),
+      .DataWidth            (DataWidth              ),
+      .ByteWidth            (8                      ),
+      .LP1NumWordOffsetBits (LP1NumWordOffsetBits   ),
+      .LP1NrBitsCoalOffset  (LP1NrBitsCoalOffset    ),
+      .HPDcacheCfg          (HPDcacheCfg            ),
+      .wbuf_timecnt_t       (hpdcache_wbuf_timecnt_t),
+      .l1_cache_req_t       (tcdm_req_t             ),
+      .l1_cache_rsp_t       (tcdm_rsp_t             ),
+      .tcdm_meta_t          (tcdm_meta_t            ),
+      .downstream_info_t    (downstream_info_t      ),
+      .word_offset_t        (word_offset_t          ),
+      .l2_cache_req_t       (tcdm_cacheline_req_t   ),
+      .l2_cache_rsp_t       (tcdm_cacheline_rsp_t   ),
+      .hpdcache_tag_t        (hpdcache_tag_t        ),
+      .hpdcache_data_word_t  (hpdcache_data_word_t  ),
+      .hpdcache_data_be_t    (hpdcache_data_be_t    ),
+      .hpdcache_req_offset_t (hpdcache_req_offset_t ),
+      .hpdcache_req_data_t   (hpdcache_req_data_t   ),
+      .hpdcache_req_be_t     (hpdcache_req_be_t     ),
+      .hpdcache_req_sid_t    (hpdcache_req_sid_t    ),
+      .hpdcache_req_tid_t    (hpdcache_req_tid_t    ),
+      .hpdcache_req_t        (hpdcache_req_t        ),
+      .hpdcache_rsp_t        (hpdcache_rsp_t        ),
+      .hpdcache_mem_addr_t   (hpdcache_mem_addr_t   ),
+      .hpdcache_mem_id_t     (hpdcache_mem_id_t     ),
+      .hpdcache_mem_data_t   (hpdcache_mem_data_t   ),
+      .hpdcache_mem_be_t     (hpdcache_mem_be_t     ),
+      .hpdcache_mem_req_t    (hpdcache_mem_req_t    ),
+      .hpdcache_mem_req_w_t  (hpdcache_mem_req_w_t  ),
+      .hpdcache_mem_resp_r_t (hpdcache_mem_resp_r_t ),
+      .hpdcache_mem_resp_w_t (hpdcache_mem_resp_w_t )
+    ) i_lp1_cache (
+      .clk_i            (clk_i        ),
+      .rst_ni           (rst_ni       ),
+      .wbuf_flush_i     (1'b0         ),
+
+      // Core side (NrTCDMPortsPerCore narrow TCDM ports for this core)
+      .core_req_i       (cache_req_transposed [c]),
+      .core_rsp_o       (cache_rsp_transposed [c]),
+      .core_req_ready_o (lp1_cache_req_ready  [c]),
+      .core_rsp_ready_i (lp1_cache_rsp_ready  [c]),
+
+      // Downstream (cacheline-wide) to shared L1/L2 via the interco
+      .l2_req_o         (lp1_l1_req       [c]),
+      .l2_rsp_i         (lp1_l1_rsp       [c]),
+      .l2_rsp_ready_o   (lp1_l1_rsp_ready [c]),
+
+      // Performance events: unconnected (perf counters unused for now)
+      .evt_cache_write_miss_o   (),
+      .evt_cache_read_miss_o    (),
+      .evt_cache_dir_unc_err_o  (),
+      .evt_cache_dir_cor_err_o  (),
+      .evt_cache_dat_unc_err_o  (), 
+      .evt_cache_dat_cor_err_o  (),
+      .evt_scrub_complete_o     (), 
+      .evt_uncached_req_o       (),
+      .evt_cmo_req_o            (), 
+      .evt_write_req_o          (),
+      .evt_read_req_o           (), 
+      .evt_prefetch_req_o       (),
+      .evt_req_on_hold_o        (), 
+      .evt_rtab_rollback_o      (),
+      .evt_stall_refill_o       (), 
+      .evt_stall_o              (),
+      .wbuf_empty_o             (),
+
+      // Configuration (static for now)
+      .cfg_enable_i                        (1'b1),
+      .cfg_wbuf_threshold_i                ('0  ),  // drain writes immediately (WT)
+      .cfg_wbuf_reset_timecnt_on_write_i   (1'b0),
+      .cfg_wbuf_sequential_waw_i           (1'b0),
+      .cfg_wbuf_inhibit_write_coalescing_i (1'b0),
+      .cfg_prefetch_updt_plru_i            (1'b0),
+      .cfg_error_on_cacheable_amo_i        (1'b0),
+      .cfg_rtab_single_entry_i             (1'b0),
+      .cfg_default_wb_i                    (1'b0),  // write-through default
+      .cfg_scrub_enable_i                  (1'b0),
+      .cfg_scrub_period_i                  ('0  ),
+      .cfg_scrub_restart_i                 (1'b0)
+    );
+  end
+
+  // [LP1] Tag each private L1 downstream with a globally-unique id so the shared
+  // L1/L2 can round-trip it. core_id selects the response path in the interco
+  // (input port == core_id); tile_id marks this tile (for remote response
+  // routing). req_id += core_id + tile_id offsets the HPDcache mem id so that
+  // ids from different private caches (across cores AND remote tiles, which are
+  // mutually agnostic) stay distinct towards the shared L2 (which keys on
+  // req_id). The LP1 ctrl recovers the original via req_id - core_id - tile_id.
+  for (genvar c = 0; c < NumLP1CacheCtrl; c++) begin : gen_lp1_l1_req_unique
+    logic [CoreIDWidth-1:0] c_id;
+    assign c_id = c[CoreIDWidth-1:0];
+    always_comb begin
+      lp1_l1_req_unique[c]                = lp1_l1_req[c];
+      lp1_l1_req_unique[c].q.user.core_id = c_id;
+      lp1_l1_req_unique[c].q.user.tile_id = tile_id_i;
+      lp1_l1_req_unique[c].q.user.req_id  = lp1_l1_req[c].q.user.req_id + c_id + tile_id_i;
     end
   end
 

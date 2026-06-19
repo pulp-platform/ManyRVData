@@ -140,21 +140,24 @@ module cachepool_l1_ctrl
   localparam int unsigned WordBytes             = coalescedDataWidth / ByteWidth;
 
   // tid layout (one fixed, non-overlapping scheme), MSB -> LSB:
-  //   { word_offset | is_fpu | core_id | write | req_id | ofsts | hitmap }
+  //   { word_offset | is_fpu | tile_id | core_id | write | req_id | ofsts | hitmap }
   // Snitch path uses word_offset (ofsts/hitmap = 0); Spatz path uses ofsts/hitmap
-  // (word_offset = 0). The {is_fpu, core_id, write, req_id} block is at fixed
-  // positions for both. sid (0 Spatz / 1 Snitch) selects the unpack path.
+  // (word_offset = 0). The {is_fpu, tile_id, core_id, write, req_id} block is at
+  // fixed positions for both. sid (0 Spatz / 1 Snitch) selects the unpack path.
+  // tile_id is round-tripped so the core-side response recovers the full origin
+  // metadata (the private L1 is otherwise core/tile-agnostic).
   localparam int unsigned ReqIdW        = $bits(reqid_t);
   localparam int unsigned HitmapW       = NrLP1CoalInputs;
   localparam int unsigned OfstsW        = NrLP1CoalInputs * LP1NrBitsCoalOffset;
   localparam int unsigned CoalInfoW     = HitmapW + OfstsW;
-  localparam int unsigned TidUserW      = CoreIDWidth + ReqIdW + 2;  // {is_fpu,core_id,write,req_id}
+  localparam int unsigned TidUserW      = CoreIDWidth + TileIDWidth + ReqIdW + 2;  // {is_fpu,tile_id,core_id,write,req_id}
   localparam int unsigned HitmapLsb     = 0;
   localparam int unsigned OfstsLsb      = HitmapW;
   localparam int unsigned ReqIdLsb      = CoalInfoW;
   localparam int unsigned WritePos      = CoalInfoW + ReqIdW;
   localparam int unsigned CoreIdLsb     = CoalInfoW + ReqIdW + 1;
-  localparam int unsigned IsFpuPos      = CoalInfoW + ReqIdW + 1 + CoreIDWidth;
+  localparam int unsigned TileIdLsb     = CoreIdLsb + CoreIDWidth;
+  localparam int unsigned IsFpuPos      = TileIdLsb + TileIDWidth;
   localparam int unsigned WordOffLsb    = CoalInfoW + TidUserW;
 
   ///////////////////
@@ -167,6 +170,7 @@ module cachepool_l1_ctrl
   hpdcache_req_offset_t [NrTCDMPortsPerCore-1:0]                  cache_req_addr_offset;
   word_offset_t         [NrTCDMPortsPerCore-1:0]                  cache_req_word_offset;
   logic                 [NrTCDMPortsPerCore-1:0][CoreIDWidth-1:0] cache_req_coreid;
+  logic                 [NrTCDMPortsPerCore-1:0][TileIDWidth-1:0] cache_req_tileid;
   reqid_t               [NrTCDMPortsPerCore-1:0]                  cache_req_reqid;
   logic                 [NrTCDMPortsPerCore-1:0]                  cache_req_is_fpu;
   logic                 [NrTCDMPortsPerCore-1:0]                  cache_req_write;
@@ -236,6 +240,7 @@ module cachepool_l1_ctrl
     assign cache_req_addr_offset[i] = core_req_i[i].q.addr[HPDcacheCfg.reqOffsetWidth-1:0];
     assign cache_req_word_offset[i] = core_req_i[i].q.addr[$clog2(DataWidth/ByteWidth) +: LP1NumWordOffsetBits];
     assign cache_req_coreid[i]      = core_req_i[i].q.user.core_id;
+    assign cache_req_tileid[i]      = core_req_i[i].q.user.tile_id;
     assign cache_req_reqid[i]       = core_req_i[i].q.user.req_id;
     assign cache_req_is_fpu[i]      = core_req_i[i].q.user.is_fpu;
     assign cache_req_write[i]       = core_req_i[i].q.write;
@@ -263,6 +268,7 @@ module cachepool_l1_ctrl
     // Snitch-path tid (per-port). Spatz lanes get their tid rebuilt post-coalesce.
     assign l1_cache_req[i].tid          = pack_tid_snitch(cache_req_word_offset[i],
                                                           cache_req_is_fpu[i],
+                                                          cache_req_tileid[i],
                                                           cache_req_coreid[i],
                                                           cache_req_write[i],
                                                           cache_req_reqid[i]);
@@ -291,7 +297,7 @@ module cachepool_l1_ctrl
 
     // Coalescer info payload (carried per lane, returned with the response).
     assign cache_req_info[i].user.core_id = cache_req_coreid[i];
-    assign cache_req_info[i].user.tile_id = '0;  // tagged at tile level
+    assign cache_req_info[i].user.tile_id = cache_req_tileid[i];  // round-tripped for core rsp
     assign cache_req_info[i].user.is_amo  = (cache_req_amo[i] != AMONone);
     assign cache_req_info[i].user.req_id  = cache_req_reqid[i];
     assign cache_req_info[i].user.is_fpu  = cache_req_is_fpu[i];
@@ -395,7 +401,8 @@ module cachepool_l1_ctrl
     // tid: pack the coalescer scatter info + shared user.
     l1_req[0].tid = coal_req_valid
                   ? pack_tid_spatz(coal_req_info.hitmap, coal_req_info.ofsts,
-                                   coal_meta.user.is_fpu, coal_meta.user.core_id,
+                                   coal_meta.user.is_fpu, coal_meta.user.tile_id,
+                                   coal_meta.user.core_id,
                                    coal_req_write, coal_meta.user.req_id)
                   : '0;
   end
@@ -434,6 +441,7 @@ module cachepool_l1_ctrl
 
     coal_resp_user          = '0;
     coal_resp_user.is_fpu   = l1_rsp[0].tid[IsFpuPos];
+    coal_resp_user.tile_id  = l1_rsp[0].tid[TileIdLsb +: TileIDWidth];
     coal_resp_user.core_id  = l1_rsp[0].tid[CoreIdLsb +: CoreIDWidth];
     coal_resp_user.req_id   = l1_rsp[0].tid[ReqIdLsb  +: ReqIdW];
     coal_resp_user.is_amo   = 1'b0;
@@ -479,7 +487,7 @@ module cachepool_l1_ctrl
     core_rsp_o[SnitchPort].p.user.core_id = l1_rsp[1].tid[CoreIdLsb +: CoreIDWidth];
     core_rsp_o[SnitchPort].p.user.req_id  = l1_rsp[1].tid[ReqIdLsb  +: ReqIdW];
     core_rsp_o[SnitchPort].p.user.is_amo  = 1'b0;
-    core_rsp_o[SnitchPort].p.user.tile_id = '0;
+    core_rsp_o[SnitchPort].p.user.tile_id = l1_rsp[1].tid[TileIdLsb +: TileIDWidth];
     core_rsp_o[SnitchPort].p.write        = l1_rsp[1].tid[WritePos];
   end
 
@@ -492,8 +500,10 @@ module cachepool_l1_ctrl
   // drives it, so refills/write-acks are properly back-pressured. Read/write
   // responses are distinguished by p.write and steered to the matching HPDcache
   // mem channel. The original HPDcache mem id is recovered by removing the
-  // per-core offset the tile added (req_id - core_id); the L1 controller is
-  // core-private and core_id-agnostic.
+  // per-private-cache offset the tile added to make ids unique towards the shared
+  // L2 (req_id += core_id + tile_id), i.e. req_id - core_id - tile_id. The L1
+  // controller is core/tile-private and agnostic of its own ids (it reads them
+  // back from the echoed downstream user).
   always_comb begin : rsp_translation
     l1_mem_resp_read_valid  = 1'b0;
     l1_mem_resp_write_valid = 1'b0;
@@ -504,11 +514,11 @@ module cachepool_l1_ctrl
       l1_mem_resp_write_valid                = l2_rsp_i.p_valid;
       l1_mem_resp_write.mem_resp_w_is_atomic = l2_rsp_i.p.user.is_amo;
       l1_mem_resp_write.mem_resp_w_error     = HPDCACHE_MEM_RESP_OK;
-      l1_mem_resp_write.mem_resp_w_id        = l2_rsp_i.p.user.req_id - l2_rsp_i.p.user.core_id;
+      l1_mem_resp_write.mem_resp_w_id        = l2_rsp_i.p.user.req_id - l2_rsp_i.p.user.core_id - l2_rsp_i.p.user.tile_id;
     end else begin
       l1_mem_resp_read_valid             = l2_rsp_i.p_valid;
       l1_mem_resp_read.mem_resp_r_error  = HPDCACHE_MEM_RESP_OK;
-      l1_mem_resp_read.mem_resp_r_id     = l2_rsp_i.p.user.req_id - l2_rsp_i.p.user.core_id;
+      l1_mem_resp_read.mem_resp_r_id     = l2_rsp_i.p.user.req_id - l2_rsp_i.p.user.core_id - l2_rsp_i.p.user.tile_id;
       l1_mem_resp_read.mem_resp_r_data   = l2_rsp_i.p.data;
       l1_mem_resp_read.mem_resp_r_last   = 1'b1;
     end
@@ -677,6 +687,7 @@ module cachepool_l1_ctrl
   function automatic hpdcache_req_tid_t pack_tid_snitch(
       input word_offset_t              word_offset,
       input logic                      is_fpu,
+      input logic [TileIDWidth-1:0]    tile_id,
       input logic [CoreIDWidth-1:0]    core_id,
       input logic                      write,
       input reqid_t                    req_id);
@@ -684,6 +695,7 @@ module cachepool_l1_ctrl
     pack_tid_snitch[ReqIdLsb  +: ReqIdW]      = req_id;
     pack_tid_snitch[WritePos]                 = write;
     pack_tid_snitch[CoreIdLsb +: CoreIDWidth] = core_id;
+    pack_tid_snitch[TileIdLsb +: TileIDWidth] = tile_id;
     pack_tid_snitch[IsFpuPos]                 = is_fpu;
     pack_tid_snitch[WordOffLsb +: LP1NumWordOffsetBits] = word_offset;
   endfunction
@@ -692,6 +704,7 @@ module cachepool_l1_ctrl
       input logic [HitmapW-1:0]        hitmap,
       input logic [OfstsW-1:0]         ofsts,
       input logic                      is_fpu,
+      input logic [TileIDWidth-1:0]    tile_id,
       input logic [CoreIDWidth-1:0]    core_id,
       input logic                      write,
       input reqid_t                    req_id);
@@ -701,6 +714,7 @@ module cachepool_l1_ctrl
     pack_tid_spatz[ReqIdLsb   +: ReqIdW]      = req_id;
     pack_tid_spatz[WritePos]                  = write;
     pack_tid_spatz[CoreIdLsb  +: CoreIDWidth] = core_id;
+    pack_tid_spatz[TileIdLsb  +: TileIDWidth] = tile_id;
     pack_tid_spatz[IsFpuPos]                  = is_fpu;
   endfunction
 

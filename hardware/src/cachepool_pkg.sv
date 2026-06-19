@@ -125,6 +125,12 @@ package cachepool_pkg;
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC001_0000;
 
+  /////////////////////////
+  //  CACHEPOOL LP1 CFG  //
+  /////////////////////////
+
+  localparam int unsigned NumLP1CacheCtrl     = NumCoresTile;
+
   ///////////////////////
   //  CACHEPOOL L1 CFG  //
   ///////////////////////
