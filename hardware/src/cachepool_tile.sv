@@ -105,7 +105,10 @@ module cachepool_tile
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
     parameter int                     unsigned               NrSramCfg                          = 1,
-    localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
+    // [LP1] Strategy-B collapse: inter-group remote ports no longer fan out per
+    // TCDM plane; the flat count drops to NumRemoteGroupPortCore * NumL2Plane.
+    // localparam int                 unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
+    localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NumL2Plane-1
   ) (
     /// System clock.
     input  logic                                          clk_i,
@@ -146,13 +149,21 @@ module cachepool_tile
     output axi_out_req_t      [TileNarrowAxiPorts-1:0]    axi_wide_req_o,
     input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]    axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
-    output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
+    // [LP1] Strategy-B collapse + Option-A width: the intra-group remote NoC is now
+    // cacheline-wide (tcdm_cacheline_*) and the flat dimension collapses to
+    // NumRemotePortTile = NumRemotePortCore * NumL2Plane (NumL2Plane = 1). Old
+    // narrow ports commented out.
+    // output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
+    // input  tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_i,
+    // input  tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_i,
+    // output tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_o,
+    output tcdm_cacheline_req_t [NumRemotePortTile-1:0]   remote_req_o,
     output remote_tile_sel_t  [NumRemotePortTile-1:0]     remote_req_dst_o,
-    input  tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_i,
+    input  tcdm_cacheline_rsp_t [NumRemotePortTile-1:0]   remote_rsp_i,
     input  logic              [NumRemotePortTile-1:0]     remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
-    input  tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_i,
-    output tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_o,
+    input  tcdm_cacheline_req_t [NumRemotePortTile-1:0]   remote_req_i,
+    output tcdm_cacheline_rsp_t [NumRemotePortTile-1:0]   remote_rsp_o,
     output logic              [NumRemotePortTile-1:0]     remote_rsp_ready_o,
     /// Inter-group remote access ports (to other groups).
     /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
@@ -516,17 +527,30 @@ module cachepool_tile
   tcdm_req_t  [NrTCDMPortsCores-1:0] unmerge_req;
   tcdm_rsp_t  [NrTCDMPortsCores-1:0] unmerge_rsp;
 
-  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
-  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
+  // [LP1] cache_req/cache_rsp stay as the per-core *narrow* TCDM ports that feed
+  // the private L1 (gen_lp1_cache_transpose). The interco mem-side collapses to a
+  // single cacheline-wide plane per L2 controller (NumL2Plane = 1), so cache_xbar_*
+  // lose the NrTCDMPortsPerCore dimension and become tcdm_cacheline_*.
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp;
+  // tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
+  // tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
+  tcdm_cacheline_req_t [NumL1CtrlTile-1:0] cache_xbar_req;
+  tcdm_cacheline_rsp_t [NumL1CtrlTile-1:0] cache_xbar_rsp;
   // Post-xbar gated copies.
   // cache_ctrl_req : xbar output with q_valid suppressed during flush.
-  // cache_bank_rsp : raw response from the bank/AMO stage; q_ready is gated before
+  // cache_bank_rsp : raw response from the bank stage; q_ready is gated before
   //                  being returned to the interco as cache_xbar_rsp.
-  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
-  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
+  // tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
+  // tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
+  tcdm_cacheline_req_t [NumL1CtrlTile-1:0] cache_ctrl_req;
+  tcdm_cacheline_rsp_t [NumL1CtrlTile-1:0] cache_bank_rsp;
 
-  tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
-  tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
+  // [LP1] Phase 1: AMOs are serviced inside the private L1 (HPDcache); the L2-side
+  // spatz_cache_amo is bypassed (kept instantiated-but-unused below for phase 2).
+  // cache_amo_* are therefore unused in the collapsed path.
+  // tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
+  // tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
 
   // ---- Private L1 (LP1) -> shared L1/L2 downstream (cacheline-wide) ----
   // One private L1 per core; its single mem-side downstream feeds the collapsed
@@ -541,19 +565,35 @@ module cachepool_tile
   tcdm_rsp_t  [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_transposed;
   logic       [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] lp1_cache_rsp_ready, lp1_cache_req_ready;
 
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
-  tcdm_addr_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_addr;
-  tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_meta;
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_write;
-  data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_data;
-  strb_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_strb;
+  // [LP1] Collapsed: one cacheline-wide port per L2 controller (was a 2-D
+  // [NumL1CtrlTile][NrTCDMPortsPerCore] fan-in feeding the in-ctrl coalescer).
+  // data/strb widen from DataWidth to the cacheline (the private L1 already
+  // coalesced upstream; the L2-side coalescer in the insitu fork is removed).
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_ready;
+  // tcdm_addr_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_addr;
+  // tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_meta;
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_write;
+  // data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_data;
+  // strb_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_strb;
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_valid;
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_ready;
+  // logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_write;
+  // data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_data;
+  // tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_meta;
+  logic            [NumL1CtrlTile-1:0] cache_req_valid;
+  logic            [NumL1CtrlTile-1:0] cache_req_ready;
+  tcdm_addr_t      [NumL1CtrlTile-1:0] cache_req_addr;
+  tcdm_user_t      [NumL1CtrlTile-1:0] cache_req_meta;
+  logic            [NumL1CtrlTile-1:0] cache_req_write;
+  cacheline_data_t [NumL1CtrlTile-1:0] cache_req_data;
+  cacheline_strb_t [NumL1CtrlTile-1:0] cache_req_strb;
 
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_valid;
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_ready;
-  logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_write;
-  data_t      [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_data;
-  tcdm_user_t [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_meta;
+  logic            [NumL1CtrlTile-1:0] cache_rsp_valid;
+  logic            [NumL1CtrlTile-1:0] cache_rsp_ready;
+  logic            [NumL1CtrlTile-1:0] cache_rsp_write;
+  cacheline_data_t [NumL1CtrlTile-1:0] cache_rsp_data;
+  tcdm_user_t      [NumL1CtrlTile-1:0] cache_rsp_meta;
 
   logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_req;
   logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_we;
@@ -629,8 +669,13 @@ module cachepool_tile
 
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
-  logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
-  logic  [NumL1CtrlTile-1:0] cache_amo_pready;
+  // [LP1] cache_pready stays per-core narrow (LP1 core-side resp-ready, via the
+  // transpose). cache_xbar_pready is the interco mem-side resp-ready: one per L2
+  // controller now. cache_amo_pready unused in the collapsed (AMO-in-L1) path.
+  // logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
+  // logic  [NumL1CtrlTile-1:0] cache_amo_pready;
+  logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready;
+  logic  [NumL1CtrlTile-1:0] cache_xbar_pready;
 
   // ----------------------------------------------------------------------------
   // [LP1] Old core<->interco bridge, replaced by the per-core private L1.
@@ -806,23 +851,24 @@ module cachepool_tile
   // response-ready (remote_in_pready) is still gated to prevent draining in-flight
   // completions during the flush window.
 
-  tcdm_req_t [NumRemotePortTile-1:0] remote_req_gated;
-  tcdm_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
+  // [LP1] cacheline-wide now; the single L2 plane means the flat index is just the
+  // remote slot r (no j de-interleave, NumRemotePortTile == NumRemotePortCore).
+  tcdm_cacheline_req_t [NumRemotePortTile-1:0] remote_req_gated;
+  tcdm_cacheline_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
-    for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
-      for (int r = 0; r < NumRemotePortCore; r++) begin
-        automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
+    // for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+    //   for (int r = 0; r < NumRemotePortCore; r++) begin
+    //     automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
+    for (int r = 0; r < NumRemotePortTile; r++) begin
+      remote_req_gated[r].q       = remote_req_i[r].q;
+      remote_req_gated[r].q_valid = remote_req_i[r].q_valid;
 
-        remote_req_gated[flat].q       = remote_req_i[flat].q;
-        remote_req_gated[flat].q_valid = remote_req_i[flat].q_valid;
+      remote_rsp_o[r]             = remote_rsp_xbar[r];
 
-        remote_rsp_o[flat]         = remote_rsp_xbar[flat];
-
-        // Gate response-ready back to us: prevent draining completions
-        // of requests that arrived just before the flush.
-        remote_in_pready[flat] = remote_rsp_ready_i[flat] && !l1d_busy_i;
-      end
+      // Gate response-ready back to us: prevent draining completions
+      // of requests that arrived just before the flush.
+      remote_in_pready[r]         = remote_rsp_ready_i[r] && !l1d_busy_i;
     end
   end
 
@@ -839,23 +885,28 @@ module cachepool_tile
   // Same flat layout as remote ports: flat = j + r * NrTCDMPortsPerCore.
   // Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
 
-  localparam int unsigned NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore;
+  // [LP1] Single L2 plane: count drops to NumRemoteGroupPortCore * NumL2Plane, and
+  // the interco-side signals are cacheline-wide (Option A). The external ports
+  // (remote_group_req_t) are already cacheline-wide via the pkg typedef.
+  // localparam int unsigned NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore;
+  localparam int unsigned NumRemoteGroupPortTile = NumRemoteGroupPortCore * NumL2Plane;
 
-  // Internal TCDM-style signals going to/from the interco.
-  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_in_req;   // incoming requests to interco
-  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_in_rsp;   // responses from interco (for incoming)
-  logic      [NumRemoteGroupPortTile-1:0] rg_interco_in_pready; // response ready for incoming
+  // Internal TCDM-style (cacheline-wide) signals going to/from the interco.
+  tcdm_cacheline_req_t [NumRemoteGroupPortTile-1:0] rg_interco_in_req;   // incoming requests to interco
+  tcdm_cacheline_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_in_rsp;   // responses from interco (for incoming)
+  logic                [NumRemoteGroupPortTile-1:0] rg_interco_in_pready; // response ready for incoming
 
-  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_out_req;  // outgoing requests from interco
-  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_out_rsp;  // responses returning (for outgoing)
-  logic      [NumRemoteGroupPortTile-1:0] rg_interco_out_pready;// response ready for outgoing
-  remote_tile_sel_t [NumRemoteGroupPortTile-1:0] rg_interco_out_dst; // target tile from interco
+  tcdm_cacheline_req_t [NumRemoteGroupPortTile-1:0] rg_interco_out_req;  // outgoing requests from interco
+  tcdm_cacheline_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_out_rsp;  // responses returning (for outgoing)
+  logic                [NumRemoteGroupPortTile-1:0] rg_interco_out_pready;// response ready for outgoing
+  remote_tile_sel_t    [NumRemoteGroupPortTile-1:0] rg_interco_out_dst; // target tile from interco
 
   if (NumRemoteGroupPortCore > 0) begin : gen_remote_group_ports
     always_comb begin
-      for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
+      // [LP1] j now indexes the (single) L2 plane; flat de-interleave uses NumL2Plane.
+      for (int j = 0; j < NumL2Plane; j++) begin
         for (int r = 0; r < NumRemoteGroupPortCore; r++) begin
-          automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
+          automatic int unsigned flat = j + r * NumL2Plane;
 
           // -----------------------------------------------------------
           // Incoming: REQRSP → TCDM conversion → interco
@@ -966,23 +1017,23 @@ module cachepool_tile
     assign rg_interco_out_dst      = '0;
   end
 
-  /// Wire requests after strb handling to the cache controller.
-  /// Each xbar j handles NumRemotePortCore remote slots at flat indices
-  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemotePortCore).
-  /// Similarly, each xbar j handles NumRemoteGroupPortCore inter-group remote slots at flat indices
-  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemoteGroupPortCore).
-  for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
-    // Collect the NumRemotePortCore remote slots for this xbar.
-    tcdm_req_t [NumRemotePortCore-1:0] xbar_remote_req_gated;
-    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_xbar;
-    logic      [NumRemotePortCore-1:0] xbar_remote_in_pready;
-    logic      [NumRemotePortCore-1:0] xbar_remote_out_pready;
-    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_i;
-    remote_tile_sel_t [NumRemotePortCore-1:0] xbar_remote_req_dst;
-    tcdm_req_t        [NumRemotePortCore-1:0] xbar_remote_req_o;
+  /// [LP1] Strategy-B collapse: the 5-plane (NrTCDMPortsPerCore) interco fan-out
+  /// becomes a SINGLE cacheline-wide plane (NumL2Plane = 1). The core side is now
+  /// the per-core private-L1 downstreams (lp1_l1_req_unique), and the mem side
+  /// drives one cacheline port per L2 controller (cache_xbar_*, no plane index).
+  /// Remote/inter-group slots are de-interleaved by NumL2Plane (so flat = r).
+  for (genvar j = 0; j < NumL2Plane; j++) begin : gen_cache_xbar
+    // Collect the NumRemotePortCore remote slots for this plane.
+    tcdm_cacheline_req_t [NumRemotePortCore-1:0] xbar_remote_req_gated;
+    tcdm_cacheline_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_xbar;
+    logic                [NumRemotePortCore-1:0] xbar_remote_in_pready;
+    logic                [NumRemotePortCore-1:0] xbar_remote_out_pready;
+    tcdm_cacheline_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_i;
+    remote_tile_sel_t    [NumRemotePortCore-1:0] xbar_remote_req_dst;
+    tcdm_cacheline_req_t [NumRemotePortCore-1:0] xbar_remote_req_o;
 
     for (genvar r = 0; r < NumRemotePortCore; r++) begin : gen_remote_slice
-      localparam int unsigned flat = j + r * NrTCDMPortsPerCore;
+      localparam int unsigned flat = j + r * NumL2Plane;
       assign xbar_remote_req_gated [r]  = remote_req_gated      [flat];
       assign xbar_remote_in_pready [r]  = remote_in_pready      [flat];
       assign xbar_remote_rsp_i     [r]  = remote_rsp_i          [flat];
@@ -996,16 +1047,16 @@ module cachepool_tile
     // When NumRemoteGroupPortCore == 0, no inter-group remote signals exist and the interco is
     // instantiated without inter-group remote ports (backward-compatible).
     if (NumRemoteGroupPortCore > 0) begin : gen_remote_group_slice
-      tcdm_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_req;
-      tcdm_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_rsp;
-      logic      [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_pready;
-      tcdm_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_req;
-      tcdm_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_rsp;
-      logic      [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_pready;
-      remote_tile_sel_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_dst;
+      tcdm_cacheline_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_req;
+      tcdm_cacheline_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_rsp;
+      logic                [NumRemoteGroupPortCore-1:0] xbar_remote_group_in_pready;
+      tcdm_cacheline_req_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_req;
+      tcdm_cacheline_rsp_t [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_rsp;
+      logic                [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_pready;
+      remote_tile_sel_t    [NumRemoteGroupPortCore-1:0] xbar_remote_group_out_dst;
 
       for (genvar r = 0; r < NumRemoteGroupPortCore; r++) begin : gen_remote_group_slice_r
-        localparam int unsigned flat = j + r * NrTCDMPortsPerCore;
+        localparam int unsigned flat = j + r * NumL2Plane;
         // Incoming: from conversion/flush → interco input
         assign xbar_remote_group_in_req    [r]    = rg_interco_in_req    [flat];
         assign xbar_remote_group_in_pready [r]    = rg_interco_in_pready [flat];
@@ -1017,65 +1068,132 @@ module cachepool_tile
         assign rg_interco_out_pready       [flat] = xbar_remote_group_out_pready[r];
       end
 
+      // tcdm_cache_interco #(
+      //   .NumTiles              (NumTiles          ),
+      //   .NumCores              (NrCores           ),
+      //   .NumCache              (NumL1CtrlTile     ),
+      //   .NumTotCache           (NumL1CacheCtrl    ),
+      //   .NumRemotePort         (NumRemotePortCore ),
+      //   .NumRemoteGroupPort    (NumRemoteGroupPortCore    ),
+      //   .NumTilesPerGroup      (NumTilesPerGroup  ),
+      //   .AddrWidth             (TCDMAddrWidth     ),
+      //   .TileIDWidth           (TileIDWidth       ),
+      //   .tcdm_req_t            (tcdm_req_t        ),
+      //   .tcdm_rsp_t            (tcdm_rsp_t        ),
+      //   .tcdm_req_chan_t       (tcdm_req_chan_t   ),
+      //   .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+      // ) i_cache_xbar (
+      //   .clk_i                ( clk_i                                              ),
+      //   .rst_ni               ( rst_ni                                             ),
+      //   .tile_id_i            ( tile_id_i                                          ),
+      //   .dynamic_offset_i     ( dynamic_offset                                     ),
+      //   .private_start_addr_i ( private_start_addr_i                               ),
+      //   .num_private_cache_i  ( num_private_cache                                  ),
+      //   .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  cache_req        [j]}),
+      //   .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  cache_pready     [j]}),
+      //   .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   cache_rsp        [j]}),
+      //   .tile_sel_o           ( xbar_remote_req_dst                                                        ),
+      //   .remote_group_sel_o   ( xbar_remote_group_out_dst                                                  ),
+      //   .mem_req_o            ({xbar_remote_group_out_req,    xbar_remote_req_o,      cache_xbar_req   [j]}),
+      //   .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready, cache_xbar_pready[j]}),
+      //   .mem_rsp_i            ({xbar_remote_group_out_rsp,    xbar_remote_rsp_i,      cache_xbar_rsp   [j]})
+      // );
+
+      // [LP1] New collapsed, cacheline-wide interco for the single L2 plane.
+      // Core side  : the NumL1CtrlTile per-core private-L1 downstreams
+      //              (lp1_l1_req_unique), already coalesced & id-tagged.
+      // Mem side   : one cacheline port per L2 controller (cache_xbar_*), no
+      //              plane index (NumL2Plane = 1).
+      // Routing math is identical to before (width-agnostic, Option A); only the
+      // data/strb width and the port multiplicity change.
       tcdm_cache_interco #(
-        .NumTiles              (NumTiles          ),
-        .NumCores              (NrCores           ),
-        .NumCache              (NumL1CtrlTile     ),
-        .NumTotCache           (NumL1CacheCtrl    ),
-        .NumRemotePort         (NumRemotePortCore ),
+        .NumTiles              (NumTiles                  ),
+        .NumCores              (NrCores                   ),
+        .NumCache              (NumL1CtrlTile             ),
+        .NumTotCache           (NumL1CacheCtrl            ),
+        .NumRemotePort         (NumRemotePortCore         ),
         .NumRemoteGroupPort    (NumRemoteGroupPortCore    ),
-        .NumTilesPerGroup      (NumTilesPerGroup  ),
-        .AddrWidth             (TCDMAddrWidth     ),
-        .TileIDWidth           (TileIDWidth       ),
-        .tcdm_req_t            (tcdm_req_t        ),
-        .tcdm_rsp_t            (tcdm_rsp_t        ),
-        .tcdm_req_chan_t       (tcdm_req_chan_t   ),
-        .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+        .NumTilesPerGroup      (NumTilesPerGroup          ),
+        .AddrWidth             (TCDMAddrWidth             ),
+        .TileIDWidth           (TileIDWidth               ),
+        .tcdm_req_t            (tcdm_cacheline_req_t      ),
+        .tcdm_rsp_t            (tcdm_cacheline_rsp_t      ),
+        .tcdm_req_chan_t       (tcdm_cacheline_req_chan_t ),
+        .tcdm_rsp_chan_t       (tcdm_cacheline_rsp_chan_t )
       ) i_cache_xbar (
-        .clk_i                ( clk_i                                              ),
-        .rst_ni               ( rst_ni                                             ),
-        .tile_id_i            ( tile_id_i                                          ),
-        .dynamic_offset_i     ( dynamic_offset                                     ),
-        .private_start_addr_i ( private_start_addr_i                               ),
-        .num_private_cache_i  ( num_private_cache                                  ),
-        .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  cache_req        [j]}),
-        .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  cache_pready     [j]}),
-        .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   cache_rsp        [j]}),
-        .tile_sel_o           ( xbar_remote_req_dst                                                        ),
-        .remote_group_sel_o   ( xbar_remote_group_out_dst                                                  ),
-        .mem_req_o            ({xbar_remote_group_out_req,    xbar_remote_req_o,      cache_xbar_req   [j]}),
-        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready, cache_xbar_pready[j]}),
-        .mem_rsp_i            ({xbar_remote_group_out_rsp,    xbar_remote_rsp_i,      cache_xbar_rsp   [j]})
+        .clk_i                ( clk_i                                                                  ),
+        .rst_ni               ( rst_ni                                                                 ),
+        .tile_id_i            ( tile_id_i                                                              ),
+        .dynamic_offset_i     ( dynamic_offset                                                         ),
+        .private_start_addr_i ( private_start_addr_i                                                   ),
+        .num_private_cache_i  ( num_private_cache                                                      ),
+        .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  lp1_l1_req_unique}),
+        .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  lp1_l1_rsp_ready }),
+        .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   lp1_l1_rsp       }),
+        .tile_sel_o           ( xbar_remote_req_dst                                                    ),
+        .remote_group_sel_o   ( xbar_remote_group_out_dst                                              ),
+        .mem_req_o            ({xbar_remote_group_out_req,    xbar_remote_req_o,      cache_xbar_req   }),
+        .mem_rsp_ready_o      ({xbar_remote_group_out_pready, xbar_remote_out_pready, cache_xbar_pready}),
+        .mem_rsp_i            ({xbar_remote_group_out_rsp,    xbar_remote_rsp_i,      cache_xbar_rsp   })
       );
     end else begin : gen_no_remote_group
       // No inter-group remote ports: instantiate interco without inter-group remote ports (backward-compatible).
+      // [LP1] Collapsed, cacheline-wide variant. Old narrow/5-plane instance below.
+      // tcdm_cache_interco #(
+      //   .NumTiles              (NumTiles          ),
+      //   .NumCores              (NrCores           ),
+      //   .NumCache              (NumL1CtrlTile     ),
+      //   .NumTotCache           (NumL1CacheCtrl    ),
+      //   .NumRemotePort         (NumRemotePortCore ),
+      //   .AddrWidth             (TCDMAddrWidth     ),
+      //   .TileIDWidth           (TileIDWidth       ),
+      //   .tcdm_req_t            (tcdm_req_t        ),
+      //   .tcdm_rsp_t            (tcdm_rsp_t        ),
+      //   .tcdm_req_chan_t       (tcdm_req_chan_t   ),
+      //   .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+      // ) i_cache_xbar (
+      //   .clk_i                ( clk_i                                         ),
+      //   .rst_ni               ( rst_ni                                        ),
+      //   .tile_id_i            ( tile_id_i                                     ),
+      //   .dynamic_offset_i     ( dynamic_offset                                ),
+      //   .private_start_addr_i ( private_start_addr_i                          ),
+      //   .num_private_cache_i  ( num_private_cache                             ),
+      //   .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]} ),
+      //   .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]} ),
+      //   .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]} ),
+      //   .tile_sel_o           ( xbar_remote_req_dst                           ),
+      //   .remote_group_sel_o   (                                               ),
+      //   .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}),
+      //   .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}),
+      //   .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
+      // );
       tcdm_cache_interco #(
-        .NumTiles              (NumTiles          ),
-        .NumCores              (NrCores           ),
-        .NumCache              (NumL1CtrlTile     ),
-        .NumTotCache           (NumL1CacheCtrl    ),
-        .NumRemotePort         (NumRemotePortCore ),
-        .AddrWidth             (TCDMAddrWidth     ),
-        .TileIDWidth           (TileIDWidth       ),
-        .tcdm_req_t            (tcdm_req_t        ),
-        .tcdm_rsp_t            (tcdm_rsp_t        ),
-        .tcdm_req_chan_t       (tcdm_req_chan_t   ),
-        .tcdm_rsp_chan_t       (tcdm_rsp_chan_t   )
+        .NumTiles              (NumTiles                  ),
+        .NumCores              (NrCores                   ),
+        .NumCache              (NumL1CtrlTile             ),
+        .NumTotCache           (NumL1CacheCtrl            ),
+        .NumRemotePort         (NumRemotePortCore         ),
+        .AddrWidth             (TCDMAddrWidth             ),
+        .TileIDWidth           (TileIDWidth               ),
+        .tcdm_req_t            (tcdm_cacheline_req_t      ),
+        .tcdm_rsp_t            (tcdm_cacheline_rsp_t      ),
+        .tcdm_req_chan_t       (tcdm_cacheline_req_chan_t ),
+        .tcdm_rsp_chan_t       (tcdm_cacheline_rsp_chan_t )
       ) i_cache_xbar (
-        .clk_i                ( clk_i                                         ),
-        .rst_ni               ( rst_ni                                        ),
-        .tile_id_i            ( tile_id_i                                     ),
-        .dynamic_offset_i     ( dynamic_offset                                ),
-        .private_start_addr_i ( private_start_addr_i                          ),
-        .num_private_cache_i  ( num_private_cache                             ),
-        .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]} ),
-        .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]} ),
-        .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]} ),
-        .tile_sel_o           ( xbar_remote_req_dst                           ),
-        .remote_group_sel_o   (                                               ),
-        .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   [j]}),
-        .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready[j]}),
-        .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   [j]})
+        .clk_i                ( clk_i                                            ),
+        .rst_ni               ( rst_ni                                           ),
+        .tile_id_i            ( tile_id_i                                        ),
+        .dynamic_offset_i     ( dynamic_offset                                   ),
+        .private_start_addr_i ( private_start_addr_i                             ),
+        .num_private_cache_i  ( num_private_cache                                ),
+        .core_req_i           ({xbar_remote_req_gated,  lp1_l1_req_unique}       ),
+        .core_rsp_ready_i     ({xbar_remote_in_pready,  lp1_l1_rsp_ready }       ),
+        .core_rsp_o           ({xbar_remote_rsp_xbar,   lp1_l1_rsp       }       ),
+        .tile_sel_o           ( xbar_remote_req_dst                              ),
+        .remote_group_sel_o   (                                                  ),
+        .mem_req_o            ({xbar_remote_req_o,       cache_xbar_req   }       ),
+        .mem_rsp_ready_o      ({xbar_remote_out_pready,  cache_xbar_pready}       ),
+        .mem_rsp_i            ({xbar_remote_rsp_i,       cache_xbar_rsp   }       )
       );
     end
   end
@@ -1084,6 +1202,11 @@ module cachepool_tile
     // Only Snitch will send out amo requests
     // Ports from Spatz can bypass this module
 
+    // [LP1] OLD per-plane AMO + spill structure. Superseded by the single
+    // cacheline-wide spill path below: the private L1 already coalesced the
+    // Spatz lanes and handles AMOs (phase 1), so there is one cacheline port per
+    // L2 controller and the L2-side spatz_cache_amo is bypassed. Kept for ref.
+    /*
     for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_amo_connect
       if (j == NrTCDMPortsPerCore-1) begin : gen_amo
         spatz_cache_amo #(
@@ -1199,6 +1322,54 @@ module cachepool_tile
 
       end
     end
+    */
+
+    // [LP1] Single cacheline port per L2 controller. A spill register cuts the
+    // interco -> bank critical path (matching the old timing budget). AMOs are
+    // serviced upstream in the private L1, so spatz_cache_amo is bypassed here.
+    tcdm_cacheline_req_t cache_req_reg;
+    tcdm_cacheline_rsp_t cache_rsp_reg;
+
+    spill_register #(
+      .T      ( tcdm_cacheline_req_chan_t ),
+      .Bypass ( 1'b0                      )
+    ) i_spill_reg_cache_req (
+      .clk_i                                     ,
+      .rst_ni  ( rst_ni                         ),
+      .valid_i ( cache_ctrl_req[cb].q_valid     ),
+      .ready_o ( cache_bank_rsp[cb].q_ready     ),
+      .data_i  ( cache_ctrl_req[cb].q           ),
+      .valid_o ( cache_req_reg.q_valid          ),
+      .ready_i ( cache_rsp_reg.q_ready          ),
+      .data_o  ( cache_req_reg.q                )
+    );
+
+    spill_register #(
+      .T      ( tcdm_cacheline_rsp_chan_t ),
+      .Bypass ( 1'b1                      )
+    ) i_spill_reg_cache_rsp (
+      .clk_i   ( clk_i                       ),
+      .rst_ni  ( rst_ni                      ),
+      .valid_i ( cache_rsp_reg.p_valid       ),
+      .ready_o ( cache_rsp_ready  [cb]       ),
+      .data_i  ( cache_rsp_reg.p             ),
+      .valid_o ( cache_bank_rsp   [cb].p_valid),
+      .ready_i ( cache_xbar_pready[cb]       ),
+      .data_o  ( cache_bank_rsp   [cb].p     )
+    );
+
+    assign cache_req_valid[cb] = cache_req_reg.q_valid;
+    assign cache_req_addr [cb] = cache_req_reg.q.addr;
+    assign cache_req_meta [cb] = cache_req_reg.q.user;
+    assign cache_req_write[cb] = cache_req_reg.q.write;
+    assign cache_req_data [cb] = cache_req_reg.q.data;
+    assign cache_req_strb [cb] = cache_req_reg.q.strb;
+
+    assign cache_rsp_reg.p_valid = cache_rsp_valid[cb];
+    assign cache_rsp_reg.q_ready = cache_req_ready[cb];
+    assign cache_rsp_reg.p.data  = cache_rsp_data [cb];
+    assign cache_rsp_reg.p.user  = cache_rsp_meta [cb];
+    assign cache_rsp_reg.p.write = cache_rsp_write[cb];
   end
 
   // Post-xbar flush gate (applied uniformly across all ports).
@@ -1206,13 +1377,13 @@ module cachepool_tile
   // while a flush is in progress, and gates q_ready going back to the interco so the
   // xbar cannot dequeue a buffered request that is already sitting at its output.
   always_comb begin : cache_xbar_flush_gate
-    for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
-      for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
-        cache_ctrl_req[j][cb]         = cache_xbar_req[j][cb];
-        cache_ctrl_req[j][cb].q_valid = cache_xbar_req[j][cb].q_valid && !l1d_busy_i;
-        cache_xbar_rsp[j][cb]         = cache_bank_rsp[j][cb];
-        cache_xbar_rsp[j][cb].q_ready = cache_bank_rsp[j][cb].q_ready && !l1d_busy_i;
-      end
+    // [LP1] One cacheline port per L2 controller (the NrTCDMPortsPerCore plane
+    // dimension is gone).
+    for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
+      cache_ctrl_req[cb]         = cache_xbar_req[cb];
+      cache_ctrl_req[cb].q_valid = cache_xbar_req[cb].q_valid && !l1d_busy_i;
+      cache_xbar_rsp[cb]         = cache_bank_rsp[cb];
+      cache_xbar_rsp[cb].q_ready = cache_bank_rsp[cb].q_ready && !l1d_busy_i;
     end
   end
 
@@ -1357,12 +1528,91 @@ module cachepool_tile
   assign l1d_insn_ready_o = flush_pending_q && (cache_flush_d == '0);
 
   for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin: gen_l1_cache_ctrl
+    // cachepool_cache_ctrl #(
+    //   // Core
+    //   .NumPorts         (NrTCDMPortsPerCore ),
+    //   .CoalExtFactor    (L1CoalFactor       ),
+    //   .AddrWidth        (L1AddrWidth        ),
+    //   .WordWidth        (DataWidth          ),
+    //   .ByteWidth        (8                  ),
+    //   .TagWidth         (L1TagDataWidth     ),
+    //   // Cache
+    //   .NumCacheEntry    (L1NumEntryPerCtrl  ),
+    //   .CacheLineWidth   (L1LineWidth        ),
+    //   .SetAssociativity (L1AssoPerCtrl      ),
+    //   .BankFactor       (L1BankFactor       ),
+    //   // .LogDebug         (0                  ),
+    //   .RefillDataWidth  (RefillDataWidth    ),
+    //   // Type
+    //   .core_meta_t      (tcdm_user_t        ),
+    //   .impl_in_t        (impl_in_t          ),
+    //   .refill_req_t     (cache_refill_req_chan_t),
+    //   .refill_rsp_t     (cache_refill_rsp_chan_t),
+    //   .burst_req_t      (burst_req_t        )
+    // ) i_l1_controller (
+    //   .clk_i                 (clk_i                          ),
+    //   .rst_ni                (rst_ni                         ),
+    //   .impl_i                ('0                             ),
+    //   // Sync Control
+    //   .cache_sync_valid_i    (ctrl_sync_valid[cb]            ),
+    //   .cache_sync_ready_o    (ctrl_sync_ready[cb]            ),
+    //   .cache_sync_insn_i     (ctrl_sync_insn[cb]             ),
+    //   // SPM Size
+    //   // The calculation of spm region in cache is different
+    //   // than other modules (needs to times 2)
+    //   // Currently assume full cache
+    //   .bank_depth_for_SPM_i  ('0                             ),
+    //   // Request
+    //   .core_req_valid_i      (cache_req_valid[cb]            ),
+    //   .core_req_ready_o      (cache_req_ready[cb]            ),
+    //   .core_req_addr_i       (cache_req_addr [cb]            ),
+    //   .core_req_meta_i       (cache_req_meta [cb]            ),
+    //   .core_req_write_i      (cache_req_write[cb]            ),
+    //   .core_req_wdata_i      (cache_req_data [cb]            ),
+    //   .core_req_wstrb_i      (cache_req_strb [cb]            ),
+    //   // Response
+    //   .core_resp_valid_o     (cache_rsp_valid[cb]            ),
+    //   .core_resp_ready_i     (cache_rsp_ready[cb]            ),
+    //   .core_resp_write_o     (cache_rsp_write[cb]            ),
+    //   .core_resp_data_o      (cache_rsp_data [cb]            ),
+    //   .core_resp_meta_o      (cache_rsp_meta [cb]            ),
+    //   // TCDM Refill
+    //   .refill_req_o          (cache_refill_req      [cb]     ),
+    //   .refill_burst_o        (cache_refill_burst    [cb]     ),
+    //   .refill_req_valid_o    (cache_refill_req_valid[cb]     ),
+    //   .refill_req_ready_i    (cache_refill_req_ready[cb]     ),
+    //   .refill_rsp_i          (cache_refill_rsp      [cb]     ),
+    //   .refill_rsp_valid_i    (cache_refill_rsp_valid[cb]     ),
+    //   .refill_rsp_ready_o    (cache_refill_rsp_ready[cb]     ),
+    //   // Tag Banks
+    //   .tcdm_tag_bank_req_o   (l1_tag_bank_req  [cb]          ),
+    //   .tcdm_tag_bank_we_o    (l1_tag_bank_we   [cb]          ),
+    //   .tcdm_tag_bank_addr_o  (l1_tag_bank_addr [cb]          ),
+    //   .tcdm_tag_bank_wdata_o (l1_tag_bank_wdata[cb]          ),
+    //   .tcdm_tag_bank_be_o    (l1_tag_bank_be   [cb]          ),
+    //   .tcdm_tag_bank_rdata_i (l1_tag_bank_rdata[cb]          ),
+    //   // Data Banks
+    //   .tcdm_data_bank_req_o  (l1_data_bank_req  [cb]         ),
+    //   .tcdm_data_bank_we_o   (l1_data_bank_we   [cb]         ),
+    //   .tcdm_data_bank_addr_o (l1_data_bank_addr [cb]         ),
+    //   .tcdm_data_bank_wdata_o(l1_data_bank_wdata[cb]         ),
+    //   .tcdm_data_bank_be_o   (l1_data_bank_be   [cb]         ),
+    //   .tcdm_data_bank_rdata_i(l1_data_bank_rdata[cb]         ),
+    //   .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
+    // );
+
+    // [LP1] New shared-cache (L2) controller: ONE cacheline-wide core port.
+    // The private L1 already coalesced the Spatz lanes upstream, so the L2-side
+    // coalescer (i_par_coalescer_for_spatz) is removed in the insitu fork and
+    // CoalExtFactor collapses to 1, WordWidth widens to the full cache line.
+    // The fork's core_req_*/core_resp_* interface must present this single
+    // cacheline port (the tile drives the scalar cache_req_*/cache_rsp_* below).
     cachepool_cache_ctrl #(
       // Core
-      .NumPorts         (NrTCDMPortsPerCore ),
-      .CoalExtFactor    (L1CoalFactor       ),
+      .NumPorts         (1                  ),
+      .CoalExtFactor    (1                  ),
       .AddrWidth        (L1AddrWidth        ),
-      .WordWidth        (DataWidth          ),
+      .WordWidth        (L1LineWidth        ),
       .ByteWidth        (8                  ),
       .TagWidth         (L1TagDataWidth     ),
       // Cache
@@ -1391,7 +1641,7 @@ module cachepool_tile
       // than other modules (needs to times 2)
       // Currently assume full cache
       .bank_depth_for_SPM_i  ('0                             ),
-      // Request
+      // Request (single cacheline port)
       .core_req_valid_i      (cache_req_valid[cb]            ),
       .core_req_ready_o      (cache_req_ready[cb]            ),
       .core_req_addr_i       (cache_req_addr [cb]            ),
