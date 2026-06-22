@@ -163,7 +163,13 @@ package cachepool_pkg;
   localparam int unsigned NumL1CtrlTile       = NumL1CacheCtrl / NumTiles;
 
   // Number of data banks assigned to each cache controller
-  localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;
+  // [LP1] Cacheline-granular L2: each data bank now holds a FULL cache line (the
+  // L2 ctrl uses WordWidth = CacheLineWidth), so the per-line word count
+  // (L1LineWidth/SpatzDataWidth = NumWordPerLine) is absorbed into the bank width
+  // and dropped from the bank count. Banks = SetAssoc * BankFactor, matching the
+  // ctrl's [SetAssociativity][NumDataBankPerWay=BankFactor] ports 1:1.
+  // localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;
+  localparam int unsigned NumDataBankPerCtrl  = L1AssoPerCtrl * L1BankFactor;
   // Number of tag banks assigned to each cache controller
   localparam int unsigned NumTagBankPerCtrl   = L1AssoPerCtrl * L1BankFactor;
   // Number of entries of L1 Cache (total number across multiple cache controllers)

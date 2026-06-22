@@ -602,12 +602,18 @@ module cachepool_tile
   logic            [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_be;
   tag_data_t       [NumL1CtrlTile-1:0][NumTagBankPerCtrl-1:0] l1_tag_bank_rdata;
 
+  // [LP1] Cacheline-granular L2 data banks: NumDataBankPerCtrl is now SetAssoc*BankFactor
+  // banks, each holding a full cache line. req/we/addr/gnt stay 1-per-bank; wdata/rdata
+  // widen to a cache line and be becomes a cacheline byte-mask.
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_req;
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_we;
   tcdm_bank_addr_t [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_addr;
-  data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
-  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0][DataWidth/8-1:0] l1_data_bank_be;
-  data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
+  // data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
+  // logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0][DataWidth/8-1:0] l1_data_bank_be;
+  // data_t           [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
+  cacheline_data_t [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_wdata;
+  logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0][L1LineWidth/8-1:0] l1_data_bank_be;
+  cacheline_data_t [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_rdata;
   logic            [NumL1CtrlTile-1:0][NumDataBankPerCtrl-1:0] l1_data_bank_gnt;
 
   tcdm_bank_addr_t            cfg_spm_size;
@@ -1802,16 +1808,11 @@ module cachepool_tile
       );
     end
 
-    // TODO: Should we use a single large bank or multiple narrow ones?
-    for (genvar bank = 0; bank < (NumDataBankPerCtrl/NumWordPerLine);
-         bank++) begin : gen_l1_data_banks
-      localparam int unsigned BaseIdx = bank * NumWordPerLine;
-      logic [NumWordPerLine*WordBytes-1:0] bank_be;
-
-      for (genvar w = 0; w < NumWordPerLine; w++) begin : gen_bank_be
-        assign bank_be[w*WordBytes +: WordBytes] = l1_data_bank_be[cb][BaseIdx + w];
-      end
-
+    // [LP1] Cacheline-granular: each bank is directly one cacheline-wide SRAM
+    // (NumDataBankPerCtrl == SetAssoc*BankFactor now), matching the L2 ctrl's
+    // per-bank cacheline ports. The old NumWordPerLine grouping (which packed
+    // narrow per-word entries into a cacheline SRAM) is no longer needed.
+    for (genvar bank = 0; bank < NumDataBankPerCtrl; bank++) begin : gen_l1_data_banks
       tc_sram_impl #(
         .NumWords   (L1CacheWayEntry/L1BankFactor),
         .DataWidth  (L1LineWidth),
@@ -1824,16 +1825,49 @@ module cachepool_tile
         .rst_ni (rst_ni                      ),
         .impl_i ('0                          ),
         .impl_o (/* unused */                 ),
-        .req_i  ( l1_data_bank_req  [cb][BaseIdx]  ),
-        .we_i   ( l1_data_bank_we   [cb][BaseIdx]  ),
-        .addr_i ( l1_data_bank_addr [cb][BaseIdx]  ),
-        .wdata_i( l1_data_bank_wdata[cb][BaseIdx+:NumWordPerLine]),
-        .be_i   ( bank_be ),
-        .rdata_o( l1_data_bank_rdata[cb][BaseIdx+:NumWordPerLine])
+        .req_i  ( l1_data_bank_req  [cb][bank]  ),
+        .we_i   ( l1_data_bank_we   [cb][bank]  ),
+        .addr_i ( l1_data_bank_addr [cb][bank]  ),
+        .wdata_i( l1_data_bank_wdata[cb][bank]  ),  // full cache line
+        .be_i   ( l1_data_bank_be   [cb][bank]  ),  // cacheline byte-mask
+        .rdata_o( l1_data_bank_rdata[cb][bank]  )
       );
 
-      assign l1_data_bank_gnt[cb][BaseIdx+:NumWordPerLine] = {NumWordPerLine{1'b1}};
+      assign l1_data_bank_gnt[cb][bank] = 1'b1;
     end
+
+    // TODO: Should we use a single large bank or multiple narrow ones?
+    // for (genvar bank = 0; bank < (NumDataBankPerCtrl/NumWordPerLine);
+    //      bank++) begin : gen_l1_data_banks
+    //   localparam int unsigned BaseIdx = bank * NumWordPerLine;
+    //   logic [NumWordPerLine*WordBytes-1:0] bank_be;
+
+    //   for (genvar w = 0; w < NumWordPerLine; w++) begin : gen_bank_be
+    //     assign bank_be[w*WordBytes +: WordBytes] = l1_data_bank_be[cb][BaseIdx + w];
+    //   end
+
+    //   tc_sram_impl #(
+    //     .NumWords   (L1CacheWayEntry/L1BankFactor),
+    //     .DataWidth  (L1LineWidth),
+    //     .ByteWidth  (8          ),
+    //     .NumPorts   (1          ),
+    //     .Latency    (1          ),
+    //     .SimInit    ("zeros"    )
+    //   ) i_data_bank (
+    //     .clk_i  (clk_i                       ),
+    //     .rst_ni (rst_ni                      ),
+    //     .impl_i ('0                          ),
+    //     .impl_o (/* unused */                 ),
+    //     .req_i  ( l1_data_bank_req  [cb][BaseIdx]  ),
+    //     .we_i   ( l1_data_bank_we   [cb][BaseIdx]  ),
+    //     .addr_i ( l1_data_bank_addr [cb][BaseIdx]  ),
+    //     .wdata_i( l1_data_bank_wdata[cb][BaseIdx+:NumWordPerLine]),
+    //     .be_i   ( bank_be ),
+    //     .rdata_o( l1_data_bank_rdata[cb][BaseIdx+:NumWordPerLine])
+    //   );
+
+    //   assign l1_data_bank_gnt[cb][BaseIdx+:NumWordPerLine] = {NumWordPerLine{1'b1}};
+    // end
 
     // for (genvar j = 0; j < NumDataBankPerCtrl; j++) begin : gen_l1_data_banks
     //   tc_sram_impl #(
