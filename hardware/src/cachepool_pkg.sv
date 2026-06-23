@@ -458,7 +458,18 @@ package cachepool_pkg;
   ///////////////////
 
   typedef logic [RemoteXbarSelWidth-1:0]         remote_xbar_sel_t;
-  typedef logic [$clog2(NrTCDMPortsPerCore)-1:0] portid_t;
+  // [LP1] port_id / src_port_id index a remote-group port within a tile, so the
+  // correct width is $clog2(NumRemoteGroupPortTile). Pre-collapse that equalled
+  // NrTCDMPortsPerCore (=5); after the Strategy-B collapse the governing count is
+  // NumRemoteGroupPortCore * NumL2Plane (mirrors the per-module NumRemoteGroupPortTile
+  // localparams). NrTCDMPortsPerCore here over-sized portid_t to 3 bits and tripped
+  // vsim-3015 (PCDPC) at the uncast master-xbar select connections.
+  // Distinct name from the per-module NumRemoteGroupPortTile localparams to avoid
+  // a wildcard-import override warning; same value by construction.
+  localparam int unsigned PortIdPortCount = (NumRemoteGroupPortCore == 0)
+                                            ? 1 : NumRemoteGroupPortCore * NumL2Plane;
+  // typedef logic [$clog2(NrTCDMPortsPerCore)-1:0] portid_t;
+  typedef logic [((PortIdPortCount > 1) ? $clog2(PortIdPortCount) : 1)-1:0] portid_t;
 
   typedef struct packed {
     logic [CoreIDWidth-1:0]           core_id;

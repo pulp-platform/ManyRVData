@@ -15,7 +15,7 @@ dependencies:
   tech_cells_generic:  { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11                  }
   # Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/cachepool_dev  }
   Insitu-Cache:        { git: "https://github.com/HHT1228/Insitu-Cache.git",             rev:     hohung-multi-tile       }
-  hpdcache:            { git: "https://github.com/HHT1228/cv-hpdcache",                  rev:     cachepool/no_coherence  }
+  hpdcache:            { git: "https://github.com/HHT1228/cv-hpdcache.git",              rev:     cachepool/no_coherence  }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool               }
   floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                    }
   cluster_icache:      { git: "https://github.com/pulp-platform/cluster_icache.git",     rev:     main                    }
@@ -43,6 +43,8 @@ sources:
   # Level 1
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
+  # Private L1 data cache (per-core HPDcache wrapper) — must precede the tile
+  - hardware/src/cachepool_l1_ctrl.sv
   # Barrier
   - hardware/src/cachepool_tile_barrier.sv
   - hardware/src/cachepool_cluster_barrier.sv

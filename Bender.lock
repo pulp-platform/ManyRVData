@@ -63,7 +63,7 @@ packages:
     dependencies:
     - axi
   floo_noc:
-    revision: 97306733f33acbb646c7e403c03a674fc1404b44
+    revision: f7f81e2c65c231a8fab4cf8a6e6cd2aa3efdcdb6
     version: null
     source:
       Git: https://github.com/pulp-platform/FlooNoC.git
@@ -96,6 +96,12 @@ packages:
       Git: https://github.com/pulp-platform/fpu_div_sqrt_mvp.git
     dependencies:
     - common_cells
+  hpdcache:
+    revision: null
+    version: null
+    source:
+      Path: ../cv-hpdcache
+    dependencies: []
   idma:
     revision: 28a36e5e07705549e59fc33db96ab681bc1ca88e
     version: 0.6.5
@@ -109,10 +115,10 @@ packages:
     - obi
     - register_interface
   insitu-cache:
-    revision: fa761ddebc946f9b46509d84945bf41ee1a9ec49
+    revision: null
     version: null
     source:
-      Git: https://github.com/pulp-platform/Insitu-Cache.git
+      Path: ../Insitu-Cache
     dependencies:
     - axi
     - common_cells
@@ -150,10 +156,10 @@ packages:
     dependencies:
     - tech_cells_generic
   spatz:
-    revision: 944e9042379fbe1db69567655cffd7a2e260ff16
+    revision: null
     version: null
     source:
-      Git: https://github.com/pulp-platform/spatz.git
+      Path: hardware/deps/spatz
     dependencies:
     - axi
     - axi_riscv_atomics
