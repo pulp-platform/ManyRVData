@@ -327,7 +327,7 @@ module cachepool_tile
       nRequesters:        LP1NrRequesters,
       paWidth:            32,
       wordWidth:          LP1WordWidth,
-      sets:               64,            // TODO: 32 sets => 8KB/core target (currently 16KB)
+      sets:               32,
       ways:               4,
       clWords:            4,
       reqWords:           1,
@@ -335,7 +335,7 @@ module cachepool_tile
       reqSrcIdWidth:      1,             // selects requester port (0 Spatz / 1 Snitch)
       victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_PLRU,
       dataWaysPerRamWord: 1,
-      dataSetsPerRam:     64,
+      dataSetsPerRam:     32,
       dataRamByteEnable:  1'b1,
       accessWords:        4,
       mshrSets:           8,
