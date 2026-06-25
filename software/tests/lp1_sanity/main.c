@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Author: Ho Tin Hung, ETH Zurich
+
 // LP1 sanity — Tier 0 single-core smoke test for the private L1 (HPDcache)
 // bring-up.
 //

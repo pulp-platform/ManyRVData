@@ -129,6 +129,7 @@ add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 32768)
 
 add_spatz_test_zeroParam(lp1_sanity lp1_sanity/main.c)
 add_spatz_test_zeroParam(lp1_private lp1_private/main.c)
+add_spatz_test_zeroParam(lp1_eviction lp1_eviction/main.c)
 
 add_spatz_test_zeroParam(load-store load-store/main.c)
 

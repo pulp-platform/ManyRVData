@@ -2,7 +2,7 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Author: Ho Tin Hung
+// Author: Ho Tin Hung, ETH Zurich
 //
 // Per-core private L1 data cache controller.
 //

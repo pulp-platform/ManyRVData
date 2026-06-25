@@ -1,0 +1,96 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# 4x4 group mesh for the cachepool_fpu_16g / _16g_tiny configs (num_groups=16,
+# num_groups_x=4 => num_groups_y=4). Faithful extension of the 2x2
+# floonoc_cachepool_4g.yml. CHECK BEFORE TRUSTING: the HBM endpoint count (8 =
+# one per mesh row on each of the west/east edges, i.e. 2*num_groups_y) and the
+# HBM addr_range stride are extrapolated from the 4g pattern; confirm they match
+# the 16g memory map / DRAMSys backing.
+
+name: cachepool
+description: "CachePool AXI NoC"
+network_type: "axi"
+
+routing:
+  route_algo: "SRC"
+  use_id_table: true
+
+protocols:
+  - name: "wide_in"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 256
+    addr_width: 32
+    id_width: 2
+    user_width: 1
+  - name: "wide_out"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 256
+    addr_width: 32
+    id_width: 2
+    user_width: 1
+
+endpoints:
+  - name: "group"
+    array: [4, 4]
+    mgr_port_protocol:
+      - "wide_in"
+  - name: "hbm"
+    array: [8]
+    addr_range:
+      base: 0x8000_0000
+      size: 0x0010_0000
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "host_peri"
+    addr_range:
+      - start: 0x0000_0000
+        end: 0x7FFF_FFFF
+      - start: 0xA000_0000
+        end: 0xC000_FFFF
+    mgr_port_protocol:
+      - "wide_in"
+    sbr_port_protocol:
+      - "wide_out"
+
+routers:
+  - name: "group_router"
+    array: [4, 4]
+    degree: 5
+
+connections:
+  - src: "group"
+    dst: "group_router"
+    src_range:
+    - [0, 3]
+    - [0, 3]
+    dst_range:
+    - [0, 3]
+    - [0, 3]
+    dst_dir: "Eject"
+  # HBM West (4, one per mesh row on the west edge)
+  - src: "hbm"
+    dst: "group_router"
+    src_range:
+    - [0, 3]
+    dst_range:
+    - [0, 0]
+    - [0, 3]
+    dst_dir: "West"
+  # HBM East (4, one per mesh row on the east edge)
+  - src: "hbm"
+    dst: "group_router"
+    src_range:
+    - [4, 7]
+    dst_range:
+    - [3, 3]
+    - [0, 3]
+    dst_dir: "East"
+  # Special
+  - src: "host_peri"
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "South"

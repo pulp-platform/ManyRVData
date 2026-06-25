@@ -168,7 +168,7 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 ###########
 FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
 FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
-FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_16g.yml
 FLOO_NAME     = cachepool
 FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
 

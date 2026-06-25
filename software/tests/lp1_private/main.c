@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Author: Ho Tin Hung, ETH Zurich
+
 // LP1 private — Tier 1 per-core private-slice test for the private L1 (HPDcache)
 // bring-up.
 //
@@ -60,8 +62,8 @@ static volatile uint32_t priv_src[LP1_MAX_CORES * WORDS_PER_CORE]
 static volatile uint32_t priv_dst[LP1_MAX_CORES * WORDS_PER_CORE]
     __attribute__((aligned(64))) __attribute__((section(".data")));
 
-uint32_t s_errors [32] __attribute__((section(".data"))) = {0};
-uint32_t v_errors [32] __attribute__((section(".data"))) = {0};
+uint32_t s_errors [LP1_MAX_CORES] __attribute__((section(".data"))) = {0};
+uint32_t v_errors [LP1_MAX_CORES] __attribute__((section(".data"))) = {0};
 
 // Per-core expected pattern: distinct per core and per index.
 static inline uint32_t pattern(uint32_t cid, uint32_t i) {
@@ -100,7 +102,10 @@ int main() {
     printf("\n*** LP1 private (Tier 1: per-core private slices) ***\n");
     printf("Cores:%u  words/core:%u (%u cachelines)\n",
            num_cores, WORDS_PER_CORE, LINES_PER_CORE);
+
+    start_kernel();
   }
+
   snrt_cluster_hw_barrier();
 
   if (cid < active) {
@@ -119,9 +124,13 @@ int main() {
     // ----- Phase B: vector copy src -> dst, then scalar verify dst -----
     for (uint32_t i = 0; i < WORDS_PER_CORE; i++)
       my_dst[i] = 0u;  // clear so a no-op copy can't masquerade as success
+    
     snrt_fence_spatz();      // order Snitch clear-stores BEFORE the Spatz vector stores
+
     vec_copy(my_dst, my_src, WORDS_PER_CORE);
+
     snrt_fence_spatz();      // drain Spatz vector stores BEFORE the Snitch scalar reads
+
     for (uint32_t i = 0; i < WORDS_PER_CORE; i++) {
       uint32_t got = my_dst[i];
       uint32_t exp = pattern(cid, i);
@@ -133,6 +142,10 @@ int main() {
   }
 
   snrt_cluster_hw_barrier();
+
+  if (cid == 0) {
+    stop_kernel();
+  }
 
   // Serialized per-core reporting: round-robin gated by the HW barrier, so no
   // shared memory and no coherence are involved in producing the verdict.
