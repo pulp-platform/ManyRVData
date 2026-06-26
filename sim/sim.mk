@@ -92,7 +92,7 @@ ${WORK_DIR}/lib/libfesvr_vsim.a: ${WORK_DIR}/${FESVR_VERSION}_unzip
 	mkdir -p $(dir $@)
 	cp $(dir $<)libfesvr.a $@
 
-${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTROM_DIR}/bootdata.cc ${BOOTROM_DIR}/bootrom.bin
+${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTROM_DIR}/bootdata.cc ${BOOTROM_DIR}/bootrom.bin ${FLOO_NOC}
 	vlib $(dir $@)
 	${BENDER} script vsim ${VSIM_BENDER} --vlog-arg="${VLOG_FLAGS} -work $(dir $@)" ${VLOG_DEFS} > $@
 	echo '${VLOG} -work $(dir $@) ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc ${BOOTROM_DIR}/bootdata.cc -ccflags "-std=c++17 -I${BOOTROM_DIR} -I${WORK_DIR}/include -I${SNLIB_DIR}"' >> $@

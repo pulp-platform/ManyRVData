@@ -381,14 +381,12 @@ SW_CMAKE_FLAGS = \
 .PHONY: sw
 sw: generate bootrom gen-data
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} .. && $(MAKE)
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
+	  $(if $(wildcard ${SIMBIN_DIR}/cachepool_cluster.vsim),-DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim) \
+	  .. && $(MAKE)
 
 .PHONY: vsim
-vsim: generate bootrom gen-data dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
-	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
-	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
-	  .. && $(MAKE)
+vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
 .PHONY: clean
 clean: clean.sw clean.vsim clean.data
@@ -450,7 +448,7 @@ help:
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
-	@echo "*vsim*:           build hardware and software for QuestaSim simulation"
+	@echo "*vsim*:           build hardware for QuestaSim simulation (use 'sw' to build software separately)"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
 	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
 	@echo ""
