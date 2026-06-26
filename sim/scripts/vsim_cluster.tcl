@@ -11,5 +11,5 @@ add wave -noupdate -group Cluster -group CSR ${cluster_path}/i_cachepool_cluster
 
 add wave -noupdate -group Cluster -group Internal ${cluster_path}/*
 
-add wave -noupdate -group Barrier -group Global ${cluster_path}/i_cachepool_cluster_barrier/*
+add wave -noupdate -group Barrier -group Global ${cluster_path}/i_cluster_barrier/*
 
