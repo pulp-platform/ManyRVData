@@ -56,7 +56,12 @@ module spatz_cache_amo
   input  tcdm_rsp_t      mem_rsp_i
 );
 
-  logic                     idx_q, idx_d;
+  // logic                     idx_q, idx_d;
+  // Phase 2: the AMO unit now faces a cacheline-wide port (DataWidth=512) but the
+  // atomic is still a 32-bit word. NumWords/IdxW generalize the 1-bit lane select.
+  localparam int unsigned NumWords = DataWidth/32;
+  localparam int unsigned IdxW     = (NumWords > 1) ? $clog2(NumWords) : 1;
+  logic [IdxW-1:0]          idx_q, idx_d;
   logic [31:0]              operand_a, operand_b_q, amo_result, amo_result_q;
   logic [AddrMemWidth-1:0]  addr_q;
   amo_op_e    amo_op_q;
@@ -192,7 +197,8 @@ module spatz_cache_amo
   // -------
   // Atomics
   // -------
-  logic [63:0] wdata;
+  // logic [63:0] wdata;
+  logic [DataWidth-1:0] wdata;
   assign wdata = $unsigned(amo_req.data);
   logic amo_result_en;
 
@@ -203,10 +209,14 @@ module spatz_cache_amo
   `FFL(addr_q,   amo_req.addr, load_amo, '0)
   // Which word to pick.
   `FFL(idx_q,    idx_d,        load_amo, '0)
-  `FFL(operand_b_q, (amo_req.strb[0] ? wdata[31:0] : wdata[63:32]), load_amo, '0)
+  // `FFL(operand_b_q, (amo_req.strb[0] ? wdata[31:0] : wdata[63:32]), load_amo, '0)
+  `FFL(operand_b_q, wdata[32*idx_d +: 32], load_amo, '0)
   `FFL(amo_result_q, amo_result, amo_result_en, '0)
 
-  assign idx_d     = ((DataWidth == 64) ? amo_req.strb[DataWidth/8/2] : 0);
+  // assign idx_d     = ((DataWidth == 64) ? amo_req.strb[DataWidth/8/2] : 0);
+  // Lane (32-bit word) index within the cacheline, from the word-aligned address.
+  // Equivalent to the old strb-based half-select for DataWidth==64 (addr[2]<->strb[4]).
+  assign idx_d     = (NumWords > 1) ? amo_req.addr[2 +: IdxW] : '0;
   assign load_amo  = amo_req_valid & amo_req_ready & core_ready &
           ~(amo_insn inside {AMONone, AMOLR, AMOSC});
   assign operand_a = amo_rsp.data[32*idx_q+:32];
@@ -250,8 +260,10 @@ module spatz_cache_amo
         core_ready        = 1'b0;
         mem_req_o.q.write = 1'b1;
         mem_req_o.q.addr  = addr_q;
-        mem_req_o.q.strb  = 'b1111 << (idx_q*4);
-        mem_req_o.q.data  = amo_result_q << (idx_q*32);
+        // mem_req_o.q.strb  = 'b1111 << (idx_q*4);
+        // mem_req_o.q.data  = amo_result_q << (idx_q*32);
+        mem_req_o.q.strb  = StrbWidth'('hF) << (idx_q*4);
+        mem_req_o.q.data  = DataWidth'(amo_result_q) << (idx_q*32);
         mem_req_o.q.user  = amo_user_q;
         // Indicate that we are doing an AMO write-back
         // Used to filter out the response

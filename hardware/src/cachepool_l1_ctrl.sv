@@ -423,6 +423,11 @@ module cachepool_l1_ctrl
     l1_req[1].wdata       = hpdcache_req_data_t'(cache_req_data[SnitchPort]) << (sn_byte_pos * ByteWidth);
     l1_req[1].be          = hpdcache_req_be_t'(cache_req_strb[SnitchPort]) << sn_byte_pos;
     l1_req[1].tid         = core_req_i[SnitchPort].q_valid ? l1_cache_req[SnitchPort].tid : '0;
+    // Phase 2: AMOs (incl. LR/SC) are serviced at the shared L2 by spatz_cache_amo,
+    // not inside this private L1. Mark them uncacheable so HPDcache routes them
+    // through its uncached/ATOP handler (forwards the atomic downstream) instead of
+    // doing a local self-update. Plain loads/stores stay cacheable WT.
+    l1_req[1].pma.uncacheable = (cache_req_amo[SnitchPort] != AMONone);
   end
 
   assign l1_req_valid[1]            = core_req_i[SnitchPort].q_valid;
@@ -576,6 +581,36 @@ module cachepool_l1_ctrl
     l2_req_o.q.strb  = l1_mem_req_write_data.mem_req_w_be;
     l2_req_o.q.user  = l1_l2_req_meta;
     l2_req_o.q_valid = l1_l2_req_valid;
+
+    // Phase 2 AMO: phase 1 forced q.amo=AMONone (atomics were serviced inside
+    // HPDcache). Now route them to the shared-L2 spatz_cache_amo by translating
+    // HPDcache's AXI5-ATOP subtype back into the reqrsp amo_op_e the AMO unit reads.
+    // Atomics arrive with command==ATOMIC, so q.write stays 0 above: the AMO unit
+    // issues the operand-A read itself and generates its own write-back / SC write.
+    // The operand (rs2) rides on the write-data channel (mem_req_w_data) already
+    // aligned to the target byte offset.
+    if (l1_l2_req.mem_req_command == HPDCACHE_MEM_ATOMIC) begin
+      unique case (l1_l2_req.mem_req_atomic)
+        HPDCACHE_MEM_ATOMIC_ADD : l2_req_o.q.amo = AMOAdd;
+        HPDCACHE_MEM_ATOMIC_SET : l2_req_o.q.amo = AMOOr;
+        HPDCACHE_MEM_ATOMIC_EOR : l2_req_o.q.amo = AMOXor;
+        HPDCACHE_MEM_ATOMIC_SMAX: l2_req_o.q.amo = AMOMax;
+        HPDCACHE_MEM_ATOMIC_SMIN: l2_req_o.q.amo = AMOMin;
+        HPDCACHE_MEM_ATOMIC_UMAX: l2_req_o.q.amo = AMOMaxu;
+        HPDCACHE_MEM_ATOMIC_UMIN: l2_req_o.q.amo = AMOMinu;
+        HPDCACHE_MEM_ATOMIC_SWAP: l2_req_o.q.amo = AMOSwap;
+        HPDCACHE_MEM_ATOMIC_LDEX: l2_req_o.q.amo = AMOLR;
+        HPDCACHE_MEM_ATOMIC_STEX: l2_req_o.q.amo = AMOSC;
+        // HPDcache encodes RISC-V AMOAND as ATOP CLR with an inverted operand
+        // (clears the bits set in ~rs2, i.e. mem & ~(~rs2)). The spatz AMO ALU only
+        // has AMOAnd (A & B), so re-invert the operand here to recover rs2.
+        HPDCACHE_MEM_ATOMIC_CLR : begin
+          l2_req_o.q.amo  = AMOAnd;
+          l2_req_o.q.data = ~l1_mem_req_write_data.mem_req_w_data;
+        end
+        default                 : l2_req_o.q.amo = AMONone;
+      endcase
+    end
   end
 
   //////////////
