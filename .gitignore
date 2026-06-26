@@ -1,36 +1,16 @@
-work-dpi/
-dw*
-site/*
-*.ucdb
-work/*
+# Simulation
 transcript
 *.ini
 *.wlf
-*.vstf
-wlft*
-*nfs*
-*.sig
-*.dtb
-*.dasm
-obj_dir/*
-/tmp*
-*.dasm
-build/
-trace_*
-mems
-*log
-.bender
-.dvt
-.settings
-*.o
-install
-.projectBender.lock
-logs
-bin
-hardware/deps/*
 *.tdb
+# Toolchain
+install
+# Utilization logs
 util/lint/sg_projects
 util/lint/tmp
+# Dependency files
+.bender
+hardware/deps/*
 # Bootrom auto-generated files
 hardware/bootrom/bootdata.cc
 hardware/bootrom/bootdata_bootrom.cc

@@ -18,5 +18,8 @@ for {set p 0}  {$p < $2} {incr p} {
 
 add wave -noupdate -group "${parent_grp}" -group refill_xbar -group req_xbar ${group_path}/i_refill_xbar/i_req_xbar/*
 add wave -noupdate -group "${parent_grp}" -group refill_xbar -group rsp_xbar ${group_path}/i_refill_xbar/i_rsp_xbar/*
+add wave -noupdate -group "${parent_grp}" -group l2_icache -group axi_conv ${group_path}/i_l2icache_axi2reqrsp/*
+add wave -noupdate -group "${parent_grp}" -group l2_icache -group bottom_lvl ${group_path}/i_l2icache_interco/gen_bottom_level/*
+add wave -noupdate -group "${parent_grp}" -group l2_icache ${group_path}/i_l2icache_interco/*
 
-add wave -noupdate -group "${parent_grp}" -group Internal ${group_path}/*
+add wave -noupdate -group "${parent_grp}" -group group_internal ${group_path}/*

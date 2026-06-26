@@ -30,7 +30,7 @@ num_remote_ports_per_tile ?= 1
 
 num_rg_ports_per_core ?= 1
 
-num_noc_ports_per_tile ?= 1
+num_noc_ports_per_tile ?= 2
 
 
 ######################

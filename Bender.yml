@@ -15,7 +15,7 @@ dependencies:
   tech_cells_generic:  { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11               }
   Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/sync-flush-fixes }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool            }
-  floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                 }
+  floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     cachepool            }
   cluster_icache:      { git: "https://github.com/pulp-platform/cluster_icache.git",     rev:     main                 }
   spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b        }
 
@@ -26,12 +26,12 @@ export_include_dirs:
 
 sources:
   # Level 0
+  - hardware/src/reqrsp_to_reg.sv
+  - hardware/src/reqrsp_w2n_converter.sv
   - hardware/src/reqrsp_xbar.sv
   - hardware/src/tcdm_cache_interco.sv
   - hardware/src/tcdm_id_remapper.sv
   - hardware/src/spatz_cache_amo.sv
-  # FlooNoC
-  - hardware/generated/floo_cachepool_noc_pkg.sv
   # Memory-mapped register
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_pkg.sv
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_top.sv
@@ -39,6 +39,7 @@ sources:
   # Bootrom
   - hardware/bootrom/bootrom.sv
   # Level 1
+  - hardware/generated/floo_cachepool_noc_pkg.sv
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
   # Barrier
@@ -63,4 +64,5 @@ sources:
   - target: cachepool_test
     files:
     - hardware/tb/axi_uart.sv
+    - hardware/tb/cachepool_monitor.sv
     - hardware/tb/tb_cachepool.sv

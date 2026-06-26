@@ -71,6 +71,9 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
+# Bootrom datawidth
+bootrom_data_width ?= 32
+
 
 ######################
 ##  CachePool Tile  ##

@@ -67,7 +67,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config                ?= cachepool_fpu_2g
+config                ?= cachepool_fpu_4g
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -122,7 +122,7 @@ quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 .PHONY: generate
-generate: update_opcodes gen-spatz-cfg
+generate: gen-spatz-cfg update_opcodes update-floonoc
 	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson PYTHON=${PYTHON}
 
 .PHONY: cache-init
@@ -146,8 +146,13 @@ $(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_
 $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
+SNRT_BOOTINFO_H := $(SOFTWARE_DIR)/snRuntime/include/snrt_bootinfo.h
+
+$(SNRT_BOOTINFO_H): $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT) $(BOOTROM_DIR)/snrt_bootinfo.h.tpl
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t snrt_bootinfo.h.tpl -o $@
+
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld $(SNRT_BOOTINFO_H)
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -168,7 +173,15 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 ###########
 FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
 FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
-FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+
+# Auto-select FlooNoC YAML based on config name
+ifneq ($(filter %_16g_tiny,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g_tiny.yml
+else ifneq ($(filter %_16g,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g.yml
+else
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+endif
 FLOO_NAME     = cachepool
 FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
 
@@ -180,7 +193,7 @@ install-floogen:
 	pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
-$(FLOO_NOC): install-floogen $(FLOO_CFG)
+$(FLOO_NOC): $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
 	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
 
@@ -366,6 +379,15 @@ clean.data:
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
+.PHONY: clean
+clean: clean.sw clean.vsim clean.data
+	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
+	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
+	                    $(BOOTROM_DIR)/bootrom.sv \
+	                    $(BOOTROM_DIR)/bootrom.dump \
+	                    $(BOOTROM_DIR)/bootrom.elf \
+	                    $(SNRT_BOOTINFO_H)
+
 # Common CMake flags shared by sw and vsim targets.
 # vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
 SW_CMAKE_FLAGS = \
@@ -381,22 +403,13 @@ SW_CMAKE_FLAGS = \
 .PHONY: sw
 sw: generate bootrom gen-data
 	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} .. && $(MAKE)
-
-.PHONY: vsim
-vsim: generate bootrom gen-data dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
-	mkdir -p ${SOFTWARE_DIR}/build
 	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
-	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
+	  $(if $(wildcard ${SIMBIN_DIR}/cachepool_cluster.vsim),-DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim) \
 	  .. && $(MAKE)
 
-.PHONY: clean
-clean: clean.sw clean.vsim clean.data
-	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
-	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
-	                    $(BOOTROM_DIR)/bootrom.sv \
-	                    $(BOOTROM_DIR)/bootrom.dump \
-	                    $(BOOTROM_DIR)/bootrom.elf
+.PHONY: vsim
+vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
+
 
 ########
 # Lint #
@@ -450,7 +463,7 @@ help:
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
-	@echo "*vsim*:           build hardware and software for QuestaSim simulation"
+	@echo "*vsim*:           build hardware for QuestaSim simulation (use 'sw' to build software separately)"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
 	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
 	@echo ""

@@ -141,15 +141,15 @@ module cachepool_tile
     input  remote_tile_sel_t                              tile_id_i,
     /// Partitioning address
     input  axi_addr_t                                     private_start_addr_i,
-    /// AXI Narrow out-port (UART/Peripheral)
-    output axi_narrow_req_t   [1:0]                       axi_out_req_o,
-    input  axi_narrow_resp_t  [1:0]                       axi_out_resp_i,
     /// Cache Refill ports
     output cache_trans_req_t  [NumL1CtrlTile-1:0]         cache_refill_req_o,
     input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]         cache_refill_rsp_i,
-    /// Wide AXI ports to cluster level
-    output axi_out_req_t      [TileNarrowAxiPorts-1:0]    axi_wide_req_o,
-    input  axi_out_resp_t     [TileNarrowAxiPorts-1:0]    axi_wide_rsp_i,
+    /// Peripheral REQRSP port (narrow, 32b, bypasses wide AXI xbar)
+    output periph_req_t                                    periph_req_o,
+    input  periph_rsp_t                                    periph_rsp_i,
+    /// Wide AXI port: iCache L2 refill only (BootROM at cluster level)
+    output axi_out_req_t      [TileWideAxiPorts-1:0]      axi_wide_req_o,
+    input  axi_out_resp_t     [TileWideAxiPorts-1:0]      axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
     output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
     output remote_tile_sel_t  [NumRemotePortTile-1:0]     remote_req_dst_o,
@@ -181,6 +181,10 @@ module cachepool_tile
     input  logic                                          l1d_busy_i,
 
 
+
+    // Direct-wire barrier interface (bypasses NoC)
+    output logic                                    barrier_o,
+    input  logic                                    barrier_done_i,
 
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t          [NrSramCfg-1:0]       impl_i,
@@ -222,59 +226,15 @@ module cachepool_tile
   localparam int unsigned NumTCDMIn                   = NrTCDMPortsCores + 1;
   localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
 
-  // Core Request, SoC Request
-  localparam int unsigned NrNarrowMasters = 1;
-
-  // Narrow AXI network parameters
+  // Narrow data path parameters (core reqrsp → upsizer)
   localparam int unsigned NarrowIdWidthIn  = AxiIdWidthIn;
-  localparam int unsigned NarrowIdWidthOut = NarrowIdWidthIn + $clog2(NrNarrowMasters);
+  localparam int unsigned NarrowIdWidthOut = NarrowIdWidthIn;
   localparam int unsigned NarrowDataWidth  = ELEN;
   localparam int unsigned NarrowUserWidth  = AxiUserWidth;
 
-  // Peripherals, SoC Request, UART
-  localparam int unsigned NrNarrowSlaves = 3;
-  localparam int unsigned NrNarrowRules  = NrNarrowSlaves - 1;
-
-  // Core Request, Instruction cache
-  localparam int unsigned NrWideMasters  = 2;
+  // ICache AXI output: no xbar needed, single master direct to port
   localparam int unsigned WideIdWidthOut = AxiIdWidthOut;
-  localparam int unsigned WideIdWidthIn  = AxiIdWidthOut - $clog2(NrWideMasters);
-  // Wide X-BAR configuration: Core Request, ICache
-  localparam int unsigned NrWideSlaves   = 2;
-
-  // AXI Configuration
-  localparam axi_pkg::xbar_cfg_t ClusterXbarCfg = '{
-    NoSlvPorts        : NrNarrowMasters,
-    NoMstPorts        : NrNarrowSlaves,
-    MaxMstTrans       : MaxMstTrans,
-    MaxSlvTrans       : MaxSlvTrans,
-    FallThrough       : 1'b0,
-    LatencyMode       : XbarLatency,
-    AxiIdWidthSlvPorts: NarrowIdWidthIn,
-    AxiIdUsedSlvPorts : NarrowIdWidthIn,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : NarrowDataWidth,
-    NoAddrRules       : NrNarrowRules,
-    default           : '0
-  };
-
-  // DMA configuration struct
-  localparam axi_pkg::xbar_cfg_t WideXbarCfg = '{
-    NoSlvPorts        : NrWideMasters,
-    NoMstPorts        : NrWideSlaves,
-    MaxMstTrans       : MaxMstTrans,
-    MaxSlvTrans       : MaxSlvTrans,
-    FallThrough       : 1'b0,
-    LatencyMode       : XbarLatency,
-    AxiIdWidthSlvPorts: WideIdWidthIn,
-    AxiIdUsedSlvPorts : WideIdWidthIn,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : AxiDataWidth,
-    NoAddrRules       : NrWideSlaves - 1,
-    default           : '0
-  };
+  localparam int unsigned WideIdWidthIn  = AxiIdWidthOut;
 
   // --------
   // Typedefs
@@ -307,15 +267,8 @@ module cachepool_tile
   `AXI_TYPEDEF_ALL(axi_mst, addr_t, id_mst_t, data_t, strb_t, user_t)
   `AXI_TYPEDEF_ALL(axi_slv, addr_t, id_slv_t, data_t, strb_t, user_t)
   `AXI_TYPEDEF_ALL(axi_mst_tile_wide, addr_t, id_wide_mst_t, data_wide_t, strb_wide_t, user_wide_t)
-  `AXI_TYPEDEF_ALL(axi_slv_tile_wide, addr_t, id_wide_slv_t, data_wide_t, strb_wide_t, user_wide_t)
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
-
-  typedef struct packed {
-    int unsigned idx;
-    addr_t start_addr;
-    addr_t end_addr;
-  } xbar_rule_t;
 
   typedef struct packed {
     acc_addr_e addr;
@@ -389,17 +342,9 @@ module cachepool_tile
   // ----------------
   // Wire Definitions
   // ----------------
-  // 1. AXI
-  axi_slv_req_t  [NrNarrowSlaves-1:0]  narrow_axi_slv_req;
-  axi_slv_resp_t [NrNarrowSlaves-1:0]  narrow_axi_slv_rsp;
-  axi_mst_req_t  [NrNarrowMasters-1:0] narrow_axi_mst_req;
-  axi_mst_resp_t [NrNarrowMasters-1:0] narrow_axi_mst_rsp;
-
-  // DMA AXI buses
-  axi_mst_tile_wide_req_t  [NrWideMasters-1:0] wide_axi_mst_req;
-  axi_mst_tile_wide_resp_t [NrWideMasters-1:0] wide_axi_mst_rsp;
-  axi_slv_tile_wide_req_t  [NrWideSlaves-1 :0] wide_axi_slv_req;
-  axi_slv_tile_wide_resp_t [NrWideSlaves-1 :0] wide_axi_slv_rsp;
+  // iCache AXI output (512b, direct to port, no xbar)
+  axi_mst_tile_wide_req_t  icache_axi_req;
+  axi_mst_tile_wide_resp_t icache_axi_rsp;
 
   // 3. Memory Subsystem (Interconnect)
   tcdm_req_t [NrTCDMPortsCores-1:0] tcdm_req;
@@ -466,56 +411,12 @@ module cachepool_tile
   assign error_o = 1'b0;
 
 
-  // -------------
-  // DMA Subsystem
-  // -------------
-  // Optionally decouple the external wide AXI master port.
-
-  assign axi_wide_req_o[TileMem] = wide_axi_slv_req[SoCDMAOut];
-  assign wide_axi_slv_rsp[SoCDMAOut] = axi_wide_rsp_i[TileMem];
-
-  logic       [WideXbarCfg.NoSlvPorts-1:0][$clog2(WideXbarCfg.NoMstPorts)-1:0] dma_xbar_default_port;
-  xbar_rule_t [WideXbarCfg.NoAddrRules-1:0]                                   dma_xbar_rule;
-
-  assign dma_xbar_default_port = '{default: SoCDMAOut};
-  assign dma_xbar_rule         = '{
-    '{
-      idx       : BootROM,
-      start_addr: BootAddr,
-      end_addr  : BootAddr + 'h1000
-    }
-  };
-
-  localparam bit [WideXbarCfg.NoSlvPorts-1:0] DMAEnableDefaultMstPort = '1;
-  axi_xbar #(
-    .Cfg           (WideXbarCfg                ),
-    .ATOPs         (0                          ),
-    .slv_aw_chan_t (axi_mst_tile_wide_aw_chan_t),
-    .mst_aw_chan_t (axi_slv_tile_wide_aw_chan_t),
-    .w_chan_t      (axi_mst_tile_wide_w_chan_t ),
-    .slv_b_chan_t  (axi_mst_tile_wide_b_chan_t ),
-    .mst_b_chan_t  (axi_slv_tile_wide_b_chan_t ),
-    .slv_ar_chan_t (axi_mst_tile_wide_ar_chan_t),
-    .mst_ar_chan_t (axi_slv_tile_wide_ar_chan_t),
-    .slv_r_chan_t  (axi_mst_tile_wide_r_chan_t ),
-    .mst_r_chan_t  (axi_slv_tile_wide_r_chan_t ),
-    .slv_req_t     (axi_mst_tile_wide_req_t    ),
-    .slv_resp_t    (axi_mst_tile_wide_resp_t   ),
-    .mst_req_t     (axi_slv_tile_wide_req_t    ),
-    .mst_resp_t    (axi_slv_tile_wide_resp_t   ),
-    .rule_t        (xbar_rule_t          )
-  ) i_axi_wide_xbar (
-    .clk_i                 (clk_i                  ),
-    .rst_ni                (rst_ni                 ),
-    .test_i                (1'b0                   ),
-    .slv_ports_req_i       (wide_axi_mst_req       ),
-    .slv_ports_resp_o      (wide_axi_mst_rsp       ),
-    .mst_ports_req_o       (wide_axi_slv_req       ),
-    .mst_ports_resp_i      (wide_axi_slv_rsp       ),
-    .addr_map_i            (dma_xbar_rule          ),
-    .en_default_mst_port_i (DMAEnableDefaultMstPort),
-    .default_mst_port_i    (dma_xbar_default_port  )
-  );
+  // -----------------------
+  // iCache AXI Direct Wire
+  // -----------------------
+  // No xbar needed: iCache is the sole wide AXI master, directly wired to output port.
+  assign axi_wide_req_o[0] = axi_out_req_t'(icache_axi_req);
+  assign icache_axi_rsp     = axi_mst_tile_wide_resp_t'(axi_wide_rsp_i[0]);
 
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
@@ -1275,10 +1176,8 @@ module cachepool_tile
         default : '0
       };
 
-      // ID 0 reserved for bypass cache
       cache_refill_req_o[cb].q.user = '{
-        // The first bit is reserved for iCache identifier
-        bank_id : cb + 1,
+        bank_id : cb,
         info    : cache_refill_req[cb].info,
         burst   : cache_refill_burst[cb],
         default : '0
@@ -1315,6 +1214,7 @@ module cachepool_tile
                                                        + refill_bits_to_rotate));
       end
     end
+
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
       tc_sram_impl #(
@@ -1700,8 +1600,8 @@ module cachepool_tile
     .sram_cfg_data_i      ( '0                       ),
     .sram_cfg_out_data_o  (),
     .sram_cfg_out_tag_o   (),
-    .axi_req_o            ( wide_axi_mst_req[ICache] ),
-    .axi_rsp_i            ( wide_axi_mst_rsp[ICache] )
+    .axi_req_o            ( icache_axi_req ),
+    .axi_rsp_i            ( icache_axi_rsp )
   );
 
   // --------
@@ -1722,15 +1622,13 @@ module cachepool_tile
     .in_rsp_o                       (core_rsp                    ),
     .out_req_o                      (filtered_core_req           ),
     .out_rsp_i                      (filtered_core_rsp           ),
+    .barrier_o                      (barrier_o                   ),
+    .barrier_done_i                 (barrier_done_i              ),
     .cluster_periph_start_address_i (cluster_periph_start_address)
   );
 
-  reqrsp_req_t core_to_axi_req;
-  reqrsp_rsp_t core_to_axi_rsp;
-  user_t       cluster_user;
-  // Atomic ID, needs to be unique ID of cluster
-  // cluster_id + HartIdOffset + 1 (because 0 is for non-atomic masters)
-  assign cluster_user = (hart_base_id_i / NrCores) + (hart_base_id_i % NrCores) + 1'b1;
+  reqrsp_req_t core_to_periph_req;
+  reqrsp_rsp_t core_to_periph_rsp;
 
   reqrsp_mux #(
     .NrPorts   (NrCores           ),
@@ -1741,149 +1639,18 @@ module cachepool_tile
     .rsp_t     (reqrsp_rsp_t      ),
     .RespDepth (2                 )
   ) i_reqrsp_mux_core (
-    .clk_i     (clk_i            ),
-    .rst_ni    (rst_ni           ),
-    .slv_req_i (filtered_core_req),
-    .slv_rsp_o (filtered_core_rsp),
-    .mst_req_o (core_to_axi_req  ),
-    .mst_rsp_i (core_to_axi_rsp  ),
-    .idx_o     (/*unused*/       )
+    .clk_i     (clk_i              ),
+    .rst_ni    (rst_ni             ),
+    .slv_req_i (filtered_core_req  ),
+    .slv_rsp_o (filtered_core_rsp  ),
+    .mst_req_o (core_to_periph_req ),
+    .mst_rsp_i (core_to_periph_rsp ),
+    .idx_o     (/*unused*/         )
   );
 
-  reqrsp_to_axi #(
-    .DataWidth    (NarrowDataWidth    ),
-    .AxiUserWidth (NarrowUserWidth    ),
-    .UserWidth    ($bits(tcdm_user_t) ),
-    .ID           ( 1 ),
-    .reqrsp_req_t (reqrsp_req_t       ),
-    .reqrsp_rsp_t (reqrsp_rsp_t       ),
-    .axi_req_t    (axi_mst_req_t      ),
-    .axi_rsp_t    (axi_mst_resp_t     )
-  ) i_reqrsp_to_axi_core (
-    .clk_i        (clk_i                      ),
-    .rst_ni       (rst_ni                     ),
-    .user_i       (cluster_user               ),
-    .reqrsp_req_i (core_to_axi_req            ),
-    .reqrsp_rsp_o (core_to_axi_rsp            ),
-    .axi_req_o    (narrow_axi_mst_req[CoreReq]),
-    .axi_rsp_i    (narrow_axi_mst_rsp[CoreReq])
-  );
-
-  xbar_rule_t [NrNarrowRules-1:0] cluster_xbar_rules;
-
-  assign cluster_xbar_rules = '{
-    '{
-      idx       : ClusterPeripherals,
-      start_addr: cluster_periph_start_address,
-      end_addr  : cluster_periph_end_address
-    },
-    '{
-      idx       : UART,
-      start_addr: UartAddr,
-      end_addr  : UartAddr + 32'h1000
-    }
-  };
-
-  localparam bit   [ClusterXbarCfg.NoSlvPorts-1:0]                                                        ClusterEnableDefaultMstPort = '1;
-  localparam logic [ClusterXbarCfg.NoSlvPorts-1:0][cf_math_pkg::idx_width(ClusterXbarCfg.NoMstPorts)-1:0] ClusterXbarDefaultPort      = '{default: SoC};
-
-  axi_xbar #(
-    .Cfg           (ClusterXbarCfg   ),
-    .slv_aw_chan_t (axi_mst_aw_chan_t),
-    .mst_aw_chan_t (axi_slv_aw_chan_t),
-    .w_chan_t      (axi_mst_w_chan_t ),
-    .slv_b_chan_t  (axi_mst_b_chan_t ),
-    .mst_b_chan_t  (axi_slv_b_chan_t ),
-    .slv_ar_chan_t (axi_mst_ar_chan_t),
-    .mst_ar_chan_t (axi_slv_ar_chan_t),
-    .slv_r_chan_t  (axi_mst_r_chan_t ),
-    .mst_r_chan_t  (axi_slv_r_chan_t ),
-    .slv_req_t     (axi_mst_req_t    ),
-    .slv_resp_t    (axi_mst_resp_t   ),
-    .mst_req_t     (axi_slv_req_t    ),
-    .mst_resp_t    (axi_slv_resp_t   ),
-    .rule_t        (xbar_rule_t      )
-  ) i_axi_narrow_xbar (
-    .clk_i                 (clk_i                      ),
-    .rst_ni                (rst_ni                     ),
-    .test_i                (1'b0                       ),
-    .slv_ports_req_i       (narrow_axi_mst_req         ),
-    .slv_ports_resp_o      (narrow_axi_mst_rsp         ),
-    .mst_ports_req_o       (narrow_axi_slv_req         ),
-    .mst_ports_resp_i      (narrow_axi_slv_rsp         ),
-    .addr_map_i            (cluster_xbar_rules         ),
-    .en_default_mst_port_i (ClusterEnableDefaultMstPort),
-    .default_mst_port_i    (ClusterXbarDefaultPort     )
-  );
-
-  // 3. BootROM
-  assign axi_wide_req_o[TileBootROM] = wide_axi_slv_req[BootROM];
-  assign wide_axi_slv_rsp[BootROM] = axi_wide_rsp_i[TileBootROM];
-
-  // 4. UART
-  assign axi_out_req_o[0] = narrow_axi_slv_req[UART];
-  assign narrow_axi_slv_rsp[UART] = axi_out_resp_i[0];
-
-  assign axi_out_req_o[1] = narrow_axi_slv_req[ClusterPeripherals];
-  assign narrow_axi_slv_rsp[ClusterPeripherals] = axi_out_resp_i[1];
-
-
-  // Upsize the narrow SoC connection
-  `AXI_TYPEDEF_ALL(axi_mst_core_narrow, addr_t, id_wide_mst_t, data_t, strb_t, user_t)
-  axi_mst_core_narrow_req_t  narrow_axi_slv_req_soc;
-  axi_mst_core_narrow_resp_t narrow_axi_slv_resp_soc;
-
-  axi_iw_converter #(
-    .AxiAddrWidth          (AxiAddrWidth             ),
-    .AxiDataWidth          (NarrowDataWidth          ),
-    .AxiUserWidth          (AxiUserWidth             ),
-    .AxiSlvPortIdWidth     (NarrowIdWidthOut         ),
-    .AxiSlvPortMaxUniqIds  (1                        ),
-    .AxiSlvPortMaxTxnsPerId(1                        ),
-    .AxiSlvPortMaxTxns     (1                        ),
-    .AxiMstPortIdWidth     (WideIdWidthIn            ),
-    .AxiMstPortMaxUniqIds  (1                        ),
-    .AxiMstPortMaxTxnsPerId(1                        ),
-    .slv_req_t             (axi_slv_req_t            ),
-    .slv_resp_t            (axi_slv_resp_t           ),
-    .mst_req_t             (axi_mst_core_narrow_req_t ),
-    .mst_resp_t            (axi_mst_core_narrow_resp_t)
-  ) i_soc_port_iw_convert (
-    .clk_i      (clk_i                   ),
-    .rst_ni     (rst_ni                  ),
-    .slv_req_i  (narrow_axi_slv_req[SoC] ),
-    .slv_resp_o (narrow_axi_slv_rsp[SoC] ),
-    .mst_req_o  (narrow_axi_slv_req_soc  ),
-    .mst_resp_i (narrow_axi_slv_resp_soc )
-  );
-
-  // TODO: Do we need this data path?
-  // core will never use it as wide destination is only BootRom and main memory
-  axi_dw_converter #(
-    .AxiAddrWidth       (AxiAddrWidth               ),
-    .AxiIdWidth         (WideIdWidthIn              ),
-    .AxiMaxReads        (2                          ),
-    .AxiSlvPortDataWidth(NarrowDataWidth            ),
-    .AxiMstPortDataWidth(AxiDataWidth               ),
-    .ar_chan_t          (axi_mst_tile_wide_ar_chan_t),
-    .aw_chan_t          (axi_mst_tile_wide_aw_chan_t),
-    .b_chan_t           (axi_mst_tile_wide_b_chan_t ),
-    .slv_r_chan_t       (axi_mst_core_narrow_r_chan_t),
-    .slv_w_chan_t       (axi_mst_core_narrow_b_chan_t),
-    .axi_slv_req_t      (axi_mst_core_narrow_req_t   ),
-    .axi_slv_resp_t     (axi_mst_core_narrow_resp_t  ),
-    .mst_r_chan_t       (axi_mst_tile_wide_r_chan_t ),
-    .mst_w_chan_t       (axi_mst_tile_wide_w_chan_t ),
-    .axi_mst_req_t      (axi_mst_tile_wide_req_t    ),
-    .axi_mst_resp_t     (axi_mst_tile_wide_resp_t   )
-  ) i_soc_port_dw_upsize (
-    .clk_i      (clk_i                        ),
-    .rst_ni     (rst_ni                       ),
-    .slv_req_i  (narrow_axi_slv_req_soc       ),
-    .slv_resp_o (narrow_axi_slv_resp_soc      ),
-    .mst_req_o  (wide_axi_mst_req[CoreReqWide]),
-    .mst_resp_i (wide_axi_mst_rsp[CoreReqWide])
-  );
+  // Peripheral REQRSP: directly exposed to group level (no AXI conversion)
+  assign periph_req_o       = core_to_periph_req;
+  assign core_to_periph_rsp = periph_rsp_i;
 
   // -------------
   // Sanity Checks

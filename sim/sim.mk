@@ -106,7 +106,7 @@ ${WORK_DIR}/compile.vsim.tcl: ${SNLIB_DIR}/rtl_lib.cc ${SNLIB_DIR}/common_lib.cc
 define QUESTASIM
 	${VSIM} -c -do "source $<; quit" | tee $(dir $<)vsim.log
 	@! grep -P "Errors: [1-9]*," $(dir $<)vsim.log
-	@mkdir -p $(SIMBIN_DIR) $(SIMBIN_DIR)/logs
+	@mkdir -p $(SIMBIN_DIR) $(SIMBIN_DIR)/logs $(SIMBIN_DIR)/logs/core $(SIMBIN_DIR)/logs/noc $(SIMBIN_DIR)/logs/others
 	@echo '#!/bin/bash' > $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@echo 'ROOT_DIR="$$(cd "$$(dirname "$$(readlink -f "$$0")")/../.." && pwd)"' >> $(SIMBIN_DIR)/cachepool_cluster.vsim
 	@echo 'echo `realpath $$1` > ${SIMBIN_DIR}/logs/.rtlbinary' >> $(SIMBIN_DIR)/cachepool_cluster.vsim
@@ -131,4 +131,4 @@ vsim: dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 clean.vsim:
 	rm -rf ${WORK_DIR}/compile.vsim.tcl ${SIMBIN_DIR}/cachepool_cluster.vsim ${SIMBIN_DIR}/cachepool_cluster.vsim.gui ${SIM_DIR}/work-vsim \
 	       ${SIM_DIR}/work-dpi ${WORK_DIR} vsim.wlf vish_stacktrace.vstf transcript modelsim.ini logs *.tdb *.vstf bin
-
+	rm -rf $(SIM_DIR)/bin/*

@@ -13,14 +13,12 @@ quietly set parent_grp $4
 quietly set NUM_XBARS   5
 quietly set SNITCH_IDX  [expr {$NUM_XBARS - 1}]
 
-# Add waves for tcdm_mapper and csrs
-# add wave -noupdate -group ${parent_grp} -group tile[$1] -group Barrier ${tile_path}/i_tile/i_snitch_barrier/*
-# add wave -noupdate -group ${parent_grp} -group tile[$1] -group axi2reqrsp ${tile_path}/i_axi2reqrsp/*
 # Add waves for xbars
-add wave -noupdate -group ${parent_grp} -group tile[$1] -group narrow_xbar ${tile_path}/i_tile/i_axi_narrow_xbar/*
-add wave -noupdate -group ${parent_grp} -group tile[$1] -group wide_xbar ${tile_path}/i_tile/i_axi_wide_xbar/*
+# add wave -noupdate -group ${parent_grp} -group tile[$1] -group wide_xbar ${tile_path}/i_tile/i_axi_wide_xbar/*
 
 add wave -noupdate -group ${parent_grp} -group tile[$1] -group Barrier ${tile_path}/i_tile/i_cachepool_tile_barrier/*
+
+add wave -noupdate -group ${parent_grp} -group tile[$1] -group L1ICache ${tile_path}/i_tile/i_snitch_icache/*
 
 # Add waves for cache controller
 for {set c 0}  {$c < 4} {incr c} {

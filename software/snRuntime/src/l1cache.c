@@ -189,12 +189,23 @@ void l1d_part (uint32_t size) {
 
 // Configure the starting address mapping to the private partition
 void l1d_addr (uint32_t addr) {
-  // set the pointers
-  volatile uint32_t *cfg_private =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET);
-  *cfg_private = addr;
-  l1d_commit();
+  // All cores fence and sync before reconfiguration, matching l1d_part()/
+  // l1d_xbar_config(): without this, other cores can race past the boundary
+  // change and issue accesses classified under the stale boundary.
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    volatile uint32_t *cfg_private =
+        (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                     CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET);
+    *cfg_private = addr;
+    l1d_commit();
+    // TODO: replace with a real completion status bit in the peripheral.
+    uint32_t start = read_csr(mcycle);
+    while ((read_csr(mcycle) - start) < 100) {
+    }
+  }
+  snrt_cluster_hw_barrier();
 }
 
 void set_eoc (uint32_t eoc_value) {

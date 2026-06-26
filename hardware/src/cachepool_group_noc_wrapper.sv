@@ -9,6 +9,8 @@
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 
+`include "axi/typedef.svh"
+
 module cachepool_group_noc_wrapper
   import cachepool_pkg::*;
   import floo_pkg::*;
@@ -48,8 +50,6 @@ module cachepool_group_noc_wrapper
     parameter int                     unsigned               MaxSlvTrans                        = 4,
     parameter type                                           axi_in_req_t                       = logic,
     parameter type                                           axi_in_resp_t                      = logic,
-    parameter type                                           axi_narrow_req_t                   = logic,
-    parameter type                                           axi_narrow_resp_t                  = logic,
     parameter type                                           axi_out_req_t                      = logic,
     parameter type                                           axi_out_resp_t                     = logic,
     parameter type                                           impl_in_t                          = logic,
@@ -73,10 +73,22 @@ module cachepool_group_noc_wrapper
     input  logic              [TileIDWidth-1:0]                           tile_base_id_i,
     input  axi_addr_t                                                     cluster_base_addr_i,
     input  axi_addr_t                                                     private_start_addr_i,
-    output axi_narrow_req_t   [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_req_o,
-    input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_rsp_i,
-    output l2_req_t           [ClusterWideOutAxiPorts-1:0]                l2_req_o,
-    input  l2_rsp_t           [ClusterWideOutAxiPorts-1:0]                l2_rsp_i,
+    // L2 refill TCDM mesh: 4 directions (North=0, East=1, South=2, West=3)
+    output l2_noc_req_t [3:0] l2_req_o,
+    output logic        [3:0] l2_req_valid_o,
+    input  logic        [3:0] l2_req_ready_i,
+    input  l2_noc_req_t [3:0] l2_req_i,
+    input  logic        [3:0] l2_req_valid_i,
+    output logic        [3:0] l2_req_ready_o,
+    output l2_noc_rsp_t [3:0] l2_rsp_o,
+    output logic        [3:0] l2_rsp_valid_o,
+    input  logic        [3:0] l2_rsp_ready_i,
+    input  l2_noc_rsp_t [3:0] l2_rsp_i,
+    input  logic        [3:0] l2_rsp_valid_i,
+    output logic        [3:0] l2_rsp_ready_o,
+    // L2 mesh: endpoint ID and source-routing table from floogen
+    input  floo_cachepool_noc_pkg::id_t    l2_id_i,
+    input  floo_cachepool_noc_pkg::route_t [floo_cachepool_noc_pkg::RouteCfg.NumRoutes-1:0] l2_route_table_i,
     output icache_l1_events_t [NrCores-1:0]                               icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]                               cl_interrupt_i,
@@ -104,7 +116,10 @@ module cachepool_group_noc_wrapper
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_i,
     input  noc_group_rsp_t [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_i,
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_valid_i,
-    output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o
+    output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o,
+    // Direct-wire barrier: one bit per tile in this group
+    output logic           [NumTilesPerGroup-1:0]                         tile_barrier_o,
+    input  logic                                                          barrier_done_i
   );
 
 
@@ -122,8 +137,9 @@ module cachepool_group_noc_wrapper
   localparam int unsigned NocCacheBankBits  = $clog2(NrBanks);
   localparam int unsigned NocAddrTileWidth  = (NumTilesPerGroup > 1) ? $clog2(NumTilesPerGroup) : 1;
   // -- Actual bit counts inside dst_tile_id (can be 0 when that dimension = 1) -
+  // Flat group_id = gy * NumGroupsX + gx  (row-major, set in cachepool_cluster.sv).
   // dst_tile_id layout: [ group_y (NocGroupBitsY) | group_x (NocGroupBitsX) | local_tile (NocGroupOffset) ]
-  // where NocGroupOffset = $clog2(NumTilesPerGroup) (0 when NumTilesPerGroup == 1).
+  // Lower group bits are X, upper group bits are Y.
   localparam int unsigned NocGroupOffset    = $clog2(NumTilesPerGroup);
   localparam int unsigned NocGroupBitsX     = (NumGroupsX > 1) ? $clog2(NumGroupsX) : 0;
   localparam int unsigned NocGroupBitsY     = (NumGroupsY > 1) ? $clog2(NumGroupsY) : 0;
@@ -296,9 +312,9 @@ module cachepool_group_noc_wrapper
         localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
         assign packed_req[noc_port].hdr.collective_op   = '0;
         assign packed_req[noc_port].hdr.src_id          = group_xy_id_i;
-        // dst_tile_id set by tcdm_cache_interco: bits [NocGroupOffset +: NocGroupBitsX] = group_x,
-        // bits [(NocGroupOffset+NocGroupBitsX) +: NocGroupBitsY] = group_y.
-        // When a dimension has only 1 group, no bits are consumed and the coordinate is 0.
+        // Flat group_id = gy * NumGroupsX + gx (row-major), so in the
+        // dst_tile_id bit field the lower group bits are X and the upper are Y:
+        //   dst_tile_id = [ gy (NocGroupBitsY) | gx (NocGroupBitsX) | local_tile ]
         if (NumGroupsX > 1) begin : gen_dst_x
           assign packed_req[noc_port].hdr.dst_id.x =
             mst_xbar_req[noc_port].user.dst_tile_id[NocGroupOffset +: NocGroupBitsX];
@@ -493,6 +509,7 @@ module cachepool_group_noc_wrapper
           remote_group_rsp_from_group[port].p;
         assign slv_xbar_mst_rsp[port].hdr.collective_op   = '0;
         assign slv_xbar_mst_rsp[port].hdr.src_id          = group_xy_id_i;
+        // Row-major: lower group bits are X, upper are Y
         if (NumGroupsX > 1) begin : gen_rsp_dst_x
           assign slv_xbar_mst_rsp[port].hdr.dst_id.x      =
             remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset +: NocGroupBitsX];
@@ -530,6 +547,169 @@ module cachepool_group_noc_wrapper
 
 
   // -------------------------------------------------------------------------
+  // L2 path: floo_tcdm_chimney (MgrPort) + floo_router (source routing)
+  // -------------------------------------------------------------------------
+  // The chimney translates request addresses to destination IDs via SAM,
+  // looks up source routes in the routing table, and packs/unpacks flits.
+  // Two floo_router instances (req + rsp) handle 5-port source-routed mesh.
+
+  // Internal L2 reqrsp between group and chimney
+  l2_req_t l2_group_req;
+  l2_rsp_t l2_group_rsp;
+
+  // Router port signals [Eject:North] = [4:0]
+  l2_noc_req_t [floo_pkg::Eject:floo_pkg::North] l2_router_req_in;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_req_valid_in;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_req_ready_out;
+  l2_noc_req_t [floo_pkg::Eject:floo_pkg::North] l2_router_req_out;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_req_valid_out;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_req_ready_in;
+
+  l2_noc_rsp_t [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_in;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_valid_in;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_ready_out;
+  l2_noc_rsp_t [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_out;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_valid_out;
+  logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_ready_in;
+
+  // Manager chimney: group REQRSP ↔ flit inject/eject at router Eject port
+  floo_tcdm_chimney #(
+    .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
+    .EnMgrPort  ( 1'b1                                ),
+    .EnSbrPort  ( 1'b0                                ),
+    .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+    .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+    .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+    .hdr_t      ( l2_noc_hdr_t                        ),
+    .req_chan_t  ( cache_trans_req_chan_t             ),
+    .rsp_chan_t  ( cache_trans_rsp_chan_t             ),
+    .floo_req_t ( l2_noc_req_t                        ),
+    .floo_rsp_t ( l2_noc_rsp_t                        ),
+    .addr_t     ( axi_addr_t                          ),
+    .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+    .Sam        ( floo_cachepool_noc_pkg::Sam         )
+  ) i_l2_mgr_chimney (
+    .clk_i            ( clk_i                                    ),
+    .rst_ni           ( rst_ni                                   ),
+    .test_enable_i    ( 1'b0                                     ),
+    // Manager port: group REQRSP
+    .mgr_req_i        ( l2_group_req.q                           ),
+    .mgr_req_valid_i  ( l2_group_req.q_valid                     ),
+    .mgr_req_ready_o  ( l2_group_rsp.q_ready                     ),
+    .mgr_rsp_o        ( l2_group_rsp.p                           ),
+    .mgr_rsp_valid_o  ( l2_group_rsp.p_valid                     ),
+    .mgr_rsp_ready_i  ( l2_group_req.p_ready                     ),
+    // Subordinate port: unused
+    .sbr_req_o        (                                          ),
+    .sbr_req_valid_o  (                                          ),
+    .sbr_req_ready_i  ( 1'b0                                     ),
+    .sbr_rsp_i        ( '0                                       ),
+    .sbr_rsp_valid_i  ( 1'b0                                     ),
+    .sbr_rsp_ready_o  (                                          ),
+    .sbr_txn_id_i     ( '0                                       ),
+    // Routing
+    .id_i             ( l2_id_i                                  ),
+    .route_table_i    ( l2_route_table_i                         ),
+    // Request flit: inject into request router Eject port
+    .floo_req_o       ( l2_router_req_in[floo_pkg::Eject]        ),
+    .floo_req_valid_o ( l2_router_req_valid_in[floo_pkg::Eject]  ),
+    .floo_req_ready_i ( l2_router_req_ready_out[floo_pkg::Eject] ),
+    // Request flit: eject from request router (unused for MgrPort)
+    .floo_req_i       ( l2_router_req_out[floo_pkg::Eject]       ),
+    .floo_req_valid_i ( l2_router_req_valid_out[floo_pkg::Eject] ),
+    .floo_req_ready_o ( l2_router_req_ready_in[floo_pkg::Eject]  ),
+    // Response flit: inject into response router (unused for MgrPort)
+    .floo_rsp_o       ( l2_router_rsp_in[floo_pkg::Eject]        ),
+    .floo_rsp_valid_o ( l2_router_rsp_valid_in[floo_pkg::Eject]  ),
+    .floo_rsp_ready_i ( l2_router_rsp_ready_out[floo_pkg::Eject] ),
+    // Response flit: eject from response router
+    .floo_rsp_i       ( l2_router_rsp_out[floo_pkg::Eject]       ),
+    .floo_rsp_valid_i ( l2_router_rsp_valid_out[floo_pkg::Eject] ),
+    .floo_rsp_ready_o ( l2_router_rsp_ready_in[floo_pkg::Eject]  )
+  );
+
+  // Request router (source routing, 5 ports: N/E/S/W/Eject)
+  floo_router #(
+    .NumRoutes      ( 5                           ),
+    .NumVirtChannels( 1                           ),
+    .NumPhysChannels( 1                           ),
+    .InFifoDepth    ( 32                          ),
+    .OutFifoDepth   ( 32                          ),
+    .RouteAlgo      ( floo_pkg::SourceRouting     ),
+    .id_t           ( floo_cachepool_noc_pkg::id_t),
+    .flit_t         ( l2_noc_req_t                ),
+    .hdr_t          ( l2_noc_hdr_t                ),
+    .addr_rule_t    ( logic                       ),
+    .red_req_t      ( logic                       ),
+    .red_rsp_t      ( logic                       )
+  ) i_l2_req_router (
+    .clk_i          ( clk_i                       ),
+    .rst_ni         ( rst_ni                      ),
+    .test_enable_i  ( 1'b0                        ),
+    .xy_id_i        ( '0                          ),
+    .id_route_map_i ( '0                          ),
+    .valid_i        ( l2_router_req_valid_in      ),
+    .ready_o        ( l2_router_req_ready_out     ),
+    .data_i         ( l2_router_req_in            ),
+    .credit_o       (                             ),
+    .valid_o        ( l2_router_req_valid_out     ),
+    .ready_i        ( l2_router_req_ready_in      ),
+    .data_o         ( l2_router_req_out           ),
+    .credit_i       ( '0                          ),
+    .offload_req_o  (                             ),
+    .offload_rsp_i  ( '0                          )
+  );
+
+  // Response router (source routing, 5 ports: N/E/S/W/Eject)
+  floo_router #(
+    .NumRoutes      ( 5                           ),
+    .NumVirtChannels( 1                           ),
+    .NumPhysChannels( 1                           ),
+    .InFifoDepth    ( 32                          ),
+    .OutFifoDepth   ( 32                          ),
+    .RouteAlgo      ( floo_pkg::SourceRouting     ),
+    .id_t           ( floo_cachepool_noc_pkg::id_t),
+    .flit_t         ( l2_noc_rsp_t                ),
+    .hdr_t          ( l2_noc_hdr_t                ),
+    .addr_rule_t    ( logic                       ),
+    .red_req_t      ( logic                       ),
+    .red_rsp_t      ( logic                       )
+  ) i_l2_rsp_router (
+    .clk_i          ( clk_i                       ),
+    .rst_ni         ( rst_ni                      ),
+    .test_enable_i  ( 1'b0                        ),
+    .xy_id_i        ( '0                          ),
+    .id_route_map_i ( '0                          ),
+    .valid_i        ( l2_router_rsp_valid_in      ),
+    .ready_o        ( l2_router_rsp_ready_out     ),
+    .data_i         ( l2_router_rsp_in            ),
+    .credit_o       (                             ),
+    .valid_o        ( l2_router_rsp_valid_out     ),
+    .ready_i        ( l2_router_rsp_ready_in      ),
+    .data_o         ( l2_router_rsp_out           ),
+    .credit_i       ( '0                          ),
+    .offload_req_o  (                             ),
+    .offload_rsp_i  ( '0                          )
+  );
+
+  // Expose [West:North] router ports (indices 3:0) to cluster for mesh wiring
+  for (genvar d = 0; d < 4; d++) begin : gen_l2_mesh_ports
+    assign l2_req_o[d]                              = l2_router_req_out[d];
+    assign l2_req_valid_o[d]                        = l2_router_req_valid_out[d];
+    assign l2_router_req_ready_in[d]                = l2_req_ready_i[d];
+    assign l2_router_req_in[d]                      = l2_req_i[d];
+    assign l2_router_req_valid_in[d]                = l2_req_valid_i[d];
+    assign l2_req_ready_o[d]                        = l2_router_req_ready_out[d];
+
+    assign l2_rsp_o[d]                              = l2_router_rsp_out[d];
+    assign l2_rsp_valid_o[d]                        = l2_router_rsp_valid_out[d];
+    assign l2_router_rsp_ready_in[d]                = l2_rsp_ready_i[d];
+    assign l2_router_rsp_in[d]                      = l2_rsp_i[d];
+    assign l2_router_rsp_valid_in[d]                = l2_rsp_valid_i[d];
+    assign l2_rsp_ready_o[d]                        = l2_router_rsp_ready_out[d];
+  end
+
+  // -------------------------------------------------------------------------
   // Group instantiation
   // -------------------------------------------------------------------------
   cachepool_group #(
@@ -554,10 +734,6 @@ module cachepool_group_noc_wrapper
     .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
     .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
     .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-    .axi_in_req_t             ( axi_in_req_t             ),
-    .axi_in_resp_t            ( axi_in_resp_t            ),
-    .axi_narrow_req_t         ( axi_narrow_req_t         ),
-    .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
     .axi_out_req_t            ( axi_out_req_t            ),
     .axi_out_resp_t           ( axi_out_resp_t           ),
     .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
@@ -575,33 +751,34 @@ module cachepool_group_noc_wrapper
   ) i_group (
     .clk_i,
     .rst_ni,
-    .impl_i                   ( impl_i                   ),
-    .error_o                  ( error_o                  ),
-    .debug_req_i              ( debug_req_i              ),
-    .meip_i                   ( meip_i                   ),
-    .mtip_i                   ( mtip_i                   ),
-    .msip_i                   ( msip_i                   ),
-    .hart_base_id_i           ( hart_base_id_i           ),
-    .tile_base_id_i           ( tile_base_id_i           ),
-    .cluster_base_addr_i      ( cluster_base_addr_i      ),
-    .private_start_addr_i     ( private_start_addr_i     ),
-    .axi_narrow_req_o         ( axi_narrow_req_o         ),
-    .axi_narrow_rsp_i         ( axi_narrow_rsp_i         ),
-    .l2_req_o                 ( l2_req_o                 ),
-    .l2_rsp_i                 ( l2_rsp_i                 ),
+    .impl_i                   ( impl_i                      ),
+    .error_o                  ( error_o                     ),
+    .debug_req_i              ( debug_req_i                 ),
+    .meip_i                   ( meip_i                      ),
+    .mtip_i                   ( mtip_i                      ),
+    .msip_i                   ( msip_i                      ),
+    .hart_base_id_i           ( hart_base_id_i              ),
+    .tile_base_id_i           ( tile_base_id_i              ),
+    .cluster_base_addr_i      ( cluster_base_addr_i         ),
+    .private_start_addr_i     ( private_start_addr_i        ),
+    .l2_req_o                 ( l2_group_req                ),
+    .l2_rsp_i                 ( l2_group_rsp                ),
+    .l2_group_id_i            ( l2_id_i                     ),
     .remote_group_req_o       ( remote_group_req_from_group ),
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
     .remote_group_rsp_o       ( remote_group_rsp_from_group ),
-    .icache_events_o          ( icache_events_o           ),
-    .icache_prefetch_enable_i ( icache_prefetch_enable_i  ),
-    .cl_interrupt_i           ( cl_interrupt_i            ),
-    .dynamic_offset_i         ( dynamic_offset_i          ),
-    .l1d_private_i            ( l1d_private_i             ),
-    .l1d_insn_i               ( l1d_insn_i                ),
-    .l1d_insn_valid_i         ( l1d_insn_valid_i          ),
-    .l1d_insn_ready_o         ( l1d_insn_ready_o          ),
-    .l1d_busy_i               ( l1d_busy_i                )
+    .tile_barrier_o           ( tile_barrier_o              ),
+    .barrier_done_i           ( barrier_done_i              ),
+    .icache_events_o          ( icache_events_o             ),
+    .icache_prefetch_enable_i ( icache_prefetch_enable_i    ),
+    .cl_interrupt_i           ( cl_interrupt_i              ),
+    .dynamic_offset_i         ( dynamic_offset_i            ),
+    .l1d_private_i            ( l1d_private_i               ),
+    .l1d_insn_i               ( l1d_insn_i                  ),
+    .l1d_insn_valid_i         ( l1d_insn_valid_i            ),
+    .l1d_insn_ready_o         ( l1d_insn_ready_o            ),
+    .l1d_busy_i               ( l1d_busy_i                  )
   );
 
 endmodule

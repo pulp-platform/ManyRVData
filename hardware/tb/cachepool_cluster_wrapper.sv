@@ -13,15 +13,12 @@ module cachepool_cluster_wrapper
  import fpnew_pkg::fpu_implementation_t;
  import snitch_pma_pkg::snitch_pma_t;
  #(
-  parameter int unsigned AxiAddrWidth       = SpatzAxiAddrWidth,
-  parameter int unsigned AxiDataWidth       = SpatzAxiDataWidth,
-  parameter int unsigned AxiUserWidth       = SpatzAxiUserWidth,
-  // External input ID width (SoC/testbench → wrapper); remapped to SpatzAxiIdInWidth inside.
-  parameter int unsigned AxiInIdWidth       = WrapperAxiIdInWidth,
+  parameter int unsigned AxiAddrWidth         = SpatzAxiAddrWidth,
+  parameter int unsigned AxiDataWidth         = SpatzAxiDataWidth,
+  parameter int unsigned AxiUserWidth         = SpatzAxiUserWidth,
   // External wide output ID width (wrapper → DRAM); remapped from SpatzAxiIdOutWidth inside.
-  parameter int unsigned AxiOutIdWidth      = WrapperAxiIdOutWidth,
-  // External narrow output ID width (UART, wrapper → SoC); remapped from SpatzAxiUartIdWidth inside.
-  parameter int unsigned AxiNarrowOutIdWidth = WrapperAxiNarrowIdOutWidth,
+  parameter int unsigned AxiOutIdWidth        = WrapperAxiIdOutWidth,
+  parameter int unsigned AxiNarrowOutIdWidth  = WrapperAxiNarrowIdOutWidth,
   // L1 data-bank / way-select / forwarding-buffer knobs.  Defaulted from the
   // config macros (set in config/*.mk -> Makefile VLOG_DEFS); fall back to the
   // production combination (folded + hash + fwd-buffer) when a macro is unset.
@@ -30,17 +27,13 @@ module cachepool_cluster_wrapper
   parameter bit          UseHashWaySelect    = `ifdef L1D_USE_HASH_WAY `L1D_USE_HASH_WAY `else 1'b1 `endif,
   parameter bit          UseForwardingBuffer = `ifdef L1D_USE_FWD_BUF  `L1D_USE_FWD_BUF  `else 1'b1 `endif,
 
-  // External input types use the wrapper-narrowed ID (WrapperAxiIdInWidth).
-  parameter type axi_in_req_t               = spatz_axi_wrapper_in_req_t,
-  parameter type axi_in_resp_t              = spatz_axi_wrapper_in_resp_t,
-
   // External wide output types use the wrapper-narrowed ID (WrapperAxiIdOutWidth).
-  parameter type axi_out_req_t              = spatz_axi_wrapper_out_req_t,
-  parameter type axi_out_resp_t             = spatz_axi_wrapper_out_resp_t,
+  parameter type axi_out_req_t                = spatz_axi_wrapper_out_req_t,
+  parameter type axi_out_resp_t               = spatz_axi_wrapper_out_resp_t,
 
   // External narrow output types use the wrapper-narrowed ID (WrapperAxiNarrowIdOutWidth).
-  parameter type axi_narrow_out_req_t       = spatz_axi_wrapper_narrow_out_req_t,
-  parameter type axi_narrow_out_resp_t      = spatz_axi_wrapper_narrow_out_resp_t
+  parameter type axi_narrow_out_req_t         = spatz_axi_wrapper_narrow_out_req_t,
+  parameter type axi_narrow_out_resp_t        = spatz_axi_wrapper_narrow_out_resp_t
 
 )(
   input  logic                                   clk_i,
@@ -52,9 +45,9 @@ module cachepool_cluster_wrapper
   input  logic                                   mtip_i,
   input  logic                                   msip_i,
   output logic                                   cluster_probe_o,
-  // AXI slave port (from SoC/testbench); external ID = AxiInIdWidth.
-  input  axi_in_req_t                            axi_in_req_i,
-  output axi_in_resp_t                           axi_in_resp_o,
+  // REQRSP peripheral in-port (from SoC/testbench); 32b narrow with refill_user_t.
+  input  peri_narrow_req_t                       peri_ext_req_i,
+  output peri_narrow_rsp_t                       peri_ext_rsp_o,
   /// AXI Narrow out-port (UART); external ID = AxiNarrowOutIdWidth.
   output axi_narrow_out_req_t                    axi_narrow_req_o,
   input  axi_narrow_out_resp_t                   axi_narrow_resp_i,
@@ -64,19 +57,16 @@ module cachepool_cluster_wrapper
 );
 
   // Internal signals between wrapper remappers and cluster (fat IDs).
-  spatz_axi_in_req_t                       axi_cluster_in_req;
-  spatz_axi_in_resp_t                      axi_cluster_in_resp;
-  axi_uart_req_t                           axi_cluster_narrow_req;
-  axi_uart_resp_t                          axi_cluster_narrow_resp;
-  spatz_axi_out_req_t  [NumClusterSlv-1:0] axi_cluster_out_req;
-  spatz_axi_out_resp_t [NumClusterSlv-1:0] axi_cluster_out_resp;
+  axi_uart_req_t                                 axi_cluster_narrow_req;
+  axi_uart_resp_t                                axi_cluster_narrow_resp;
+  spatz_axi_out_req_t   [NumClusterSlv-1:0]      axi_cluster_out_req;
+  spatz_axi_out_resp_t  [NumClusterSlv-1:0]      axi_cluster_out_resp;
 
   // Spatz cluster under test.
   // Internal AXI types are fixed (full-width IDs); the wrapper remaps at both boundaries.
   cachepool_cluster #(
     .AxiAddrWidth             (AxiAddrWidth             ),
     .AxiDataWidth             (AxiDataWidth             ),
-    // Cluster always sees the full internal ID width on its slave port.
     .AxiIdWidthIn             (SpatzAxiIdInWidth        ),
     .AxiIdWidthOut            (SpatzAxiIdOutWidth       ),
     .AxiUserWidth             (AxiUserWidth             ),
@@ -96,13 +86,6 @@ module cachepool_cluster_wrapper
     .NumIntOutstandingLoads   (NumIntOutstandingLoads   ),
     .NumIntOutstandingMem     (NumIntOutstandingMem     ),
     .NumSpatzOutstandingLoads (NumSpatzOutstandingLoads ),
-    // Cluster slave port uses full internal type (remap is above this level).
-    .axi_in_req_t             (spatz_axi_in_req_t       ),
-    .axi_in_resp_t            (spatz_axi_in_resp_t      ),
-    // Cluster per-tile narrow type (internal crossbar width, not the UART mux output).
-    .axi_narrow_req_t         (spatz_axi_narrow_req_t   ),
-    .axi_narrow_resp_t        (spatz_axi_narrow_resp_t  ),
-    // Cluster internally uses the fat output type; the wrapper remaps it.
     .axi_out_req_t            (spatz_axi_out_req_t      ),
     .axi_out_resp_t           (spatz_axi_out_resp_t     ),
     .RegisterOffloadRsp       (1                        ),
@@ -130,9 +113,9 @@ module cachepool_cluster_wrapper
     .hart_base_id_i           (10'h0                    ),
     .cluster_base_addr_i      (TCDMStartAddr            ),
     .cluster_probe_o          (cluster_probe_o          ),
-    // Remapped internal connections.
-    .axi_in_req_i             (axi_cluster_in_req       ),
-    .axi_in_resp_o            (axi_cluster_in_resp      ),
+    // REQRSP peripheral in-port: passed straight through from wrapper port.
+    .peri_ext_req_i           (peri_ext_req_i           ),
+    .peri_ext_rsp_o           (peri_ext_rsp_o           ),
     .axi_narrow_req_o         (axi_cluster_narrow_req   ),
     .axi_narrow_resp_i        (axi_cluster_narrow_resp  ),
     // AXI Master Port (fat IDs; wrapper remaps before external port).
@@ -140,32 +123,12 @@ module cachepool_cluster_wrapper
     .axi_out_resp_i           (axi_cluster_out_resp     )
   );
 
-  // Expand WrapperAxiIdInWidth -> SpatzAxiIdInWidth on the cluster slave port.
-  // The external SoC/testbench drives narrow IDs; the cluster expects full-width IDs.
-  axi_id_remap #(
-    .AxiSlvPortIdWidth    ( WrapperAxiIdInWidth         ),
-    // Up to 2^WrapperAxiIdInWidth = 16 unique IDs from external host.
-    .AxiSlvPortMaxUniqIds ( 2**WrapperAxiIdInWidth      ),
-    .AxiMaxTxnsPerId      ( NumAxiMaxTrans              ),
-    .AxiMstPortIdWidth    ( SpatzAxiIdInWidth           ),
-    .slv_req_t            ( axi_in_req_t                ),
-    .slv_resp_t           ( axi_in_resp_t               ),
-    .mst_req_t            ( spatz_axi_in_req_t          ),
-    .mst_resp_t           ( spatz_axi_in_resp_t         )
-  ) i_in_id_remap (
-    .clk_i      ( clk_i               ),
-    .rst_ni     ( rst_ni              ),
-    .slv_req_i  ( axi_in_req_i        ),
-    .slv_resp_o ( axi_in_resp_o       ),
-    .mst_req_o  ( axi_cluster_in_req  ),
-    .mst_resp_i ( axi_cluster_in_resp )
-  );
 
-  // Compress SpatzAxiUartIdWidth -> WrapperAxiNarrowIdOutWidth on the UART master port.
+  // Remap SpatzAxiUartIdWidth -> WrapperAxiNarrowIdOutWidth on the UART master port.
   axi_id_remap #(
     .AxiSlvPortIdWidth    ( SpatzAxiUartIdWidth                ),
-    // Cap at 2^WrapperAxiNarrowIdOutWidth unique IDs toward the SoC.
-    .AxiSlvPortMaxUniqIds ( 2**WrapperAxiNarrowIdOutWidth      ),
+    // MaxUniqIds capped by the slave port's ID space.
+    .AxiSlvPortMaxUniqIds ( 2**SpatzAxiUartIdWidth             ),
     .AxiMaxTxnsPerId      ( NumAxiMaxTrans                     ),
     .AxiMstPortIdWidth    ( WrapperAxiNarrowIdOutWidth         ),
     .slv_req_t            ( axi_uart_req_t                     ),
@@ -181,26 +144,31 @@ module cachepool_cluster_wrapper
     .mst_resp_i ( axi_narrow_resp_i        )
   );
 
-  // Reduce SpatzAxiIdOutWidth -> WrapperAxiIdOutWidth per DRAM channel.
-  // NumAxiMaxTrans = 32 outstanding per channel; 6 bits gives 64 unique ID slots.
+  // Remap SpatzAxiIdOutWidth -> WrapperAxiIdOutWidth per DRAM channel.
+  // With FlooNoC mesh, both are 6 bits (no-op remap); kept for interface stability.
   for (genvar ch = 0; ch < NumClusterSlv; ch++) begin : gen_out_id_remap
-    axi_id_remap #(
-      .AxiSlvPortIdWidth    ( SpatzAxiIdOutWidth           ),
-      .AxiSlvPortMaxUniqIds ( NumAxiMaxTrans               ),
-      .AxiMaxTxnsPerId      ( NumAxiMaxTrans               ),
-      .AxiMstPortIdWidth    ( WrapperAxiIdOutWidth         ),
-      .slv_req_t            ( spatz_axi_out_req_t          ),
-      .slv_resp_t           ( spatz_axi_out_resp_t         ),
-      .mst_req_t            ( spatz_axi_wrapper_out_req_t  ),
-      .mst_resp_t           ( spatz_axi_wrapper_out_resp_t )
-    ) i_out_id_remap (
-      .clk_i      ( clk_i                     ),
-      .rst_ni     ( rst_ni                     ),
-      .slv_req_i  ( axi_cluster_out_req  [ch] ),
-      .slv_resp_o ( axi_cluster_out_resp [ch] ),
-      .mst_req_o  ( axi_out_req_o        [ch] ),
-      .mst_resp_i ( axi_out_resp_i       [ch] )
-    );
+    if (SpatzAxiIdOutWidth != WrapperAxiIdOutWidth) begin
+      axi_id_remap #(
+        .AxiSlvPortIdWidth    ( SpatzAxiIdOutWidth           ),
+        .AxiSlvPortMaxUniqIds ( NumAxiMaxTrans               ),
+        .AxiMaxTxnsPerId      ( NumAxiMaxTrans               ),
+        .AxiMstPortIdWidth    ( WrapperAxiIdOutWidth         ),
+        .slv_req_t            ( spatz_axi_out_req_t          ),
+        .slv_resp_t           ( spatz_axi_out_resp_t         ),
+        .mst_req_t            ( spatz_axi_wrapper_out_req_t  ),
+        .mst_resp_t           ( spatz_axi_wrapper_out_resp_t )
+      ) i_out_id_remap (
+        .clk_i      ( clk_i                     ),
+        .rst_ni     ( rst_ni                    ),
+        .slv_req_i  ( axi_cluster_out_req  [ch] ),
+        .slv_resp_o ( axi_cluster_out_resp [ch] ),
+        .mst_req_o  ( axi_out_req_o        [ch] ),
+        .mst_resp_i ( axi_out_resp_i       [ch] )
+      );
+    end else begin
+      assign axi_out_req_o[ch]        = axi_cluster_out_req[ch];
+      assign axi_cluster_out_resp[ch] = axi_out_resp_i[ch];
+    end
   end
 
   // AXI utilization monitor
@@ -331,8 +299,6 @@ module cachepool_cluster_wrapper
   if (AxiUserWidth != SpatzAxiUserWidth)
     $error("[spatz_cluster_wrapper] AXI User Width does not match the configuration.");
 
-  if (AxiInIdWidth != WrapperAxiIdInWidth)
-    $error("[spatz_cluster_wrapper] AXI Id Width (In) does not match the configuration.");
 
   if (AxiOutIdWidth != WrapperAxiIdOutWidth)
     $error("[spatz_cluster_wrapper] AXI Id Width (Out) does not match the configuration.");

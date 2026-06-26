@@ -60,6 +60,7 @@ int verify_matrix(float *matrix, const float *checksum,
 
 int main() {
   const unsigned int num_cores = snrt_cluster_core_num();
+  const unsigned int num_cores_per_tile = snrt_cluster_core_per_tile();
   const unsigned int cid = snrt_cluster_core_idx();
 
   #if MEAS_1ITER == 1
@@ -93,8 +94,8 @@ int main() {
 
   // Set xbar policy and switch to private cache mode for the matmul.
   // All cores will access the same B; scramble based on cacheline.
-  l1d_xbar_config(5);
-  l1d_part(4);
+  l1d_xbar_config(6);
+  l1d_part(num_cores_per_tile);
 
   a = gemm_A_dram;
   b = gemm_B_dram;

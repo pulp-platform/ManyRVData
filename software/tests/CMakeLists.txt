@@ -128,6 +128,7 @@ add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 32 32 32)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 64 64 64)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 128 128 128)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 1024 32 32)
+add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 1024 64 64)
 
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 256 4)
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 1024 4)
