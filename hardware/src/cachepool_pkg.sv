@@ -207,25 +207,25 @@ package cachepool_pkg;
   // Alias used by the Spatz-generated wrapper and testbench templates.
   localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
 
-  // Per-group AXI output ID width (pre multi-group mux).
+  // Per-group AXI output ID width (pre-mesh, kept for BootROM path sizing).
   // The +1 comes from reqrsp_to_axi, which tags each burst with one extra bit.
   localparam int unsigned GroupAxiIdOutWidth      = ClusterAxiIdWidth + 1;
-  // Bounded per-group refill ID width: uses NumTilesPerGroup (not NumTiles) so the
-  // ID space stays fixed regardless of total system size. axi_id_remap at each group
-  // output reduces GroupAxiIdOutWidth to this before the inter-group mux / future NoC.
-  // For NumGroups == 1, NumTilesPerGroup == NumTiles so this equals GroupAxiIdOutWidth.
-  localparam int unsigned WideRefillIdWidth       = TileAxiIdWidth + $clog2(NumTilesPerGroup) + ClusterRouteIdWidth + 1;
-  // Cluster-level AXI output ID width: widened by multi-group mux.
-  // When NumGroups == 1, $clog2(1) == 0 so this equals WideRefillIdWidth == GroupAxiIdOutWidth.
-  localparam int unsigned GroupMuxIdBits          = (NumGroups > 1) ? $clog2(NumGroups) : 0;
-  localparam int unsigned SpatzAxiIdOutWidth      = WideRefillIdWidth + GroupMuxIdBits;
 
-  // Fixed AXI ID width for IWC
-  localparam int unsigned IwcAxiIdOutWidth        = SpatzAxiIdOutWidth + 1;
+  // Tile-internal wide AXI ID width (passed to groups/tiles as AxiIdWidthOut).
+  // Sized for the tile's wide xbar: iCache needs TileAxiIdWidth bits,
+  // group-level BootROM mux needs $clog2(NumTilesPerGroup) bits on top,
+  // and reqrsp_to_axi adds 1 bit.
+  localparam int unsigned GroupWideIdWidth        = TileAxiIdWidth + $clog2(NumTilesPerGroup) + 1;
 
-  // Cluster wrapper external output AXI ID width, after the wrapper-level axi_id_remap.
-  // Reduces the fat SpatzAxiIdOutWidth presented to the DRAM controller.
-  // Must satisfy: WrapperAxiIdOutWidth >= $clog2(NumAxiMaxTrans) = $clog2(32) = 5.
+  // Cluster-level AXI output ID width (chimney → DRAM).
+  // With the FlooNoC mesh, reqrsp_to_axi generates fresh IDs with
+  // $clog2(MaxTrans) bits. The chimney carries these through unchanged.
+  // No multi-group mux → no extra bits needed.
+  localparam int unsigned SpatzAxiIdOutWidth      = $clog2(NumSpatzOutstandingLoads * 2);
+
+  // Cluster wrapper external output AXI ID width.
+  // Now equals SpatzAxiIdOutWidth (no compression needed), but kept as a
+  // separate parameter for interface stability.
   localparam int unsigned WrapperAxiIdOutWidth        = 6;
   // External SoC/testbench input AXI ID width (host → cluster direction).
   // axi_id_remap in the wrapper expands these to SpatzAxiIdInWidth internally.
@@ -235,36 +235,32 @@ package cachepool_pkg;
   localparam int unsigned WrapperAxiNarrowIdOutWidth  = 4;
 
   localparam int unsigned CsrAxiMstIdWidth        = ClusterAxiIdWidth;
-  // ID width after per-master serialization before the CSR mux.
-  // axi_id_serialize at each CSR master reduces CsrAxiMstIdWidth to this,
-  // keeping the mux output (CsrAxiSlvIdWidth) bounded regardless of NumTiles.
-  // Must be > 1: axi_id_serialize internally uses axi_id_prepend which requires
-  // AxiMstPortIdWidth > MuxIdWidth (= 1 when AxiMstPortMaxUniqIds = 1).
+  // ID width after per-master serialization (legacy, kept for barrier compatibility).
   localparam int unsigned CsrSerIdWidth           = 2;
-  localparam int unsigned CsrAxiSlvIdWidth        = CsrSerIdWidth + $clog2(NumTiles+1);
+  // CSR slave ID width: 2×2 peripheral xbar adds 1 bit to CsrSerIdWidth.
+  // Both the HBM0 peripheral path (serialized) and TB axi_in path (serialized)
+  // feed into the xbar at CsrSerIdWidth; output is CsrSerIdWidth + 1.
+  localparam int unsigned CsrAxiSlvIdWidth        = CsrSerIdWidth + 1;
 
-  // Narrow AXI ID width = ClusterAxiIdWidth (same field structure, used on the narrow path).
+  // Narrow AXI ID width = ClusterAxiIdWidth (used for barrier types).
   localparam int unsigned SpatzAxiNarrowIdWidth   = ClusterAxiIdWidth;
-  // UART ID width: narrow path muxed across all tiles adds $clog2(NumTiles) bits.
-  localparam int unsigned SpatzAxiUartIdWidth     = SpatzAxiNarrowIdWidth + $clog2(NumTiles);
+  // UART ID width: same as CSR slave ID width (both are xbar master outputs).
+  localparam int unsigned SpatzAxiUartIdWidth     = CsrSerIdWidth + 1;
 
   // BootROM AXI ID width: wide data bus, muxed from NumTilesPerGroup tile ports per group.
-  // The group's axi_mst_cache slave ID width = GroupAxiIdWidth + 1
-  // (cluster passes WideIdWidthIn = SpatzAxiIdOutWidth - ClusterRouteIdWidth - GroupMuxIdBits
-  //  = GroupAxiIdWidth + 1).
+  // The group's axi_mst_cache slave ID width = GroupWideIdWidth
+  // (= TileAxiIdWidth + $clog2(NumTilesPerGroup) + 1).
   // The per-group BootROM mux master adds $clog2(NumTilesPerGroup) bits on top.
-  localparam int unsigned BootRomAxiSlvIdWidth    = GroupAxiIdWidth + 1 + $clog2(NumTilesPerGroup);
+  localparam int unsigned BootRomAxiSlvIdWidth    = GroupWideIdWidth + $clog2(NumTilesPerGroup);
 
   /***** Tile Ports *****/
-  // We have three sets of AXI ports for each tile:
-  // 1) Wide   output bus for BootRom & L2 (from ICache)
-  // 2) Narrow output bus for UART/Periph
-  // 3) Narrow input  bus for SoC control
+  // Each tile has two sets of AXI output ports:
+  // 1) Wide output bus for BootRom & L2/peripheral (from ICache + core requests)
+  //    All non-TCDM core requests (DRAM, UART, CSR) go through the wide path
+  //    via the existing 32→512 DW upsizer.
+  // 2) Wide input bus for SoC control (enters via mesh)
 
-  // Narrow AXI Ports: 1 UART + 1 Periph
-  localparam int unsigned TileNarrowAxiPorts      = 2;
-
-  // Wide AXI Ports: 1 BootROM + 1 Data (I$)
+  // Wide AXI Ports: 1 BootROM + 1 Data (L2/peripheral)
   localparam int unsigned TileWideAxiPorts        = 2;
   localparam int unsigned TileWideXbarInputs      = 2; // iCache + narrow2wide
   localparam int unsigned TileWideXbarIdExtraBits = $clog2(TileWideXbarInputs); // = 1
@@ -274,8 +270,6 @@ package cachepool_pkg;
   localparam int unsigned TileWideDataPorts   = NumL1CtrlTile;
 
   /***** Group Ports *****/
-  // Narrow AXI ports
-  localparam int unsigned GroupNarrowAxiPorts = TileNarrowAxiPorts * NumTiles;
   // Wide AXI ports
   localparam int unsigned GroupWideAxiPorts   = TileWideAxiPorts * NumTiles;
   // Wide Data ports
@@ -285,10 +279,12 @@ package cachepool_pkg;
   localparam int unsigned RemoteXbarSelWidth = $clog2(NumTiles * NumRemotePortCore);
 
   /***** Cluster Ports *****/
-  // Narrow AXI ports: 1 In from SoC, 1 Out to UART
+  // Narrow AXI ports:
+  //   In:  1 from SoC (enters mesh via HBM0 chimney input, upsized 32→512)
+  //   Out: 1 to UART (exits HBM0 chimney output → demux → downsizer 512→32)
   localparam int unsigned ClusterNarrowInAxiPorts  = 1;
   localparam int unsigned ClusterNarrowOutAxiPorts = 1;
-  // Wide AXI ports: X to DRAM (X=4 for now)
+  // Wide AXI ports: one per HBM channel (HBM0 is shared with peripheral demux)
   localparam int unsigned ClusterWideOutAxiPorts   = NumL2Channel;
 
 
@@ -348,7 +344,6 @@ package cachepool_pkg;
   typedef logic [CsrSerIdWidth-1:0]             axi_id_csr_ser_t;
   typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
 
-  typedef logic [IwcAxiIdOutWidth-1:0]           axi_id_out_iwc_t;
   typedef logic [WrapperAxiIdOutWidth-1:0]       axi_id_wrapper_out_t;
   typedef logic [WrapperAxiIdInWidth-1:0]        axi_id_wrapper_in_t;
   typedef logic [WrapperAxiNarrowIdOutWidth-1:0] axi_id_wrapper_narrow_out_t;
@@ -360,13 +355,7 @@ package cachepool_pkg;
   //////////////////
   typedef logic [TileIDWidth-1:0]               remote_tile_sel_t;
 
-  // Naming the port for easier connection
-  typedef enum integer {
-    TilePeriph  = 0,
-    TileUart    = 1
-  } tile_narrow_e;
-
-  // Naming the port for easier connection
+  // Naming the wide output port for easier connection
   typedef enum integer {
     TileBootROM = 0,
     TileMem     = 1
@@ -495,11 +484,6 @@ package cachepool_pkg;
   //  CLUSTER TYPES  //
   /////////////////////
   typedef enum integer {
-    ClusterUart   = 0,
-    ClusterPeriph = 1
-  } cluster_narrow_e;
-
-  typedef enum integer {
     L2Channel0  = 0,
     L2Channel1  = 1,
     L2Channel2  = 2,
@@ -550,8 +534,7 @@ package cachepool_pkg;
   `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
   // Per-group AXI output: narrower ID (pre multi-group mux).
   `AXI_TYPEDEF_ALL(spatz_axi_group_out, axi_addr_t, axi_id_group_out_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_iwc_out,     axi_addr_t, axi_id_out_iwc_t,     axi_wide_data_t, axi_wide_strb_t, axi_user_t)
-  // Wrapper-level external output type: ID narrowed from SpatzAxiIdOutWidth to WrapperAxiIdOutWidth.
+  // Wrapper-level external output type: ID from SpatzAxiIdOutWidth to WrapperAxiIdOutWidth.
   `AXI_TYPEDEF_ALL(spatz_axi_wrapper_out,         axi_addr_t, axi_id_wrapper_out_t,         axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
   // Wrapper-level external input type: narrow ID from SoC (WrapperAxiIdInWidth → SpatzAxiIdInWidth inside).
   `AXI_TYPEDEF_ALL(spatz_axi_wrapper_in,          axi_addr_t, axi_id_wrapper_in_t,          axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
@@ -603,11 +586,13 @@ package cachepool_pkg;
     automatic snitch_pma_pkg::rule_t [snitch_pma_pkg::NrMaxRules-1:0] cached_regions;
     cached_regions = '{default: '0};
     cached_regions[0] = '{base: 32'h80000000, mask: 32'hfc000000};
+    // Bootrom at 0x1000: make low 64KB cacheable for ICache
+    cached_regions[1] = '{base: 32'h00000000, mask: 32'hffff0000};
     return cached_regions;
   endfunction
 
   localparam snitch_pma_pkg::snitch_pma_t SnitchPMACfg = '{
-      NrCachedRegionRules: 1,
+      NrCachedRegionRules: 2,
       CachedRegion:        get_cached_regions(),
       default:             0
   };

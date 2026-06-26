@@ -180,7 +180,7 @@ module tb_cachepool;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while
-    repeat (1000)
+    repeat (100)
       @(posedge clk);
 
     // Store the entry point in the Spatz cluster

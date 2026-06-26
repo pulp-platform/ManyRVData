@@ -92,9 +92,6 @@ module cachepool_cluster_wrapper
     // Cluster slave port uses full internal type (remap is above this level).
     .axi_in_req_t             (spatz_axi_in_req_t       ),
     .axi_in_resp_t            (spatz_axi_in_resp_t      ),
-    // Cluster per-tile narrow type (internal crossbar width, not the UART mux output).
-    .axi_narrow_req_t         (spatz_axi_narrow_req_t   ),
-    .axi_narrow_resp_t        (spatz_axi_narrow_resp_t  ),
     // Cluster internally uses the fat output type; the wrapper remaps it.
     .axi_out_req_t            (spatz_axi_out_req_t      ),
     .axi_out_resp_t           (spatz_axi_out_resp_t     ),
@@ -150,11 +147,11 @@ module cachepool_cluster_wrapper
     .mst_resp_i ( axi_cluster_in_resp )
   );
 
-  // Compress SpatzAxiUartIdWidth -> WrapperAxiNarrowIdOutWidth on the UART master port.
+  // Remap SpatzAxiUartIdWidth -> WrapperAxiNarrowIdOutWidth on the UART master port.
   axi_id_remap #(
     .AxiSlvPortIdWidth    ( SpatzAxiUartIdWidth                ),
-    // Cap at 2^WrapperAxiNarrowIdOutWidth unique IDs toward the SoC.
-    .AxiSlvPortMaxUniqIds ( 2**WrapperAxiNarrowIdOutWidth      ),
+    // MaxUniqIds capped by the slave port's ID space.
+    .AxiSlvPortMaxUniqIds ( 2**SpatzAxiUartIdWidth             ),
     .AxiMaxTxnsPerId      ( NumAxiMaxTrans                     ),
     .AxiMstPortIdWidth    ( WrapperAxiNarrowIdOutWidth         ),
     .slv_req_t            ( axi_uart_req_t                     ),
@@ -170,8 +167,8 @@ module cachepool_cluster_wrapper
     .mst_resp_i ( axi_narrow_resp_i        )
   );
 
-  // Reduce SpatzAxiIdOutWidth -> WrapperAxiIdOutWidth per DRAM channel.
-  // NumAxiMaxTrans = 32 outstanding per channel; 6 bits gives 64 unique ID slots.
+  // Remap SpatzAxiIdOutWidth -> WrapperAxiIdOutWidth per DRAM channel.
+  // With FlooNoC mesh, both are 6 bits (no-op remap); kept for interface stability.
   for (genvar ch = 0; ch < NumClusterSlv; ch++) begin : gen_out_id_remap
     axi_id_remap #(
       .AxiSlvPortIdWidth    ( SpatzAxiIdOutWidth           ),

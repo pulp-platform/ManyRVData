@@ -168,7 +168,15 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 ###########
 FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
 FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
-FLOO_CFG      ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+
+# Auto-select FlooNoC YAML based on config name
+ifneq ($(filter %_16g_tiny,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g_tiny.yml
+else ifneq ($(filter %_16g,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g.yml
+else
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+endif
 FLOO_NAME     = cachepool
 FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
 
@@ -180,7 +188,7 @@ install-floogen:
 	pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
-$(FLOO_NOC): install-floogen $(FLOO_CFG)
+$(FLOO_NOC): $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
 	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
 

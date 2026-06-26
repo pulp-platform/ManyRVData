@@ -1,0 +1,156 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author: Diyou Shen, ETH Zurich
+
+# FlooNoC topology for CachePool 16-group (4x4 mesh) with AXI-only links.
+#
+# Wide channel: dCache refill (512b data)
+#
+# 4x4 group router mesh, 8 HBM on West/East edges:
+#   West:  hbm0-3 at routers [0,0]-[0,3]
+#   East:  hbm4-7 at routers [3,0]-[3,3]
+#   Peripheral traffic routed through hbm0 chimney (demuxed at cluster output)
+#
+# Width calculation notes (for cachepool_fpu_16g config, 4 tiles/group):
+#   wide_in  id_width  = GroupWideIdWidth + 1 = TileAxiIdWidth + clog2(4) + 1 + 1 = 7
+#   wide_out id_width  = SpatzAxiIdOutWidth = clog2(32*2) = 6
+#   user_width         = SpatzAxiUserWidth = axi_user_width + clog2(NumTiles) = 17 + 6 = 23
+#   HBM per-channel    = DramSize / l2_channel = 0x4000_0000 / 8 = 0x0800_0000
+#   DRAM total: 0x8000_0000 - 0xBFFF_FFFF (1 GB)
+
+name: cachepool
+description: "CachePool AXI NoC - 16 groups"
+network_type: "axi"
+
+routing:
+  route_algo: "SRC"
+  use_id_table: true
+
+protocols:
+  - name: "wide_in"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 7
+    user_width: 23
+  - name: "wide_out"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 6
+    user_width: 23
+
+endpoints:
+  - name: "group"
+    array: [4, 4]
+    mgr_port_protocol:
+      - "wide_in"
+  # HBM West (channels 0-3, scrambled contiguous addresses)
+  # HBM0 also handles peripheral traffic (demuxed at cluster output)
+  - name: "hbm0"
+    addr_range:
+      - start: 0x0000_0000
+        end: 0x7FFF_FFFF
+      - start: 0x8000_0000
+        end: 0x87FF_FFFF
+      - start: 0xC000_0000
+        end: 0xFFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm1"
+    addr_range:
+      - start: 0x8800_0000
+        end: 0x8FFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm2"
+    addr_range:
+      - start: 0x9000_0000
+        end: 0x97FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm3"
+    addr_range:
+      - start: 0x9800_0000
+        end: 0x9FFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  # HBM East (channels 4-7)
+  - name: "hbm4"
+    addr_range:
+      - start: 0xA000_0000
+        end: 0xA7FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm5"
+    addr_range:
+      - start: 0xA800_0000
+        end: 0xAFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm6"
+    addr_range:
+      - start: 0xB000_0000
+        end: 0xB7FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm7"
+    addr_range:
+      - start: 0xB800_0000
+        end: 0xBFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+
+routers:
+  - name: "group_router"
+    array: [4, 4]
+    degree: 5
+
+connections:
+  - src: "group"
+    dst: "group_router"
+    src_range:
+    - [0, 3]
+    - [0, 3]
+    dst_range:
+    - [0, 3]
+    - [0, 3]
+    dst_dir: "Eject"
+  # HBM West
+  - src: "hbm0"
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "West"
+  - src: "hbm1"
+    dst: "group_router"
+    dst_idx: [0, 1]
+    dst_dir: "West"
+  - src: "hbm2"
+    dst: "group_router"
+    dst_idx: [0, 2]
+    dst_dir: "West"
+  - src: "hbm3"
+    dst: "group_router"
+    dst_idx: [0, 3]
+    dst_dir: "West"
+  # HBM East
+  - src: "hbm4"
+    dst: "group_router"
+    dst_idx: [3, 0]
+    dst_dir: "East"
+  - src: "hbm5"
+    dst: "group_router"
+    dst_idx: [3, 1]
+    dst_dir: "East"
+  - src: "hbm6"
+    dst: "group_router"
+    dst_idx: [3, 2]
+    dst_dir: "East"
+  - src: "hbm7"
+    dst: "group_router"
+    dst_idx: [3, 3]
+    dst_dir: "East"

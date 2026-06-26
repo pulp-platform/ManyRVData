@@ -9,6 +9,8 @@
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 
+`include "axi/typedef.svh"
+
 module cachepool_group_noc_wrapper
   import cachepool_pkg::*;
   import floo_pkg::*;
@@ -48,8 +50,6 @@ module cachepool_group_noc_wrapper
     parameter int                     unsigned               MaxSlvTrans                        = 4,
     parameter type                                           axi_in_req_t                       = logic,
     parameter type                                           axi_in_resp_t                      = logic,
-    parameter type                                           axi_narrow_req_t                   = logic,
-    parameter type                                           axi_narrow_resp_t                  = logic,
     parameter type                                           axi_out_req_t                      = logic,
     parameter type                                           axi_out_resp_t                     = logic,
     parameter type                                           impl_in_t                          = logic,
@@ -66,10 +66,15 @@ module cachepool_group_noc_wrapper
     input  logic              [TileIDWidth-1:0]                           tile_base_id_i,
     input  axi_addr_t                                                     cluster_base_addr_i,
     input  axi_addr_t                                                     private_start_addr_i,
-    output axi_narrow_req_t   [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_req_o,
-    input  axi_narrow_resp_t  [TileNarrowAxiPorts*NumTilesPerGroup-1:0]   axi_narrow_rsp_i,
-    output l2_req_t           [ClusterWideOutAxiPorts-1:0]                l2_req_o,
-    input  l2_rsp_t           [ClusterWideOutAxiPorts-1:0]                l2_rsp_i,
+    // L2 refill FlooNoC links: 4 mesh directions (North=0, East=1, South=2, West=3)
+    output floo_cachepool_noc_pkg::floo_req_t [floo_pkg::West:floo_pkg::North] l2_floo_req_o,
+    output floo_cachepool_noc_pkg::floo_rsp_t [floo_pkg::West:floo_pkg::North] l2_floo_rsp_o,
+    input  floo_cachepool_noc_pkg::floo_req_t [floo_pkg::West:floo_pkg::North] l2_floo_req_i,
+    input  floo_cachepool_noc_pkg::floo_rsp_t [floo_pkg::West:floo_pkg::North] l2_floo_rsp_i,
+    // Chimney ID and routing table for the L2 refill mesh
+    input  floo_cachepool_noc_pkg::id_t                                   l2_floo_id_i,
+    input  floo_cachepool_noc_pkg::route_t [floo_pkg::floo_iomsb(
+             floo_cachepool_noc_pkg::RouteCfg.NumRoutes):0]               l2_floo_route_table_i,
     output icache_l1_events_t [NrCores-1:0]                               icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
     input  logic              [NrCores-1:0]                               cl_interrupt_i,
@@ -97,7 +102,10 @@ module cachepool_group_noc_wrapper
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_i,
     input  noc_group_rsp_t [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_i,
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_valid_i,
-    output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o
+    output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o,
+    // Direct-wire barrier: one bit per tile in this group
+    output logic           [NumTilesPerGroup-1:0]                         tile_barrier_o,
+    input  logic                                                          barrier_done_i
   );
 
 
@@ -115,12 +123,26 @@ module cachepool_group_noc_wrapper
   localparam int unsigned NocCacheBankBits  = $clog2(NrBanks);
   localparam int unsigned NocAddrTileWidth  = (NumTilesPerGroup > 1) ? $clog2(NumTilesPerGroup) : 1;
   // -- Actual bit counts inside dst_tile_id (can be 0 when that dimension = 1) -
+  // Flat group_id = gy * NumGroupsX + gx  (row-major, set in cachepool_cluster.sv).
   // dst_tile_id layout: [ group_y (NocGroupBitsY) | group_x (NocGroupBitsX) | local_tile (NocGroupOffset) ]
-  // where NocGroupOffset = $clog2(NumTilesPerGroup) (0 when NumTilesPerGroup == 1).
+  // Lower group bits are X, upper group bits are Y.
   localparam int unsigned NocGroupOffset    = $clog2(NumTilesPerGroup);
   localparam int unsigned NocGroupBitsX     = (NumGroupsX > 1) ? $clog2(NumGroupsX) : 0;
   localparam int unsigned NocGroupBitsY     = (NumGroupsY > 1) ? $clog2(NumGroupsY) : 0;
 
+
+  // -------------------------------------------------------------------------
+  // AXI types for L2 mux slave ports
+  // ID width = AxiIdWidthOut (matches group internal axi_mst_cache types)
+  // Master types come from floo_cachepool_noc_pkg (InIdWidth = AxiIdWidthOut + 1)
+  // -------------------------------------------------------------------------
+  typedef logic [AxiAddrWidth-1:0]          l2_addr_t;
+  typedef logic [AxiIdWidthOut-1:0]         l2_mux_slv_id_t;
+  typedef logic [AxiDataWidth-1:0]          l2_data_t;
+  typedef logic [AxiDataWidth/8-1:0]        l2_strb_t;
+  typedef logic [AxiUserWidth-1:0]          l2_user_t;
+
+  `AXI_TYPEDEF_ALL(l2_axi_mux_slv, l2_addr_t, l2_mux_slv_id_t, l2_data_t, l2_strb_t, l2_user_t)
 
   // -------------------------------------------------------------------------
   // Group ↔ wrapper boundary signals
@@ -289,9 +311,9 @@ module cachepool_group_noc_wrapper
         localparam int unsigned noc_port = t * NumNoCPortsPerTile + n;
         assign packed_req[noc_port].hdr.collective_op   = '0;
         assign packed_req[noc_port].hdr.src_id          = group_xy_id_i;
-        // dst_tile_id set by tcdm_cache_interco: bits [NocGroupOffset +: NocGroupBitsX] = group_x,
-        // bits [(NocGroupOffset+NocGroupBitsX) +: NocGroupBitsY] = group_y.
-        // When a dimension has only 1 group, no bits are consumed and the coordinate is 0.
+        // Flat group_id = gy * NumGroupsX + gx (row-major), so in the
+        // dst_tile_id bit field the lower group bits are X and the upper are Y:
+        //   dst_tile_id = [ gy (NocGroupBitsY) | gx (NocGroupBitsX) | local_tile ]
         if (NumGroupsX > 1) begin : gen_dst_x
           assign packed_req[noc_port].hdr.dst_id.x =
             mst_xbar_req[noc_port].user.dst_tile_id[NocGroupOffset +: NocGroupBitsX];
@@ -486,6 +508,7 @@ module cachepool_group_noc_wrapper
           remote_group_rsp_from_group[port].p;
         assign slv_xbar_mst_rsp[port].hdr.collective_op   = '0;
         assign slv_xbar_mst_rsp[port].hdr.src_id          = group_xy_id_i;
+        // Row-major: lower group bits are X, upper are Y
         if (NumGroupsX > 1) begin : gen_rsp_dst_x
           assign slv_xbar_mst_rsp[port].hdr.dst_id.x      =
             remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset +: NocGroupBitsX];
@@ -523,6 +546,173 @@ module cachepool_group_noc_wrapper
 
 
   // -------------------------------------------------------------------------
+  // L2 path: reqrsp_to_axi + axi_mux(2:1) → floo_axi_chimney → floo_axi_router
+  // -------------------------------------------------------------------------
+  // Two AXI streams merged before the chimney:
+  //   [0] refill traffic: group l2_req/rsp → reqrsp_to_axi
+  //   [1] ICache/peripheral traffic: group l2_axi_req/rsp (stays AXI)
+  // The axi_mux adds 1 ID bit ($clog2(2)), so chimney InIdWidth = SlvIdWidth + 1.
+
+  // Internal L2 reqrsp between group and reqrsp_to_axi
+  l2_req_t l2_group_req;
+  l2_rsp_t l2_group_rsp;
+
+  // Internal L2 AXI from group (ICache/peripheral bypass)
+  l2_axi_mux_slv_req_t  l2_group_axi_req;
+  l2_axi_mux_slv_resp_t  l2_group_axi_rsp;
+
+  // AXI mux slave-side wires (6-bit ID, before mux prepends 1 bit)
+  l2_axi_mux_slv_req_t  [1:0] l2_mux_slv_req;
+  l2_axi_mux_slv_resp_t  [1:0] l2_mux_slv_rsp;
+
+  // Chimney AXI wires (InIdWidth bit ID, after mux)
+  floo_cachepool_noc_pkg::axi_wide_in_req_t l2_chimney_axi_req;
+  floo_cachepool_noc_pkg::axi_wide_in_rsp_t l2_chimney_axi_rsp;
+
+  // Router ↔ chimney floo links [Eject:North]
+  floo_cachepool_noc_pkg::floo_req_t [floo_pkg::Eject:floo_pkg::North] l2_router_req_in;
+  floo_cachepool_noc_pkg::floo_req_t [floo_pkg::Eject:floo_pkg::North] l2_router_req_out;
+  floo_cachepool_noc_pkg::floo_rsp_t [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_in;
+  floo_cachepool_noc_pkg::floo_rsp_t [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_out;
+
+  // reqrsp_to_axi: convert l2 refill reqrsp to AXI (mux slave [0])
+  reqrsp_to_axi #(
+    .MaxTrans           ( NumSpatzOutstandingLoads * 2  ),
+    .ID                 ( '0                            ),
+    .EnBurst            ( 1                             ),
+    .ShuffleId          ( 1                             ),
+    .UserWidth          ( $bits(refill_user_t)          ),
+    .ReqUserFallThrough ( 1'b0                          ),
+    .DataWidth          ( AxiDataWidth                  ),
+    .AxiUserWidth       ( AxiUserWidth                  ),
+    .reqrsp_req_t       ( l2_req_t                      ),
+    .reqrsp_rsp_t       ( l2_rsp_t                      ),
+    .axi_req_t          ( l2_axi_mux_slv_req_t          ),
+    .axi_rsp_t          ( l2_axi_mux_slv_resp_t         )
+  ) i_l2_reqrsp2axi (
+    .clk_i              ( clk_i                         ),
+    .rst_ni             ( rst_ni                        ),
+    .user_i             ( l2_group_req.q.user           ),
+    .reqrsp_req_i       ( l2_group_req                  ),
+    .reqrsp_rsp_o       ( l2_group_rsp                  ),
+    .axi_req_o          ( l2_mux_slv_req[0]             ),
+    .axi_rsp_i          ( l2_mux_slv_rsp[0]             )
+  );
+
+  // ICache/peripheral AXI from group (mux slave [1])
+  // Scramble DRAM addresses so they match the refill path's scrambled layout.
+  // Peripheral/bootrom addresses are left unscrambled — the top 2 address bits
+  // are preserved by scrambleAddr, so scrambled DRAM (10xx) never overlaps
+  // with peripheral (11xx) or low (00xx) ranges.
+  always_comb begin
+    l2_mux_slv_req[1] = l2_group_axi_req;
+    if (l2_group_axi_req.ar.addr >= DramAddr &&
+        l2_group_axi_req.ar.addr <  DramAddr + DramSize)
+      l2_mux_slv_req[1].ar.addr = scrambleAddr(l2_group_axi_req.ar.addr);
+    if (l2_group_axi_req.aw.addr >= DramAddr &&
+        l2_group_axi_req.aw.addr <  DramAddr + DramSize)
+      l2_mux_slv_req[1].aw.addr = scrambleAddr(l2_group_axi_req.aw.addr);
+  end
+  assign l2_group_axi_rsp = l2_mux_slv_rsp[1];
+
+  // 2:1 AXI mux: merges refill and ICache/peripheral streams before chimney
+  axi_mux #(
+    .SlvAxiIDWidth ( AxiIdWidthOut                                        ),
+    .slv_aw_chan_t ( l2_axi_mux_slv_aw_chan_t                             ),
+    .mst_aw_chan_t ( floo_cachepool_noc_pkg::axi_wide_in_aw_chan_t        ),
+    .w_chan_t      ( l2_axi_mux_slv_w_chan_t                              ),
+    .slv_b_chan_t  ( l2_axi_mux_slv_b_chan_t                              ),
+    .mst_b_chan_t  ( floo_cachepool_noc_pkg::axi_wide_in_b_chan_t         ),
+    .slv_ar_chan_t ( l2_axi_mux_slv_ar_chan_t                             ),
+    .mst_ar_chan_t ( floo_cachepool_noc_pkg::axi_wide_in_ar_chan_t        ),
+    .slv_r_chan_t  ( l2_axi_mux_slv_r_chan_t                              ),
+    .mst_r_chan_t  ( floo_cachepool_noc_pkg::axi_wide_in_r_chan_t         ),
+    .slv_req_t     ( l2_axi_mux_slv_req_t                                 ),
+    .slv_resp_t    ( l2_axi_mux_slv_resp_t                                ),
+    .mst_req_t     ( floo_cachepool_noc_pkg::axi_wide_in_req_t            ),
+    .mst_resp_t    ( floo_cachepool_noc_pkg::axi_wide_in_rsp_t            ),
+    .NoSlvPorts    ( 2                                                    ),
+    .MaxWTrans     ( 4                                                    )
+  ) i_l2_axi_mux (
+    .clk_i       ( clk_i              ),
+    .rst_ni      ( rst_ni             ),
+    .test_i      ( 1'b0               ),
+    .slv_reqs_i  ( l2_mux_slv_req     ),
+    .slv_resps_o ( l2_mux_slv_rsp     ),
+    .mst_req_o   ( l2_chimney_axi_req ),
+    .mst_resp_i  ( l2_chimney_axi_rsp )
+  );
+
+
+  // Manager-only chimney: injects merged L2 traffic into mesh
+  floo_axi_chimney #(
+    .AxiCfg       ( floo_cachepool_noc_pkg::AxiCfg                        ),
+    .ChimneyCfg   ( floo_pkg::set_ports(floo_pkg::ChimneyDefaultCfg,
+                      1'b0, 1'b1)                                         ),
+    .RouteCfg     ( floo_cachepool_noc_pkg::RouteCfg                      ),
+    .AtopSupport  ( 1'b0                                                  ),
+    .MaxAtomicTxns( 0                                                     ),
+    .id_t         ( floo_cachepool_noc_pkg::id_t                          ),
+    .rob_idx_t    ( floo_cachepool_noc_pkg::rob_idx_t                     ),
+    .route_t      ( floo_cachepool_noc_pkg::route_t                       ),
+    .dst_t        ( floo_cachepool_noc_pkg::route_t                       ),
+    .hdr_t        ( floo_cachepool_noc_pkg::hdr_t                         ),
+    .sam_rule_t   ( floo_cachepool_noc_pkg::sam_rule_t                    ),
+    .Sam          ( floo_cachepool_noc_pkg::Sam                           ),
+    .axi_in_req_t ( floo_cachepool_noc_pkg::axi_wide_in_req_t             ),
+    .axi_in_rsp_t ( floo_cachepool_noc_pkg::axi_wide_in_rsp_t             ),
+    .axi_out_req_t( floo_cachepool_noc_pkg::axi_wide_out_req_t            ),
+    .axi_out_rsp_t( floo_cachepool_noc_pkg::axi_wide_out_rsp_t            ),
+    .floo_req_t   ( floo_cachepool_noc_pkg::floo_req_t                    ),
+    .floo_rsp_t   ( floo_cachepool_noc_pkg::floo_rsp_t                    )
+  ) i_l2_chimney (
+    .clk_i          ( clk_i                                               ),
+    .rst_ni         ( rst_ni                                              ),
+    .test_enable_i  ( 1'b0                                                ),
+    .sram_cfg_i     ( '0                                                  ),
+    .axi_in_req_i   ( l2_chimney_axi_req                                  ),
+    .axi_in_rsp_o   ( l2_chimney_axi_rsp                                  ),
+    .axi_out_req_o  (                                                     ),
+    .axi_out_rsp_i  ( '0                                                  ),
+    .id_i           ( l2_floo_id_i                                        ),
+    .route_table_i  ( l2_floo_route_table_i                               ),
+    // Chimney connects to router Eject port
+    .floo_req_o     ( l2_router_req_in [floo_pkg::Eject]                  ),
+    .floo_rsp_o     ( l2_router_rsp_in [floo_pkg::Eject]                  ),
+    .floo_req_i     ( l2_router_req_out[floo_pkg::Eject]                  ),
+    .floo_rsp_i     ( l2_router_rsp_out[floo_pkg::Eject]                  )
+  );
+
+  // L2 refill mesh router (source-routing, 5 ports: N/E/S/W/Eject)
+  floo_axi_router #(
+    .AxiCfg       ( floo_cachepool_noc_pkg::AxiCfg                        ),
+    .RouteAlgo    ( floo_cachepool_noc_pkg::RouteCfg.RouteAlgo            ),
+    .NumRoutes    ( 5                                                     ),
+    .InFifoDepth  ( 2                                                     ),
+    .OutFifoDepth ( 2                                                     ),
+    .id_t         ( floo_cachepool_noc_pkg::id_t                          ),
+    .hdr_t        ( floo_cachepool_noc_pkg::hdr_t                         ),
+    .floo_req_t   ( floo_cachepool_noc_pkg::floo_req_t                    ),
+    .floo_rsp_t   ( floo_cachepool_noc_pkg::floo_rsp_t                    )
+  ) i_l2_router (
+    .clk_i          ( clk_i                                               ),
+    .rst_ni         ( rst_ni                                              ),
+    .test_enable_i  ( 1'b0                                                ),
+    .id_i           ( '0                                                  ),
+    .id_route_map_i ( '0                                                  ),
+    .floo_req_i     ( l2_router_req_in                                    ),
+    .floo_rsp_i     ( l2_router_rsp_in                                    ),
+    .floo_req_o     ( l2_router_req_out                                   ),
+    .floo_rsp_o     ( l2_router_rsp_out                                   )
+  );
+
+  // Expose [West:North] router ports to cluster for mesh wiring
+  assign l2_floo_req_o = l2_router_req_out[floo_pkg::West:floo_pkg::North];
+  assign l2_floo_rsp_o = l2_router_rsp_out[floo_pkg::West:floo_pkg::North];
+  assign l2_router_req_in[floo_pkg::West:floo_pkg::North] = l2_floo_req_i;
+  assign l2_router_rsp_in[floo_pkg::West:floo_pkg::North] = l2_floo_rsp_i;
+
+  // -------------------------------------------------------------------------
   // Group instantiation
   // -------------------------------------------------------------------------
   cachepool_group #(
@@ -549,10 +739,10 @@ module cachepool_group_noc_wrapper
     .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
     .axi_in_req_t             ( axi_in_req_t             ),
     .axi_in_resp_t            ( axi_in_resp_t            ),
-    .axi_narrow_req_t         ( axi_narrow_req_t         ),
-    .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
     .axi_out_req_t            ( axi_out_req_t            ),
     .axi_out_resp_t           ( axi_out_resp_t           ),
+    .l2_axi_req_t             ( l2_axi_mux_slv_req_t     ),
+    .l2_axi_rsp_t             ( l2_axi_mux_slv_resp_t    ),
     .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
     .RegisterCoreReq          ( RegisterCoreReq          ),
     .RegisterCoreRsp          ( RegisterCoreRsp          ),
@@ -574,14 +764,16 @@ module cachepool_group_noc_wrapper
     .tile_base_id_i           ( tile_base_id_i           ),
     .cluster_base_addr_i      ( cluster_base_addr_i      ),
     .private_start_addr_i     ( private_start_addr_i     ),
-    .axi_narrow_req_o         ( axi_narrow_req_o         ),
-    .axi_narrow_rsp_i         ( axi_narrow_rsp_i         ),
-    .l2_req_o                 ( l2_req_o                 ),
-    .l2_rsp_i                 ( l2_rsp_i                 ),
+    .l2_req_o                 ( l2_group_req              ),
+    .l2_rsp_i                 ( l2_group_rsp              ),
+    .l2_axi_req_o             ( l2_group_axi_req          ),
+    .l2_axi_rsp_i             ( l2_group_axi_rsp          ),
     .remote_group_req_o       ( remote_group_req_from_group ),
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
     .remote_group_rsp_o       ( remote_group_rsp_from_group ),
+    .tile_barrier_o           ( tile_barrier_o             ),
+    .barrier_done_i           ( barrier_done_i             ),
     .icache_events_o          ( icache_events_o           ),
     .icache_prefetch_enable_i ( icache_prefetch_enable_i  ),
     .cl_interrupt_i           ( cl_interrupt_i            ),
