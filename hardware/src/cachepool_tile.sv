@@ -551,6 +551,12 @@ module cachepool_tile
   // cache_amo_* are therefore unused in the collapsed path.
   // tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
   // tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
+  // Phase 2: spatz_cache_amo is re-instantiated per L2 controller (cb) on the single
+  // cacheline port, between the flush-gated xbar output (cache_ctrl_req) and the bank
+  // spill register. The private L1 forwards AMOs downstream (uncacheable); this unit
+  // does the real bank-side RMW. cache_amo_* carry the unit's mem side to the bank.
+  tcdm_cacheline_req_t [NumL1CtrlTile-1:0] cache_amo_req;
+  tcdm_cacheline_rsp_t [NumL1CtrlTile-1:0] cache_amo_rsp;
 
   // ---- Private L1 (LP1) -> shared L1/L2 downstream (cacheline-wide) ----
   // One private L1 per core; its single mem-side downstream feeds the collapsed
@@ -679,9 +685,10 @@ module cachepool_tile
   // transpose). cache_xbar_pready is the interco mem-side resp-ready: one per L2
   // controller now. cache_amo_pready unused in the collapsed (AMO-in-L1) path.
   // logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
-  // logic  [NumL1CtrlTile-1:0] cache_amo_pready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready;
   logic  [NumL1CtrlTile-1:0] cache_xbar_pready;
+  // Phase 2: mem-side resp-ready of the per-cb spatz_cache_amo toward the bank spill.
+  logic  [NumL1CtrlTile-1:0] cache_amo_pready;
 
   // ----------------------------------------------------------------------------
   // [LP1] Old core<->interco bridge, replaced by the per-core private L1.
@@ -1331,10 +1338,34 @@ module cachepool_tile
     */
 
     // [LP1] Single cacheline port per L2 controller. A spill register cuts the
-    // interco -> bank critical path (matching the old timing budget). AMOs are
-    // serviced upstream in the private L1, so spatz_cache_amo is bypassed here.
+    // interco -> bank critical path (matching the old timing budget).
+    // Phase 2: spatz_cache_amo is re-instantiated here (one per cb) on the cacheline
+    // port. It serializes every access to this controller (the system-wide atomicity
+    // point) and performs the RMW for AMOs the private L1 forwarded uncacheable. Its
+    // mem side (cache_amo_*) drives the bank spill register below; plain loads/stores
+    // pass through it unchanged.
     tcdm_cacheline_req_t cache_req_reg;
     tcdm_cacheline_rsp_t cache_rsp_reg;
+
+    spatz_cache_amo #(
+      .AddrMemWidth     ( L1AddrWidth               ),
+      .DataWidth        ( L1LineWidth               ),
+      .CoreIDWidth      ( CoreIDWidth               ),
+      .tcdm_req_t       ( tcdm_cacheline_req_t      ),
+      .tcdm_rsp_t       ( tcdm_cacheline_rsp_t      ),
+      .tcdm_req_chan_t  ( tcdm_cacheline_req_chan_t ),
+      .tcdm_rsp_chan_t  ( tcdm_cacheline_rsp_chan_t ),
+      .tcdm_user_t      ( tcdm_user_t               )
+    ) i_cache_amo (
+      .clk_i            ( clk_i               ),
+      .rst_ni           ( rst_ni              ),
+      .core_req_i       ( cache_ctrl_req[cb]  ),
+      .core_rsp_ready_i ( cache_xbar_pready[cb]),
+      .core_rsp_o       ( cache_bank_rsp[cb]  ),
+      .mem_req_o        ( cache_amo_req[cb]   ),
+      .mem_rsp_ready_o  ( cache_amo_pready[cb]),
+      .mem_rsp_i        ( cache_amo_rsp[cb]   )
+    );
 
     spill_register #(
       .T      ( tcdm_cacheline_req_chan_t ),
@@ -1342,9 +1373,13 @@ module cachepool_tile
     ) i_spill_reg_cache_req (
       .clk_i                                     ,
       .rst_ni  ( rst_ni                         ),
-      .valid_i ( cache_ctrl_req[cb].q_valid     ),
-      .ready_o ( cache_bank_rsp[cb].q_ready     ),
-      .data_i  ( cache_ctrl_req[cb].q           ),
+      // Phase 2: fed from the AMO unit's mem side instead of the xbar directly.
+      // .valid_i ( cache_ctrl_req[cb].q_valid     ),
+      // .ready_o ( cache_bank_rsp[cb].q_ready     ),
+      // .data_i  ( cache_ctrl_req[cb].q           ),
+      .valid_i ( cache_amo_req[cb].q_valid      ),
+      .ready_o ( cache_amo_rsp[cb].q_ready      ),
+      .data_i  ( cache_amo_req[cb].q            ),
       .valid_o ( cache_req_reg.q_valid          ),
       .ready_i ( cache_rsp_reg.q_ready          ),
       .data_o  ( cache_req_reg.q                )
@@ -1359,9 +1394,13 @@ module cachepool_tile
       .valid_i ( cache_rsp_reg.p_valid       ),
       .ready_o ( cache_rsp_ready  [cb]       ),
       .data_i  ( cache_rsp_reg.p             ),
-      .valid_o ( cache_bank_rsp   [cb].p_valid),
-      .ready_i ( cache_xbar_pready[cb]       ),
-      .data_o  ( cache_bank_rsp   [cb].p     )
+      // Phase 2: bank response returns to the AMO unit's mem side, not the xbar.
+      // .valid_o ( cache_bank_rsp   [cb].p_valid),
+      // .ready_i ( cache_xbar_pready[cb]       ),
+      // .data_o  ( cache_bank_rsp   [cb].p     )
+      .valid_o ( cache_amo_rsp   [cb].p_valid),
+      .ready_i ( cache_amo_pready[cb]        ),
+      .data_o  ( cache_amo_rsp   [cb].p      )
     );
 
     assign cache_req_valid[cb] = cache_req_reg.q_valid;
