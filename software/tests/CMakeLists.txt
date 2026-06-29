@@ -131,6 +131,8 @@ add_spatz_test_zeroParam(lp1_sanity lp1_sanity/main.c)
 add_spatz_test_zeroParam(lp1_private lp1_private/main.c)
 add_spatz_test_zeroParam(lp1_eviction lp1_eviction/main.c)
 
+add_spatz_test_zeroParam(arith_amo arith_amo/main.c)
+
 add_spatz_test_zeroParam(load-store load-store/main.c)
 
 add_spatz_test_zeroParam(bandwidth bandwidth/main.c)
