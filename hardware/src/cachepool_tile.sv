@@ -185,6 +185,10 @@ module cachepool_tile
     input  logic                                          l1d_insn_valid_i,
     output logic                                          l1d_insn_ready_o,
     input  logic                                          l1d_busy_i,
+    // Per-core private-L1 (LP1) CMO injector interface (one slot per core).
+    input  lp1_cmo_req_t      [NumCoresTile-1:0]          lp1_cmo_req_i,
+    input  logic              [NumCoresTile-1:0]          lp1_cmo_valid_i,
+    output logic              [NumCoresTile-1:0]          lp1_cmo_done_o,
 
 
 
@@ -321,7 +325,7 @@ module cachepool_tile
   localparam int unsigned LP1CoalInfoWidth     = LP1ExtPorts + LP1ExtPorts*LP1NrBitsCoalOffset;
   localparam int unsigned LP1ReqIdWidth        = $clog2(NumSpatzOutstandingLoads);
   localparam int unsigned LP1TidWidth          = CoreIDWidth + TileIDWidth + LP1ReqIdWidth + 2 + LP1CoalInfoWidth; // +2: is_fpu, write; tile_id+core_id round-tripped
-  localparam int unsigned LP1NrRequesters      = 2;                               // Snitch + Spatz(coalesced)
+  localparam int unsigned LP1NrRequesters      = 3;                               // Spatz(coalesced) + Snitch + CMO injector
 
   localparam hpdcache_pkg::hpdcache_user_cfg_t HPDcacheUserCfg = '{
       nRequesters:        LP1NrRequesters,
@@ -332,7 +336,7 @@ module cachepool_tile
       clWords:            4,
       reqWords:           1,
       reqTransIdWidth:    LP1TidWidth + LP1NumWordOffsetBits,
-      reqSrcIdWidth:      1,             // selects requester port (0 Spatz / 1 Snitch)
+      reqSrcIdWidth:      $clog2(LP1NrRequesters), // selects requester port (0 Spatz / 1 Snitch / 2 CMO)
       victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_PLRU,
       dataWaysPerRamWord: 1,
       dataSetsPerRam:     32,
@@ -784,6 +788,11 @@ module cachepool_tile
       .clk_i            (clk_i        ),
       .rst_ni           (rst_ni       ),
       .wbuf_flush_i     (1'b0         ),
+
+      // Per-core CMO injector (slot c = this core)
+      .lp1_cmo_req_i    (lp1_cmo_req_i   [c]),
+      .lp1_cmo_valid_i  (lp1_cmo_valid_i [c]),
+      .lp1_cmo_done_o   (lp1_cmo_done_o  [c]),
 
       // Core side (NrTCDMPortsPerCore narrow TCDM ports for this core)
       .core_req_i       (cache_req_transposed [c]),

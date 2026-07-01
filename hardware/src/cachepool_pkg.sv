@@ -432,6 +432,15 @@ package cachepool_pkg;
     logic [NumTiles-1:0] tile_sel;
   } cache_insn_t;
 
+  // Per-core private-L1 (LP1) CMO request, driven by the peripheral to each
+  // core's cachepool_l1_ctrl injector.
+  //   op:   0 = FENCE (write-through WBUF drain), 1 = INVAL_ALL, 2 = INVAL_NLINE
+  //   addr: cacheline address for INVAL_NLINE (ignored for FENCE / INVAL_ALL)
+  typedef struct packed {
+    logic [2:0]  op;
+    logic [31:0] addr;
+  } lp1_cmo_req_t;
+
   typedef struct packed {
     logic                  for_write_pend;
     cache_ways_entry_ptr_t depth;

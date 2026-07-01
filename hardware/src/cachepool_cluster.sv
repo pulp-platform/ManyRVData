@@ -202,6 +202,10 @@ module cachepool_cluster
   logic         [NumTiles-1:0]              l1d_insn_ready;
   logic         [NumTiles-1:0]              l1d_busy;
   logic         [$clog2(NumL1CtrlTile):0]   l1d_private;
+  // Per-core private-L1 (LP1) CMO injector bundle (one slot per core).
+  lp1_cmo_req_t [NumCores-1:0]              lp1_cmo_req;
+  logic         [NumCores-1:0]              lp1_cmo_valid;
+  logic         [NumCores-1:0]              lp1_cmo_done;
 
   // Per-group error signals.
   logic              [NumGroups-1:0]       group_error;
@@ -298,6 +302,9 @@ module cachepool_cluster
         .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
         .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
         .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
+        .lp1_cmo_req_i            ( lp1_cmo_req  [g*NumCoreGroup +: NumCoreGroup]   ),
+        .lp1_cmo_valid_i          ( lp1_cmo_valid[g*NumCoreGroup +: NumCoreGroup]   ),
+        .lp1_cmo_done_o           ( lp1_cmo_done [g*NumCoreGroup +: NumCoreGroup]   ),
         .group_xy_id_i            ( group_xy_id_t'{x:       gx,
                                                    y:       gy,
                                                    port_id: 1'b0}                          ),
@@ -756,9 +763,11 @@ module cachepool_cluster
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
     .NumTiles      (NumTiles        ),
+    .NumCores      (NumCores        ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
-    .cache_insn_t  (cache_insn_t    )
+    .cache_insn_t  (cache_insn_t    ),
+    .lp1_cmo_req_t (lp1_cmo_req_t   )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    (clk_i                 ),
     .rst_ni                   (rst_ni                ),
@@ -778,7 +787,10 @@ module cachepool_cluster
     .l1d_insn_o               (l1d_insn              ),
     .l1d_insn_valid_o         (l1d_insn_valid        ),
     .l1d_insn_ready_i         (l1d_insn_ready        ),
-    .l1d_busy_o               (l1d_busy              )
+    .l1d_busy_o               (l1d_busy              ),
+    .lp1_cmo_req_o            (lp1_cmo_req           ),
+    .lp1_cmo_valid_o          (lp1_cmo_valid         ),
+    .lp1_cmo_done_i           (lp1_cmo_done          )
   );
 
 endmodule

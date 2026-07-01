@@ -23,6 +23,12 @@
 // Coalescer metadata has no package; all coalescer-facing types (tcdm_meta_t,
 // downstream_info_t, word_offset_t, ...) are defined at the tile and passed in
 // as parameters.
+`include "axi/typedef.svh"
+`include "common_cells/assertions.svh"
+`include "common_cells/registers.svh"
+`include "reqrsp_interface/typedef.svh"
+`include "snitch_vm/typedef.svh"
+`include "hpdcache_typedef.svh"
 
 module cachepool_l1_ctrl
   import cachepool_pkg::*;
@@ -80,6 +86,14 @@ module cachepool_l1_ctrl
   input  logic clk_i,
   input  logic rst_ni,
   input  logic wbuf_flush_i,
+
+  //  Per-core CMO injector interface (driven by the cluster peripheral).
+  //  lp1_cmo_valid_i pulses for one cycle to request the CMO in lp1_cmo_req_i;
+  //  lp1_cmo_done_o pulses when the CMO has completed (used to clear the
+  //  peripheral's per-core busy/status bit).  FSM implemented in Task 3.
+  input  lp1_cmo_req_t  lp1_cmo_req_i,
+  input  logic          lp1_cmo_valid_i,
+  output logic          lp1_cmo_done_o,
 
   //  Core-side TCDM interface (Spatz lanes [0..NrLP1CoalInputs-1] + Snitch [last]).
   //  Request handshake : core_req_i.q_valid / core_req_ready_o
@@ -432,6 +446,86 @@ module cachepool_l1_ctrl
 
   assign l1_req_valid[1]            = core_req_i[SnitchPort].q_valid;
   assign cache_req_ready[SnitchPort] = l1_req_ready[1];
+
+  //////////////////////////////////////////
+  // HPDcache requester 2 (CMO injector)    //
+  //////////////////////////////////////////
+  // Converts the peripheral's one-cycle lp1_cmo_valid_i pulse into an HPDcache
+  // CMO on requester port 2, then reports completion via lp1_cmo_done_o (which
+  // clears the peripheral's per-core busy/status bit).  Single outstanding CMO
+  // per core (the peripheral won't issue a new one until done), so no flow
+  // control is needed on the incoming pulse -- it is latched here.
+  //
+  //   IDLE : wait for lp1_cmo_valid_i; decode + latch op/addr.
+  //   REQ  : hold l1_req_valid[2] until l1_req_ready[2] accepts the request.
+  //   RESP : wait for l1_rsp_valid[2]; pulse lp1_cmo_done_o; return to IDLE.
+  //
+  // lp1_cmo_req_i.op encoding (from the peripheral register block):
+  //   0 = FENCE (write-through WBUF drain), 1 = INVAL_ALL, 2 = INVAL_NLINE
+  localparam int unsigned CmoReqId = 2;
+
+  typedef enum logic [1:0] { CMO_IDLE, CMO_REQ, CMO_RESP } cmo_state_e;
+  cmo_state_e       cmo_state_q, cmo_state_d;
+  hpdcache_req_op_t cmo_op_q,    cmo_op_d;
+  logic [31:0]      cmo_addr_q,  cmo_addr_d;
+
+  // Translate the peripheral op code into the HPDcache CMO request op.
+  function automatic hpdcache_req_op_t cmo_decode(input logic [2:0] op);
+    case (op)
+      3'd0:    cmo_decode = HPDCACHE_REQ_CMO_FENCE;
+      3'd1:    cmo_decode = HPDCACHE_REQ_CMO_INVAL_ALL;
+      3'd2:    cmo_decode = HPDCACHE_REQ_CMO_INVAL_NLINE;
+      default: cmo_decode = HPDCACHE_REQ_CMO_FENCE;
+    endcase
+  endfunction
+
+  always_comb begin : gen_l1_req_cmo
+    cmo_state_d    = cmo_state_q;
+    cmo_op_d       = cmo_op_q;
+    cmo_addr_d     = cmo_addr_q;
+    lp1_cmo_done_o = 1'b0;
+
+    // Compose the CMO request (INVAL_NLINE uses addr; FENCE/INVAL_ALL ignore it).
+    l1_req[CmoReqId]                    = '0;
+    l1_req[CmoReqId].op                 = cmo_op_q;
+    l1_req[CmoReqId].addr_offset        = cmo_addr_q[HPDcacheCfg.reqOffsetWidth-1:0];
+    l1_req[CmoReqId].addr_tag           = cmo_addr_q[HPDcacheCfg.reqOffsetWidth +: HPDcacheCfg.tagWidth];
+    l1_req[CmoReqId].sid                = hpdcache_req_sid_t'(CmoReqId);
+    l1_req[CmoReqId].tid                = '0;
+    l1_req[CmoReqId].need_rsp           = 1'b1;   // required: how we learn it completed
+    l1_req[CmoReqId].phys_indexed       = 1'b1;
+    l1_req[CmoReqId].pma.uncacheable    = 1'b0;
+    l1_req[CmoReqId].pma.io             = 1'b0;
+    l1_req[CmoReqId].pma.wr_policy_hint = HPDCACHE_WR_POLICY_WT;
+    l1_req_valid[CmoReqId]              = 1'b0;
+
+    unique case (cmo_state_q)
+      CMO_IDLE: begin
+        if (lp1_cmo_valid_i) begin
+          cmo_op_d    = cmo_decode(lp1_cmo_req_i.op);
+          cmo_addr_d  = lp1_cmo_req_i.addr;
+          cmo_state_d = CMO_REQ;
+        end
+      end
+      CMO_REQ: begin
+        l1_req_valid[CmoReqId] = 1'b1;
+        if (l1_req_ready[CmoReqId]) begin
+          cmo_state_d = CMO_RESP;
+        end
+      end
+      CMO_RESP: begin
+        if (l1_rsp_valid[CmoReqId]) begin
+          lp1_cmo_done_o = 1'b1;
+          cmo_state_d    = CMO_IDLE;
+        end
+      end
+      default: cmo_state_d = CMO_IDLE;
+    endcase
+  end
+
+  `FF(cmo_state_q, cmo_state_d, CMO_IDLE,               clk_i, rst_ni)
+  `FF(cmo_op_q,    cmo_op_d,    HPDCACHE_REQ_CMO_FENCE, clk_i, rst_ni)
+  `FF(cmo_addr_q,  cmo_addr_d,  '0,                     clk_i, rst_ni)
 
   ///////////////////////////////
   // Spatz response scatter     //

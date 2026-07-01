@@ -15,9 +15,12 @@ module cachepool_peripheral
   parameter int unsigned SPMWidth     = 0,
   // Number of tiles (used for flush controller granularity)
   parameter int unsigned NumTiles     = 1,
+  // Number of cores (one per-core LP1 CMO slot).  Must be <= NumLp1CmoRegs.
+  parameter int unsigned NumCores     = 1,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,
+  parameter type lp1_cmo_req_t = logic,
   /// Derived parameter *Do not override*
   parameter type addr_t = logic [AddrWidth-1:0],
   parameter type spm_size_t = logic [SPMWidth-1:0]
@@ -42,7 +45,11 @@ module cachepool_peripheral
   output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
-  output logic [NumTiles-1:0]        l1d_busy_o
+  output logic [NumTiles-1:0]        l1d_busy_o,
+  // Per-core private-L1 (LP1) CMO injector interface (one slot per core).
+  output lp1_cmo_req_t [NumCores-1:0] lp1_cmo_req_o,
+  output logic         [NumCores-1:0] lp1_cmo_valid_o,
+  input  logic         [NumCores-1:0] lp1_cmo_done_i
 );
 
   cachepool_peripheral_reg2hw_t reg2hw;
@@ -182,6 +189,56 @@ module cachepool_peripheral
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
   // assign l1d_busy_o = (l1d_lock_q != '0);
+
+  //////////// Private-L1 (LP1) per-core CMO ////////////
+  // Per-core handshake mirroring the L1D flush path above, but vectorized so
+  // that independent cores running unrelated critical sections issue CMOs
+  // without contending on a shared trigger register.  Per core slot [c]:
+  //   commit[c] & !lock[c] -> pulse valid[c], present op/addr, set lock[c],
+  //                           and self-clear the commit bit
+  //   done[c]              -> clear lock[c]
+  //   status[c]            = lock[c]  (busy while a CMO is in flight)
+  logic [NumLp1CmoRegs-1:0] lp1_cmo_lock_d, lp1_cmo_lock_q;
+
+  always_comb begin : lp1_cmo_cfg
+    lp1_cmo_lock_d = lp1_cmo_lock_q;
+
+    // Default every register-file back-channel low (covers unused upper slots
+    // when NumCores < NumLp1CmoRegs).
+    for (int unsigned i = 0; i < NumLp1CmoRegs; i++) begin
+      hw2reg.lp1_cmo_commit[i].d  = 1'b0;
+      hw2reg.lp1_cmo_commit[i].de = 1'b0;
+      hw2reg.lp1_cmo_status[i].d  = 1'b0;
+    end
+
+    // Default the per-core outputs.
+    lp1_cmo_req_o   = '0;
+    lp1_cmo_valid_o = '0;
+
+    for (int unsigned c = 0; c < NumCores; c++) begin
+      // Present the requested op/addr for this core's injector.
+      lp1_cmo_req_o[c].op   = reg2hw.cfg_lp1_cmo[c].q;
+      lp1_cmo_req_o[c].addr = reg2hw.cfg_lp1_cmo_addr[c].q;
+
+      // Issue when committed and not already in flight.
+      if (reg2hw.lp1_cmo_commit[c].q && !lp1_cmo_lock_q[c]) begin
+        lp1_cmo_valid_o[c]          = 1'b1;
+        lp1_cmo_lock_d[c]           = 1'b1;
+        hw2reg.lp1_cmo_commit[c].d  = 1'b0;   // self-clear the commit
+        hw2reg.lp1_cmo_commit[c].de = 1'b1;
+      end
+
+      // Clear the lock when the injector signals completion.
+      if (lp1_cmo_done_i[c]) begin
+        lp1_cmo_lock_d[c] = 1'b0;
+      end
+
+      // Busy/done status polled by the runtime.
+      hw2reg.lp1_cmo_status[c].d = lp1_cmo_lock_q[c];
+    end
+  end
+
+  `FF(lp1_cmo_lock_q, lp1_cmo_lock_d, '0, clk_i, rst_ni)
 
   // Enable icache prefetch
   assign icache_prefetch_enable_o = reg2hw.icache_prefetch_enable.q;

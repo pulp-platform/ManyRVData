@@ -10,7 +10,7 @@
 module cachepool_peripheral_reg_top #(
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
-  parameter int AW = 7
+  parameter int AW = 11
 ) (
   input logic clk_i,
   input logic rst_ni,
@@ -115,6 +115,710 @@ module cachepool_peripheral_reg_top #(
   logic xbar_offset_commit_qs;
   logic xbar_offset_commit_wd;
   logic xbar_offset_commit_we;
+  logic [2:0] cfg_lp1_cmo_0_qs;
+  logic [2:0] cfg_lp1_cmo_0_wd;
+  logic cfg_lp1_cmo_0_we;
+  logic [2:0] cfg_lp1_cmo_1_qs;
+  logic [2:0] cfg_lp1_cmo_1_wd;
+  logic cfg_lp1_cmo_1_we;
+  logic [2:0] cfg_lp1_cmo_2_qs;
+  logic [2:0] cfg_lp1_cmo_2_wd;
+  logic cfg_lp1_cmo_2_we;
+  logic [2:0] cfg_lp1_cmo_3_qs;
+  logic [2:0] cfg_lp1_cmo_3_wd;
+  logic cfg_lp1_cmo_3_we;
+  logic [2:0] cfg_lp1_cmo_4_qs;
+  logic [2:0] cfg_lp1_cmo_4_wd;
+  logic cfg_lp1_cmo_4_we;
+  logic [2:0] cfg_lp1_cmo_5_qs;
+  logic [2:0] cfg_lp1_cmo_5_wd;
+  logic cfg_lp1_cmo_5_we;
+  logic [2:0] cfg_lp1_cmo_6_qs;
+  logic [2:0] cfg_lp1_cmo_6_wd;
+  logic cfg_lp1_cmo_6_we;
+  logic [2:0] cfg_lp1_cmo_7_qs;
+  logic [2:0] cfg_lp1_cmo_7_wd;
+  logic cfg_lp1_cmo_7_we;
+  logic [2:0] cfg_lp1_cmo_8_qs;
+  logic [2:0] cfg_lp1_cmo_8_wd;
+  logic cfg_lp1_cmo_8_we;
+  logic [2:0] cfg_lp1_cmo_9_qs;
+  logic [2:0] cfg_lp1_cmo_9_wd;
+  logic cfg_lp1_cmo_9_we;
+  logic [2:0] cfg_lp1_cmo_10_qs;
+  logic [2:0] cfg_lp1_cmo_10_wd;
+  logic cfg_lp1_cmo_10_we;
+  logic [2:0] cfg_lp1_cmo_11_qs;
+  logic [2:0] cfg_lp1_cmo_11_wd;
+  logic cfg_lp1_cmo_11_we;
+  logic [2:0] cfg_lp1_cmo_12_qs;
+  logic [2:0] cfg_lp1_cmo_12_wd;
+  logic cfg_lp1_cmo_12_we;
+  logic [2:0] cfg_lp1_cmo_13_qs;
+  logic [2:0] cfg_lp1_cmo_13_wd;
+  logic cfg_lp1_cmo_13_we;
+  logic [2:0] cfg_lp1_cmo_14_qs;
+  logic [2:0] cfg_lp1_cmo_14_wd;
+  logic cfg_lp1_cmo_14_we;
+  logic [2:0] cfg_lp1_cmo_15_qs;
+  logic [2:0] cfg_lp1_cmo_15_wd;
+  logic cfg_lp1_cmo_15_we;
+  logic [2:0] cfg_lp1_cmo_16_qs;
+  logic [2:0] cfg_lp1_cmo_16_wd;
+  logic cfg_lp1_cmo_16_we;
+  logic [2:0] cfg_lp1_cmo_17_qs;
+  logic [2:0] cfg_lp1_cmo_17_wd;
+  logic cfg_lp1_cmo_17_we;
+  logic [2:0] cfg_lp1_cmo_18_qs;
+  logic [2:0] cfg_lp1_cmo_18_wd;
+  logic cfg_lp1_cmo_18_we;
+  logic [2:0] cfg_lp1_cmo_19_qs;
+  logic [2:0] cfg_lp1_cmo_19_wd;
+  logic cfg_lp1_cmo_19_we;
+  logic [2:0] cfg_lp1_cmo_20_qs;
+  logic [2:0] cfg_lp1_cmo_20_wd;
+  logic cfg_lp1_cmo_20_we;
+  logic [2:0] cfg_lp1_cmo_21_qs;
+  logic [2:0] cfg_lp1_cmo_21_wd;
+  logic cfg_lp1_cmo_21_we;
+  logic [2:0] cfg_lp1_cmo_22_qs;
+  logic [2:0] cfg_lp1_cmo_22_wd;
+  logic cfg_lp1_cmo_22_we;
+  logic [2:0] cfg_lp1_cmo_23_qs;
+  logic [2:0] cfg_lp1_cmo_23_wd;
+  logic cfg_lp1_cmo_23_we;
+  logic [2:0] cfg_lp1_cmo_24_qs;
+  logic [2:0] cfg_lp1_cmo_24_wd;
+  logic cfg_lp1_cmo_24_we;
+  logic [2:0] cfg_lp1_cmo_25_qs;
+  logic [2:0] cfg_lp1_cmo_25_wd;
+  logic cfg_lp1_cmo_25_we;
+  logic [2:0] cfg_lp1_cmo_26_qs;
+  logic [2:0] cfg_lp1_cmo_26_wd;
+  logic cfg_lp1_cmo_26_we;
+  logic [2:0] cfg_lp1_cmo_27_qs;
+  logic [2:0] cfg_lp1_cmo_27_wd;
+  logic cfg_lp1_cmo_27_we;
+  logic [2:0] cfg_lp1_cmo_28_qs;
+  logic [2:0] cfg_lp1_cmo_28_wd;
+  logic cfg_lp1_cmo_28_we;
+  logic [2:0] cfg_lp1_cmo_29_qs;
+  logic [2:0] cfg_lp1_cmo_29_wd;
+  logic cfg_lp1_cmo_29_we;
+  logic [2:0] cfg_lp1_cmo_30_qs;
+  logic [2:0] cfg_lp1_cmo_30_wd;
+  logic cfg_lp1_cmo_30_we;
+  logic [2:0] cfg_lp1_cmo_31_qs;
+  logic [2:0] cfg_lp1_cmo_31_wd;
+  logic cfg_lp1_cmo_31_we;
+  logic [2:0] cfg_lp1_cmo_32_qs;
+  logic [2:0] cfg_lp1_cmo_32_wd;
+  logic cfg_lp1_cmo_32_we;
+  logic [2:0] cfg_lp1_cmo_33_qs;
+  logic [2:0] cfg_lp1_cmo_33_wd;
+  logic cfg_lp1_cmo_33_we;
+  logic [2:0] cfg_lp1_cmo_34_qs;
+  logic [2:0] cfg_lp1_cmo_34_wd;
+  logic cfg_lp1_cmo_34_we;
+  logic [2:0] cfg_lp1_cmo_35_qs;
+  logic [2:0] cfg_lp1_cmo_35_wd;
+  logic cfg_lp1_cmo_35_we;
+  logic [2:0] cfg_lp1_cmo_36_qs;
+  logic [2:0] cfg_lp1_cmo_36_wd;
+  logic cfg_lp1_cmo_36_we;
+  logic [2:0] cfg_lp1_cmo_37_qs;
+  logic [2:0] cfg_lp1_cmo_37_wd;
+  logic cfg_lp1_cmo_37_we;
+  logic [2:0] cfg_lp1_cmo_38_qs;
+  logic [2:0] cfg_lp1_cmo_38_wd;
+  logic cfg_lp1_cmo_38_we;
+  logic [2:0] cfg_lp1_cmo_39_qs;
+  logic [2:0] cfg_lp1_cmo_39_wd;
+  logic cfg_lp1_cmo_39_we;
+  logic [2:0] cfg_lp1_cmo_40_qs;
+  logic [2:0] cfg_lp1_cmo_40_wd;
+  logic cfg_lp1_cmo_40_we;
+  logic [2:0] cfg_lp1_cmo_41_qs;
+  logic [2:0] cfg_lp1_cmo_41_wd;
+  logic cfg_lp1_cmo_41_we;
+  logic [2:0] cfg_lp1_cmo_42_qs;
+  logic [2:0] cfg_lp1_cmo_42_wd;
+  logic cfg_lp1_cmo_42_we;
+  logic [2:0] cfg_lp1_cmo_43_qs;
+  logic [2:0] cfg_lp1_cmo_43_wd;
+  logic cfg_lp1_cmo_43_we;
+  logic [2:0] cfg_lp1_cmo_44_qs;
+  logic [2:0] cfg_lp1_cmo_44_wd;
+  logic cfg_lp1_cmo_44_we;
+  logic [2:0] cfg_lp1_cmo_45_qs;
+  logic [2:0] cfg_lp1_cmo_45_wd;
+  logic cfg_lp1_cmo_45_we;
+  logic [2:0] cfg_lp1_cmo_46_qs;
+  logic [2:0] cfg_lp1_cmo_46_wd;
+  logic cfg_lp1_cmo_46_we;
+  logic [2:0] cfg_lp1_cmo_47_qs;
+  logic [2:0] cfg_lp1_cmo_47_wd;
+  logic cfg_lp1_cmo_47_we;
+  logic [2:0] cfg_lp1_cmo_48_qs;
+  logic [2:0] cfg_lp1_cmo_48_wd;
+  logic cfg_lp1_cmo_48_we;
+  logic [2:0] cfg_lp1_cmo_49_qs;
+  logic [2:0] cfg_lp1_cmo_49_wd;
+  logic cfg_lp1_cmo_49_we;
+  logic [2:0] cfg_lp1_cmo_50_qs;
+  logic [2:0] cfg_lp1_cmo_50_wd;
+  logic cfg_lp1_cmo_50_we;
+  logic [2:0] cfg_lp1_cmo_51_qs;
+  logic [2:0] cfg_lp1_cmo_51_wd;
+  logic cfg_lp1_cmo_51_we;
+  logic [2:0] cfg_lp1_cmo_52_qs;
+  logic [2:0] cfg_lp1_cmo_52_wd;
+  logic cfg_lp1_cmo_52_we;
+  logic [2:0] cfg_lp1_cmo_53_qs;
+  logic [2:0] cfg_lp1_cmo_53_wd;
+  logic cfg_lp1_cmo_53_we;
+  logic [2:0] cfg_lp1_cmo_54_qs;
+  logic [2:0] cfg_lp1_cmo_54_wd;
+  logic cfg_lp1_cmo_54_we;
+  logic [2:0] cfg_lp1_cmo_55_qs;
+  logic [2:0] cfg_lp1_cmo_55_wd;
+  logic cfg_lp1_cmo_55_we;
+  logic [2:0] cfg_lp1_cmo_56_qs;
+  logic [2:0] cfg_lp1_cmo_56_wd;
+  logic cfg_lp1_cmo_56_we;
+  logic [2:0] cfg_lp1_cmo_57_qs;
+  logic [2:0] cfg_lp1_cmo_57_wd;
+  logic cfg_lp1_cmo_57_we;
+  logic [2:0] cfg_lp1_cmo_58_qs;
+  logic [2:0] cfg_lp1_cmo_58_wd;
+  logic cfg_lp1_cmo_58_we;
+  logic [2:0] cfg_lp1_cmo_59_qs;
+  logic [2:0] cfg_lp1_cmo_59_wd;
+  logic cfg_lp1_cmo_59_we;
+  logic [2:0] cfg_lp1_cmo_60_qs;
+  logic [2:0] cfg_lp1_cmo_60_wd;
+  logic cfg_lp1_cmo_60_we;
+  logic [2:0] cfg_lp1_cmo_61_qs;
+  logic [2:0] cfg_lp1_cmo_61_wd;
+  logic cfg_lp1_cmo_61_we;
+  logic [2:0] cfg_lp1_cmo_62_qs;
+  logic [2:0] cfg_lp1_cmo_62_wd;
+  logic cfg_lp1_cmo_62_we;
+  logic [2:0] cfg_lp1_cmo_63_qs;
+  logic [2:0] cfg_lp1_cmo_63_wd;
+  logic cfg_lp1_cmo_63_we;
+  logic [31:0] cfg_lp1_cmo_addr_0_qs;
+  logic [31:0] cfg_lp1_cmo_addr_0_wd;
+  logic cfg_lp1_cmo_addr_0_we;
+  logic [31:0] cfg_lp1_cmo_addr_1_qs;
+  logic [31:0] cfg_lp1_cmo_addr_1_wd;
+  logic cfg_lp1_cmo_addr_1_we;
+  logic [31:0] cfg_lp1_cmo_addr_2_qs;
+  logic [31:0] cfg_lp1_cmo_addr_2_wd;
+  logic cfg_lp1_cmo_addr_2_we;
+  logic [31:0] cfg_lp1_cmo_addr_3_qs;
+  logic [31:0] cfg_lp1_cmo_addr_3_wd;
+  logic cfg_lp1_cmo_addr_3_we;
+  logic [31:0] cfg_lp1_cmo_addr_4_qs;
+  logic [31:0] cfg_lp1_cmo_addr_4_wd;
+  logic cfg_lp1_cmo_addr_4_we;
+  logic [31:0] cfg_lp1_cmo_addr_5_qs;
+  logic [31:0] cfg_lp1_cmo_addr_5_wd;
+  logic cfg_lp1_cmo_addr_5_we;
+  logic [31:0] cfg_lp1_cmo_addr_6_qs;
+  logic [31:0] cfg_lp1_cmo_addr_6_wd;
+  logic cfg_lp1_cmo_addr_6_we;
+  logic [31:0] cfg_lp1_cmo_addr_7_qs;
+  logic [31:0] cfg_lp1_cmo_addr_7_wd;
+  logic cfg_lp1_cmo_addr_7_we;
+  logic [31:0] cfg_lp1_cmo_addr_8_qs;
+  logic [31:0] cfg_lp1_cmo_addr_8_wd;
+  logic cfg_lp1_cmo_addr_8_we;
+  logic [31:0] cfg_lp1_cmo_addr_9_qs;
+  logic [31:0] cfg_lp1_cmo_addr_9_wd;
+  logic cfg_lp1_cmo_addr_9_we;
+  logic [31:0] cfg_lp1_cmo_addr_10_qs;
+  logic [31:0] cfg_lp1_cmo_addr_10_wd;
+  logic cfg_lp1_cmo_addr_10_we;
+  logic [31:0] cfg_lp1_cmo_addr_11_qs;
+  logic [31:0] cfg_lp1_cmo_addr_11_wd;
+  logic cfg_lp1_cmo_addr_11_we;
+  logic [31:0] cfg_lp1_cmo_addr_12_qs;
+  logic [31:0] cfg_lp1_cmo_addr_12_wd;
+  logic cfg_lp1_cmo_addr_12_we;
+  logic [31:0] cfg_lp1_cmo_addr_13_qs;
+  logic [31:0] cfg_lp1_cmo_addr_13_wd;
+  logic cfg_lp1_cmo_addr_13_we;
+  logic [31:0] cfg_lp1_cmo_addr_14_qs;
+  logic [31:0] cfg_lp1_cmo_addr_14_wd;
+  logic cfg_lp1_cmo_addr_14_we;
+  logic [31:0] cfg_lp1_cmo_addr_15_qs;
+  logic [31:0] cfg_lp1_cmo_addr_15_wd;
+  logic cfg_lp1_cmo_addr_15_we;
+  logic [31:0] cfg_lp1_cmo_addr_16_qs;
+  logic [31:0] cfg_lp1_cmo_addr_16_wd;
+  logic cfg_lp1_cmo_addr_16_we;
+  logic [31:0] cfg_lp1_cmo_addr_17_qs;
+  logic [31:0] cfg_lp1_cmo_addr_17_wd;
+  logic cfg_lp1_cmo_addr_17_we;
+  logic [31:0] cfg_lp1_cmo_addr_18_qs;
+  logic [31:0] cfg_lp1_cmo_addr_18_wd;
+  logic cfg_lp1_cmo_addr_18_we;
+  logic [31:0] cfg_lp1_cmo_addr_19_qs;
+  logic [31:0] cfg_lp1_cmo_addr_19_wd;
+  logic cfg_lp1_cmo_addr_19_we;
+  logic [31:0] cfg_lp1_cmo_addr_20_qs;
+  logic [31:0] cfg_lp1_cmo_addr_20_wd;
+  logic cfg_lp1_cmo_addr_20_we;
+  logic [31:0] cfg_lp1_cmo_addr_21_qs;
+  logic [31:0] cfg_lp1_cmo_addr_21_wd;
+  logic cfg_lp1_cmo_addr_21_we;
+  logic [31:0] cfg_lp1_cmo_addr_22_qs;
+  logic [31:0] cfg_lp1_cmo_addr_22_wd;
+  logic cfg_lp1_cmo_addr_22_we;
+  logic [31:0] cfg_lp1_cmo_addr_23_qs;
+  logic [31:0] cfg_lp1_cmo_addr_23_wd;
+  logic cfg_lp1_cmo_addr_23_we;
+  logic [31:0] cfg_lp1_cmo_addr_24_qs;
+  logic [31:0] cfg_lp1_cmo_addr_24_wd;
+  logic cfg_lp1_cmo_addr_24_we;
+  logic [31:0] cfg_lp1_cmo_addr_25_qs;
+  logic [31:0] cfg_lp1_cmo_addr_25_wd;
+  logic cfg_lp1_cmo_addr_25_we;
+  logic [31:0] cfg_lp1_cmo_addr_26_qs;
+  logic [31:0] cfg_lp1_cmo_addr_26_wd;
+  logic cfg_lp1_cmo_addr_26_we;
+  logic [31:0] cfg_lp1_cmo_addr_27_qs;
+  logic [31:0] cfg_lp1_cmo_addr_27_wd;
+  logic cfg_lp1_cmo_addr_27_we;
+  logic [31:0] cfg_lp1_cmo_addr_28_qs;
+  logic [31:0] cfg_lp1_cmo_addr_28_wd;
+  logic cfg_lp1_cmo_addr_28_we;
+  logic [31:0] cfg_lp1_cmo_addr_29_qs;
+  logic [31:0] cfg_lp1_cmo_addr_29_wd;
+  logic cfg_lp1_cmo_addr_29_we;
+  logic [31:0] cfg_lp1_cmo_addr_30_qs;
+  logic [31:0] cfg_lp1_cmo_addr_30_wd;
+  logic cfg_lp1_cmo_addr_30_we;
+  logic [31:0] cfg_lp1_cmo_addr_31_qs;
+  logic [31:0] cfg_lp1_cmo_addr_31_wd;
+  logic cfg_lp1_cmo_addr_31_we;
+  logic [31:0] cfg_lp1_cmo_addr_32_qs;
+  logic [31:0] cfg_lp1_cmo_addr_32_wd;
+  logic cfg_lp1_cmo_addr_32_we;
+  logic [31:0] cfg_lp1_cmo_addr_33_qs;
+  logic [31:0] cfg_lp1_cmo_addr_33_wd;
+  logic cfg_lp1_cmo_addr_33_we;
+  logic [31:0] cfg_lp1_cmo_addr_34_qs;
+  logic [31:0] cfg_lp1_cmo_addr_34_wd;
+  logic cfg_lp1_cmo_addr_34_we;
+  logic [31:0] cfg_lp1_cmo_addr_35_qs;
+  logic [31:0] cfg_lp1_cmo_addr_35_wd;
+  logic cfg_lp1_cmo_addr_35_we;
+  logic [31:0] cfg_lp1_cmo_addr_36_qs;
+  logic [31:0] cfg_lp1_cmo_addr_36_wd;
+  logic cfg_lp1_cmo_addr_36_we;
+  logic [31:0] cfg_lp1_cmo_addr_37_qs;
+  logic [31:0] cfg_lp1_cmo_addr_37_wd;
+  logic cfg_lp1_cmo_addr_37_we;
+  logic [31:0] cfg_lp1_cmo_addr_38_qs;
+  logic [31:0] cfg_lp1_cmo_addr_38_wd;
+  logic cfg_lp1_cmo_addr_38_we;
+  logic [31:0] cfg_lp1_cmo_addr_39_qs;
+  logic [31:0] cfg_lp1_cmo_addr_39_wd;
+  logic cfg_lp1_cmo_addr_39_we;
+  logic [31:0] cfg_lp1_cmo_addr_40_qs;
+  logic [31:0] cfg_lp1_cmo_addr_40_wd;
+  logic cfg_lp1_cmo_addr_40_we;
+  logic [31:0] cfg_lp1_cmo_addr_41_qs;
+  logic [31:0] cfg_lp1_cmo_addr_41_wd;
+  logic cfg_lp1_cmo_addr_41_we;
+  logic [31:0] cfg_lp1_cmo_addr_42_qs;
+  logic [31:0] cfg_lp1_cmo_addr_42_wd;
+  logic cfg_lp1_cmo_addr_42_we;
+  logic [31:0] cfg_lp1_cmo_addr_43_qs;
+  logic [31:0] cfg_lp1_cmo_addr_43_wd;
+  logic cfg_lp1_cmo_addr_43_we;
+  logic [31:0] cfg_lp1_cmo_addr_44_qs;
+  logic [31:0] cfg_lp1_cmo_addr_44_wd;
+  logic cfg_lp1_cmo_addr_44_we;
+  logic [31:0] cfg_lp1_cmo_addr_45_qs;
+  logic [31:0] cfg_lp1_cmo_addr_45_wd;
+  logic cfg_lp1_cmo_addr_45_we;
+  logic [31:0] cfg_lp1_cmo_addr_46_qs;
+  logic [31:0] cfg_lp1_cmo_addr_46_wd;
+  logic cfg_lp1_cmo_addr_46_we;
+  logic [31:0] cfg_lp1_cmo_addr_47_qs;
+  logic [31:0] cfg_lp1_cmo_addr_47_wd;
+  logic cfg_lp1_cmo_addr_47_we;
+  logic [31:0] cfg_lp1_cmo_addr_48_qs;
+  logic [31:0] cfg_lp1_cmo_addr_48_wd;
+  logic cfg_lp1_cmo_addr_48_we;
+  logic [31:0] cfg_lp1_cmo_addr_49_qs;
+  logic [31:0] cfg_lp1_cmo_addr_49_wd;
+  logic cfg_lp1_cmo_addr_49_we;
+  logic [31:0] cfg_lp1_cmo_addr_50_qs;
+  logic [31:0] cfg_lp1_cmo_addr_50_wd;
+  logic cfg_lp1_cmo_addr_50_we;
+  logic [31:0] cfg_lp1_cmo_addr_51_qs;
+  logic [31:0] cfg_lp1_cmo_addr_51_wd;
+  logic cfg_lp1_cmo_addr_51_we;
+  logic [31:0] cfg_lp1_cmo_addr_52_qs;
+  logic [31:0] cfg_lp1_cmo_addr_52_wd;
+  logic cfg_lp1_cmo_addr_52_we;
+  logic [31:0] cfg_lp1_cmo_addr_53_qs;
+  logic [31:0] cfg_lp1_cmo_addr_53_wd;
+  logic cfg_lp1_cmo_addr_53_we;
+  logic [31:0] cfg_lp1_cmo_addr_54_qs;
+  logic [31:0] cfg_lp1_cmo_addr_54_wd;
+  logic cfg_lp1_cmo_addr_54_we;
+  logic [31:0] cfg_lp1_cmo_addr_55_qs;
+  logic [31:0] cfg_lp1_cmo_addr_55_wd;
+  logic cfg_lp1_cmo_addr_55_we;
+  logic [31:0] cfg_lp1_cmo_addr_56_qs;
+  logic [31:0] cfg_lp1_cmo_addr_56_wd;
+  logic cfg_lp1_cmo_addr_56_we;
+  logic [31:0] cfg_lp1_cmo_addr_57_qs;
+  logic [31:0] cfg_lp1_cmo_addr_57_wd;
+  logic cfg_lp1_cmo_addr_57_we;
+  logic [31:0] cfg_lp1_cmo_addr_58_qs;
+  logic [31:0] cfg_lp1_cmo_addr_58_wd;
+  logic cfg_lp1_cmo_addr_58_we;
+  logic [31:0] cfg_lp1_cmo_addr_59_qs;
+  logic [31:0] cfg_lp1_cmo_addr_59_wd;
+  logic cfg_lp1_cmo_addr_59_we;
+  logic [31:0] cfg_lp1_cmo_addr_60_qs;
+  logic [31:0] cfg_lp1_cmo_addr_60_wd;
+  logic cfg_lp1_cmo_addr_60_we;
+  logic [31:0] cfg_lp1_cmo_addr_61_qs;
+  logic [31:0] cfg_lp1_cmo_addr_61_wd;
+  logic cfg_lp1_cmo_addr_61_we;
+  logic [31:0] cfg_lp1_cmo_addr_62_qs;
+  logic [31:0] cfg_lp1_cmo_addr_62_wd;
+  logic cfg_lp1_cmo_addr_62_we;
+  logic [31:0] cfg_lp1_cmo_addr_63_qs;
+  logic [31:0] cfg_lp1_cmo_addr_63_wd;
+  logic cfg_lp1_cmo_addr_63_we;
+  logic lp1_cmo_commit_0_qs;
+  logic lp1_cmo_commit_0_wd;
+  logic lp1_cmo_commit_0_we;
+  logic lp1_cmo_commit_1_qs;
+  logic lp1_cmo_commit_1_wd;
+  logic lp1_cmo_commit_1_we;
+  logic lp1_cmo_commit_2_qs;
+  logic lp1_cmo_commit_2_wd;
+  logic lp1_cmo_commit_2_we;
+  logic lp1_cmo_commit_3_qs;
+  logic lp1_cmo_commit_3_wd;
+  logic lp1_cmo_commit_3_we;
+  logic lp1_cmo_commit_4_qs;
+  logic lp1_cmo_commit_4_wd;
+  logic lp1_cmo_commit_4_we;
+  logic lp1_cmo_commit_5_qs;
+  logic lp1_cmo_commit_5_wd;
+  logic lp1_cmo_commit_5_we;
+  logic lp1_cmo_commit_6_qs;
+  logic lp1_cmo_commit_6_wd;
+  logic lp1_cmo_commit_6_we;
+  logic lp1_cmo_commit_7_qs;
+  logic lp1_cmo_commit_7_wd;
+  logic lp1_cmo_commit_7_we;
+  logic lp1_cmo_commit_8_qs;
+  logic lp1_cmo_commit_8_wd;
+  logic lp1_cmo_commit_8_we;
+  logic lp1_cmo_commit_9_qs;
+  logic lp1_cmo_commit_9_wd;
+  logic lp1_cmo_commit_9_we;
+  logic lp1_cmo_commit_10_qs;
+  logic lp1_cmo_commit_10_wd;
+  logic lp1_cmo_commit_10_we;
+  logic lp1_cmo_commit_11_qs;
+  logic lp1_cmo_commit_11_wd;
+  logic lp1_cmo_commit_11_we;
+  logic lp1_cmo_commit_12_qs;
+  logic lp1_cmo_commit_12_wd;
+  logic lp1_cmo_commit_12_we;
+  logic lp1_cmo_commit_13_qs;
+  logic lp1_cmo_commit_13_wd;
+  logic lp1_cmo_commit_13_we;
+  logic lp1_cmo_commit_14_qs;
+  logic lp1_cmo_commit_14_wd;
+  logic lp1_cmo_commit_14_we;
+  logic lp1_cmo_commit_15_qs;
+  logic lp1_cmo_commit_15_wd;
+  logic lp1_cmo_commit_15_we;
+  logic lp1_cmo_commit_16_qs;
+  logic lp1_cmo_commit_16_wd;
+  logic lp1_cmo_commit_16_we;
+  logic lp1_cmo_commit_17_qs;
+  logic lp1_cmo_commit_17_wd;
+  logic lp1_cmo_commit_17_we;
+  logic lp1_cmo_commit_18_qs;
+  logic lp1_cmo_commit_18_wd;
+  logic lp1_cmo_commit_18_we;
+  logic lp1_cmo_commit_19_qs;
+  logic lp1_cmo_commit_19_wd;
+  logic lp1_cmo_commit_19_we;
+  logic lp1_cmo_commit_20_qs;
+  logic lp1_cmo_commit_20_wd;
+  logic lp1_cmo_commit_20_we;
+  logic lp1_cmo_commit_21_qs;
+  logic lp1_cmo_commit_21_wd;
+  logic lp1_cmo_commit_21_we;
+  logic lp1_cmo_commit_22_qs;
+  logic lp1_cmo_commit_22_wd;
+  logic lp1_cmo_commit_22_we;
+  logic lp1_cmo_commit_23_qs;
+  logic lp1_cmo_commit_23_wd;
+  logic lp1_cmo_commit_23_we;
+  logic lp1_cmo_commit_24_qs;
+  logic lp1_cmo_commit_24_wd;
+  logic lp1_cmo_commit_24_we;
+  logic lp1_cmo_commit_25_qs;
+  logic lp1_cmo_commit_25_wd;
+  logic lp1_cmo_commit_25_we;
+  logic lp1_cmo_commit_26_qs;
+  logic lp1_cmo_commit_26_wd;
+  logic lp1_cmo_commit_26_we;
+  logic lp1_cmo_commit_27_qs;
+  logic lp1_cmo_commit_27_wd;
+  logic lp1_cmo_commit_27_we;
+  logic lp1_cmo_commit_28_qs;
+  logic lp1_cmo_commit_28_wd;
+  logic lp1_cmo_commit_28_we;
+  logic lp1_cmo_commit_29_qs;
+  logic lp1_cmo_commit_29_wd;
+  logic lp1_cmo_commit_29_we;
+  logic lp1_cmo_commit_30_qs;
+  logic lp1_cmo_commit_30_wd;
+  logic lp1_cmo_commit_30_we;
+  logic lp1_cmo_commit_31_qs;
+  logic lp1_cmo_commit_31_wd;
+  logic lp1_cmo_commit_31_we;
+  logic lp1_cmo_commit_32_qs;
+  logic lp1_cmo_commit_32_wd;
+  logic lp1_cmo_commit_32_we;
+  logic lp1_cmo_commit_33_qs;
+  logic lp1_cmo_commit_33_wd;
+  logic lp1_cmo_commit_33_we;
+  logic lp1_cmo_commit_34_qs;
+  logic lp1_cmo_commit_34_wd;
+  logic lp1_cmo_commit_34_we;
+  logic lp1_cmo_commit_35_qs;
+  logic lp1_cmo_commit_35_wd;
+  logic lp1_cmo_commit_35_we;
+  logic lp1_cmo_commit_36_qs;
+  logic lp1_cmo_commit_36_wd;
+  logic lp1_cmo_commit_36_we;
+  logic lp1_cmo_commit_37_qs;
+  logic lp1_cmo_commit_37_wd;
+  logic lp1_cmo_commit_37_we;
+  logic lp1_cmo_commit_38_qs;
+  logic lp1_cmo_commit_38_wd;
+  logic lp1_cmo_commit_38_we;
+  logic lp1_cmo_commit_39_qs;
+  logic lp1_cmo_commit_39_wd;
+  logic lp1_cmo_commit_39_we;
+  logic lp1_cmo_commit_40_qs;
+  logic lp1_cmo_commit_40_wd;
+  logic lp1_cmo_commit_40_we;
+  logic lp1_cmo_commit_41_qs;
+  logic lp1_cmo_commit_41_wd;
+  logic lp1_cmo_commit_41_we;
+  logic lp1_cmo_commit_42_qs;
+  logic lp1_cmo_commit_42_wd;
+  logic lp1_cmo_commit_42_we;
+  logic lp1_cmo_commit_43_qs;
+  logic lp1_cmo_commit_43_wd;
+  logic lp1_cmo_commit_43_we;
+  logic lp1_cmo_commit_44_qs;
+  logic lp1_cmo_commit_44_wd;
+  logic lp1_cmo_commit_44_we;
+  logic lp1_cmo_commit_45_qs;
+  logic lp1_cmo_commit_45_wd;
+  logic lp1_cmo_commit_45_we;
+  logic lp1_cmo_commit_46_qs;
+  logic lp1_cmo_commit_46_wd;
+  logic lp1_cmo_commit_46_we;
+  logic lp1_cmo_commit_47_qs;
+  logic lp1_cmo_commit_47_wd;
+  logic lp1_cmo_commit_47_we;
+  logic lp1_cmo_commit_48_qs;
+  logic lp1_cmo_commit_48_wd;
+  logic lp1_cmo_commit_48_we;
+  logic lp1_cmo_commit_49_qs;
+  logic lp1_cmo_commit_49_wd;
+  logic lp1_cmo_commit_49_we;
+  logic lp1_cmo_commit_50_qs;
+  logic lp1_cmo_commit_50_wd;
+  logic lp1_cmo_commit_50_we;
+  logic lp1_cmo_commit_51_qs;
+  logic lp1_cmo_commit_51_wd;
+  logic lp1_cmo_commit_51_we;
+  logic lp1_cmo_commit_52_qs;
+  logic lp1_cmo_commit_52_wd;
+  logic lp1_cmo_commit_52_we;
+  logic lp1_cmo_commit_53_qs;
+  logic lp1_cmo_commit_53_wd;
+  logic lp1_cmo_commit_53_we;
+  logic lp1_cmo_commit_54_qs;
+  logic lp1_cmo_commit_54_wd;
+  logic lp1_cmo_commit_54_we;
+  logic lp1_cmo_commit_55_qs;
+  logic lp1_cmo_commit_55_wd;
+  logic lp1_cmo_commit_55_we;
+  logic lp1_cmo_commit_56_qs;
+  logic lp1_cmo_commit_56_wd;
+  logic lp1_cmo_commit_56_we;
+  logic lp1_cmo_commit_57_qs;
+  logic lp1_cmo_commit_57_wd;
+  logic lp1_cmo_commit_57_we;
+  logic lp1_cmo_commit_58_qs;
+  logic lp1_cmo_commit_58_wd;
+  logic lp1_cmo_commit_58_we;
+  logic lp1_cmo_commit_59_qs;
+  logic lp1_cmo_commit_59_wd;
+  logic lp1_cmo_commit_59_we;
+  logic lp1_cmo_commit_60_qs;
+  logic lp1_cmo_commit_60_wd;
+  logic lp1_cmo_commit_60_we;
+  logic lp1_cmo_commit_61_qs;
+  logic lp1_cmo_commit_61_wd;
+  logic lp1_cmo_commit_61_we;
+  logic lp1_cmo_commit_62_qs;
+  logic lp1_cmo_commit_62_wd;
+  logic lp1_cmo_commit_62_we;
+  logic lp1_cmo_commit_63_qs;
+  logic lp1_cmo_commit_63_wd;
+  logic lp1_cmo_commit_63_we;
+  logic lp1_cmo_status_0_qs;
+  logic lp1_cmo_status_0_re;
+  logic lp1_cmo_status_1_qs;
+  logic lp1_cmo_status_1_re;
+  logic lp1_cmo_status_2_qs;
+  logic lp1_cmo_status_2_re;
+  logic lp1_cmo_status_3_qs;
+  logic lp1_cmo_status_3_re;
+  logic lp1_cmo_status_4_qs;
+  logic lp1_cmo_status_4_re;
+  logic lp1_cmo_status_5_qs;
+  logic lp1_cmo_status_5_re;
+  logic lp1_cmo_status_6_qs;
+  logic lp1_cmo_status_6_re;
+  logic lp1_cmo_status_7_qs;
+  logic lp1_cmo_status_7_re;
+  logic lp1_cmo_status_8_qs;
+  logic lp1_cmo_status_8_re;
+  logic lp1_cmo_status_9_qs;
+  logic lp1_cmo_status_9_re;
+  logic lp1_cmo_status_10_qs;
+  logic lp1_cmo_status_10_re;
+  logic lp1_cmo_status_11_qs;
+  logic lp1_cmo_status_11_re;
+  logic lp1_cmo_status_12_qs;
+  logic lp1_cmo_status_12_re;
+  logic lp1_cmo_status_13_qs;
+  logic lp1_cmo_status_13_re;
+  logic lp1_cmo_status_14_qs;
+  logic lp1_cmo_status_14_re;
+  logic lp1_cmo_status_15_qs;
+  logic lp1_cmo_status_15_re;
+  logic lp1_cmo_status_16_qs;
+  logic lp1_cmo_status_16_re;
+  logic lp1_cmo_status_17_qs;
+  logic lp1_cmo_status_17_re;
+  logic lp1_cmo_status_18_qs;
+  logic lp1_cmo_status_18_re;
+  logic lp1_cmo_status_19_qs;
+  logic lp1_cmo_status_19_re;
+  logic lp1_cmo_status_20_qs;
+  logic lp1_cmo_status_20_re;
+  logic lp1_cmo_status_21_qs;
+  logic lp1_cmo_status_21_re;
+  logic lp1_cmo_status_22_qs;
+  logic lp1_cmo_status_22_re;
+  logic lp1_cmo_status_23_qs;
+  logic lp1_cmo_status_23_re;
+  logic lp1_cmo_status_24_qs;
+  logic lp1_cmo_status_24_re;
+  logic lp1_cmo_status_25_qs;
+  logic lp1_cmo_status_25_re;
+  logic lp1_cmo_status_26_qs;
+  logic lp1_cmo_status_26_re;
+  logic lp1_cmo_status_27_qs;
+  logic lp1_cmo_status_27_re;
+  logic lp1_cmo_status_28_qs;
+  logic lp1_cmo_status_28_re;
+  logic lp1_cmo_status_29_qs;
+  logic lp1_cmo_status_29_re;
+  logic lp1_cmo_status_30_qs;
+  logic lp1_cmo_status_30_re;
+  logic lp1_cmo_status_31_qs;
+  logic lp1_cmo_status_31_re;
+  logic lp1_cmo_status_32_qs;
+  logic lp1_cmo_status_32_re;
+  logic lp1_cmo_status_33_qs;
+  logic lp1_cmo_status_33_re;
+  logic lp1_cmo_status_34_qs;
+  logic lp1_cmo_status_34_re;
+  logic lp1_cmo_status_35_qs;
+  logic lp1_cmo_status_35_re;
+  logic lp1_cmo_status_36_qs;
+  logic lp1_cmo_status_36_re;
+  logic lp1_cmo_status_37_qs;
+  logic lp1_cmo_status_37_re;
+  logic lp1_cmo_status_38_qs;
+  logic lp1_cmo_status_38_re;
+  logic lp1_cmo_status_39_qs;
+  logic lp1_cmo_status_39_re;
+  logic lp1_cmo_status_40_qs;
+  logic lp1_cmo_status_40_re;
+  logic lp1_cmo_status_41_qs;
+  logic lp1_cmo_status_41_re;
+  logic lp1_cmo_status_42_qs;
+  logic lp1_cmo_status_42_re;
+  logic lp1_cmo_status_43_qs;
+  logic lp1_cmo_status_43_re;
+  logic lp1_cmo_status_44_qs;
+  logic lp1_cmo_status_44_re;
+  logic lp1_cmo_status_45_qs;
+  logic lp1_cmo_status_45_re;
+  logic lp1_cmo_status_46_qs;
+  logic lp1_cmo_status_46_re;
+  logic lp1_cmo_status_47_qs;
+  logic lp1_cmo_status_47_re;
+  logic lp1_cmo_status_48_qs;
+  logic lp1_cmo_status_48_re;
+  logic lp1_cmo_status_49_qs;
+  logic lp1_cmo_status_49_re;
+  logic lp1_cmo_status_50_qs;
+  logic lp1_cmo_status_50_re;
+  logic lp1_cmo_status_51_qs;
+  logic lp1_cmo_status_51_re;
+  logic lp1_cmo_status_52_qs;
+  logic lp1_cmo_status_52_re;
+  logic lp1_cmo_status_53_qs;
+  logic lp1_cmo_status_53_re;
+  logic lp1_cmo_status_54_qs;
+  logic lp1_cmo_status_54_re;
+  logic lp1_cmo_status_55_qs;
+  logic lp1_cmo_status_55_re;
+  logic lp1_cmo_status_56_qs;
+  logic lp1_cmo_status_56_re;
+  logic lp1_cmo_status_57_qs;
+  logic lp1_cmo_status_57_re;
+  logic lp1_cmo_status_58_qs;
+  logic lp1_cmo_status_58_re;
+  logic lp1_cmo_status_59_qs;
+  logic lp1_cmo_status_59_re;
+  logic lp1_cmo_status_60_qs;
+  logic lp1_cmo_status_60_re;
+  logic lp1_cmo_status_61_qs;
+  logic lp1_cmo_status_61_re;
+  logic lp1_cmo_status_62_qs;
+  logic lp1_cmo_status_62_re;
+  logic lp1_cmo_status_63_qs;
+  logic lp1_cmo_status_63_re;
 
   // Register instances
   // R[hw_barrier]: V(True)
@@ -555,27 +1259,6499 @@ module cachepool_peripheral_reg_top #(
 
 
 
+  // Subregister 0 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_0]: V(False)
 
-  logic [16:0] addr_hit;
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_0 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_0_we),
+    .wd     (cfg_lp1_cmo_0_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[0].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_0_qs)
+  );
+
+  // Subregister 1 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_1]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_1_we),
+    .wd     (cfg_lp1_cmo_1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[1].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_1_qs)
+  );
+
+  // Subregister 2 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_2]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_2 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_2_we),
+    .wd     (cfg_lp1_cmo_2_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[2].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_2_qs)
+  );
+
+  // Subregister 3 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_3]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_3 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_3_we),
+    .wd     (cfg_lp1_cmo_3_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[3].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_3_qs)
+  );
+
+  // Subregister 4 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_4]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_4 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_4_we),
+    .wd     (cfg_lp1_cmo_4_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[4].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_4_qs)
+  );
+
+  // Subregister 5 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_5]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_5 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_5_we),
+    .wd     (cfg_lp1_cmo_5_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[5].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_5_qs)
+  );
+
+  // Subregister 6 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_6]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_6 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_6_we),
+    .wd     (cfg_lp1_cmo_6_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[6].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_6_qs)
+  );
+
+  // Subregister 7 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_7]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_7 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_7_we),
+    .wd     (cfg_lp1_cmo_7_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[7].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_7_qs)
+  );
+
+  // Subregister 8 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_8]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_8 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_8_we),
+    .wd     (cfg_lp1_cmo_8_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[8].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_8_qs)
+  );
+
+  // Subregister 9 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_9]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_9 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_9_we),
+    .wd     (cfg_lp1_cmo_9_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[9].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_9_qs)
+  );
+
+  // Subregister 10 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_10]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_10 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_10_we),
+    .wd     (cfg_lp1_cmo_10_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[10].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_10_qs)
+  );
+
+  // Subregister 11 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_11]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_11 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_11_we),
+    .wd     (cfg_lp1_cmo_11_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[11].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_11_qs)
+  );
+
+  // Subregister 12 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_12]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_12 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_12_we),
+    .wd     (cfg_lp1_cmo_12_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[12].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_12_qs)
+  );
+
+  // Subregister 13 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_13]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_13 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_13_we),
+    .wd     (cfg_lp1_cmo_13_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[13].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_13_qs)
+  );
+
+  // Subregister 14 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_14]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_14 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_14_we),
+    .wd     (cfg_lp1_cmo_14_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[14].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_14_qs)
+  );
+
+  // Subregister 15 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_15]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_15 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_15_we),
+    .wd     (cfg_lp1_cmo_15_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[15].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_15_qs)
+  );
+
+  // Subregister 16 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_16]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_16 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_16_we),
+    .wd     (cfg_lp1_cmo_16_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[16].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_16_qs)
+  );
+
+  // Subregister 17 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_17]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_17 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_17_we),
+    .wd     (cfg_lp1_cmo_17_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[17].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_17_qs)
+  );
+
+  // Subregister 18 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_18]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_18 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_18_we),
+    .wd     (cfg_lp1_cmo_18_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[18].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_18_qs)
+  );
+
+  // Subregister 19 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_19]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_19 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_19_we),
+    .wd     (cfg_lp1_cmo_19_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[19].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_19_qs)
+  );
+
+  // Subregister 20 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_20]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_20 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_20_we),
+    .wd     (cfg_lp1_cmo_20_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[20].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_20_qs)
+  );
+
+  // Subregister 21 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_21]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_21 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_21_we),
+    .wd     (cfg_lp1_cmo_21_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[21].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_21_qs)
+  );
+
+  // Subregister 22 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_22]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_22 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_22_we),
+    .wd     (cfg_lp1_cmo_22_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[22].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_22_qs)
+  );
+
+  // Subregister 23 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_23]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_23 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_23_we),
+    .wd     (cfg_lp1_cmo_23_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[23].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_23_qs)
+  );
+
+  // Subregister 24 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_24]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_24 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_24_we),
+    .wd     (cfg_lp1_cmo_24_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[24].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_24_qs)
+  );
+
+  // Subregister 25 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_25]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_25 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_25_we),
+    .wd     (cfg_lp1_cmo_25_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[25].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_25_qs)
+  );
+
+  // Subregister 26 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_26]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_26 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_26_we),
+    .wd     (cfg_lp1_cmo_26_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[26].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_26_qs)
+  );
+
+  // Subregister 27 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_27]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_27 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_27_we),
+    .wd     (cfg_lp1_cmo_27_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[27].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_27_qs)
+  );
+
+  // Subregister 28 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_28]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_28 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_28_we),
+    .wd     (cfg_lp1_cmo_28_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[28].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_28_qs)
+  );
+
+  // Subregister 29 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_29]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_29 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_29_we),
+    .wd     (cfg_lp1_cmo_29_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[29].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_29_qs)
+  );
+
+  // Subregister 30 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_30]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_30 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_30_we),
+    .wd     (cfg_lp1_cmo_30_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[30].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_30_qs)
+  );
+
+  // Subregister 31 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_31]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_31 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_31_we),
+    .wd     (cfg_lp1_cmo_31_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[31].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_31_qs)
+  );
+
+  // Subregister 32 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_32]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_32 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_32_we),
+    .wd     (cfg_lp1_cmo_32_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[32].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_32_qs)
+  );
+
+  // Subregister 33 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_33]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_33 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_33_we),
+    .wd     (cfg_lp1_cmo_33_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[33].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_33_qs)
+  );
+
+  // Subregister 34 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_34]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_34 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_34_we),
+    .wd     (cfg_lp1_cmo_34_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[34].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_34_qs)
+  );
+
+  // Subregister 35 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_35]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_35 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_35_we),
+    .wd     (cfg_lp1_cmo_35_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[35].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_35_qs)
+  );
+
+  // Subregister 36 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_36]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_36 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_36_we),
+    .wd     (cfg_lp1_cmo_36_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[36].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_36_qs)
+  );
+
+  // Subregister 37 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_37]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_37 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_37_we),
+    .wd     (cfg_lp1_cmo_37_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[37].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_37_qs)
+  );
+
+  // Subregister 38 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_38]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_38 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_38_we),
+    .wd     (cfg_lp1_cmo_38_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[38].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_38_qs)
+  );
+
+  // Subregister 39 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_39]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_39 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_39_we),
+    .wd     (cfg_lp1_cmo_39_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[39].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_39_qs)
+  );
+
+  // Subregister 40 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_40]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_40 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_40_we),
+    .wd     (cfg_lp1_cmo_40_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[40].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_40_qs)
+  );
+
+  // Subregister 41 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_41]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_41 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_41_we),
+    .wd     (cfg_lp1_cmo_41_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[41].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_41_qs)
+  );
+
+  // Subregister 42 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_42]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_42 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_42_we),
+    .wd     (cfg_lp1_cmo_42_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[42].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_42_qs)
+  );
+
+  // Subregister 43 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_43]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_43 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_43_we),
+    .wd     (cfg_lp1_cmo_43_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[43].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_43_qs)
+  );
+
+  // Subregister 44 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_44]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_44 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_44_we),
+    .wd     (cfg_lp1_cmo_44_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[44].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_44_qs)
+  );
+
+  // Subregister 45 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_45]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_45 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_45_we),
+    .wd     (cfg_lp1_cmo_45_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[45].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_45_qs)
+  );
+
+  // Subregister 46 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_46]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_46 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_46_we),
+    .wd     (cfg_lp1_cmo_46_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[46].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_46_qs)
+  );
+
+  // Subregister 47 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_47]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_47 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_47_we),
+    .wd     (cfg_lp1_cmo_47_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[47].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_47_qs)
+  );
+
+  // Subregister 48 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_48]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_48 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_48_we),
+    .wd     (cfg_lp1_cmo_48_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[48].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_48_qs)
+  );
+
+  // Subregister 49 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_49]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_49 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_49_we),
+    .wd     (cfg_lp1_cmo_49_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[49].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_49_qs)
+  );
+
+  // Subregister 50 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_50]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_50 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_50_we),
+    .wd     (cfg_lp1_cmo_50_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[50].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_50_qs)
+  );
+
+  // Subregister 51 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_51]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_51 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_51_we),
+    .wd     (cfg_lp1_cmo_51_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[51].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_51_qs)
+  );
+
+  // Subregister 52 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_52]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_52 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_52_we),
+    .wd     (cfg_lp1_cmo_52_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[52].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_52_qs)
+  );
+
+  // Subregister 53 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_53]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_53 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_53_we),
+    .wd     (cfg_lp1_cmo_53_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[53].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_53_qs)
+  );
+
+  // Subregister 54 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_54]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_54 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_54_we),
+    .wd     (cfg_lp1_cmo_54_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[54].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_54_qs)
+  );
+
+  // Subregister 55 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_55]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_55 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_55_we),
+    .wd     (cfg_lp1_cmo_55_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[55].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_55_qs)
+  );
+
+  // Subregister 56 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_56]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_56 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_56_we),
+    .wd     (cfg_lp1_cmo_56_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[56].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_56_qs)
+  );
+
+  // Subregister 57 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_57]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_57 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_57_we),
+    .wd     (cfg_lp1_cmo_57_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[57].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_57_qs)
+  );
+
+  // Subregister 58 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_58]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_58 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_58_we),
+    .wd     (cfg_lp1_cmo_58_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[58].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_58_qs)
+  );
+
+  // Subregister 59 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_59]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_59 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_59_we),
+    .wd     (cfg_lp1_cmo_59_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[59].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_59_qs)
+  );
+
+  // Subregister 60 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_60]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_60 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_60_we),
+    .wd     (cfg_lp1_cmo_60_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[60].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_60_qs)
+  );
+
+  // Subregister 61 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_61]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_61 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_61_we),
+    .wd     (cfg_lp1_cmo_61_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[61].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_61_qs)
+  );
+
+  // Subregister 62 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_62]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_62 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_62_we),
+    .wd     (cfg_lp1_cmo_62_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[62].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_62_qs)
+  );
+
+  // Subregister 63 of Multireg cfg_lp1_cmo
+  // R[cfg_lp1_cmo_63]: V(False)
+
+  prim_subreg #(
+    .DW      (3),
+    .SWACCESS("RW"),
+    .RESVAL  (3'h0)
+  ) u_cfg_lp1_cmo_63 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_63_we),
+    .wd     (cfg_lp1_cmo_63_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo[63].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_63_qs)
+  );
+
+
+
+  // Subregister 0 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_0]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_0 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_0_we),
+    .wd     (cfg_lp1_cmo_addr_0_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[0].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_0_qs)
+  );
+
+  // Subregister 1 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_1_we),
+    .wd     (cfg_lp1_cmo_addr_1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[1].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_1_qs)
+  );
+
+  // Subregister 2 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_2]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_2 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_2_we),
+    .wd     (cfg_lp1_cmo_addr_2_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[2].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_2_qs)
+  );
+
+  // Subregister 3 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_3]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_3 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_3_we),
+    .wd     (cfg_lp1_cmo_addr_3_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[3].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_3_qs)
+  );
+
+  // Subregister 4 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_4]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_4 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_4_we),
+    .wd     (cfg_lp1_cmo_addr_4_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[4].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_4_qs)
+  );
+
+  // Subregister 5 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_5]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_5 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_5_we),
+    .wd     (cfg_lp1_cmo_addr_5_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[5].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_5_qs)
+  );
+
+  // Subregister 6 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_6]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_6 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_6_we),
+    .wd     (cfg_lp1_cmo_addr_6_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[6].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_6_qs)
+  );
+
+  // Subregister 7 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_7]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_7 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_7_we),
+    .wd     (cfg_lp1_cmo_addr_7_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[7].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_7_qs)
+  );
+
+  // Subregister 8 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_8]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_8 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_8_we),
+    .wd     (cfg_lp1_cmo_addr_8_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[8].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_8_qs)
+  );
+
+  // Subregister 9 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_9]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_9 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_9_we),
+    .wd     (cfg_lp1_cmo_addr_9_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[9].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_9_qs)
+  );
+
+  // Subregister 10 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_10]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_10 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_10_we),
+    .wd     (cfg_lp1_cmo_addr_10_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[10].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_10_qs)
+  );
+
+  // Subregister 11 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_11]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_11 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_11_we),
+    .wd     (cfg_lp1_cmo_addr_11_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[11].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_11_qs)
+  );
+
+  // Subregister 12 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_12]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_12 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_12_we),
+    .wd     (cfg_lp1_cmo_addr_12_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[12].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_12_qs)
+  );
+
+  // Subregister 13 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_13]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_13 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_13_we),
+    .wd     (cfg_lp1_cmo_addr_13_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[13].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_13_qs)
+  );
+
+  // Subregister 14 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_14]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_14 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_14_we),
+    .wd     (cfg_lp1_cmo_addr_14_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[14].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_14_qs)
+  );
+
+  // Subregister 15 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_15]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_15 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_15_we),
+    .wd     (cfg_lp1_cmo_addr_15_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[15].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_15_qs)
+  );
+
+  // Subregister 16 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_16]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_16 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_16_we),
+    .wd     (cfg_lp1_cmo_addr_16_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[16].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_16_qs)
+  );
+
+  // Subregister 17 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_17]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_17 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_17_we),
+    .wd     (cfg_lp1_cmo_addr_17_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[17].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_17_qs)
+  );
+
+  // Subregister 18 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_18]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_18 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_18_we),
+    .wd     (cfg_lp1_cmo_addr_18_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[18].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_18_qs)
+  );
+
+  // Subregister 19 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_19]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_19 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_19_we),
+    .wd     (cfg_lp1_cmo_addr_19_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[19].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_19_qs)
+  );
+
+  // Subregister 20 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_20]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_20 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_20_we),
+    .wd     (cfg_lp1_cmo_addr_20_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[20].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_20_qs)
+  );
+
+  // Subregister 21 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_21]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_21 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_21_we),
+    .wd     (cfg_lp1_cmo_addr_21_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[21].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_21_qs)
+  );
+
+  // Subregister 22 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_22]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_22 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_22_we),
+    .wd     (cfg_lp1_cmo_addr_22_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[22].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_22_qs)
+  );
+
+  // Subregister 23 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_23]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_23 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_23_we),
+    .wd     (cfg_lp1_cmo_addr_23_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[23].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_23_qs)
+  );
+
+  // Subregister 24 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_24]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_24 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_24_we),
+    .wd     (cfg_lp1_cmo_addr_24_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[24].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_24_qs)
+  );
+
+  // Subregister 25 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_25]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_25 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_25_we),
+    .wd     (cfg_lp1_cmo_addr_25_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[25].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_25_qs)
+  );
+
+  // Subregister 26 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_26]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_26 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_26_we),
+    .wd     (cfg_lp1_cmo_addr_26_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[26].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_26_qs)
+  );
+
+  // Subregister 27 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_27]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_27 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_27_we),
+    .wd     (cfg_lp1_cmo_addr_27_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[27].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_27_qs)
+  );
+
+  // Subregister 28 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_28]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_28 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_28_we),
+    .wd     (cfg_lp1_cmo_addr_28_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[28].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_28_qs)
+  );
+
+  // Subregister 29 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_29]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_29 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_29_we),
+    .wd     (cfg_lp1_cmo_addr_29_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[29].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_29_qs)
+  );
+
+  // Subregister 30 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_30]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_30 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_30_we),
+    .wd     (cfg_lp1_cmo_addr_30_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[30].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_30_qs)
+  );
+
+  // Subregister 31 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_31]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_31 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_31_we),
+    .wd     (cfg_lp1_cmo_addr_31_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[31].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_31_qs)
+  );
+
+  // Subregister 32 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_32]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_32 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_32_we),
+    .wd     (cfg_lp1_cmo_addr_32_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[32].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_32_qs)
+  );
+
+  // Subregister 33 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_33]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_33 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_33_we),
+    .wd     (cfg_lp1_cmo_addr_33_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[33].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_33_qs)
+  );
+
+  // Subregister 34 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_34]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_34 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_34_we),
+    .wd     (cfg_lp1_cmo_addr_34_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[34].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_34_qs)
+  );
+
+  // Subregister 35 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_35]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_35 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_35_we),
+    .wd     (cfg_lp1_cmo_addr_35_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[35].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_35_qs)
+  );
+
+  // Subregister 36 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_36]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_36 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_36_we),
+    .wd     (cfg_lp1_cmo_addr_36_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[36].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_36_qs)
+  );
+
+  // Subregister 37 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_37]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_37 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_37_we),
+    .wd     (cfg_lp1_cmo_addr_37_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[37].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_37_qs)
+  );
+
+  // Subregister 38 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_38]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_38 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_38_we),
+    .wd     (cfg_lp1_cmo_addr_38_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[38].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_38_qs)
+  );
+
+  // Subregister 39 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_39]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_39 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_39_we),
+    .wd     (cfg_lp1_cmo_addr_39_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[39].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_39_qs)
+  );
+
+  // Subregister 40 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_40]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_40 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_40_we),
+    .wd     (cfg_lp1_cmo_addr_40_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[40].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_40_qs)
+  );
+
+  // Subregister 41 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_41]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_41 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_41_we),
+    .wd     (cfg_lp1_cmo_addr_41_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[41].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_41_qs)
+  );
+
+  // Subregister 42 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_42]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_42 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_42_we),
+    .wd     (cfg_lp1_cmo_addr_42_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[42].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_42_qs)
+  );
+
+  // Subregister 43 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_43]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_43 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_43_we),
+    .wd     (cfg_lp1_cmo_addr_43_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[43].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_43_qs)
+  );
+
+  // Subregister 44 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_44]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_44 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_44_we),
+    .wd     (cfg_lp1_cmo_addr_44_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[44].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_44_qs)
+  );
+
+  // Subregister 45 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_45]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_45 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_45_we),
+    .wd     (cfg_lp1_cmo_addr_45_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[45].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_45_qs)
+  );
+
+  // Subregister 46 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_46]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_46 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_46_we),
+    .wd     (cfg_lp1_cmo_addr_46_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[46].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_46_qs)
+  );
+
+  // Subregister 47 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_47]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_47 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_47_we),
+    .wd     (cfg_lp1_cmo_addr_47_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[47].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_47_qs)
+  );
+
+  // Subregister 48 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_48]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_48 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_48_we),
+    .wd     (cfg_lp1_cmo_addr_48_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[48].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_48_qs)
+  );
+
+  // Subregister 49 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_49]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_49 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_49_we),
+    .wd     (cfg_lp1_cmo_addr_49_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[49].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_49_qs)
+  );
+
+  // Subregister 50 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_50]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_50 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_50_we),
+    .wd     (cfg_lp1_cmo_addr_50_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[50].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_50_qs)
+  );
+
+  // Subregister 51 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_51]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_51 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_51_we),
+    .wd     (cfg_lp1_cmo_addr_51_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[51].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_51_qs)
+  );
+
+  // Subregister 52 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_52]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_52 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_52_we),
+    .wd     (cfg_lp1_cmo_addr_52_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[52].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_52_qs)
+  );
+
+  // Subregister 53 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_53]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_53 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_53_we),
+    .wd     (cfg_lp1_cmo_addr_53_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[53].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_53_qs)
+  );
+
+  // Subregister 54 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_54]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_54 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_54_we),
+    .wd     (cfg_lp1_cmo_addr_54_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[54].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_54_qs)
+  );
+
+  // Subregister 55 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_55]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_55 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_55_we),
+    .wd     (cfg_lp1_cmo_addr_55_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[55].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_55_qs)
+  );
+
+  // Subregister 56 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_56]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_56 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_56_we),
+    .wd     (cfg_lp1_cmo_addr_56_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[56].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_56_qs)
+  );
+
+  // Subregister 57 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_57]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_57 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_57_we),
+    .wd     (cfg_lp1_cmo_addr_57_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[57].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_57_qs)
+  );
+
+  // Subregister 58 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_58]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_58 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_58_we),
+    .wd     (cfg_lp1_cmo_addr_58_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[58].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_58_qs)
+  );
+
+  // Subregister 59 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_59]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_59 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_59_we),
+    .wd     (cfg_lp1_cmo_addr_59_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[59].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_59_qs)
+  );
+
+  // Subregister 60 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_60]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_60 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_60_we),
+    .wd     (cfg_lp1_cmo_addr_60_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[60].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_60_qs)
+  );
+
+  // Subregister 61 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_61]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_61 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_61_we),
+    .wd     (cfg_lp1_cmo_addr_61_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[61].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_61_qs)
+  );
+
+  // Subregister 62 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_62]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_62 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_62_we),
+    .wd     (cfg_lp1_cmo_addr_62_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[62].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_62_qs)
+  );
+
+  // Subregister 63 of Multireg cfg_lp1_cmo_addr
+  // R[cfg_lp1_cmo_addr_63]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_lp1_cmo_addr_63 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_lp1_cmo_addr_63_we),
+    .wd     (cfg_lp1_cmo_addr_63_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_lp1_cmo_addr[63].q ),
+
+    // to register interface (read)
+    .qs     (cfg_lp1_cmo_addr_63_qs)
+  );
+
+
+
+  // Subregister 0 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_0]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_0 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_0_we),
+    .wd     (lp1_cmo_commit_0_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[0].de),
+    .d      (hw2reg.lp1_cmo_commit[0].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[0].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_0_qs)
+  );
+
+  // Subregister 1 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_1]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_1_we),
+    .wd     (lp1_cmo_commit_1_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[1].de),
+    .d      (hw2reg.lp1_cmo_commit[1].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[1].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_1_qs)
+  );
+
+  // Subregister 2 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_2]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_2 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_2_we),
+    .wd     (lp1_cmo_commit_2_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[2].de),
+    .d      (hw2reg.lp1_cmo_commit[2].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[2].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_2_qs)
+  );
+
+  // Subregister 3 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_3]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_3 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_3_we),
+    .wd     (lp1_cmo_commit_3_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[3].de),
+    .d      (hw2reg.lp1_cmo_commit[3].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[3].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_3_qs)
+  );
+
+  // Subregister 4 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_4]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_4 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_4_we),
+    .wd     (lp1_cmo_commit_4_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[4].de),
+    .d      (hw2reg.lp1_cmo_commit[4].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[4].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_4_qs)
+  );
+
+  // Subregister 5 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_5]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_5 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_5_we),
+    .wd     (lp1_cmo_commit_5_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[5].de),
+    .d      (hw2reg.lp1_cmo_commit[5].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[5].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_5_qs)
+  );
+
+  // Subregister 6 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_6]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_6 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_6_we),
+    .wd     (lp1_cmo_commit_6_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[6].de),
+    .d      (hw2reg.lp1_cmo_commit[6].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[6].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_6_qs)
+  );
+
+  // Subregister 7 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_7]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_7 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_7_we),
+    .wd     (lp1_cmo_commit_7_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[7].de),
+    .d      (hw2reg.lp1_cmo_commit[7].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[7].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_7_qs)
+  );
+
+  // Subregister 8 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_8]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_8 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_8_we),
+    .wd     (lp1_cmo_commit_8_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[8].de),
+    .d      (hw2reg.lp1_cmo_commit[8].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[8].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_8_qs)
+  );
+
+  // Subregister 9 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_9]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_9 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_9_we),
+    .wd     (lp1_cmo_commit_9_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[9].de),
+    .d      (hw2reg.lp1_cmo_commit[9].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[9].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_9_qs)
+  );
+
+  // Subregister 10 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_10]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_10 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_10_we),
+    .wd     (lp1_cmo_commit_10_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[10].de),
+    .d      (hw2reg.lp1_cmo_commit[10].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[10].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_10_qs)
+  );
+
+  // Subregister 11 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_11]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_11 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_11_we),
+    .wd     (lp1_cmo_commit_11_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[11].de),
+    .d      (hw2reg.lp1_cmo_commit[11].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[11].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_11_qs)
+  );
+
+  // Subregister 12 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_12]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_12 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_12_we),
+    .wd     (lp1_cmo_commit_12_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[12].de),
+    .d      (hw2reg.lp1_cmo_commit[12].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[12].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_12_qs)
+  );
+
+  // Subregister 13 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_13]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_13 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_13_we),
+    .wd     (lp1_cmo_commit_13_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[13].de),
+    .d      (hw2reg.lp1_cmo_commit[13].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[13].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_13_qs)
+  );
+
+  // Subregister 14 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_14]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_14 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_14_we),
+    .wd     (lp1_cmo_commit_14_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[14].de),
+    .d      (hw2reg.lp1_cmo_commit[14].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[14].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_14_qs)
+  );
+
+  // Subregister 15 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_15]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_15 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_15_we),
+    .wd     (lp1_cmo_commit_15_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[15].de),
+    .d      (hw2reg.lp1_cmo_commit[15].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[15].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_15_qs)
+  );
+
+  // Subregister 16 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_16]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_16 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_16_we),
+    .wd     (lp1_cmo_commit_16_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[16].de),
+    .d      (hw2reg.lp1_cmo_commit[16].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[16].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_16_qs)
+  );
+
+  // Subregister 17 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_17]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_17 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_17_we),
+    .wd     (lp1_cmo_commit_17_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[17].de),
+    .d      (hw2reg.lp1_cmo_commit[17].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[17].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_17_qs)
+  );
+
+  // Subregister 18 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_18]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_18 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_18_we),
+    .wd     (lp1_cmo_commit_18_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[18].de),
+    .d      (hw2reg.lp1_cmo_commit[18].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[18].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_18_qs)
+  );
+
+  // Subregister 19 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_19]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_19 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_19_we),
+    .wd     (lp1_cmo_commit_19_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[19].de),
+    .d      (hw2reg.lp1_cmo_commit[19].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[19].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_19_qs)
+  );
+
+  // Subregister 20 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_20]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_20 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_20_we),
+    .wd     (lp1_cmo_commit_20_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[20].de),
+    .d      (hw2reg.lp1_cmo_commit[20].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[20].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_20_qs)
+  );
+
+  // Subregister 21 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_21]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_21 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_21_we),
+    .wd     (lp1_cmo_commit_21_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[21].de),
+    .d      (hw2reg.lp1_cmo_commit[21].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[21].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_21_qs)
+  );
+
+  // Subregister 22 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_22]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_22 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_22_we),
+    .wd     (lp1_cmo_commit_22_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[22].de),
+    .d      (hw2reg.lp1_cmo_commit[22].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[22].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_22_qs)
+  );
+
+  // Subregister 23 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_23]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_23 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_23_we),
+    .wd     (lp1_cmo_commit_23_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[23].de),
+    .d      (hw2reg.lp1_cmo_commit[23].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[23].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_23_qs)
+  );
+
+  // Subregister 24 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_24]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_24 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_24_we),
+    .wd     (lp1_cmo_commit_24_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[24].de),
+    .d      (hw2reg.lp1_cmo_commit[24].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[24].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_24_qs)
+  );
+
+  // Subregister 25 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_25]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_25 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_25_we),
+    .wd     (lp1_cmo_commit_25_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[25].de),
+    .d      (hw2reg.lp1_cmo_commit[25].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[25].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_25_qs)
+  );
+
+  // Subregister 26 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_26]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_26 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_26_we),
+    .wd     (lp1_cmo_commit_26_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[26].de),
+    .d      (hw2reg.lp1_cmo_commit[26].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[26].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_26_qs)
+  );
+
+  // Subregister 27 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_27]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_27 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_27_we),
+    .wd     (lp1_cmo_commit_27_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[27].de),
+    .d      (hw2reg.lp1_cmo_commit[27].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[27].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_27_qs)
+  );
+
+  // Subregister 28 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_28]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_28 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_28_we),
+    .wd     (lp1_cmo_commit_28_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[28].de),
+    .d      (hw2reg.lp1_cmo_commit[28].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[28].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_28_qs)
+  );
+
+  // Subregister 29 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_29]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_29 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_29_we),
+    .wd     (lp1_cmo_commit_29_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[29].de),
+    .d      (hw2reg.lp1_cmo_commit[29].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[29].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_29_qs)
+  );
+
+  // Subregister 30 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_30]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_30 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_30_we),
+    .wd     (lp1_cmo_commit_30_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[30].de),
+    .d      (hw2reg.lp1_cmo_commit[30].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[30].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_30_qs)
+  );
+
+  // Subregister 31 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_31]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_31 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_31_we),
+    .wd     (lp1_cmo_commit_31_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[31].de),
+    .d      (hw2reg.lp1_cmo_commit[31].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[31].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_31_qs)
+  );
+
+  // Subregister 32 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_32]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_32 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_32_we),
+    .wd     (lp1_cmo_commit_32_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[32].de),
+    .d      (hw2reg.lp1_cmo_commit[32].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[32].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_32_qs)
+  );
+
+  // Subregister 33 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_33]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_33 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_33_we),
+    .wd     (lp1_cmo_commit_33_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[33].de),
+    .d      (hw2reg.lp1_cmo_commit[33].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[33].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_33_qs)
+  );
+
+  // Subregister 34 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_34]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_34 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_34_we),
+    .wd     (lp1_cmo_commit_34_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[34].de),
+    .d      (hw2reg.lp1_cmo_commit[34].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[34].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_34_qs)
+  );
+
+  // Subregister 35 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_35]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_35 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_35_we),
+    .wd     (lp1_cmo_commit_35_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[35].de),
+    .d      (hw2reg.lp1_cmo_commit[35].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[35].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_35_qs)
+  );
+
+  // Subregister 36 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_36]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_36 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_36_we),
+    .wd     (lp1_cmo_commit_36_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[36].de),
+    .d      (hw2reg.lp1_cmo_commit[36].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[36].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_36_qs)
+  );
+
+  // Subregister 37 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_37]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_37 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_37_we),
+    .wd     (lp1_cmo_commit_37_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[37].de),
+    .d      (hw2reg.lp1_cmo_commit[37].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[37].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_37_qs)
+  );
+
+  // Subregister 38 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_38]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_38 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_38_we),
+    .wd     (lp1_cmo_commit_38_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[38].de),
+    .d      (hw2reg.lp1_cmo_commit[38].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[38].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_38_qs)
+  );
+
+  // Subregister 39 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_39]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_39 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_39_we),
+    .wd     (lp1_cmo_commit_39_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[39].de),
+    .d      (hw2reg.lp1_cmo_commit[39].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[39].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_39_qs)
+  );
+
+  // Subregister 40 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_40]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_40 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_40_we),
+    .wd     (lp1_cmo_commit_40_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[40].de),
+    .d      (hw2reg.lp1_cmo_commit[40].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[40].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_40_qs)
+  );
+
+  // Subregister 41 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_41]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_41 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_41_we),
+    .wd     (lp1_cmo_commit_41_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[41].de),
+    .d      (hw2reg.lp1_cmo_commit[41].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[41].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_41_qs)
+  );
+
+  // Subregister 42 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_42]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_42 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_42_we),
+    .wd     (lp1_cmo_commit_42_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[42].de),
+    .d      (hw2reg.lp1_cmo_commit[42].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[42].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_42_qs)
+  );
+
+  // Subregister 43 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_43]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_43 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_43_we),
+    .wd     (lp1_cmo_commit_43_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[43].de),
+    .d      (hw2reg.lp1_cmo_commit[43].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[43].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_43_qs)
+  );
+
+  // Subregister 44 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_44]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_44 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_44_we),
+    .wd     (lp1_cmo_commit_44_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[44].de),
+    .d      (hw2reg.lp1_cmo_commit[44].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[44].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_44_qs)
+  );
+
+  // Subregister 45 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_45]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_45 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_45_we),
+    .wd     (lp1_cmo_commit_45_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[45].de),
+    .d      (hw2reg.lp1_cmo_commit[45].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[45].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_45_qs)
+  );
+
+  // Subregister 46 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_46]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_46 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_46_we),
+    .wd     (lp1_cmo_commit_46_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[46].de),
+    .d      (hw2reg.lp1_cmo_commit[46].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[46].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_46_qs)
+  );
+
+  // Subregister 47 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_47]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_47 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_47_we),
+    .wd     (lp1_cmo_commit_47_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[47].de),
+    .d      (hw2reg.lp1_cmo_commit[47].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[47].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_47_qs)
+  );
+
+  // Subregister 48 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_48]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_48 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_48_we),
+    .wd     (lp1_cmo_commit_48_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[48].de),
+    .d      (hw2reg.lp1_cmo_commit[48].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[48].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_48_qs)
+  );
+
+  // Subregister 49 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_49]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_49 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_49_we),
+    .wd     (lp1_cmo_commit_49_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[49].de),
+    .d      (hw2reg.lp1_cmo_commit[49].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[49].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_49_qs)
+  );
+
+  // Subregister 50 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_50]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_50 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_50_we),
+    .wd     (lp1_cmo_commit_50_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[50].de),
+    .d      (hw2reg.lp1_cmo_commit[50].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[50].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_50_qs)
+  );
+
+  // Subregister 51 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_51]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_51 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_51_we),
+    .wd     (lp1_cmo_commit_51_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[51].de),
+    .d      (hw2reg.lp1_cmo_commit[51].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[51].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_51_qs)
+  );
+
+  // Subregister 52 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_52]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_52 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_52_we),
+    .wd     (lp1_cmo_commit_52_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[52].de),
+    .d      (hw2reg.lp1_cmo_commit[52].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[52].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_52_qs)
+  );
+
+  // Subregister 53 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_53]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_53 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_53_we),
+    .wd     (lp1_cmo_commit_53_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[53].de),
+    .d      (hw2reg.lp1_cmo_commit[53].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[53].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_53_qs)
+  );
+
+  // Subregister 54 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_54]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_54 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_54_we),
+    .wd     (lp1_cmo_commit_54_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[54].de),
+    .d      (hw2reg.lp1_cmo_commit[54].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[54].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_54_qs)
+  );
+
+  // Subregister 55 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_55]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_55 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_55_we),
+    .wd     (lp1_cmo_commit_55_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[55].de),
+    .d      (hw2reg.lp1_cmo_commit[55].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[55].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_55_qs)
+  );
+
+  // Subregister 56 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_56]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_56 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_56_we),
+    .wd     (lp1_cmo_commit_56_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[56].de),
+    .d      (hw2reg.lp1_cmo_commit[56].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[56].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_56_qs)
+  );
+
+  // Subregister 57 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_57]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_57 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_57_we),
+    .wd     (lp1_cmo_commit_57_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[57].de),
+    .d      (hw2reg.lp1_cmo_commit[57].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[57].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_57_qs)
+  );
+
+  // Subregister 58 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_58]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_58 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_58_we),
+    .wd     (lp1_cmo_commit_58_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[58].de),
+    .d      (hw2reg.lp1_cmo_commit[58].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[58].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_58_qs)
+  );
+
+  // Subregister 59 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_59]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_59 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_59_we),
+    .wd     (lp1_cmo_commit_59_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[59].de),
+    .d      (hw2reg.lp1_cmo_commit[59].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[59].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_59_qs)
+  );
+
+  // Subregister 60 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_60]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_60 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_60_we),
+    .wd     (lp1_cmo_commit_60_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[60].de),
+    .d      (hw2reg.lp1_cmo_commit[60].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[60].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_60_qs)
+  );
+
+  // Subregister 61 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_61]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_61 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_61_we),
+    .wd     (lp1_cmo_commit_61_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[61].de),
+    .d      (hw2reg.lp1_cmo_commit[61].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[61].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_61_qs)
+  );
+
+  // Subregister 62 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_62]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_62 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_62_we),
+    .wd     (lp1_cmo_commit_62_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[62].de),
+    .d      (hw2reg.lp1_cmo_commit[62].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[62].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_62_qs)
+  );
+
+  // Subregister 63 of Multireg lp1_cmo_commit
+  // R[lp1_cmo_commit_63]: V(False)
+
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_lp1_cmo_commit_63 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (lp1_cmo_commit_63_we),
+    .wd     (lp1_cmo_commit_63_wd),
+
+    // from internal hardware
+    .de     (hw2reg.lp1_cmo_commit[63].de),
+    .d      (hw2reg.lp1_cmo_commit[63].d ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.lp1_cmo_commit[63].q ),
+
+    // to register interface (read)
+    .qs     (lp1_cmo_commit_63_qs)
+  );
+
+
+
+  // Subregister 0 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_0]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_0 (
+    .re     (lp1_cmo_status_0_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[0].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_0_qs)
+  );
+
+  // Subregister 1 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_1]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_1 (
+    .re     (lp1_cmo_status_1_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[1].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_1_qs)
+  );
+
+  // Subregister 2 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_2]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_2 (
+    .re     (lp1_cmo_status_2_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[2].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_2_qs)
+  );
+
+  // Subregister 3 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_3]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_3 (
+    .re     (lp1_cmo_status_3_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[3].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_3_qs)
+  );
+
+  // Subregister 4 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_4]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_4 (
+    .re     (lp1_cmo_status_4_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[4].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_4_qs)
+  );
+
+  // Subregister 5 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_5]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_5 (
+    .re     (lp1_cmo_status_5_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[5].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_5_qs)
+  );
+
+  // Subregister 6 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_6]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_6 (
+    .re     (lp1_cmo_status_6_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[6].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_6_qs)
+  );
+
+  // Subregister 7 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_7]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_7 (
+    .re     (lp1_cmo_status_7_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[7].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_7_qs)
+  );
+
+  // Subregister 8 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_8]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_8 (
+    .re     (lp1_cmo_status_8_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[8].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_8_qs)
+  );
+
+  // Subregister 9 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_9]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_9 (
+    .re     (lp1_cmo_status_9_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[9].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_9_qs)
+  );
+
+  // Subregister 10 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_10]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_10 (
+    .re     (lp1_cmo_status_10_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[10].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_10_qs)
+  );
+
+  // Subregister 11 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_11]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_11 (
+    .re     (lp1_cmo_status_11_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[11].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_11_qs)
+  );
+
+  // Subregister 12 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_12]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_12 (
+    .re     (lp1_cmo_status_12_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[12].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_12_qs)
+  );
+
+  // Subregister 13 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_13]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_13 (
+    .re     (lp1_cmo_status_13_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[13].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_13_qs)
+  );
+
+  // Subregister 14 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_14]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_14 (
+    .re     (lp1_cmo_status_14_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[14].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_14_qs)
+  );
+
+  // Subregister 15 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_15]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_15 (
+    .re     (lp1_cmo_status_15_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[15].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_15_qs)
+  );
+
+  // Subregister 16 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_16]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_16 (
+    .re     (lp1_cmo_status_16_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[16].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_16_qs)
+  );
+
+  // Subregister 17 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_17]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_17 (
+    .re     (lp1_cmo_status_17_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[17].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_17_qs)
+  );
+
+  // Subregister 18 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_18]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_18 (
+    .re     (lp1_cmo_status_18_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[18].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_18_qs)
+  );
+
+  // Subregister 19 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_19]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_19 (
+    .re     (lp1_cmo_status_19_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[19].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_19_qs)
+  );
+
+  // Subregister 20 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_20]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_20 (
+    .re     (lp1_cmo_status_20_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[20].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_20_qs)
+  );
+
+  // Subregister 21 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_21]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_21 (
+    .re     (lp1_cmo_status_21_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[21].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_21_qs)
+  );
+
+  // Subregister 22 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_22]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_22 (
+    .re     (lp1_cmo_status_22_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[22].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_22_qs)
+  );
+
+  // Subregister 23 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_23]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_23 (
+    .re     (lp1_cmo_status_23_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[23].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_23_qs)
+  );
+
+  // Subregister 24 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_24]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_24 (
+    .re     (lp1_cmo_status_24_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[24].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_24_qs)
+  );
+
+  // Subregister 25 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_25]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_25 (
+    .re     (lp1_cmo_status_25_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[25].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_25_qs)
+  );
+
+  // Subregister 26 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_26]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_26 (
+    .re     (lp1_cmo_status_26_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[26].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_26_qs)
+  );
+
+  // Subregister 27 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_27]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_27 (
+    .re     (lp1_cmo_status_27_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[27].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_27_qs)
+  );
+
+  // Subregister 28 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_28]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_28 (
+    .re     (lp1_cmo_status_28_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[28].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_28_qs)
+  );
+
+  // Subregister 29 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_29]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_29 (
+    .re     (lp1_cmo_status_29_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[29].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_29_qs)
+  );
+
+  // Subregister 30 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_30]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_30 (
+    .re     (lp1_cmo_status_30_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[30].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_30_qs)
+  );
+
+  // Subregister 31 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_31]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_31 (
+    .re     (lp1_cmo_status_31_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[31].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_31_qs)
+  );
+
+  // Subregister 32 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_32]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_32 (
+    .re     (lp1_cmo_status_32_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[32].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_32_qs)
+  );
+
+  // Subregister 33 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_33]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_33 (
+    .re     (lp1_cmo_status_33_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[33].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_33_qs)
+  );
+
+  // Subregister 34 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_34]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_34 (
+    .re     (lp1_cmo_status_34_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[34].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_34_qs)
+  );
+
+  // Subregister 35 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_35]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_35 (
+    .re     (lp1_cmo_status_35_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[35].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_35_qs)
+  );
+
+  // Subregister 36 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_36]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_36 (
+    .re     (lp1_cmo_status_36_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[36].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_36_qs)
+  );
+
+  // Subregister 37 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_37]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_37 (
+    .re     (lp1_cmo_status_37_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[37].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_37_qs)
+  );
+
+  // Subregister 38 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_38]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_38 (
+    .re     (lp1_cmo_status_38_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[38].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_38_qs)
+  );
+
+  // Subregister 39 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_39]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_39 (
+    .re     (lp1_cmo_status_39_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[39].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_39_qs)
+  );
+
+  // Subregister 40 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_40]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_40 (
+    .re     (lp1_cmo_status_40_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[40].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_40_qs)
+  );
+
+  // Subregister 41 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_41]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_41 (
+    .re     (lp1_cmo_status_41_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[41].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_41_qs)
+  );
+
+  // Subregister 42 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_42]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_42 (
+    .re     (lp1_cmo_status_42_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[42].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_42_qs)
+  );
+
+  // Subregister 43 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_43]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_43 (
+    .re     (lp1_cmo_status_43_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[43].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_43_qs)
+  );
+
+  // Subregister 44 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_44]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_44 (
+    .re     (lp1_cmo_status_44_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[44].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_44_qs)
+  );
+
+  // Subregister 45 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_45]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_45 (
+    .re     (lp1_cmo_status_45_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[45].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_45_qs)
+  );
+
+  // Subregister 46 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_46]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_46 (
+    .re     (lp1_cmo_status_46_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[46].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_46_qs)
+  );
+
+  // Subregister 47 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_47]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_47 (
+    .re     (lp1_cmo_status_47_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[47].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_47_qs)
+  );
+
+  // Subregister 48 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_48]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_48 (
+    .re     (lp1_cmo_status_48_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[48].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_48_qs)
+  );
+
+  // Subregister 49 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_49]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_49 (
+    .re     (lp1_cmo_status_49_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[49].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_49_qs)
+  );
+
+  // Subregister 50 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_50]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_50 (
+    .re     (lp1_cmo_status_50_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[50].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_50_qs)
+  );
+
+  // Subregister 51 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_51]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_51 (
+    .re     (lp1_cmo_status_51_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[51].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_51_qs)
+  );
+
+  // Subregister 52 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_52]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_52 (
+    .re     (lp1_cmo_status_52_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[52].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_52_qs)
+  );
+
+  // Subregister 53 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_53]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_53 (
+    .re     (lp1_cmo_status_53_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[53].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_53_qs)
+  );
+
+  // Subregister 54 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_54]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_54 (
+    .re     (lp1_cmo_status_54_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[54].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_54_qs)
+  );
+
+  // Subregister 55 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_55]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_55 (
+    .re     (lp1_cmo_status_55_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[55].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_55_qs)
+  );
+
+  // Subregister 56 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_56]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_56 (
+    .re     (lp1_cmo_status_56_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[56].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_56_qs)
+  );
+
+  // Subregister 57 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_57]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_57 (
+    .re     (lp1_cmo_status_57_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[57].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_57_qs)
+  );
+
+  // Subregister 58 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_58]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_58 (
+    .re     (lp1_cmo_status_58_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[58].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_58_qs)
+  );
+
+  // Subregister 59 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_59]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_59 (
+    .re     (lp1_cmo_status_59_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[59].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_59_qs)
+  );
+
+  // Subregister 60 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_60]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_60 (
+    .re     (lp1_cmo_status_60_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[60].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_60_qs)
+  );
+
+  // Subregister 61 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_61]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_61 (
+    .re     (lp1_cmo_status_61_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[61].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_61_qs)
+  );
+
+  // Subregister 62 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_62]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_62 (
+    .re     (lp1_cmo_status_62_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[62].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_62_qs)
+  );
+
+  // Subregister 63 of Multireg lp1_cmo_status
+  // R[lp1_cmo_status_63]: V(True)
+
+  prim_subreg_ext #(
+    .DW    (1)
+  ) u_lp1_cmo_status_63 (
+    .re     (lp1_cmo_status_63_re),
+    .we     (1'b0),
+    .wd     ('0),
+    .d      (hw2reg.lp1_cmo_status[63].d),
+    .qre    (),
+    .qe     (),
+    .q      (),
+    .qs     (lp1_cmo_status_63_qs)
+  );
+
+
+
+
+  logic [272:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
-    addr_hit[ 1] = (reg_addr == CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
-    addr_hit[ 2] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET);
-    addr_hit[ 3] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET);
-    addr_hit[ 4] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
-    addr_hit[ 5] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
-    addr_hit[ 6] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET);
-    addr_hit[ 7] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
-    addr_hit[ 8] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET);
-    addr_hit[ 9] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET);
-    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
-    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
-    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
-    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
-    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
-    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
+    addr_hit[  0] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
+    addr_hit[  1] = (reg_addr == CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
+    addr_hit[  2] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET);
+    addr_hit[  3] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET);
+    addr_hit[  4] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
+    addr_hit[  5] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
+    addr_hit[  6] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET);
+    addr_hit[  7] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
+    addr_hit[  8] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET);
+    addr_hit[  9] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET);
+    addr_hit[ 10] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
+    addr_hit[ 11] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
+    addr_hit[ 12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
+    addr_hit[ 13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
+    addr_hit[ 14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
+    addr_hit[ 15] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
+    addr_hit[ 16] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
+    addr_hit[ 17] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_0_OFFSET);
+    addr_hit[ 18] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_1_OFFSET);
+    addr_hit[ 19] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_2_OFFSET);
+    addr_hit[ 20] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_3_OFFSET);
+    addr_hit[ 21] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_4_OFFSET);
+    addr_hit[ 22] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_5_OFFSET);
+    addr_hit[ 23] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_6_OFFSET);
+    addr_hit[ 24] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_7_OFFSET);
+    addr_hit[ 25] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_8_OFFSET);
+    addr_hit[ 26] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_9_OFFSET);
+    addr_hit[ 27] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_10_OFFSET);
+    addr_hit[ 28] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_11_OFFSET);
+    addr_hit[ 29] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_12_OFFSET);
+    addr_hit[ 30] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_13_OFFSET);
+    addr_hit[ 31] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_14_OFFSET);
+    addr_hit[ 32] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_15_OFFSET);
+    addr_hit[ 33] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_16_OFFSET);
+    addr_hit[ 34] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_17_OFFSET);
+    addr_hit[ 35] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_18_OFFSET);
+    addr_hit[ 36] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_19_OFFSET);
+    addr_hit[ 37] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_20_OFFSET);
+    addr_hit[ 38] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_21_OFFSET);
+    addr_hit[ 39] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_22_OFFSET);
+    addr_hit[ 40] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_23_OFFSET);
+    addr_hit[ 41] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_24_OFFSET);
+    addr_hit[ 42] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_25_OFFSET);
+    addr_hit[ 43] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_26_OFFSET);
+    addr_hit[ 44] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_27_OFFSET);
+    addr_hit[ 45] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_28_OFFSET);
+    addr_hit[ 46] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_29_OFFSET);
+    addr_hit[ 47] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_30_OFFSET);
+    addr_hit[ 48] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_31_OFFSET);
+    addr_hit[ 49] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_32_OFFSET);
+    addr_hit[ 50] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_33_OFFSET);
+    addr_hit[ 51] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_34_OFFSET);
+    addr_hit[ 52] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_35_OFFSET);
+    addr_hit[ 53] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_36_OFFSET);
+    addr_hit[ 54] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_37_OFFSET);
+    addr_hit[ 55] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_38_OFFSET);
+    addr_hit[ 56] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_39_OFFSET);
+    addr_hit[ 57] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_40_OFFSET);
+    addr_hit[ 58] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_41_OFFSET);
+    addr_hit[ 59] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_42_OFFSET);
+    addr_hit[ 60] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_43_OFFSET);
+    addr_hit[ 61] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_44_OFFSET);
+    addr_hit[ 62] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_45_OFFSET);
+    addr_hit[ 63] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_46_OFFSET);
+    addr_hit[ 64] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_47_OFFSET);
+    addr_hit[ 65] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_48_OFFSET);
+    addr_hit[ 66] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_49_OFFSET);
+    addr_hit[ 67] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_50_OFFSET);
+    addr_hit[ 68] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_51_OFFSET);
+    addr_hit[ 69] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_52_OFFSET);
+    addr_hit[ 70] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_53_OFFSET);
+    addr_hit[ 71] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_54_OFFSET);
+    addr_hit[ 72] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_55_OFFSET);
+    addr_hit[ 73] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_56_OFFSET);
+    addr_hit[ 74] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_57_OFFSET);
+    addr_hit[ 75] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_58_OFFSET);
+    addr_hit[ 76] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_59_OFFSET);
+    addr_hit[ 77] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_60_OFFSET);
+    addr_hit[ 78] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61_OFFSET);
+    addr_hit[ 79] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62_OFFSET);
+    addr_hit[ 80] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63_OFFSET);
+    addr_hit[ 81] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0_OFFSET);
+    addr_hit[ 82] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1_OFFSET);
+    addr_hit[ 83] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2_OFFSET);
+    addr_hit[ 84] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_3_OFFSET);
+    addr_hit[ 85] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_4_OFFSET);
+    addr_hit[ 86] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_5_OFFSET);
+    addr_hit[ 87] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_6_OFFSET);
+    addr_hit[ 88] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_7_OFFSET);
+    addr_hit[ 89] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_8_OFFSET);
+    addr_hit[ 90] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_9_OFFSET);
+    addr_hit[ 91] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_10_OFFSET);
+    addr_hit[ 92] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_11_OFFSET);
+    addr_hit[ 93] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_12_OFFSET);
+    addr_hit[ 94] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_13_OFFSET);
+    addr_hit[ 95] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_14_OFFSET);
+    addr_hit[ 96] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_15_OFFSET);
+    addr_hit[ 97] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_16_OFFSET);
+    addr_hit[ 98] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_17_OFFSET);
+    addr_hit[ 99] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_18_OFFSET);
+    addr_hit[100] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_19_OFFSET);
+    addr_hit[101] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_20_OFFSET);
+    addr_hit[102] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_21_OFFSET);
+    addr_hit[103] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_22_OFFSET);
+    addr_hit[104] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_23_OFFSET);
+    addr_hit[105] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_24_OFFSET);
+    addr_hit[106] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_25_OFFSET);
+    addr_hit[107] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_26_OFFSET);
+    addr_hit[108] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_27_OFFSET);
+    addr_hit[109] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_28_OFFSET);
+    addr_hit[110] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_29_OFFSET);
+    addr_hit[111] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_30_OFFSET);
+    addr_hit[112] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_31_OFFSET);
+    addr_hit[113] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_32_OFFSET);
+    addr_hit[114] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_33_OFFSET);
+    addr_hit[115] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_34_OFFSET);
+    addr_hit[116] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_35_OFFSET);
+    addr_hit[117] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_36_OFFSET);
+    addr_hit[118] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_37_OFFSET);
+    addr_hit[119] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_38_OFFSET);
+    addr_hit[120] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_39_OFFSET);
+    addr_hit[121] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_40_OFFSET);
+    addr_hit[122] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_41_OFFSET);
+    addr_hit[123] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_42_OFFSET);
+    addr_hit[124] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_43_OFFSET);
+    addr_hit[125] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_44_OFFSET);
+    addr_hit[126] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_45_OFFSET);
+    addr_hit[127] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_46_OFFSET);
+    addr_hit[128] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_47_OFFSET);
+    addr_hit[129] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_48_OFFSET);
+    addr_hit[130] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_49_OFFSET);
+    addr_hit[131] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_50_OFFSET);
+    addr_hit[132] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_51_OFFSET);
+    addr_hit[133] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_52_OFFSET);
+    addr_hit[134] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_53_OFFSET);
+    addr_hit[135] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_54_OFFSET);
+    addr_hit[136] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_55_OFFSET);
+    addr_hit[137] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_56_OFFSET);
+    addr_hit[138] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_57_OFFSET);
+    addr_hit[139] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_58_OFFSET);
+    addr_hit[140] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_59_OFFSET);
+    addr_hit[141] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_60_OFFSET);
+    addr_hit[142] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61_OFFSET);
+    addr_hit[143] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62_OFFSET);
+    addr_hit[144] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63_OFFSET);
+    addr_hit[145] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0_OFFSET);
+    addr_hit[146] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1_OFFSET);
+    addr_hit[147] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2_OFFSET);
+    addr_hit[148] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_3_OFFSET);
+    addr_hit[149] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_4_OFFSET);
+    addr_hit[150] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_5_OFFSET);
+    addr_hit[151] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_6_OFFSET);
+    addr_hit[152] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_7_OFFSET);
+    addr_hit[153] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_8_OFFSET);
+    addr_hit[154] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_9_OFFSET);
+    addr_hit[155] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_10_OFFSET);
+    addr_hit[156] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_11_OFFSET);
+    addr_hit[157] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_12_OFFSET);
+    addr_hit[158] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_13_OFFSET);
+    addr_hit[159] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_14_OFFSET);
+    addr_hit[160] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_15_OFFSET);
+    addr_hit[161] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_16_OFFSET);
+    addr_hit[162] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_17_OFFSET);
+    addr_hit[163] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_18_OFFSET);
+    addr_hit[164] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_19_OFFSET);
+    addr_hit[165] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_20_OFFSET);
+    addr_hit[166] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_21_OFFSET);
+    addr_hit[167] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_22_OFFSET);
+    addr_hit[168] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_23_OFFSET);
+    addr_hit[169] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_24_OFFSET);
+    addr_hit[170] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_25_OFFSET);
+    addr_hit[171] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_26_OFFSET);
+    addr_hit[172] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_27_OFFSET);
+    addr_hit[173] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_28_OFFSET);
+    addr_hit[174] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_29_OFFSET);
+    addr_hit[175] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_30_OFFSET);
+    addr_hit[176] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_31_OFFSET);
+    addr_hit[177] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_32_OFFSET);
+    addr_hit[178] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_33_OFFSET);
+    addr_hit[179] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_34_OFFSET);
+    addr_hit[180] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_35_OFFSET);
+    addr_hit[181] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_36_OFFSET);
+    addr_hit[182] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_37_OFFSET);
+    addr_hit[183] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_38_OFFSET);
+    addr_hit[184] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_39_OFFSET);
+    addr_hit[185] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_40_OFFSET);
+    addr_hit[186] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_41_OFFSET);
+    addr_hit[187] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_42_OFFSET);
+    addr_hit[188] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_43_OFFSET);
+    addr_hit[189] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_44_OFFSET);
+    addr_hit[190] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_45_OFFSET);
+    addr_hit[191] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_46_OFFSET);
+    addr_hit[192] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_47_OFFSET);
+    addr_hit[193] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_48_OFFSET);
+    addr_hit[194] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_49_OFFSET);
+    addr_hit[195] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_50_OFFSET);
+    addr_hit[196] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_51_OFFSET);
+    addr_hit[197] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_52_OFFSET);
+    addr_hit[198] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_53_OFFSET);
+    addr_hit[199] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_54_OFFSET);
+    addr_hit[200] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_55_OFFSET);
+    addr_hit[201] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_56_OFFSET);
+    addr_hit[202] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_57_OFFSET);
+    addr_hit[203] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_58_OFFSET);
+    addr_hit[204] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_59_OFFSET);
+    addr_hit[205] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_60_OFFSET);
+    addr_hit[206] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61_OFFSET);
+    addr_hit[207] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62_OFFSET);
+    addr_hit[208] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63_OFFSET);
+    addr_hit[209] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0_OFFSET);
+    addr_hit[210] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1_OFFSET);
+    addr_hit[211] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2_OFFSET);
+    addr_hit[212] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_3_OFFSET);
+    addr_hit[213] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_4_OFFSET);
+    addr_hit[214] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_5_OFFSET);
+    addr_hit[215] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_6_OFFSET);
+    addr_hit[216] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_7_OFFSET);
+    addr_hit[217] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_8_OFFSET);
+    addr_hit[218] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_9_OFFSET);
+    addr_hit[219] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_10_OFFSET);
+    addr_hit[220] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_11_OFFSET);
+    addr_hit[221] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_12_OFFSET);
+    addr_hit[222] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_13_OFFSET);
+    addr_hit[223] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_14_OFFSET);
+    addr_hit[224] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_15_OFFSET);
+    addr_hit[225] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_16_OFFSET);
+    addr_hit[226] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_17_OFFSET);
+    addr_hit[227] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_18_OFFSET);
+    addr_hit[228] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_19_OFFSET);
+    addr_hit[229] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_20_OFFSET);
+    addr_hit[230] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_21_OFFSET);
+    addr_hit[231] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_22_OFFSET);
+    addr_hit[232] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_23_OFFSET);
+    addr_hit[233] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_24_OFFSET);
+    addr_hit[234] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_25_OFFSET);
+    addr_hit[235] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_26_OFFSET);
+    addr_hit[236] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_27_OFFSET);
+    addr_hit[237] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_28_OFFSET);
+    addr_hit[238] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_29_OFFSET);
+    addr_hit[239] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_30_OFFSET);
+    addr_hit[240] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_31_OFFSET);
+    addr_hit[241] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_32_OFFSET);
+    addr_hit[242] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_33_OFFSET);
+    addr_hit[243] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_34_OFFSET);
+    addr_hit[244] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_35_OFFSET);
+    addr_hit[245] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_36_OFFSET);
+    addr_hit[246] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_37_OFFSET);
+    addr_hit[247] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_38_OFFSET);
+    addr_hit[248] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_39_OFFSET);
+    addr_hit[249] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_40_OFFSET);
+    addr_hit[250] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_41_OFFSET);
+    addr_hit[251] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_42_OFFSET);
+    addr_hit[252] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_43_OFFSET);
+    addr_hit[253] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_44_OFFSET);
+    addr_hit[254] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_45_OFFSET);
+    addr_hit[255] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_46_OFFSET);
+    addr_hit[256] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_47_OFFSET);
+    addr_hit[257] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_48_OFFSET);
+    addr_hit[258] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_49_OFFSET);
+    addr_hit[259] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_50_OFFSET);
+    addr_hit[260] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_51_OFFSET);
+    addr_hit[261] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_52_OFFSET);
+    addr_hit[262] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_53_OFFSET);
+    addr_hit[263] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_54_OFFSET);
+    addr_hit[264] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_55_OFFSET);
+    addr_hit[265] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_56_OFFSET);
+    addr_hit[266] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_57_OFFSET);
+    addr_hit[267] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_58_OFFSET);
+    addr_hit[268] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_59_OFFSET);
+    addr_hit[269] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60_OFFSET);
+    addr_hit[270] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61_OFFSET);
+    addr_hit[271] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62_OFFSET);
+    addr_hit[272] = (reg_addr == CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -583,23 +7759,279 @@ module cachepool_peripheral_reg_top #(
   // Check sub-word write is permitted
   always_comb begin
     wr_err = (reg_we &
-              ((addr_hit[ 0] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 0] & ~reg_be))) |
-               (addr_hit[ 1] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 1] & ~reg_be))) |
-               (addr_hit[ 2] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 2] & ~reg_be))) |
-               (addr_hit[ 3] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 3] & ~reg_be))) |
-               (addr_hit[ 4] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 4] & ~reg_be))) |
-               (addr_hit[ 5] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 5] & ~reg_be))) |
-               (addr_hit[ 6] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 6] & ~reg_be))) |
-               (addr_hit[ 7] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 7] & ~reg_be))) |
-               (addr_hit[ 8] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 8] & ~reg_be))) |
-               (addr_hit[ 9] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 9] & ~reg_be))) |
-               (addr_hit[10] & (|(CACHEPOOL_PERIPHERAL_PERMIT[10] & ~reg_be))) |
-               (addr_hit[11] & (|(CACHEPOOL_PERIPHERAL_PERMIT[11] & ~reg_be))) |
-               (addr_hit[12] & (|(CACHEPOOL_PERIPHERAL_PERMIT[12] & ~reg_be))) |
-               (addr_hit[13] & (|(CACHEPOOL_PERIPHERAL_PERMIT[13] & ~reg_be))) |
-               (addr_hit[14] & (|(CACHEPOOL_PERIPHERAL_PERMIT[14] & ~reg_be))) |
-               (addr_hit[15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[15] & ~reg_be))) |
-               (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be)))));
+              ((addr_hit[  0] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  0] & ~reg_be))) |
+               (addr_hit[  1] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  1] & ~reg_be))) |
+               (addr_hit[  2] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  2] & ~reg_be))) |
+               (addr_hit[  3] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  3] & ~reg_be))) |
+               (addr_hit[  4] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  4] & ~reg_be))) |
+               (addr_hit[  5] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  5] & ~reg_be))) |
+               (addr_hit[  6] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  6] & ~reg_be))) |
+               (addr_hit[  7] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  7] & ~reg_be))) |
+               (addr_hit[  8] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  8] & ~reg_be))) |
+               (addr_hit[  9] & (|(CACHEPOOL_PERIPHERAL_PERMIT[  9] & ~reg_be))) |
+               (addr_hit[ 10] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 10] & ~reg_be))) |
+               (addr_hit[ 11] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 11] & ~reg_be))) |
+               (addr_hit[ 12] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 12] & ~reg_be))) |
+               (addr_hit[ 13] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 13] & ~reg_be))) |
+               (addr_hit[ 14] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 14] & ~reg_be))) |
+               (addr_hit[ 15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 15] & ~reg_be))) |
+               (addr_hit[ 16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 16] & ~reg_be))) |
+               (addr_hit[ 17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 17] & ~reg_be))) |
+               (addr_hit[ 18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 18] & ~reg_be))) |
+               (addr_hit[ 19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 19] & ~reg_be))) |
+               (addr_hit[ 20] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 20] & ~reg_be))) |
+               (addr_hit[ 21] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 21] & ~reg_be))) |
+               (addr_hit[ 22] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 22] & ~reg_be))) |
+               (addr_hit[ 23] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 23] & ~reg_be))) |
+               (addr_hit[ 24] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 24] & ~reg_be))) |
+               (addr_hit[ 25] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 25] & ~reg_be))) |
+               (addr_hit[ 26] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 26] & ~reg_be))) |
+               (addr_hit[ 27] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 27] & ~reg_be))) |
+               (addr_hit[ 28] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 28] & ~reg_be))) |
+               (addr_hit[ 29] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 29] & ~reg_be))) |
+               (addr_hit[ 30] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 30] & ~reg_be))) |
+               (addr_hit[ 31] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 31] & ~reg_be))) |
+               (addr_hit[ 32] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 32] & ~reg_be))) |
+               (addr_hit[ 33] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 33] & ~reg_be))) |
+               (addr_hit[ 34] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 34] & ~reg_be))) |
+               (addr_hit[ 35] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 35] & ~reg_be))) |
+               (addr_hit[ 36] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 36] & ~reg_be))) |
+               (addr_hit[ 37] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 37] & ~reg_be))) |
+               (addr_hit[ 38] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 38] & ~reg_be))) |
+               (addr_hit[ 39] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 39] & ~reg_be))) |
+               (addr_hit[ 40] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 40] & ~reg_be))) |
+               (addr_hit[ 41] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 41] & ~reg_be))) |
+               (addr_hit[ 42] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 42] & ~reg_be))) |
+               (addr_hit[ 43] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 43] & ~reg_be))) |
+               (addr_hit[ 44] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 44] & ~reg_be))) |
+               (addr_hit[ 45] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 45] & ~reg_be))) |
+               (addr_hit[ 46] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 46] & ~reg_be))) |
+               (addr_hit[ 47] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 47] & ~reg_be))) |
+               (addr_hit[ 48] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 48] & ~reg_be))) |
+               (addr_hit[ 49] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 49] & ~reg_be))) |
+               (addr_hit[ 50] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 50] & ~reg_be))) |
+               (addr_hit[ 51] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 51] & ~reg_be))) |
+               (addr_hit[ 52] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 52] & ~reg_be))) |
+               (addr_hit[ 53] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 53] & ~reg_be))) |
+               (addr_hit[ 54] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 54] & ~reg_be))) |
+               (addr_hit[ 55] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 55] & ~reg_be))) |
+               (addr_hit[ 56] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 56] & ~reg_be))) |
+               (addr_hit[ 57] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 57] & ~reg_be))) |
+               (addr_hit[ 58] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 58] & ~reg_be))) |
+               (addr_hit[ 59] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 59] & ~reg_be))) |
+               (addr_hit[ 60] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 60] & ~reg_be))) |
+               (addr_hit[ 61] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 61] & ~reg_be))) |
+               (addr_hit[ 62] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 62] & ~reg_be))) |
+               (addr_hit[ 63] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 63] & ~reg_be))) |
+               (addr_hit[ 64] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 64] & ~reg_be))) |
+               (addr_hit[ 65] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 65] & ~reg_be))) |
+               (addr_hit[ 66] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 66] & ~reg_be))) |
+               (addr_hit[ 67] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 67] & ~reg_be))) |
+               (addr_hit[ 68] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 68] & ~reg_be))) |
+               (addr_hit[ 69] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 69] & ~reg_be))) |
+               (addr_hit[ 70] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 70] & ~reg_be))) |
+               (addr_hit[ 71] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 71] & ~reg_be))) |
+               (addr_hit[ 72] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 72] & ~reg_be))) |
+               (addr_hit[ 73] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 73] & ~reg_be))) |
+               (addr_hit[ 74] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 74] & ~reg_be))) |
+               (addr_hit[ 75] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 75] & ~reg_be))) |
+               (addr_hit[ 76] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 76] & ~reg_be))) |
+               (addr_hit[ 77] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 77] & ~reg_be))) |
+               (addr_hit[ 78] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 78] & ~reg_be))) |
+               (addr_hit[ 79] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 79] & ~reg_be))) |
+               (addr_hit[ 80] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 80] & ~reg_be))) |
+               (addr_hit[ 81] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 81] & ~reg_be))) |
+               (addr_hit[ 82] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 82] & ~reg_be))) |
+               (addr_hit[ 83] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 83] & ~reg_be))) |
+               (addr_hit[ 84] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 84] & ~reg_be))) |
+               (addr_hit[ 85] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 85] & ~reg_be))) |
+               (addr_hit[ 86] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 86] & ~reg_be))) |
+               (addr_hit[ 87] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 87] & ~reg_be))) |
+               (addr_hit[ 88] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 88] & ~reg_be))) |
+               (addr_hit[ 89] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 89] & ~reg_be))) |
+               (addr_hit[ 90] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 90] & ~reg_be))) |
+               (addr_hit[ 91] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 91] & ~reg_be))) |
+               (addr_hit[ 92] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 92] & ~reg_be))) |
+               (addr_hit[ 93] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 93] & ~reg_be))) |
+               (addr_hit[ 94] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 94] & ~reg_be))) |
+               (addr_hit[ 95] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 95] & ~reg_be))) |
+               (addr_hit[ 96] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 96] & ~reg_be))) |
+               (addr_hit[ 97] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 97] & ~reg_be))) |
+               (addr_hit[ 98] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 98] & ~reg_be))) |
+               (addr_hit[ 99] & (|(CACHEPOOL_PERIPHERAL_PERMIT[ 99] & ~reg_be))) |
+               (addr_hit[100] & (|(CACHEPOOL_PERIPHERAL_PERMIT[100] & ~reg_be))) |
+               (addr_hit[101] & (|(CACHEPOOL_PERIPHERAL_PERMIT[101] & ~reg_be))) |
+               (addr_hit[102] & (|(CACHEPOOL_PERIPHERAL_PERMIT[102] & ~reg_be))) |
+               (addr_hit[103] & (|(CACHEPOOL_PERIPHERAL_PERMIT[103] & ~reg_be))) |
+               (addr_hit[104] & (|(CACHEPOOL_PERIPHERAL_PERMIT[104] & ~reg_be))) |
+               (addr_hit[105] & (|(CACHEPOOL_PERIPHERAL_PERMIT[105] & ~reg_be))) |
+               (addr_hit[106] & (|(CACHEPOOL_PERIPHERAL_PERMIT[106] & ~reg_be))) |
+               (addr_hit[107] & (|(CACHEPOOL_PERIPHERAL_PERMIT[107] & ~reg_be))) |
+               (addr_hit[108] & (|(CACHEPOOL_PERIPHERAL_PERMIT[108] & ~reg_be))) |
+               (addr_hit[109] & (|(CACHEPOOL_PERIPHERAL_PERMIT[109] & ~reg_be))) |
+               (addr_hit[110] & (|(CACHEPOOL_PERIPHERAL_PERMIT[110] & ~reg_be))) |
+               (addr_hit[111] & (|(CACHEPOOL_PERIPHERAL_PERMIT[111] & ~reg_be))) |
+               (addr_hit[112] & (|(CACHEPOOL_PERIPHERAL_PERMIT[112] & ~reg_be))) |
+               (addr_hit[113] & (|(CACHEPOOL_PERIPHERAL_PERMIT[113] & ~reg_be))) |
+               (addr_hit[114] & (|(CACHEPOOL_PERIPHERAL_PERMIT[114] & ~reg_be))) |
+               (addr_hit[115] & (|(CACHEPOOL_PERIPHERAL_PERMIT[115] & ~reg_be))) |
+               (addr_hit[116] & (|(CACHEPOOL_PERIPHERAL_PERMIT[116] & ~reg_be))) |
+               (addr_hit[117] & (|(CACHEPOOL_PERIPHERAL_PERMIT[117] & ~reg_be))) |
+               (addr_hit[118] & (|(CACHEPOOL_PERIPHERAL_PERMIT[118] & ~reg_be))) |
+               (addr_hit[119] & (|(CACHEPOOL_PERIPHERAL_PERMIT[119] & ~reg_be))) |
+               (addr_hit[120] & (|(CACHEPOOL_PERIPHERAL_PERMIT[120] & ~reg_be))) |
+               (addr_hit[121] & (|(CACHEPOOL_PERIPHERAL_PERMIT[121] & ~reg_be))) |
+               (addr_hit[122] & (|(CACHEPOOL_PERIPHERAL_PERMIT[122] & ~reg_be))) |
+               (addr_hit[123] & (|(CACHEPOOL_PERIPHERAL_PERMIT[123] & ~reg_be))) |
+               (addr_hit[124] & (|(CACHEPOOL_PERIPHERAL_PERMIT[124] & ~reg_be))) |
+               (addr_hit[125] & (|(CACHEPOOL_PERIPHERAL_PERMIT[125] & ~reg_be))) |
+               (addr_hit[126] & (|(CACHEPOOL_PERIPHERAL_PERMIT[126] & ~reg_be))) |
+               (addr_hit[127] & (|(CACHEPOOL_PERIPHERAL_PERMIT[127] & ~reg_be))) |
+               (addr_hit[128] & (|(CACHEPOOL_PERIPHERAL_PERMIT[128] & ~reg_be))) |
+               (addr_hit[129] & (|(CACHEPOOL_PERIPHERAL_PERMIT[129] & ~reg_be))) |
+               (addr_hit[130] & (|(CACHEPOOL_PERIPHERAL_PERMIT[130] & ~reg_be))) |
+               (addr_hit[131] & (|(CACHEPOOL_PERIPHERAL_PERMIT[131] & ~reg_be))) |
+               (addr_hit[132] & (|(CACHEPOOL_PERIPHERAL_PERMIT[132] & ~reg_be))) |
+               (addr_hit[133] & (|(CACHEPOOL_PERIPHERAL_PERMIT[133] & ~reg_be))) |
+               (addr_hit[134] & (|(CACHEPOOL_PERIPHERAL_PERMIT[134] & ~reg_be))) |
+               (addr_hit[135] & (|(CACHEPOOL_PERIPHERAL_PERMIT[135] & ~reg_be))) |
+               (addr_hit[136] & (|(CACHEPOOL_PERIPHERAL_PERMIT[136] & ~reg_be))) |
+               (addr_hit[137] & (|(CACHEPOOL_PERIPHERAL_PERMIT[137] & ~reg_be))) |
+               (addr_hit[138] & (|(CACHEPOOL_PERIPHERAL_PERMIT[138] & ~reg_be))) |
+               (addr_hit[139] & (|(CACHEPOOL_PERIPHERAL_PERMIT[139] & ~reg_be))) |
+               (addr_hit[140] & (|(CACHEPOOL_PERIPHERAL_PERMIT[140] & ~reg_be))) |
+               (addr_hit[141] & (|(CACHEPOOL_PERIPHERAL_PERMIT[141] & ~reg_be))) |
+               (addr_hit[142] & (|(CACHEPOOL_PERIPHERAL_PERMIT[142] & ~reg_be))) |
+               (addr_hit[143] & (|(CACHEPOOL_PERIPHERAL_PERMIT[143] & ~reg_be))) |
+               (addr_hit[144] & (|(CACHEPOOL_PERIPHERAL_PERMIT[144] & ~reg_be))) |
+               (addr_hit[145] & (|(CACHEPOOL_PERIPHERAL_PERMIT[145] & ~reg_be))) |
+               (addr_hit[146] & (|(CACHEPOOL_PERIPHERAL_PERMIT[146] & ~reg_be))) |
+               (addr_hit[147] & (|(CACHEPOOL_PERIPHERAL_PERMIT[147] & ~reg_be))) |
+               (addr_hit[148] & (|(CACHEPOOL_PERIPHERAL_PERMIT[148] & ~reg_be))) |
+               (addr_hit[149] & (|(CACHEPOOL_PERIPHERAL_PERMIT[149] & ~reg_be))) |
+               (addr_hit[150] & (|(CACHEPOOL_PERIPHERAL_PERMIT[150] & ~reg_be))) |
+               (addr_hit[151] & (|(CACHEPOOL_PERIPHERAL_PERMIT[151] & ~reg_be))) |
+               (addr_hit[152] & (|(CACHEPOOL_PERIPHERAL_PERMIT[152] & ~reg_be))) |
+               (addr_hit[153] & (|(CACHEPOOL_PERIPHERAL_PERMIT[153] & ~reg_be))) |
+               (addr_hit[154] & (|(CACHEPOOL_PERIPHERAL_PERMIT[154] & ~reg_be))) |
+               (addr_hit[155] & (|(CACHEPOOL_PERIPHERAL_PERMIT[155] & ~reg_be))) |
+               (addr_hit[156] & (|(CACHEPOOL_PERIPHERAL_PERMIT[156] & ~reg_be))) |
+               (addr_hit[157] & (|(CACHEPOOL_PERIPHERAL_PERMIT[157] & ~reg_be))) |
+               (addr_hit[158] & (|(CACHEPOOL_PERIPHERAL_PERMIT[158] & ~reg_be))) |
+               (addr_hit[159] & (|(CACHEPOOL_PERIPHERAL_PERMIT[159] & ~reg_be))) |
+               (addr_hit[160] & (|(CACHEPOOL_PERIPHERAL_PERMIT[160] & ~reg_be))) |
+               (addr_hit[161] & (|(CACHEPOOL_PERIPHERAL_PERMIT[161] & ~reg_be))) |
+               (addr_hit[162] & (|(CACHEPOOL_PERIPHERAL_PERMIT[162] & ~reg_be))) |
+               (addr_hit[163] & (|(CACHEPOOL_PERIPHERAL_PERMIT[163] & ~reg_be))) |
+               (addr_hit[164] & (|(CACHEPOOL_PERIPHERAL_PERMIT[164] & ~reg_be))) |
+               (addr_hit[165] & (|(CACHEPOOL_PERIPHERAL_PERMIT[165] & ~reg_be))) |
+               (addr_hit[166] & (|(CACHEPOOL_PERIPHERAL_PERMIT[166] & ~reg_be))) |
+               (addr_hit[167] & (|(CACHEPOOL_PERIPHERAL_PERMIT[167] & ~reg_be))) |
+               (addr_hit[168] & (|(CACHEPOOL_PERIPHERAL_PERMIT[168] & ~reg_be))) |
+               (addr_hit[169] & (|(CACHEPOOL_PERIPHERAL_PERMIT[169] & ~reg_be))) |
+               (addr_hit[170] & (|(CACHEPOOL_PERIPHERAL_PERMIT[170] & ~reg_be))) |
+               (addr_hit[171] & (|(CACHEPOOL_PERIPHERAL_PERMIT[171] & ~reg_be))) |
+               (addr_hit[172] & (|(CACHEPOOL_PERIPHERAL_PERMIT[172] & ~reg_be))) |
+               (addr_hit[173] & (|(CACHEPOOL_PERIPHERAL_PERMIT[173] & ~reg_be))) |
+               (addr_hit[174] & (|(CACHEPOOL_PERIPHERAL_PERMIT[174] & ~reg_be))) |
+               (addr_hit[175] & (|(CACHEPOOL_PERIPHERAL_PERMIT[175] & ~reg_be))) |
+               (addr_hit[176] & (|(CACHEPOOL_PERIPHERAL_PERMIT[176] & ~reg_be))) |
+               (addr_hit[177] & (|(CACHEPOOL_PERIPHERAL_PERMIT[177] & ~reg_be))) |
+               (addr_hit[178] & (|(CACHEPOOL_PERIPHERAL_PERMIT[178] & ~reg_be))) |
+               (addr_hit[179] & (|(CACHEPOOL_PERIPHERAL_PERMIT[179] & ~reg_be))) |
+               (addr_hit[180] & (|(CACHEPOOL_PERIPHERAL_PERMIT[180] & ~reg_be))) |
+               (addr_hit[181] & (|(CACHEPOOL_PERIPHERAL_PERMIT[181] & ~reg_be))) |
+               (addr_hit[182] & (|(CACHEPOOL_PERIPHERAL_PERMIT[182] & ~reg_be))) |
+               (addr_hit[183] & (|(CACHEPOOL_PERIPHERAL_PERMIT[183] & ~reg_be))) |
+               (addr_hit[184] & (|(CACHEPOOL_PERIPHERAL_PERMIT[184] & ~reg_be))) |
+               (addr_hit[185] & (|(CACHEPOOL_PERIPHERAL_PERMIT[185] & ~reg_be))) |
+               (addr_hit[186] & (|(CACHEPOOL_PERIPHERAL_PERMIT[186] & ~reg_be))) |
+               (addr_hit[187] & (|(CACHEPOOL_PERIPHERAL_PERMIT[187] & ~reg_be))) |
+               (addr_hit[188] & (|(CACHEPOOL_PERIPHERAL_PERMIT[188] & ~reg_be))) |
+               (addr_hit[189] & (|(CACHEPOOL_PERIPHERAL_PERMIT[189] & ~reg_be))) |
+               (addr_hit[190] & (|(CACHEPOOL_PERIPHERAL_PERMIT[190] & ~reg_be))) |
+               (addr_hit[191] & (|(CACHEPOOL_PERIPHERAL_PERMIT[191] & ~reg_be))) |
+               (addr_hit[192] & (|(CACHEPOOL_PERIPHERAL_PERMIT[192] & ~reg_be))) |
+               (addr_hit[193] & (|(CACHEPOOL_PERIPHERAL_PERMIT[193] & ~reg_be))) |
+               (addr_hit[194] & (|(CACHEPOOL_PERIPHERAL_PERMIT[194] & ~reg_be))) |
+               (addr_hit[195] & (|(CACHEPOOL_PERIPHERAL_PERMIT[195] & ~reg_be))) |
+               (addr_hit[196] & (|(CACHEPOOL_PERIPHERAL_PERMIT[196] & ~reg_be))) |
+               (addr_hit[197] & (|(CACHEPOOL_PERIPHERAL_PERMIT[197] & ~reg_be))) |
+               (addr_hit[198] & (|(CACHEPOOL_PERIPHERAL_PERMIT[198] & ~reg_be))) |
+               (addr_hit[199] & (|(CACHEPOOL_PERIPHERAL_PERMIT[199] & ~reg_be))) |
+               (addr_hit[200] & (|(CACHEPOOL_PERIPHERAL_PERMIT[200] & ~reg_be))) |
+               (addr_hit[201] & (|(CACHEPOOL_PERIPHERAL_PERMIT[201] & ~reg_be))) |
+               (addr_hit[202] & (|(CACHEPOOL_PERIPHERAL_PERMIT[202] & ~reg_be))) |
+               (addr_hit[203] & (|(CACHEPOOL_PERIPHERAL_PERMIT[203] & ~reg_be))) |
+               (addr_hit[204] & (|(CACHEPOOL_PERIPHERAL_PERMIT[204] & ~reg_be))) |
+               (addr_hit[205] & (|(CACHEPOOL_PERIPHERAL_PERMIT[205] & ~reg_be))) |
+               (addr_hit[206] & (|(CACHEPOOL_PERIPHERAL_PERMIT[206] & ~reg_be))) |
+               (addr_hit[207] & (|(CACHEPOOL_PERIPHERAL_PERMIT[207] & ~reg_be))) |
+               (addr_hit[208] & (|(CACHEPOOL_PERIPHERAL_PERMIT[208] & ~reg_be))) |
+               (addr_hit[209] & (|(CACHEPOOL_PERIPHERAL_PERMIT[209] & ~reg_be))) |
+               (addr_hit[210] & (|(CACHEPOOL_PERIPHERAL_PERMIT[210] & ~reg_be))) |
+               (addr_hit[211] & (|(CACHEPOOL_PERIPHERAL_PERMIT[211] & ~reg_be))) |
+               (addr_hit[212] & (|(CACHEPOOL_PERIPHERAL_PERMIT[212] & ~reg_be))) |
+               (addr_hit[213] & (|(CACHEPOOL_PERIPHERAL_PERMIT[213] & ~reg_be))) |
+               (addr_hit[214] & (|(CACHEPOOL_PERIPHERAL_PERMIT[214] & ~reg_be))) |
+               (addr_hit[215] & (|(CACHEPOOL_PERIPHERAL_PERMIT[215] & ~reg_be))) |
+               (addr_hit[216] & (|(CACHEPOOL_PERIPHERAL_PERMIT[216] & ~reg_be))) |
+               (addr_hit[217] & (|(CACHEPOOL_PERIPHERAL_PERMIT[217] & ~reg_be))) |
+               (addr_hit[218] & (|(CACHEPOOL_PERIPHERAL_PERMIT[218] & ~reg_be))) |
+               (addr_hit[219] & (|(CACHEPOOL_PERIPHERAL_PERMIT[219] & ~reg_be))) |
+               (addr_hit[220] & (|(CACHEPOOL_PERIPHERAL_PERMIT[220] & ~reg_be))) |
+               (addr_hit[221] & (|(CACHEPOOL_PERIPHERAL_PERMIT[221] & ~reg_be))) |
+               (addr_hit[222] & (|(CACHEPOOL_PERIPHERAL_PERMIT[222] & ~reg_be))) |
+               (addr_hit[223] & (|(CACHEPOOL_PERIPHERAL_PERMIT[223] & ~reg_be))) |
+               (addr_hit[224] & (|(CACHEPOOL_PERIPHERAL_PERMIT[224] & ~reg_be))) |
+               (addr_hit[225] & (|(CACHEPOOL_PERIPHERAL_PERMIT[225] & ~reg_be))) |
+               (addr_hit[226] & (|(CACHEPOOL_PERIPHERAL_PERMIT[226] & ~reg_be))) |
+               (addr_hit[227] & (|(CACHEPOOL_PERIPHERAL_PERMIT[227] & ~reg_be))) |
+               (addr_hit[228] & (|(CACHEPOOL_PERIPHERAL_PERMIT[228] & ~reg_be))) |
+               (addr_hit[229] & (|(CACHEPOOL_PERIPHERAL_PERMIT[229] & ~reg_be))) |
+               (addr_hit[230] & (|(CACHEPOOL_PERIPHERAL_PERMIT[230] & ~reg_be))) |
+               (addr_hit[231] & (|(CACHEPOOL_PERIPHERAL_PERMIT[231] & ~reg_be))) |
+               (addr_hit[232] & (|(CACHEPOOL_PERIPHERAL_PERMIT[232] & ~reg_be))) |
+               (addr_hit[233] & (|(CACHEPOOL_PERIPHERAL_PERMIT[233] & ~reg_be))) |
+               (addr_hit[234] & (|(CACHEPOOL_PERIPHERAL_PERMIT[234] & ~reg_be))) |
+               (addr_hit[235] & (|(CACHEPOOL_PERIPHERAL_PERMIT[235] & ~reg_be))) |
+               (addr_hit[236] & (|(CACHEPOOL_PERIPHERAL_PERMIT[236] & ~reg_be))) |
+               (addr_hit[237] & (|(CACHEPOOL_PERIPHERAL_PERMIT[237] & ~reg_be))) |
+               (addr_hit[238] & (|(CACHEPOOL_PERIPHERAL_PERMIT[238] & ~reg_be))) |
+               (addr_hit[239] & (|(CACHEPOOL_PERIPHERAL_PERMIT[239] & ~reg_be))) |
+               (addr_hit[240] & (|(CACHEPOOL_PERIPHERAL_PERMIT[240] & ~reg_be))) |
+               (addr_hit[241] & (|(CACHEPOOL_PERIPHERAL_PERMIT[241] & ~reg_be))) |
+               (addr_hit[242] & (|(CACHEPOOL_PERIPHERAL_PERMIT[242] & ~reg_be))) |
+               (addr_hit[243] & (|(CACHEPOOL_PERIPHERAL_PERMIT[243] & ~reg_be))) |
+               (addr_hit[244] & (|(CACHEPOOL_PERIPHERAL_PERMIT[244] & ~reg_be))) |
+               (addr_hit[245] & (|(CACHEPOOL_PERIPHERAL_PERMIT[245] & ~reg_be))) |
+               (addr_hit[246] & (|(CACHEPOOL_PERIPHERAL_PERMIT[246] & ~reg_be))) |
+               (addr_hit[247] & (|(CACHEPOOL_PERIPHERAL_PERMIT[247] & ~reg_be))) |
+               (addr_hit[248] & (|(CACHEPOOL_PERIPHERAL_PERMIT[248] & ~reg_be))) |
+               (addr_hit[249] & (|(CACHEPOOL_PERIPHERAL_PERMIT[249] & ~reg_be))) |
+               (addr_hit[250] & (|(CACHEPOOL_PERIPHERAL_PERMIT[250] & ~reg_be))) |
+               (addr_hit[251] & (|(CACHEPOOL_PERIPHERAL_PERMIT[251] & ~reg_be))) |
+               (addr_hit[252] & (|(CACHEPOOL_PERIPHERAL_PERMIT[252] & ~reg_be))) |
+               (addr_hit[253] & (|(CACHEPOOL_PERIPHERAL_PERMIT[253] & ~reg_be))) |
+               (addr_hit[254] & (|(CACHEPOOL_PERIPHERAL_PERMIT[254] & ~reg_be))) |
+               (addr_hit[255] & (|(CACHEPOOL_PERIPHERAL_PERMIT[255] & ~reg_be))) |
+               (addr_hit[256] & (|(CACHEPOOL_PERIPHERAL_PERMIT[256] & ~reg_be))) |
+               (addr_hit[257] & (|(CACHEPOOL_PERIPHERAL_PERMIT[257] & ~reg_be))) |
+               (addr_hit[258] & (|(CACHEPOOL_PERIPHERAL_PERMIT[258] & ~reg_be))) |
+               (addr_hit[259] & (|(CACHEPOOL_PERIPHERAL_PERMIT[259] & ~reg_be))) |
+               (addr_hit[260] & (|(CACHEPOOL_PERIPHERAL_PERMIT[260] & ~reg_be))) |
+               (addr_hit[261] & (|(CACHEPOOL_PERIPHERAL_PERMIT[261] & ~reg_be))) |
+               (addr_hit[262] & (|(CACHEPOOL_PERIPHERAL_PERMIT[262] & ~reg_be))) |
+               (addr_hit[263] & (|(CACHEPOOL_PERIPHERAL_PERMIT[263] & ~reg_be))) |
+               (addr_hit[264] & (|(CACHEPOOL_PERIPHERAL_PERMIT[264] & ~reg_be))) |
+               (addr_hit[265] & (|(CACHEPOOL_PERIPHERAL_PERMIT[265] & ~reg_be))) |
+               (addr_hit[266] & (|(CACHEPOOL_PERIPHERAL_PERMIT[266] & ~reg_be))) |
+               (addr_hit[267] & (|(CACHEPOOL_PERIPHERAL_PERMIT[267] & ~reg_be))) |
+               (addr_hit[268] & (|(CACHEPOOL_PERIPHERAL_PERMIT[268] & ~reg_be))) |
+               (addr_hit[269] & (|(CACHEPOOL_PERIPHERAL_PERMIT[269] & ~reg_be))) |
+               (addr_hit[270] & (|(CACHEPOOL_PERIPHERAL_PERMIT[270] & ~reg_be))) |
+               (addr_hit[271] & (|(CACHEPOOL_PERIPHERAL_PERMIT[271] & ~reg_be))) |
+               (addr_hit[272] & (|(CACHEPOOL_PERIPHERAL_PERMIT[272] & ~reg_be)))));
   end
 
   assign hw_barrier_re = addr_hit[0] & reg_re & !reg_error;
@@ -650,6 +8082,710 @@ module cachepool_peripheral_reg_top #(
 
   assign xbar_offset_commit_we = addr_hit[16] & reg_we & !reg_error;
   assign xbar_offset_commit_wd = reg_wdata[0];
+
+  assign cfg_lp1_cmo_0_we = addr_hit[17] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_0_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_1_we = addr_hit[18] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_1_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_2_we = addr_hit[19] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_2_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_3_we = addr_hit[20] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_3_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_4_we = addr_hit[21] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_4_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_5_we = addr_hit[22] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_5_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_6_we = addr_hit[23] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_6_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_7_we = addr_hit[24] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_7_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_8_we = addr_hit[25] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_8_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_9_we = addr_hit[26] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_9_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_10_we = addr_hit[27] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_10_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_11_we = addr_hit[28] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_11_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_12_we = addr_hit[29] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_12_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_13_we = addr_hit[30] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_13_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_14_we = addr_hit[31] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_14_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_15_we = addr_hit[32] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_15_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_16_we = addr_hit[33] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_16_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_17_we = addr_hit[34] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_17_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_18_we = addr_hit[35] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_18_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_19_we = addr_hit[36] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_19_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_20_we = addr_hit[37] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_20_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_21_we = addr_hit[38] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_21_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_22_we = addr_hit[39] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_22_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_23_we = addr_hit[40] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_23_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_24_we = addr_hit[41] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_24_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_25_we = addr_hit[42] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_25_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_26_we = addr_hit[43] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_26_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_27_we = addr_hit[44] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_27_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_28_we = addr_hit[45] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_28_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_29_we = addr_hit[46] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_29_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_30_we = addr_hit[47] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_30_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_31_we = addr_hit[48] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_31_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_32_we = addr_hit[49] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_32_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_33_we = addr_hit[50] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_33_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_34_we = addr_hit[51] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_34_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_35_we = addr_hit[52] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_35_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_36_we = addr_hit[53] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_36_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_37_we = addr_hit[54] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_37_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_38_we = addr_hit[55] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_38_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_39_we = addr_hit[56] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_39_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_40_we = addr_hit[57] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_40_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_41_we = addr_hit[58] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_41_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_42_we = addr_hit[59] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_42_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_43_we = addr_hit[60] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_43_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_44_we = addr_hit[61] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_44_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_45_we = addr_hit[62] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_45_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_46_we = addr_hit[63] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_46_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_47_we = addr_hit[64] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_47_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_48_we = addr_hit[65] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_48_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_49_we = addr_hit[66] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_49_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_50_we = addr_hit[67] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_50_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_51_we = addr_hit[68] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_51_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_52_we = addr_hit[69] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_52_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_53_we = addr_hit[70] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_53_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_54_we = addr_hit[71] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_54_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_55_we = addr_hit[72] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_55_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_56_we = addr_hit[73] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_56_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_57_we = addr_hit[74] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_57_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_58_we = addr_hit[75] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_58_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_59_we = addr_hit[76] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_59_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_60_we = addr_hit[77] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_60_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_61_we = addr_hit[78] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_61_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_62_we = addr_hit[79] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_62_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_63_we = addr_hit[80] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_63_wd = reg_wdata[2:0];
+
+  assign cfg_lp1_cmo_addr_0_we = addr_hit[81] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_0_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_1_we = addr_hit[82] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_1_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_2_we = addr_hit[83] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_2_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_3_we = addr_hit[84] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_3_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_4_we = addr_hit[85] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_4_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_5_we = addr_hit[86] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_5_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_6_we = addr_hit[87] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_6_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_7_we = addr_hit[88] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_7_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_8_we = addr_hit[89] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_8_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_9_we = addr_hit[90] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_9_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_10_we = addr_hit[91] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_10_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_11_we = addr_hit[92] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_11_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_12_we = addr_hit[93] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_12_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_13_we = addr_hit[94] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_13_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_14_we = addr_hit[95] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_14_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_15_we = addr_hit[96] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_15_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_16_we = addr_hit[97] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_16_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_17_we = addr_hit[98] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_17_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_18_we = addr_hit[99] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_18_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_19_we = addr_hit[100] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_19_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_20_we = addr_hit[101] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_20_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_21_we = addr_hit[102] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_21_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_22_we = addr_hit[103] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_22_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_23_we = addr_hit[104] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_23_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_24_we = addr_hit[105] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_24_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_25_we = addr_hit[106] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_25_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_26_we = addr_hit[107] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_26_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_27_we = addr_hit[108] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_27_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_28_we = addr_hit[109] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_28_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_29_we = addr_hit[110] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_29_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_30_we = addr_hit[111] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_30_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_31_we = addr_hit[112] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_31_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_32_we = addr_hit[113] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_32_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_33_we = addr_hit[114] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_33_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_34_we = addr_hit[115] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_34_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_35_we = addr_hit[116] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_35_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_36_we = addr_hit[117] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_36_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_37_we = addr_hit[118] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_37_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_38_we = addr_hit[119] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_38_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_39_we = addr_hit[120] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_39_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_40_we = addr_hit[121] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_40_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_41_we = addr_hit[122] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_41_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_42_we = addr_hit[123] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_42_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_43_we = addr_hit[124] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_43_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_44_we = addr_hit[125] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_44_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_45_we = addr_hit[126] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_45_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_46_we = addr_hit[127] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_46_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_47_we = addr_hit[128] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_47_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_48_we = addr_hit[129] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_48_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_49_we = addr_hit[130] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_49_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_50_we = addr_hit[131] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_50_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_51_we = addr_hit[132] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_51_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_52_we = addr_hit[133] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_52_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_53_we = addr_hit[134] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_53_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_54_we = addr_hit[135] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_54_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_55_we = addr_hit[136] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_55_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_56_we = addr_hit[137] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_56_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_57_we = addr_hit[138] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_57_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_58_we = addr_hit[139] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_58_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_59_we = addr_hit[140] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_59_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_60_we = addr_hit[141] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_60_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_61_we = addr_hit[142] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_61_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_62_we = addr_hit[143] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_62_wd = reg_wdata[31:0];
+
+  assign cfg_lp1_cmo_addr_63_we = addr_hit[144] & reg_we & !reg_error;
+  assign cfg_lp1_cmo_addr_63_wd = reg_wdata[31:0];
+
+  assign lp1_cmo_commit_0_we = addr_hit[145] & reg_we & !reg_error;
+  assign lp1_cmo_commit_0_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_1_we = addr_hit[146] & reg_we & !reg_error;
+  assign lp1_cmo_commit_1_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_2_we = addr_hit[147] & reg_we & !reg_error;
+  assign lp1_cmo_commit_2_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_3_we = addr_hit[148] & reg_we & !reg_error;
+  assign lp1_cmo_commit_3_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_4_we = addr_hit[149] & reg_we & !reg_error;
+  assign lp1_cmo_commit_4_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_5_we = addr_hit[150] & reg_we & !reg_error;
+  assign lp1_cmo_commit_5_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_6_we = addr_hit[151] & reg_we & !reg_error;
+  assign lp1_cmo_commit_6_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_7_we = addr_hit[152] & reg_we & !reg_error;
+  assign lp1_cmo_commit_7_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_8_we = addr_hit[153] & reg_we & !reg_error;
+  assign lp1_cmo_commit_8_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_9_we = addr_hit[154] & reg_we & !reg_error;
+  assign lp1_cmo_commit_9_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_10_we = addr_hit[155] & reg_we & !reg_error;
+  assign lp1_cmo_commit_10_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_11_we = addr_hit[156] & reg_we & !reg_error;
+  assign lp1_cmo_commit_11_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_12_we = addr_hit[157] & reg_we & !reg_error;
+  assign lp1_cmo_commit_12_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_13_we = addr_hit[158] & reg_we & !reg_error;
+  assign lp1_cmo_commit_13_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_14_we = addr_hit[159] & reg_we & !reg_error;
+  assign lp1_cmo_commit_14_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_15_we = addr_hit[160] & reg_we & !reg_error;
+  assign lp1_cmo_commit_15_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_16_we = addr_hit[161] & reg_we & !reg_error;
+  assign lp1_cmo_commit_16_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_17_we = addr_hit[162] & reg_we & !reg_error;
+  assign lp1_cmo_commit_17_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_18_we = addr_hit[163] & reg_we & !reg_error;
+  assign lp1_cmo_commit_18_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_19_we = addr_hit[164] & reg_we & !reg_error;
+  assign lp1_cmo_commit_19_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_20_we = addr_hit[165] & reg_we & !reg_error;
+  assign lp1_cmo_commit_20_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_21_we = addr_hit[166] & reg_we & !reg_error;
+  assign lp1_cmo_commit_21_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_22_we = addr_hit[167] & reg_we & !reg_error;
+  assign lp1_cmo_commit_22_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_23_we = addr_hit[168] & reg_we & !reg_error;
+  assign lp1_cmo_commit_23_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_24_we = addr_hit[169] & reg_we & !reg_error;
+  assign lp1_cmo_commit_24_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_25_we = addr_hit[170] & reg_we & !reg_error;
+  assign lp1_cmo_commit_25_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_26_we = addr_hit[171] & reg_we & !reg_error;
+  assign lp1_cmo_commit_26_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_27_we = addr_hit[172] & reg_we & !reg_error;
+  assign lp1_cmo_commit_27_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_28_we = addr_hit[173] & reg_we & !reg_error;
+  assign lp1_cmo_commit_28_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_29_we = addr_hit[174] & reg_we & !reg_error;
+  assign lp1_cmo_commit_29_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_30_we = addr_hit[175] & reg_we & !reg_error;
+  assign lp1_cmo_commit_30_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_31_we = addr_hit[176] & reg_we & !reg_error;
+  assign lp1_cmo_commit_31_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_32_we = addr_hit[177] & reg_we & !reg_error;
+  assign lp1_cmo_commit_32_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_33_we = addr_hit[178] & reg_we & !reg_error;
+  assign lp1_cmo_commit_33_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_34_we = addr_hit[179] & reg_we & !reg_error;
+  assign lp1_cmo_commit_34_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_35_we = addr_hit[180] & reg_we & !reg_error;
+  assign lp1_cmo_commit_35_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_36_we = addr_hit[181] & reg_we & !reg_error;
+  assign lp1_cmo_commit_36_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_37_we = addr_hit[182] & reg_we & !reg_error;
+  assign lp1_cmo_commit_37_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_38_we = addr_hit[183] & reg_we & !reg_error;
+  assign lp1_cmo_commit_38_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_39_we = addr_hit[184] & reg_we & !reg_error;
+  assign lp1_cmo_commit_39_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_40_we = addr_hit[185] & reg_we & !reg_error;
+  assign lp1_cmo_commit_40_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_41_we = addr_hit[186] & reg_we & !reg_error;
+  assign lp1_cmo_commit_41_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_42_we = addr_hit[187] & reg_we & !reg_error;
+  assign lp1_cmo_commit_42_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_43_we = addr_hit[188] & reg_we & !reg_error;
+  assign lp1_cmo_commit_43_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_44_we = addr_hit[189] & reg_we & !reg_error;
+  assign lp1_cmo_commit_44_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_45_we = addr_hit[190] & reg_we & !reg_error;
+  assign lp1_cmo_commit_45_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_46_we = addr_hit[191] & reg_we & !reg_error;
+  assign lp1_cmo_commit_46_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_47_we = addr_hit[192] & reg_we & !reg_error;
+  assign lp1_cmo_commit_47_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_48_we = addr_hit[193] & reg_we & !reg_error;
+  assign lp1_cmo_commit_48_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_49_we = addr_hit[194] & reg_we & !reg_error;
+  assign lp1_cmo_commit_49_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_50_we = addr_hit[195] & reg_we & !reg_error;
+  assign lp1_cmo_commit_50_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_51_we = addr_hit[196] & reg_we & !reg_error;
+  assign lp1_cmo_commit_51_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_52_we = addr_hit[197] & reg_we & !reg_error;
+  assign lp1_cmo_commit_52_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_53_we = addr_hit[198] & reg_we & !reg_error;
+  assign lp1_cmo_commit_53_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_54_we = addr_hit[199] & reg_we & !reg_error;
+  assign lp1_cmo_commit_54_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_55_we = addr_hit[200] & reg_we & !reg_error;
+  assign lp1_cmo_commit_55_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_56_we = addr_hit[201] & reg_we & !reg_error;
+  assign lp1_cmo_commit_56_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_57_we = addr_hit[202] & reg_we & !reg_error;
+  assign lp1_cmo_commit_57_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_58_we = addr_hit[203] & reg_we & !reg_error;
+  assign lp1_cmo_commit_58_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_59_we = addr_hit[204] & reg_we & !reg_error;
+  assign lp1_cmo_commit_59_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_60_we = addr_hit[205] & reg_we & !reg_error;
+  assign lp1_cmo_commit_60_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_61_we = addr_hit[206] & reg_we & !reg_error;
+  assign lp1_cmo_commit_61_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_62_we = addr_hit[207] & reg_we & !reg_error;
+  assign lp1_cmo_commit_62_wd = reg_wdata[0];
+
+  assign lp1_cmo_commit_63_we = addr_hit[208] & reg_we & !reg_error;
+  assign lp1_cmo_commit_63_wd = reg_wdata[0];
+
+  assign lp1_cmo_status_0_re = addr_hit[209] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_1_re = addr_hit[210] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_2_re = addr_hit[211] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_3_re = addr_hit[212] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_4_re = addr_hit[213] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_5_re = addr_hit[214] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_6_re = addr_hit[215] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_7_re = addr_hit[216] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_8_re = addr_hit[217] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_9_re = addr_hit[218] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_10_re = addr_hit[219] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_11_re = addr_hit[220] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_12_re = addr_hit[221] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_13_re = addr_hit[222] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_14_re = addr_hit[223] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_15_re = addr_hit[224] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_16_re = addr_hit[225] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_17_re = addr_hit[226] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_18_re = addr_hit[227] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_19_re = addr_hit[228] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_20_re = addr_hit[229] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_21_re = addr_hit[230] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_22_re = addr_hit[231] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_23_re = addr_hit[232] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_24_re = addr_hit[233] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_25_re = addr_hit[234] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_26_re = addr_hit[235] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_27_re = addr_hit[236] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_28_re = addr_hit[237] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_29_re = addr_hit[238] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_30_re = addr_hit[239] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_31_re = addr_hit[240] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_32_re = addr_hit[241] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_33_re = addr_hit[242] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_34_re = addr_hit[243] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_35_re = addr_hit[244] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_36_re = addr_hit[245] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_37_re = addr_hit[246] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_38_re = addr_hit[247] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_39_re = addr_hit[248] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_40_re = addr_hit[249] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_41_re = addr_hit[250] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_42_re = addr_hit[251] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_43_re = addr_hit[252] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_44_re = addr_hit[253] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_45_re = addr_hit[254] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_46_re = addr_hit[255] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_47_re = addr_hit[256] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_48_re = addr_hit[257] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_49_re = addr_hit[258] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_50_re = addr_hit[259] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_51_re = addr_hit[260] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_52_re = addr_hit[261] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_53_re = addr_hit[262] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_54_re = addr_hit[263] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_55_re = addr_hit[264] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_56_re = addr_hit[265] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_57_re = addr_hit[266] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_58_re = addr_hit[267] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_59_re = addr_hit[268] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_60_re = addr_hit[269] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_61_re = addr_hit[270] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_62_re = addr_hit[271] & reg_re & !reg_error;
+
+  assign lp1_cmo_status_63_re = addr_hit[272] & reg_re & !reg_error;
 
   // Read data return
   always_comb begin
@@ -723,6 +8859,1030 @@ module cachepool_peripheral_reg_top #(
         reg_rdata_next[0] = xbar_offset_commit_qs;
       end
 
+      addr_hit[17]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_0_qs;
+      end
+
+      addr_hit[18]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_1_qs;
+      end
+
+      addr_hit[19]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_2_qs;
+      end
+
+      addr_hit[20]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_3_qs;
+      end
+
+      addr_hit[21]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_4_qs;
+      end
+
+      addr_hit[22]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_5_qs;
+      end
+
+      addr_hit[23]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_6_qs;
+      end
+
+      addr_hit[24]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_7_qs;
+      end
+
+      addr_hit[25]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_8_qs;
+      end
+
+      addr_hit[26]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_9_qs;
+      end
+
+      addr_hit[27]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_10_qs;
+      end
+
+      addr_hit[28]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_11_qs;
+      end
+
+      addr_hit[29]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_12_qs;
+      end
+
+      addr_hit[30]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_13_qs;
+      end
+
+      addr_hit[31]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_14_qs;
+      end
+
+      addr_hit[32]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_15_qs;
+      end
+
+      addr_hit[33]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_16_qs;
+      end
+
+      addr_hit[34]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_17_qs;
+      end
+
+      addr_hit[35]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_18_qs;
+      end
+
+      addr_hit[36]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_19_qs;
+      end
+
+      addr_hit[37]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_20_qs;
+      end
+
+      addr_hit[38]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_21_qs;
+      end
+
+      addr_hit[39]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_22_qs;
+      end
+
+      addr_hit[40]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_23_qs;
+      end
+
+      addr_hit[41]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_24_qs;
+      end
+
+      addr_hit[42]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_25_qs;
+      end
+
+      addr_hit[43]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_26_qs;
+      end
+
+      addr_hit[44]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_27_qs;
+      end
+
+      addr_hit[45]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_28_qs;
+      end
+
+      addr_hit[46]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_29_qs;
+      end
+
+      addr_hit[47]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_30_qs;
+      end
+
+      addr_hit[48]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_31_qs;
+      end
+
+      addr_hit[49]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_32_qs;
+      end
+
+      addr_hit[50]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_33_qs;
+      end
+
+      addr_hit[51]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_34_qs;
+      end
+
+      addr_hit[52]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_35_qs;
+      end
+
+      addr_hit[53]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_36_qs;
+      end
+
+      addr_hit[54]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_37_qs;
+      end
+
+      addr_hit[55]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_38_qs;
+      end
+
+      addr_hit[56]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_39_qs;
+      end
+
+      addr_hit[57]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_40_qs;
+      end
+
+      addr_hit[58]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_41_qs;
+      end
+
+      addr_hit[59]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_42_qs;
+      end
+
+      addr_hit[60]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_43_qs;
+      end
+
+      addr_hit[61]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_44_qs;
+      end
+
+      addr_hit[62]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_45_qs;
+      end
+
+      addr_hit[63]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_46_qs;
+      end
+
+      addr_hit[64]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_47_qs;
+      end
+
+      addr_hit[65]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_48_qs;
+      end
+
+      addr_hit[66]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_49_qs;
+      end
+
+      addr_hit[67]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_50_qs;
+      end
+
+      addr_hit[68]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_51_qs;
+      end
+
+      addr_hit[69]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_52_qs;
+      end
+
+      addr_hit[70]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_53_qs;
+      end
+
+      addr_hit[71]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_54_qs;
+      end
+
+      addr_hit[72]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_55_qs;
+      end
+
+      addr_hit[73]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_56_qs;
+      end
+
+      addr_hit[74]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_57_qs;
+      end
+
+      addr_hit[75]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_58_qs;
+      end
+
+      addr_hit[76]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_59_qs;
+      end
+
+      addr_hit[77]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_60_qs;
+      end
+
+      addr_hit[78]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_61_qs;
+      end
+
+      addr_hit[79]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_62_qs;
+      end
+
+      addr_hit[80]: begin
+        reg_rdata_next[2:0] = cfg_lp1_cmo_63_qs;
+      end
+
+      addr_hit[81]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_0_qs;
+      end
+
+      addr_hit[82]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_1_qs;
+      end
+
+      addr_hit[83]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_2_qs;
+      end
+
+      addr_hit[84]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_3_qs;
+      end
+
+      addr_hit[85]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_4_qs;
+      end
+
+      addr_hit[86]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_5_qs;
+      end
+
+      addr_hit[87]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_6_qs;
+      end
+
+      addr_hit[88]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_7_qs;
+      end
+
+      addr_hit[89]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_8_qs;
+      end
+
+      addr_hit[90]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_9_qs;
+      end
+
+      addr_hit[91]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_10_qs;
+      end
+
+      addr_hit[92]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_11_qs;
+      end
+
+      addr_hit[93]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_12_qs;
+      end
+
+      addr_hit[94]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_13_qs;
+      end
+
+      addr_hit[95]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_14_qs;
+      end
+
+      addr_hit[96]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_15_qs;
+      end
+
+      addr_hit[97]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_16_qs;
+      end
+
+      addr_hit[98]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_17_qs;
+      end
+
+      addr_hit[99]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_18_qs;
+      end
+
+      addr_hit[100]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_19_qs;
+      end
+
+      addr_hit[101]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_20_qs;
+      end
+
+      addr_hit[102]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_21_qs;
+      end
+
+      addr_hit[103]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_22_qs;
+      end
+
+      addr_hit[104]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_23_qs;
+      end
+
+      addr_hit[105]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_24_qs;
+      end
+
+      addr_hit[106]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_25_qs;
+      end
+
+      addr_hit[107]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_26_qs;
+      end
+
+      addr_hit[108]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_27_qs;
+      end
+
+      addr_hit[109]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_28_qs;
+      end
+
+      addr_hit[110]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_29_qs;
+      end
+
+      addr_hit[111]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_30_qs;
+      end
+
+      addr_hit[112]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_31_qs;
+      end
+
+      addr_hit[113]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_32_qs;
+      end
+
+      addr_hit[114]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_33_qs;
+      end
+
+      addr_hit[115]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_34_qs;
+      end
+
+      addr_hit[116]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_35_qs;
+      end
+
+      addr_hit[117]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_36_qs;
+      end
+
+      addr_hit[118]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_37_qs;
+      end
+
+      addr_hit[119]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_38_qs;
+      end
+
+      addr_hit[120]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_39_qs;
+      end
+
+      addr_hit[121]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_40_qs;
+      end
+
+      addr_hit[122]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_41_qs;
+      end
+
+      addr_hit[123]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_42_qs;
+      end
+
+      addr_hit[124]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_43_qs;
+      end
+
+      addr_hit[125]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_44_qs;
+      end
+
+      addr_hit[126]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_45_qs;
+      end
+
+      addr_hit[127]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_46_qs;
+      end
+
+      addr_hit[128]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_47_qs;
+      end
+
+      addr_hit[129]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_48_qs;
+      end
+
+      addr_hit[130]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_49_qs;
+      end
+
+      addr_hit[131]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_50_qs;
+      end
+
+      addr_hit[132]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_51_qs;
+      end
+
+      addr_hit[133]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_52_qs;
+      end
+
+      addr_hit[134]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_53_qs;
+      end
+
+      addr_hit[135]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_54_qs;
+      end
+
+      addr_hit[136]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_55_qs;
+      end
+
+      addr_hit[137]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_56_qs;
+      end
+
+      addr_hit[138]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_57_qs;
+      end
+
+      addr_hit[139]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_58_qs;
+      end
+
+      addr_hit[140]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_59_qs;
+      end
+
+      addr_hit[141]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_60_qs;
+      end
+
+      addr_hit[142]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_61_qs;
+      end
+
+      addr_hit[143]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_62_qs;
+      end
+
+      addr_hit[144]: begin
+        reg_rdata_next[31:0] = cfg_lp1_cmo_addr_63_qs;
+      end
+
+      addr_hit[145]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_0_qs;
+      end
+
+      addr_hit[146]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_1_qs;
+      end
+
+      addr_hit[147]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_2_qs;
+      end
+
+      addr_hit[148]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_3_qs;
+      end
+
+      addr_hit[149]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_4_qs;
+      end
+
+      addr_hit[150]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_5_qs;
+      end
+
+      addr_hit[151]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_6_qs;
+      end
+
+      addr_hit[152]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_7_qs;
+      end
+
+      addr_hit[153]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_8_qs;
+      end
+
+      addr_hit[154]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_9_qs;
+      end
+
+      addr_hit[155]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_10_qs;
+      end
+
+      addr_hit[156]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_11_qs;
+      end
+
+      addr_hit[157]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_12_qs;
+      end
+
+      addr_hit[158]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_13_qs;
+      end
+
+      addr_hit[159]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_14_qs;
+      end
+
+      addr_hit[160]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_15_qs;
+      end
+
+      addr_hit[161]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_16_qs;
+      end
+
+      addr_hit[162]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_17_qs;
+      end
+
+      addr_hit[163]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_18_qs;
+      end
+
+      addr_hit[164]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_19_qs;
+      end
+
+      addr_hit[165]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_20_qs;
+      end
+
+      addr_hit[166]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_21_qs;
+      end
+
+      addr_hit[167]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_22_qs;
+      end
+
+      addr_hit[168]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_23_qs;
+      end
+
+      addr_hit[169]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_24_qs;
+      end
+
+      addr_hit[170]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_25_qs;
+      end
+
+      addr_hit[171]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_26_qs;
+      end
+
+      addr_hit[172]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_27_qs;
+      end
+
+      addr_hit[173]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_28_qs;
+      end
+
+      addr_hit[174]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_29_qs;
+      end
+
+      addr_hit[175]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_30_qs;
+      end
+
+      addr_hit[176]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_31_qs;
+      end
+
+      addr_hit[177]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_32_qs;
+      end
+
+      addr_hit[178]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_33_qs;
+      end
+
+      addr_hit[179]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_34_qs;
+      end
+
+      addr_hit[180]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_35_qs;
+      end
+
+      addr_hit[181]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_36_qs;
+      end
+
+      addr_hit[182]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_37_qs;
+      end
+
+      addr_hit[183]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_38_qs;
+      end
+
+      addr_hit[184]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_39_qs;
+      end
+
+      addr_hit[185]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_40_qs;
+      end
+
+      addr_hit[186]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_41_qs;
+      end
+
+      addr_hit[187]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_42_qs;
+      end
+
+      addr_hit[188]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_43_qs;
+      end
+
+      addr_hit[189]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_44_qs;
+      end
+
+      addr_hit[190]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_45_qs;
+      end
+
+      addr_hit[191]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_46_qs;
+      end
+
+      addr_hit[192]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_47_qs;
+      end
+
+      addr_hit[193]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_48_qs;
+      end
+
+      addr_hit[194]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_49_qs;
+      end
+
+      addr_hit[195]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_50_qs;
+      end
+
+      addr_hit[196]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_51_qs;
+      end
+
+      addr_hit[197]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_52_qs;
+      end
+
+      addr_hit[198]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_53_qs;
+      end
+
+      addr_hit[199]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_54_qs;
+      end
+
+      addr_hit[200]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_55_qs;
+      end
+
+      addr_hit[201]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_56_qs;
+      end
+
+      addr_hit[202]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_57_qs;
+      end
+
+      addr_hit[203]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_58_qs;
+      end
+
+      addr_hit[204]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_59_qs;
+      end
+
+      addr_hit[205]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_60_qs;
+      end
+
+      addr_hit[206]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_61_qs;
+      end
+
+      addr_hit[207]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_62_qs;
+      end
+
+      addr_hit[208]: begin
+        reg_rdata_next[0] = lp1_cmo_commit_63_qs;
+      end
+
+      addr_hit[209]: begin
+        reg_rdata_next[0] = lp1_cmo_status_0_qs;
+      end
+
+      addr_hit[210]: begin
+        reg_rdata_next[0] = lp1_cmo_status_1_qs;
+      end
+
+      addr_hit[211]: begin
+        reg_rdata_next[0] = lp1_cmo_status_2_qs;
+      end
+
+      addr_hit[212]: begin
+        reg_rdata_next[0] = lp1_cmo_status_3_qs;
+      end
+
+      addr_hit[213]: begin
+        reg_rdata_next[0] = lp1_cmo_status_4_qs;
+      end
+
+      addr_hit[214]: begin
+        reg_rdata_next[0] = lp1_cmo_status_5_qs;
+      end
+
+      addr_hit[215]: begin
+        reg_rdata_next[0] = lp1_cmo_status_6_qs;
+      end
+
+      addr_hit[216]: begin
+        reg_rdata_next[0] = lp1_cmo_status_7_qs;
+      end
+
+      addr_hit[217]: begin
+        reg_rdata_next[0] = lp1_cmo_status_8_qs;
+      end
+
+      addr_hit[218]: begin
+        reg_rdata_next[0] = lp1_cmo_status_9_qs;
+      end
+
+      addr_hit[219]: begin
+        reg_rdata_next[0] = lp1_cmo_status_10_qs;
+      end
+
+      addr_hit[220]: begin
+        reg_rdata_next[0] = lp1_cmo_status_11_qs;
+      end
+
+      addr_hit[221]: begin
+        reg_rdata_next[0] = lp1_cmo_status_12_qs;
+      end
+
+      addr_hit[222]: begin
+        reg_rdata_next[0] = lp1_cmo_status_13_qs;
+      end
+
+      addr_hit[223]: begin
+        reg_rdata_next[0] = lp1_cmo_status_14_qs;
+      end
+
+      addr_hit[224]: begin
+        reg_rdata_next[0] = lp1_cmo_status_15_qs;
+      end
+
+      addr_hit[225]: begin
+        reg_rdata_next[0] = lp1_cmo_status_16_qs;
+      end
+
+      addr_hit[226]: begin
+        reg_rdata_next[0] = lp1_cmo_status_17_qs;
+      end
+
+      addr_hit[227]: begin
+        reg_rdata_next[0] = lp1_cmo_status_18_qs;
+      end
+
+      addr_hit[228]: begin
+        reg_rdata_next[0] = lp1_cmo_status_19_qs;
+      end
+
+      addr_hit[229]: begin
+        reg_rdata_next[0] = lp1_cmo_status_20_qs;
+      end
+
+      addr_hit[230]: begin
+        reg_rdata_next[0] = lp1_cmo_status_21_qs;
+      end
+
+      addr_hit[231]: begin
+        reg_rdata_next[0] = lp1_cmo_status_22_qs;
+      end
+
+      addr_hit[232]: begin
+        reg_rdata_next[0] = lp1_cmo_status_23_qs;
+      end
+
+      addr_hit[233]: begin
+        reg_rdata_next[0] = lp1_cmo_status_24_qs;
+      end
+
+      addr_hit[234]: begin
+        reg_rdata_next[0] = lp1_cmo_status_25_qs;
+      end
+
+      addr_hit[235]: begin
+        reg_rdata_next[0] = lp1_cmo_status_26_qs;
+      end
+
+      addr_hit[236]: begin
+        reg_rdata_next[0] = lp1_cmo_status_27_qs;
+      end
+
+      addr_hit[237]: begin
+        reg_rdata_next[0] = lp1_cmo_status_28_qs;
+      end
+
+      addr_hit[238]: begin
+        reg_rdata_next[0] = lp1_cmo_status_29_qs;
+      end
+
+      addr_hit[239]: begin
+        reg_rdata_next[0] = lp1_cmo_status_30_qs;
+      end
+
+      addr_hit[240]: begin
+        reg_rdata_next[0] = lp1_cmo_status_31_qs;
+      end
+
+      addr_hit[241]: begin
+        reg_rdata_next[0] = lp1_cmo_status_32_qs;
+      end
+
+      addr_hit[242]: begin
+        reg_rdata_next[0] = lp1_cmo_status_33_qs;
+      end
+
+      addr_hit[243]: begin
+        reg_rdata_next[0] = lp1_cmo_status_34_qs;
+      end
+
+      addr_hit[244]: begin
+        reg_rdata_next[0] = lp1_cmo_status_35_qs;
+      end
+
+      addr_hit[245]: begin
+        reg_rdata_next[0] = lp1_cmo_status_36_qs;
+      end
+
+      addr_hit[246]: begin
+        reg_rdata_next[0] = lp1_cmo_status_37_qs;
+      end
+
+      addr_hit[247]: begin
+        reg_rdata_next[0] = lp1_cmo_status_38_qs;
+      end
+
+      addr_hit[248]: begin
+        reg_rdata_next[0] = lp1_cmo_status_39_qs;
+      end
+
+      addr_hit[249]: begin
+        reg_rdata_next[0] = lp1_cmo_status_40_qs;
+      end
+
+      addr_hit[250]: begin
+        reg_rdata_next[0] = lp1_cmo_status_41_qs;
+      end
+
+      addr_hit[251]: begin
+        reg_rdata_next[0] = lp1_cmo_status_42_qs;
+      end
+
+      addr_hit[252]: begin
+        reg_rdata_next[0] = lp1_cmo_status_43_qs;
+      end
+
+      addr_hit[253]: begin
+        reg_rdata_next[0] = lp1_cmo_status_44_qs;
+      end
+
+      addr_hit[254]: begin
+        reg_rdata_next[0] = lp1_cmo_status_45_qs;
+      end
+
+      addr_hit[255]: begin
+        reg_rdata_next[0] = lp1_cmo_status_46_qs;
+      end
+
+      addr_hit[256]: begin
+        reg_rdata_next[0] = lp1_cmo_status_47_qs;
+      end
+
+      addr_hit[257]: begin
+        reg_rdata_next[0] = lp1_cmo_status_48_qs;
+      end
+
+      addr_hit[258]: begin
+        reg_rdata_next[0] = lp1_cmo_status_49_qs;
+      end
+
+      addr_hit[259]: begin
+        reg_rdata_next[0] = lp1_cmo_status_50_qs;
+      end
+
+      addr_hit[260]: begin
+        reg_rdata_next[0] = lp1_cmo_status_51_qs;
+      end
+
+      addr_hit[261]: begin
+        reg_rdata_next[0] = lp1_cmo_status_52_qs;
+      end
+
+      addr_hit[262]: begin
+        reg_rdata_next[0] = lp1_cmo_status_53_qs;
+      end
+
+      addr_hit[263]: begin
+        reg_rdata_next[0] = lp1_cmo_status_54_qs;
+      end
+
+      addr_hit[264]: begin
+        reg_rdata_next[0] = lp1_cmo_status_55_qs;
+      end
+
+      addr_hit[265]: begin
+        reg_rdata_next[0] = lp1_cmo_status_56_qs;
+      end
+
+      addr_hit[266]: begin
+        reg_rdata_next[0] = lp1_cmo_status_57_qs;
+      end
+
+      addr_hit[267]: begin
+        reg_rdata_next[0] = lp1_cmo_status_58_qs;
+      end
+
+      addr_hit[268]: begin
+        reg_rdata_next[0] = lp1_cmo_status_59_qs;
+      end
+
+      addr_hit[269]: begin
+        reg_rdata_next[0] = lp1_cmo_status_60_qs;
+      end
+
+      addr_hit[270]: begin
+        reg_rdata_next[0] = lp1_cmo_status_61_qs;
+      end
+
+      addr_hit[271]: begin
+        reg_rdata_next[0] = lp1_cmo_status_62_qs;
+      end
+
+      addr_hit[272]: begin
+        reg_rdata_next[0] = lp1_cmo_status_63_qs;
+      end
+
       default: begin
         reg_rdata_next = '1;
       end
@@ -745,7 +9905,7 @@ endmodule
 
 module cachepool_peripheral_reg_top_intf
 #(
-  parameter int AW = 7,
+  parameter int AW = 11,
   localparam int DW = 32
 ) (
   input logic clk_i,
