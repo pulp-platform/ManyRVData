@@ -19,6 +19,7 @@
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 #include <benchmark.h>
+#include <lp1cache.h>
 #include <snrt.h>
 #include <stdio.h>
 #include "spin_lock.h"
@@ -38,11 +39,22 @@ int main() {
   // Fetch lock
   spin_lock (&lock, 20);
 
+  // Acquire side of the critical section: drop any stale cached copies so the
+  // read of `result` below misses and refetches the fresh value from L2.
+  lp1_inval();
+  snrt_fence();
+
   // Each core print its core id
   printf("T%d,C%d: Hello\n", tid, cid);
 
   // Add cid to the result
   result += cid;
+
+  // Release side of the critical section: drain the write-through write buffer
+  // (incl. any Spatz stores) so this core's update lands at L2 before the lock
+  // is released.  The fence must precede the flush (WBUF-ordering).
+  snrt_fence();
+  lp1_wt_flush();
 
   // Release the lock
   spin_unlock(&lock, 20);

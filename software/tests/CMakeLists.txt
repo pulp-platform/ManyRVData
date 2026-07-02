@@ -85,6 +85,7 @@ set(SNITCH_TEST_PREFIX cachepool-)
 
 ## RLC
 add_spatz_test_zeroParam(spin-lock spin-lock/main.c)
+add_spatz_test_zeroParam(multi-spin-lock multi-spin-lock/main.c)
 add_spatz_test_zeroParam(mcs-lock mcs-lock/main.c)
 add_spatz_test_zeroParam(byte-enable byte-enable/main.c)
 
@@ -130,6 +131,7 @@ add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 32768)
 add_spatz_test_zeroParam(lp1_sanity lp1_sanity/main.c)
 add_spatz_test_zeroParam(lp1_private lp1_private/main.c)
 add_spatz_test_zeroParam(lp1_eviction lp1_eviction/main.c)
+add_spatz_test_zeroParam(lp1_cmo lp1_cmo/main.c)
 
 add_spatz_test_zeroParam(arith_amo arith_amo/main.c)
 add_spatz_test_zeroParam(lrsc_amo lrsc_amo/main.c)
