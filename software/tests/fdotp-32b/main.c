@@ -22,6 +22,16 @@
 
 #include DATAHEADER
 #include "kernel/fdotp.c"
+#include <lp1cache.h>
+
+// Private-L1 (LP1 = per-core write-through cache, NO coherence): the cross-core
+// tree reduction below shares `result[]`.  Producers must drain their write to
+// L2 (lp1_wt_flush) and consumers must drop stale cached copies (lp1_inval) --
+// otherwise, on the 2nd+ measure_iter pass a lead core re-reads its previously
+// cached (stale) copy of a peer's partial and the reduction is wrong.  The
+// existing barriers provide the ordering; the CMOs provide the visibility.
+// Comment out to observe the staleness failure (discriminating check).
+#define LP1
 
 int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
@@ -127,6 +137,13 @@ int main() {
     // Make sure spatz has finished writing
     snrt_fence_spatz();
 
+#ifdef LP1
+    // Producer: drain the write-through buffer so result[cid] reaches L2 before
+    // the reducers read it.  Fence must precede the flush.
+    snrt_fence();
+    lp1_wt_flush();
+#endif
+
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 
@@ -145,15 +162,31 @@ int main() {
 
     // Level 1: lead core of each group accumulates its group
     if (cid % red_group == 0) {
+#ifdef LP1
+      // Consumer: drop stale private-L1 copies of result[] (from a previous
+      // measure_iter pass) so the peer partials are refetched fresh from L2.
+      lp1_inval();
+      snrt_fence();
+#endif
       for (uint32_t i = 1; i < red_group && (cid + i) < num_cores; ++i)
         acc += result[cid + i];
       result[cid] = acc;
+#ifdef LP1
+      // Producer: expose this group's sum to core 0's level-2 pass.
+      snrt_fence();
+      lp1_wt_flush();
+#endif
     }
 
     snrt_cluster_hw_barrier();
 
     // Level 2: core 0 sums all group results
     if (cid == 0) {
+#ifdef LP1
+      // Consumer: refetch the group leads' sums fresh from L2.
+      lp1_inval();
+      snrt_fence();
+#endif
       for (uint32_t g = red_group; g < num_cores; g += red_group)
         acc += result[g];
       result[0] = acc;
