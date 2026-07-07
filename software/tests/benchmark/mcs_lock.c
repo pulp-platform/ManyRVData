@@ -24,6 +24,18 @@
 #include "benchmark.h"
 // #include "printf_lock.h"
 
+// Private-L1 (LP1) Cache Management Operations.  On the per-core private
+// write-through L1 (no coherence) the MCS handshake variables (`me->locked`,
+// `me->next`) are written by one core and spun on by another, so a spinner
+// keeps hitting a stale cached copy and never observes the handoff.  Bracket
+// the handshake with lp1_inval() on the consumer (spin) side and lp1_wt_flush()
+// on the producer (publish) side, ordered by snrt_fence().  Guarded by LP1_CMO
+// so consumers that do not run on the private L1 are unaffected.
+#define LP1_CMO
+#ifdef LP1_CMO
+#include <lp1cache.h>
+#endif
+
 // Each waiter spins on its own node (aligned to keep it on a single line)
 struct __attribute__((aligned(MCS_CACHELINE))) mcs_node {
   _Atomic(struct mcs_node*) next __attribute__((aligned(MCS_CACHELINE)));
@@ -128,8 +140,21 @@ void __attribute__((noinline)) mcs_lock_acquire(mcs_lock_t* L, int delay) {
   if (pred) {
     atomic_store_explicit(&me->locked, true, memory_order_relaxed);
     atomic_store_explicit(&pred->next, me, memory_order_relaxed);
+#ifdef LP1_CMO
+    // Producer side: order the two stores above and drain the write-through
+    // buffer so the predecessor observes pred->next=me (and our armed locked
+    // flag) at L2.  Fence must precede the flush (WBUF ordering).
+    snrt_fence();
+    lp1_wt_flush();
+#endif
     while (atomic_load_explicit(&me->locked, memory_order_relaxed)) {
       // cachepool_wait(delay); // prevent busy spinning
+#ifdef LP1_CMO
+      // Consumer side: drop the stale private-L1 copy of `locked` so the next
+      // read misses and refetches the predecessor's handoff (locked=false).
+      lp1_inval();
+      snrt_fence();
+#endif
     }
   }
 
@@ -147,6 +172,12 @@ void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L, int delay) {
   if (!b) return; // or assert in debug
 
   struct mcs_node* me = &b->node;
+#ifdef LP1_CMO
+  // Consumer side: `me->next` is published by the successor from another core;
+  // drop the stale private-L1 copy before reading it.
+  lp1_inval();
+  snrt_fence();
+#endif
   struct mcs_node* succ =
       // atomic_load_explicit(&me->next, memory_order_acquire);
       atomic_load_explicit(&me->next, memory_order_relaxed);
@@ -162,6 +193,12 @@ void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L, int delay) {
     // A successor is enqueuing; wait for linkage.
     do {
       // cachepool_wait(delay); // prevent busy spinning
+#ifdef LP1_CMO
+      // Consumer side: refetch `me->next` fresh each spin until the successor's
+      // linkage store is observed at L2.
+      lp1_inval();
+      snrt_fence();
+#endif
       // succ = atomic_load_explicit(&me->next, memory_order_acquire);
       succ = atomic_load_explicit(&me->next, memory_order_relaxed);
     } while (!succ);
@@ -169,6 +206,12 @@ void __attribute__((noinline)) mcs_lock_release(mcs_lock_t* L, int delay) {
 
   // Handoff: clear the successor's locked flag.
   atomic_store_explicit(&succ->locked, false, memory_order_release);
+#ifdef LP1_CMO
+  // Producer side: drain the write-through buffer so the successor spinning on
+  // its `locked` flag observes the handoff promptly.  Fence precedes the flush.
+  snrt_fence();
+  lp1_wt_flush();
+#endif
   mcs_bind_release_slot(b);
 
   // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);

@@ -35,7 +35,7 @@
 #endif
 
 #ifndef MCS_MAX_HARTS
-#define MCS_MAX_HARTS 4        // set to your cluster max cores
+#define MCS_MAX_HARTS 16        // set to your cluster max cores
 #endif
 
 #ifndef MCS_TLS_SLOTS

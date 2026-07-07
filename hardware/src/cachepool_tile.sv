@@ -326,22 +326,25 @@ module cachepool_tile
   localparam int unsigned LP1ReqIdWidth        = $clog2(NumSpatzOutstandingLoads);
   localparam int unsigned LP1TidWidth          = CoreIDWidth + TileIDWidth + LP1ReqIdWidth + 2 + LP1CoalInfoWidth; // +2: is_fpu, write; tile_id+core_id round-tripped
   localparam int unsigned LP1NrRequesters      = 3;                               // Spatz(coalesced) + Snitch + CMO injector
+  localparam int unsigned LP1NumSets           = 16;
+  localparam int unsigned LP1NumWays           = 4;
+  localparam int unsigned LP1NumWordsPerLine   = 4;
 
   localparam hpdcache_pkg::hpdcache_user_cfg_t HPDcacheUserCfg = '{
       nRequesters:        LP1NrRequesters,
-      paWidth:            32,
+      paWidth:            TCDMAddrWidth,
       wordWidth:          LP1WordWidth,
-      sets:               32,
-      ways:               4,
-      clWords:            4,
+      sets:               LP1NumSets,
+      ways:               LP1NumWays,
+      clWords:            LP1NumWordsPerLine,
       reqWords:           1,
       reqTransIdWidth:    LP1TidWidth + LP1NumWordOffsetBits,
       reqSrcIdWidth:      $clog2(LP1NrRequesters), // selects requester port (0 Spatz / 1 Snitch / 2 CMO)
       victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_PLRU,
       dataWaysPerRamWord: 1,
-      dataSetsPerRam:     32,
+      dataSetsPerRam:     LP1NumSets,
       dataRamByteEnable:  1'b1,
-      accessWords:        4,
+      accessWords:        LP1NumWordsPerLine,
       mshrSets:           4,
       mshrWays:           4,
       mshrWaysPerRamWord: 4,

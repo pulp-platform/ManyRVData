@@ -57,6 +57,9 @@ endmacro()
 add_library(benchmark benchmark/benchmark.c)
 add_library(spin_lock benchmark/spin_lock.c)
 add_library(mcs_lock benchmark/mcs_lock.c)
+# Private-L1 (LP1) has no coherence: bracket the MCS handshake with CMO calls
+# (see benchmark/mcs_lock.c).  Enable for all consumers of the lib.
+target_compile_definitions(mcs_lock PUBLIC LP1_CMO)
 
 add_compile_options(-O3 -g -ffunction-sections)
 add_compile_options(-DELEN=64)

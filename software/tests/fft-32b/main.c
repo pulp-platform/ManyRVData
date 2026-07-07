@@ -113,6 +113,7 @@ int main() {
       }
 
       // In first part of calculation, we need barrier after each round
+      // l1_fence
       snrt_cluster_hw_barrier();
     }
 
