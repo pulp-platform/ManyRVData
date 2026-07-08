@@ -113,7 +113,7 @@ int main() {
       }
 
       // In first part of calculation, we need barrier after each round
-      // l1_fence
+      // TODO: might need an L1 fence (flush) here
       snrt_cluster_hw_barrier();
     }
 

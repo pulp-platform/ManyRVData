@@ -187,6 +187,20 @@ $(FLOO_NOC): install-floogen $(FLOO_CFG)
 clean-floonoc:
 	rm -f $(FLOO_NOC)
 
+#########################
+# Peripheral registers  #
+#########################
+# The LP1 (private-L1) CMO peripheral has one register slot per core.  The slot
+# count (NumLp1CmoRegs) is baked into the generated reg_pkg/reg_top/C-header by
+# regtool, so it must be regenerated whenever the config's core count changes --
+# analogous to update-floonoc for the mesh.  We force the regen (-B) because the
+# generated .sv/.h are committed and may be newer than the (unchanged) schema.
+PERIPH_REG_DIR ?= $(ROOT_DIR)/hardware/cachepool_peripheral
+
+.PHONY: update-periph-reg
+update-periph-reg:
+	$(MAKE) -C $(PERIPH_REG_DIR) -B all NUM_LP1_CMO_REGS=$(num_cores)
+
 ###########
 # DramSys #
 ###########
@@ -427,6 +441,7 @@ help:
 	@echo "*cache-init*:     source the insitu-cache environment (requires bender checkout)"
 	@echo "*bootrom*:        compile and generate the bootrom SystemVerilog module"
 	@echo "*update-floonoc*: regenerate FlooNoC package from FLOO_CFG (run after changing group count)"
+	@echo "*update-periph-reg*: regenerate the peripheral registers with NumLp1CmoRegs=num_cores (run after changing core count)"
 	@echo "*install-floogen*: install the floogen Python tool (required by update-floonoc)"
 	@echo "*clean-floonoc*:  remove the generated FlooNoC package"
 	@echo ""

@@ -8,10 +8,10 @@ package cachepool_peripheral_reg_pkg;
 
   // Param list
   parameter int NumTileSelRegs = 2;
-  parameter int NumLp1CmoRegs = 64;
+  parameter int NumLp1CmoRegs = 256;
 
   // Address widths within the block
-  parameter int BlockAw = 11;
+  parameter int BlockAw = 13;
 
   ////////////////////////////
   // Typedefs for registers //
@@ -123,311 +123,1079 @@ package cachepool_peripheral_reg_pkg;
 
   // Register -> HW type
   typedef struct packed {
-    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [2525:2494]
-    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [2493:2493]
-    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [2492:2492]
-    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [2491:2460]
-    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [2459:2428]
-    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [2427:2424]
-    cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [2423:2414]
-    cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [2413:2412]
-    cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_mreg_t [1:0] cfg_l1d_tile_sel; // [2411:2348]
-    cachepool_peripheral_reg2hw_l1d_spm_commit_reg_t l1d_spm_commit; // [2347:2347]
-    cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t l1d_insn_commit; // [2346:2346]
-    cachepool_peripheral_reg2hw_l1d_private_reg_t l1d_private; // [2345:2342]
-    cachepool_peripheral_reg2hw_l1d_addr_reg_t l1d_addr; // [2341:2310]
-    cachepool_peripheral_reg2hw_xbar_offset_reg_t xbar_offset; // [2309:2305]
-    cachepool_peripheral_reg2hw_xbar_offset_commit_reg_t xbar_offset_commit; // [2304:2304]
-    cachepool_peripheral_reg2hw_cfg_lp1_cmo_mreg_t [63:0] cfg_lp1_cmo; // [2303:2112]
-    cachepool_peripheral_reg2hw_cfg_lp1_cmo_addr_mreg_t [63:0] cfg_lp1_cmo_addr; // [2111:64]
-    cachepool_peripheral_reg2hw_lp1_cmo_commit_mreg_t [63:0] lp1_cmo_commit; // [63:0]
+    cachepool_peripheral_reg2hw_hw_barrier_reg_t hw_barrier; // [9437:9406]
+    cachepool_peripheral_reg2hw_icache_prefetch_enable_reg_t icache_prefetch_enable; // [9405:9405]
+    cachepool_peripheral_reg2hw_spatz_status_reg_t spatz_status; // [9404:9404]
+    cachepool_peripheral_reg2hw_spatz_cycle_reg_t spatz_cycle; // [9403:9372]
+    cachepool_peripheral_reg2hw_cluster_boot_control_reg_t cluster_boot_control; // [9371:9340]
+    cachepool_peripheral_reg2hw_cluster_eoc_exit_reg_t cluster_eoc_exit; // [9339:9336]
+    cachepool_peripheral_reg2hw_cfg_l1d_spm_reg_t cfg_l1d_spm; // [9335:9326]
+    cachepool_peripheral_reg2hw_cfg_l1d_insn_reg_t cfg_l1d_insn; // [9325:9324]
+    cachepool_peripheral_reg2hw_cfg_l1d_tile_sel_mreg_t [1:0] cfg_l1d_tile_sel; // [9323:9260]
+    cachepool_peripheral_reg2hw_l1d_spm_commit_reg_t l1d_spm_commit; // [9259:9259]
+    cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t l1d_insn_commit; // [9258:9258]
+    cachepool_peripheral_reg2hw_l1d_private_reg_t l1d_private; // [9257:9254]
+    cachepool_peripheral_reg2hw_l1d_addr_reg_t l1d_addr; // [9253:9222]
+    cachepool_peripheral_reg2hw_xbar_offset_reg_t xbar_offset; // [9221:9217]
+    cachepool_peripheral_reg2hw_xbar_offset_commit_reg_t xbar_offset_commit; // [9216:9216]
+    cachepool_peripheral_reg2hw_cfg_lp1_cmo_mreg_t [255:0] cfg_lp1_cmo; // [9215:8448]
+    cachepool_peripheral_reg2hw_cfg_lp1_cmo_addr_mreg_t [255:0] cfg_lp1_cmo_addr; // [8447:256]
+    cachepool_peripheral_reg2hw_lp1_cmo_commit_mreg_t [255:0] lp1_cmo_commit; // [255:0]
   } cachepool_peripheral_reg2hw_t;
 
   // HW -> register type
   typedef struct packed {
-    cachepool_peripheral_hw2reg_hw_barrier_reg_t hw_barrier; // [230:199]
-    cachepool_peripheral_hw2reg_l1d_spm_commit_reg_t l1d_spm_commit; // [198:197]
-    cachepool_peripheral_hw2reg_l1d_insn_commit_reg_t l1d_insn_commit; // [196:195]
-    cachepool_peripheral_hw2reg_l1d_flush_status_reg_t l1d_flush_status; // [194:194]
-    cachepool_peripheral_hw2reg_xbar_offset_commit_reg_t xbar_offset_commit; // [193:192]
-    cachepool_peripheral_hw2reg_lp1_cmo_commit_mreg_t [63:0] lp1_cmo_commit; // [191:64]
-    cachepool_peripheral_hw2reg_lp1_cmo_status_mreg_t [63:0] lp1_cmo_status; // [63:0]
+    cachepool_peripheral_hw2reg_hw_barrier_reg_t hw_barrier; // [806:775]
+    cachepool_peripheral_hw2reg_l1d_spm_commit_reg_t l1d_spm_commit; // [774:773]
+    cachepool_peripheral_hw2reg_l1d_insn_commit_reg_t l1d_insn_commit; // [772:771]
+    cachepool_peripheral_hw2reg_l1d_flush_status_reg_t l1d_flush_status; // [770:770]
+    cachepool_peripheral_hw2reg_xbar_offset_commit_reg_t xbar_offset_commit; // [769:768]
+    cachepool_peripheral_hw2reg_lp1_cmo_commit_mreg_t [255:0] lp1_cmo_commit; // [767:256]
+    cachepool_peripheral_hw2reg_lp1_cmo_status_mreg_t [255:0] lp1_cmo_status; // [255:0]
   } cachepool_peripheral_hw2reg_t;
 
   // Register offsets
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET = 11'h 0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 11'h 4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET = 11'h 8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET = 11'h c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 11'h 10;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 11'h 14;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET = 11'h 18;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET = 11'h 1c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET = 11'h 20;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET = 11'h 24;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 11'h 28;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 11'h 2c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 11'h 30;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET = 11'h 34;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET = 11'h 38;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET = 11'h 3c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 11'h 40;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_0_OFFSET = 11'h 44;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_1_OFFSET = 11'h 48;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_2_OFFSET = 11'h 4c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_3_OFFSET = 11'h 50;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_4_OFFSET = 11'h 54;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_5_OFFSET = 11'h 58;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_6_OFFSET = 11'h 5c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_7_OFFSET = 11'h 60;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_8_OFFSET = 11'h 64;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_9_OFFSET = 11'h 68;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_10_OFFSET = 11'h 6c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_11_OFFSET = 11'h 70;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_12_OFFSET = 11'h 74;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_13_OFFSET = 11'h 78;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_14_OFFSET = 11'h 7c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_15_OFFSET = 11'h 80;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_16_OFFSET = 11'h 84;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_17_OFFSET = 11'h 88;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_18_OFFSET = 11'h 8c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_19_OFFSET = 11'h 90;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_20_OFFSET = 11'h 94;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_21_OFFSET = 11'h 98;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_22_OFFSET = 11'h 9c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_23_OFFSET = 11'h a0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_24_OFFSET = 11'h a4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_25_OFFSET = 11'h a8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_26_OFFSET = 11'h ac;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_27_OFFSET = 11'h b0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_28_OFFSET = 11'h b4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_29_OFFSET = 11'h b8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_30_OFFSET = 11'h bc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_31_OFFSET = 11'h c0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_32_OFFSET = 11'h c4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_33_OFFSET = 11'h c8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_34_OFFSET = 11'h cc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_35_OFFSET = 11'h d0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_36_OFFSET = 11'h d4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_37_OFFSET = 11'h d8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_38_OFFSET = 11'h dc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_39_OFFSET = 11'h e0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_40_OFFSET = 11'h e4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_41_OFFSET = 11'h e8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_42_OFFSET = 11'h ec;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_43_OFFSET = 11'h f0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_44_OFFSET = 11'h f4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_45_OFFSET = 11'h f8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_46_OFFSET = 11'h fc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_47_OFFSET = 11'h 100;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_48_OFFSET = 11'h 104;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_49_OFFSET = 11'h 108;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_50_OFFSET = 11'h 10c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_51_OFFSET = 11'h 110;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_52_OFFSET = 11'h 114;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_53_OFFSET = 11'h 118;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_54_OFFSET = 11'h 11c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_55_OFFSET = 11'h 120;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_56_OFFSET = 11'h 124;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_57_OFFSET = 11'h 128;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_58_OFFSET = 11'h 12c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_59_OFFSET = 11'h 130;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_60_OFFSET = 11'h 134;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61_OFFSET = 11'h 138;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62_OFFSET = 11'h 13c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63_OFFSET = 11'h 140;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0_OFFSET = 11'h 144;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1_OFFSET = 11'h 148;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2_OFFSET = 11'h 14c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_3_OFFSET = 11'h 150;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_4_OFFSET = 11'h 154;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_5_OFFSET = 11'h 158;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_6_OFFSET = 11'h 15c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_7_OFFSET = 11'h 160;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_8_OFFSET = 11'h 164;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_9_OFFSET = 11'h 168;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_10_OFFSET = 11'h 16c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_11_OFFSET = 11'h 170;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_12_OFFSET = 11'h 174;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_13_OFFSET = 11'h 178;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_14_OFFSET = 11'h 17c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_15_OFFSET = 11'h 180;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_16_OFFSET = 11'h 184;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_17_OFFSET = 11'h 188;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_18_OFFSET = 11'h 18c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_19_OFFSET = 11'h 190;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_20_OFFSET = 11'h 194;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_21_OFFSET = 11'h 198;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_22_OFFSET = 11'h 19c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_23_OFFSET = 11'h 1a0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_24_OFFSET = 11'h 1a4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_25_OFFSET = 11'h 1a8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_26_OFFSET = 11'h 1ac;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_27_OFFSET = 11'h 1b0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_28_OFFSET = 11'h 1b4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_29_OFFSET = 11'h 1b8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_30_OFFSET = 11'h 1bc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_31_OFFSET = 11'h 1c0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_32_OFFSET = 11'h 1c4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_33_OFFSET = 11'h 1c8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_34_OFFSET = 11'h 1cc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_35_OFFSET = 11'h 1d0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_36_OFFSET = 11'h 1d4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_37_OFFSET = 11'h 1d8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_38_OFFSET = 11'h 1dc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_39_OFFSET = 11'h 1e0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_40_OFFSET = 11'h 1e4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_41_OFFSET = 11'h 1e8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_42_OFFSET = 11'h 1ec;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_43_OFFSET = 11'h 1f0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_44_OFFSET = 11'h 1f4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_45_OFFSET = 11'h 1f8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_46_OFFSET = 11'h 1fc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_47_OFFSET = 11'h 200;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_48_OFFSET = 11'h 204;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_49_OFFSET = 11'h 208;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_50_OFFSET = 11'h 20c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_51_OFFSET = 11'h 210;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_52_OFFSET = 11'h 214;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_53_OFFSET = 11'h 218;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_54_OFFSET = 11'h 21c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_55_OFFSET = 11'h 220;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_56_OFFSET = 11'h 224;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_57_OFFSET = 11'h 228;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_58_OFFSET = 11'h 22c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_59_OFFSET = 11'h 230;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_60_OFFSET = 11'h 234;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61_OFFSET = 11'h 238;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62_OFFSET = 11'h 23c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63_OFFSET = 11'h 240;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0_OFFSET = 11'h 244;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1_OFFSET = 11'h 248;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2_OFFSET = 11'h 24c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_3_OFFSET = 11'h 250;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_4_OFFSET = 11'h 254;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_5_OFFSET = 11'h 258;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_6_OFFSET = 11'h 25c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_7_OFFSET = 11'h 260;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_8_OFFSET = 11'h 264;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_9_OFFSET = 11'h 268;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_10_OFFSET = 11'h 26c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_11_OFFSET = 11'h 270;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_12_OFFSET = 11'h 274;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_13_OFFSET = 11'h 278;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_14_OFFSET = 11'h 27c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_15_OFFSET = 11'h 280;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_16_OFFSET = 11'h 284;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_17_OFFSET = 11'h 288;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_18_OFFSET = 11'h 28c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_19_OFFSET = 11'h 290;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_20_OFFSET = 11'h 294;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_21_OFFSET = 11'h 298;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_22_OFFSET = 11'h 29c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_23_OFFSET = 11'h 2a0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_24_OFFSET = 11'h 2a4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_25_OFFSET = 11'h 2a8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_26_OFFSET = 11'h 2ac;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_27_OFFSET = 11'h 2b0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_28_OFFSET = 11'h 2b4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_29_OFFSET = 11'h 2b8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_30_OFFSET = 11'h 2bc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_31_OFFSET = 11'h 2c0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_32_OFFSET = 11'h 2c4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_33_OFFSET = 11'h 2c8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_34_OFFSET = 11'h 2cc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_35_OFFSET = 11'h 2d0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_36_OFFSET = 11'h 2d4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_37_OFFSET = 11'h 2d8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_38_OFFSET = 11'h 2dc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_39_OFFSET = 11'h 2e0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_40_OFFSET = 11'h 2e4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_41_OFFSET = 11'h 2e8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_42_OFFSET = 11'h 2ec;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_43_OFFSET = 11'h 2f0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_44_OFFSET = 11'h 2f4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_45_OFFSET = 11'h 2f8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_46_OFFSET = 11'h 2fc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_47_OFFSET = 11'h 300;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_48_OFFSET = 11'h 304;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_49_OFFSET = 11'h 308;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_50_OFFSET = 11'h 30c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_51_OFFSET = 11'h 310;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_52_OFFSET = 11'h 314;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_53_OFFSET = 11'h 318;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_54_OFFSET = 11'h 31c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_55_OFFSET = 11'h 320;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_56_OFFSET = 11'h 324;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_57_OFFSET = 11'h 328;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_58_OFFSET = 11'h 32c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_59_OFFSET = 11'h 330;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_60_OFFSET = 11'h 334;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61_OFFSET = 11'h 338;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62_OFFSET = 11'h 33c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63_OFFSET = 11'h 340;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0_OFFSET = 11'h 344;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1_OFFSET = 11'h 348;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2_OFFSET = 11'h 34c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_3_OFFSET = 11'h 350;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_4_OFFSET = 11'h 354;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_5_OFFSET = 11'h 358;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_6_OFFSET = 11'h 35c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_7_OFFSET = 11'h 360;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_8_OFFSET = 11'h 364;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_9_OFFSET = 11'h 368;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_10_OFFSET = 11'h 36c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_11_OFFSET = 11'h 370;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_12_OFFSET = 11'h 374;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_13_OFFSET = 11'h 378;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_14_OFFSET = 11'h 37c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_15_OFFSET = 11'h 380;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_16_OFFSET = 11'h 384;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_17_OFFSET = 11'h 388;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_18_OFFSET = 11'h 38c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_19_OFFSET = 11'h 390;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_20_OFFSET = 11'h 394;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_21_OFFSET = 11'h 398;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_22_OFFSET = 11'h 39c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_23_OFFSET = 11'h 3a0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_24_OFFSET = 11'h 3a4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_25_OFFSET = 11'h 3a8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_26_OFFSET = 11'h 3ac;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_27_OFFSET = 11'h 3b0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_28_OFFSET = 11'h 3b4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_29_OFFSET = 11'h 3b8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_30_OFFSET = 11'h 3bc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_31_OFFSET = 11'h 3c0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_32_OFFSET = 11'h 3c4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_33_OFFSET = 11'h 3c8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_34_OFFSET = 11'h 3cc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_35_OFFSET = 11'h 3d0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_36_OFFSET = 11'h 3d4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_37_OFFSET = 11'h 3d8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_38_OFFSET = 11'h 3dc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_39_OFFSET = 11'h 3e0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_40_OFFSET = 11'h 3e4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_41_OFFSET = 11'h 3e8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_42_OFFSET = 11'h 3ec;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_43_OFFSET = 11'h 3f0;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_44_OFFSET = 11'h 3f4;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_45_OFFSET = 11'h 3f8;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_46_OFFSET = 11'h 3fc;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_47_OFFSET = 11'h 400;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_48_OFFSET = 11'h 404;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_49_OFFSET = 11'h 408;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_50_OFFSET = 11'h 40c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_51_OFFSET = 11'h 410;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_52_OFFSET = 11'h 414;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_53_OFFSET = 11'h 418;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_54_OFFSET = 11'h 41c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_55_OFFSET = 11'h 420;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_56_OFFSET = 11'h 424;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_57_OFFSET = 11'h 428;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_58_OFFSET = 11'h 42c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_59_OFFSET = 11'h 430;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60_OFFSET = 11'h 434;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61_OFFSET = 11'h 438;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62_OFFSET = 11'h 43c;
-  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63_OFFSET = 11'h 440;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET = 13'h 0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET = 13'h 4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET = 13'h 8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET = 13'h c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET = 13'h 10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET = 13'h 14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET = 13'h 18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET = 13'h 1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET = 13'h 20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET = 13'h 24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET = 13'h 28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET = 13'h 2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET = 13'h 30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET = 13'h 34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET = 13'h 38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET = 13'h 3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET = 13'h 40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_0_OFFSET = 13'h 44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_1_OFFSET = 13'h 48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_2_OFFSET = 13'h 4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_3_OFFSET = 13'h 50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_4_OFFSET = 13'h 54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_5_OFFSET = 13'h 58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_6_OFFSET = 13'h 5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_7_OFFSET = 13'h 60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_8_OFFSET = 13'h 64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_9_OFFSET = 13'h 68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_10_OFFSET = 13'h 6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_11_OFFSET = 13'h 70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_12_OFFSET = 13'h 74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_13_OFFSET = 13'h 78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_14_OFFSET = 13'h 7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_15_OFFSET = 13'h 80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_16_OFFSET = 13'h 84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_17_OFFSET = 13'h 88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_18_OFFSET = 13'h 8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_19_OFFSET = 13'h 90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_20_OFFSET = 13'h 94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_21_OFFSET = 13'h 98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_22_OFFSET = 13'h 9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_23_OFFSET = 13'h a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_24_OFFSET = 13'h a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_25_OFFSET = 13'h a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_26_OFFSET = 13'h ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_27_OFFSET = 13'h b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_28_OFFSET = 13'h b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_29_OFFSET = 13'h b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_30_OFFSET = 13'h bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_31_OFFSET = 13'h c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_32_OFFSET = 13'h c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_33_OFFSET = 13'h c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_34_OFFSET = 13'h cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_35_OFFSET = 13'h d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_36_OFFSET = 13'h d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_37_OFFSET = 13'h d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_38_OFFSET = 13'h dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_39_OFFSET = 13'h e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_40_OFFSET = 13'h e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_41_OFFSET = 13'h e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_42_OFFSET = 13'h ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_43_OFFSET = 13'h f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_44_OFFSET = 13'h f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_45_OFFSET = 13'h f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_46_OFFSET = 13'h fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_47_OFFSET = 13'h 100;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_48_OFFSET = 13'h 104;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_49_OFFSET = 13'h 108;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_50_OFFSET = 13'h 10c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_51_OFFSET = 13'h 110;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_52_OFFSET = 13'h 114;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_53_OFFSET = 13'h 118;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_54_OFFSET = 13'h 11c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_55_OFFSET = 13'h 120;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_56_OFFSET = 13'h 124;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_57_OFFSET = 13'h 128;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_58_OFFSET = 13'h 12c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_59_OFFSET = 13'h 130;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_60_OFFSET = 13'h 134;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61_OFFSET = 13'h 138;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62_OFFSET = 13'h 13c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63_OFFSET = 13'h 140;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_64_OFFSET = 13'h 144;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_65_OFFSET = 13'h 148;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_66_OFFSET = 13'h 14c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_67_OFFSET = 13'h 150;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_68_OFFSET = 13'h 154;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_69_OFFSET = 13'h 158;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_70_OFFSET = 13'h 15c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_71_OFFSET = 13'h 160;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_72_OFFSET = 13'h 164;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_73_OFFSET = 13'h 168;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_74_OFFSET = 13'h 16c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_75_OFFSET = 13'h 170;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_76_OFFSET = 13'h 174;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_77_OFFSET = 13'h 178;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_78_OFFSET = 13'h 17c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_79_OFFSET = 13'h 180;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_80_OFFSET = 13'h 184;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_81_OFFSET = 13'h 188;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_82_OFFSET = 13'h 18c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_83_OFFSET = 13'h 190;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_84_OFFSET = 13'h 194;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_85_OFFSET = 13'h 198;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_86_OFFSET = 13'h 19c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_87_OFFSET = 13'h 1a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_88_OFFSET = 13'h 1a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_89_OFFSET = 13'h 1a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_90_OFFSET = 13'h 1ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_91_OFFSET = 13'h 1b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_92_OFFSET = 13'h 1b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_93_OFFSET = 13'h 1b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_94_OFFSET = 13'h 1bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_95_OFFSET = 13'h 1c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_96_OFFSET = 13'h 1c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_97_OFFSET = 13'h 1c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_98_OFFSET = 13'h 1cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_99_OFFSET = 13'h 1d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_100_OFFSET = 13'h 1d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_101_OFFSET = 13'h 1d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_102_OFFSET = 13'h 1dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_103_OFFSET = 13'h 1e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_104_OFFSET = 13'h 1e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_105_OFFSET = 13'h 1e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_106_OFFSET = 13'h 1ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_107_OFFSET = 13'h 1f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_108_OFFSET = 13'h 1f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_109_OFFSET = 13'h 1f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_110_OFFSET = 13'h 1fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_111_OFFSET = 13'h 200;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_112_OFFSET = 13'h 204;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_113_OFFSET = 13'h 208;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_114_OFFSET = 13'h 20c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_115_OFFSET = 13'h 210;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_116_OFFSET = 13'h 214;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_117_OFFSET = 13'h 218;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_118_OFFSET = 13'h 21c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_119_OFFSET = 13'h 220;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_120_OFFSET = 13'h 224;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_121_OFFSET = 13'h 228;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_122_OFFSET = 13'h 22c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_123_OFFSET = 13'h 230;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_124_OFFSET = 13'h 234;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_125_OFFSET = 13'h 238;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_126_OFFSET = 13'h 23c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_127_OFFSET = 13'h 240;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_128_OFFSET = 13'h 244;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_129_OFFSET = 13'h 248;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_130_OFFSET = 13'h 24c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_131_OFFSET = 13'h 250;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_132_OFFSET = 13'h 254;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_133_OFFSET = 13'h 258;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_134_OFFSET = 13'h 25c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_135_OFFSET = 13'h 260;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_136_OFFSET = 13'h 264;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_137_OFFSET = 13'h 268;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_138_OFFSET = 13'h 26c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_139_OFFSET = 13'h 270;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_140_OFFSET = 13'h 274;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_141_OFFSET = 13'h 278;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_142_OFFSET = 13'h 27c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_143_OFFSET = 13'h 280;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_144_OFFSET = 13'h 284;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_145_OFFSET = 13'h 288;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_146_OFFSET = 13'h 28c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_147_OFFSET = 13'h 290;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_148_OFFSET = 13'h 294;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_149_OFFSET = 13'h 298;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_150_OFFSET = 13'h 29c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_151_OFFSET = 13'h 2a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_152_OFFSET = 13'h 2a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_153_OFFSET = 13'h 2a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_154_OFFSET = 13'h 2ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_155_OFFSET = 13'h 2b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_156_OFFSET = 13'h 2b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_157_OFFSET = 13'h 2b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_158_OFFSET = 13'h 2bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_159_OFFSET = 13'h 2c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_160_OFFSET = 13'h 2c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_161_OFFSET = 13'h 2c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_162_OFFSET = 13'h 2cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_163_OFFSET = 13'h 2d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_164_OFFSET = 13'h 2d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_165_OFFSET = 13'h 2d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_166_OFFSET = 13'h 2dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_167_OFFSET = 13'h 2e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_168_OFFSET = 13'h 2e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_169_OFFSET = 13'h 2e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_170_OFFSET = 13'h 2ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_171_OFFSET = 13'h 2f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_172_OFFSET = 13'h 2f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_173_OFFSET = 13'h 2f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_174_OFFSET = 13'h 2fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_175_OFFSET = 13'h 300;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_176_OFFSET = 13'h 304;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_177_OFFSET = 13'h 308;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_178_OFFSET = 13'h 30c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_179_OFFSET = 13'h 310;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_180_OFFSET = 13'h 314;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_181_OFFSET = 13'h 318;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_182_OFFSET = 13'h 31c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_183_OFFSET = 13'h 320;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_184_OFFSET = 13'h 324;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_185_OFFSET = 13'h 328;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_186_OFFSET = 13'h 32c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_187_OFFSET = 13'h 330;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_188_OFFSET = 13'h 334;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_189_OFFSET = 13'h 338;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_190_OFFSET = 13'h 33c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_191_OFFSET = 13'h 340;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_192_OFFSET = 13'h 344;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_193_OFFSET = 13'h 348;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_194_OFFSET = 13'h 34c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_195_OFFSET = 13'h 350;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_196_OFFSET = 13'h 354;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_197_OFFSET = 13'h 358;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_198_OFFSET = 13'h 35c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_199_OFFSET = 13'h 360;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_200_OFFSET = 13'h 364;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_201_OFFSET = 13'h 368;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_202_OFFSET = 13'h 36c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_203_OFFSET = 13'h 370;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_204_OFFSET = 13'h 374;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_205_OFFSET = 13'h 378;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_206_OFFSET = 13'h 37c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_207_OFFSET = 13'h 380;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_208_OFFSET = 13'h 384;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_209_OFFSET = 13'h 388;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_210_OFFSET = 13'h 38c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_211_OFFSET = 13'h 390;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_212_OFFSET = 13'h 394;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_213_OFFSET = 13'h 398;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_214_OFFSET = 13'h 39c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_215_OFFSET = 13'h 3a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_216_OFFSET = 13'h 3a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_217_OFFSET = 13'h 3a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_218_OFFSET = 13'h 3ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_219_OFFSET = 13'h 3b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_220_OFFSET = 13'h 3b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_221_OFFSET = 13'h 3b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_222_OFFSET = 13'h 3bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_223_OFFSET = 13'h 3c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_224_OFFSET = 13'h 3c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_225_OFFSET = 13'h 3c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_226_OFFSET = 13'h 3cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_227_OFFSET = 13'h 3d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_228_OFFSET = 13'h 3d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_229_OFFSET = 13'h 3d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_230_OFFSET = 13'h 3dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_231_OFFSET = 13'h 3e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_232_OFFSET = 13'h 3e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_233_OFFSET = 13'h 3e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_234_OFFSET = 13'h 3ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_235_OFFSET = 13'h 3f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_236_OFFSET = 13'h 3f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_237_OFFSET = 13'h 3f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_238_OFFSET = 13'h 3fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_239_OFFSET = 13'h 400;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_240_OFFSET = 13'h 404;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_241_OFFSET = 13'h 408;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_242_OFFSET = 13'h 40c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_243_OFFSET = 13'h 410;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_244_OFFSET = 13'h 414;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_245_OFFSET = 13'h 418;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_246_OFFSET = 13'h 41c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_247_OFFSET = 13'h 420;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_248_OFFSET = 13'h 424;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_249_OFFSET = 13'h 428;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_250_OFFSET = 13'h 42c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_251_OFFSET = 13'h 430;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_252_OFFSET = 13'h 434;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_253_OFFSET = 13'h 438;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_254_OFFSET = 13'h 43c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_255_OFFSET = 13'h 440;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0_OFFSET = 13'h 444;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1_OFFSET = 13'h 448;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2_OFFSET = 13'h 44c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_3_OFFSET = 13'h 450;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_4_OFFSET = 13'h 454;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_5_OFFSET = 13'h 458;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_6_OFFSET = 13'h 45c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_7_OFFSET = 13'h 460;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_8_OFFSET = 13'h 464;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_9_OFFSET = 13'h 468;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_10_OFFSET = 13'h 46c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_11_OFFSET = 13'h 470;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_12_OFFSET = 13'h 474;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_13_OFFSET = 13'h 478;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_14_OFFSET = 13'h 47c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_15_OFFSET = 13'h 480;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_16_OFFSET = 13'h 484;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_17_OFFSET = 13'h 488;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_18_OFFSET = 13'h 48c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_19_OFFSET = 13'h 490;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_20_OFFSET = 13'h 494;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_21_OFFSET = 13'h 498;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_22_OFFSET = 13'h 49c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_23_OFFSET = 13'h 4a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_24_OFFSET = 13'h 4a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_25_OFFSET = 13'h 4a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_26_OFFSET = 13'h 4ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_27_OFFSET = 13'h 4b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_28_OFFSET = 13'h 4b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_29_OFFSET = 13'h 4b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_30_OFFSET = 13'h 4bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_31_OFFSET = 13'h 4c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_32_OFFSET = 13'h 4c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_33_OFFSET = 13'h 4c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_34_OFFSET = 13'h 4cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_35_OFFSET = 13'h 4d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_36_OFFSET = 13'h 4d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_37_OFFSET = 13'h 4d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_38_OFFSET = 13'h 4dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_39_OFFSET = 13'h 4e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_40_OFFSET = 13'h 4e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_41_OFFSET = 13'h 4e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_42_OFFSET = 13'h 4ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_43_OFFSET = 13'h 4f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_44_OFFSET = 13'h 4f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_45_OFFSET = 13'h 4f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_46_OFFSET = 13'h 4fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_47_OFFSET = 13'h 500;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_48_OFFSET = 13'h 504;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_49_OFFSET = 13'h 508;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_50_OFFSET = 13'h 50c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_51_OFFSET = 13'h 510;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_52_OFFSET = 13'h 514;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_53_OFFSET = 13'h 518;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_54_OFFSET = 13'h 51c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_55_OFFSET = 13'h 520;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_56_OFFSET = 13'h 524;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_57_OFFSET = 13'h 528;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_58_OFFSET = 13'h 52c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_59_OFFSET = 13'h 530;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_60_OFFSET = 13'h 534;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61_OFFSET = 13'h 538;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62_OFFSET = 13'h 53c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63_OFFSET = 13'h 540;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_64_OFFSET = 13'h 544;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_65_OFFSET = 13'h 548;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_66_OFFSET = 13'h 54c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_67_OFFSET = 13'h 550;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_68_OFFSET = 13'h 554;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_69_OFFSET = 13'h 558;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_70_OFFSET = 13'h 55c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_71_OFFSET = 13'h 560;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_72_OFFSET = 13'h 564;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_73_OFFSET = 13'h 568;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_74_OFFSET = 13'h 56c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_75_OFFSET = 13'h 570;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_76_OFFSET = 13'h 574;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_77_OFFSET = 13'h 578;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_78_OFFSET = 13'h 57c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_79_OFFSET = 13'h 580;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_80_OFFSET = 13'h 584;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_81_OFFSET = 13'h 588;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_82_OFFSET = 13'h 58c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_83_OFFSET = 13'h 590;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_84_OFFSET = 13'h 594;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_85_OFFSET = 13'h 598;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_86_OFFSET = 13'h 59c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_87_OFFSET = 13'h 5a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_88_OFFSET = 13'h 5a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_89_OFFSET = 13'h 5a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_90_OFFSET = 13'h 5ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_91_OFFSET = 13'h 5b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_92_OFFSET = 13'h 5b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_93_OFFSET = 13'h 5b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_94_OFFSET = 13'h 5bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_95_OFFSET = 13'h 5c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_96_OFFSET = 13'h 5c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_97_OFFSET = 13'h 5c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_98_OFFSET = 13'h 5cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_99_OFFSET = 13'h 5d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_100_OFFSET = 13'h 5d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_101_OFFSET = 13'h 5d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_102_OFFSET = 13'h 5dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_103_OFFSET = 13'h 5e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_104_OFFSET = 13'h 5e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_105_OFFSET = 13'h 5e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_106_OFFSET = 13'h 5ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_107_OFFSET = 13'h 5f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_108_OFFSET = 13'h 5f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_109_OFFSET = 13'h 5f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_110_OFFSET = 13'h 5fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_111_OFFSET = 13'h 600;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_112_OFFSET = 13'h 604;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_113_OFFSET = 13'h 608;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_114_OFFSET = 13'h 60c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_115_OFFSET = 13'h 610;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_116_OFFSET = 13'h 614;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_117_OFFSET = 13'h 618;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_118_OFFSET = 13'h 61c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_119_OFFSET = 13'h 620;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_120_OFFSET = 13'h 624;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_121_OFFSET = 13'h 628;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_122_OFFSET = 13'h 62c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_123_OFFSET = 13'h 630;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_124_OFFSET = 13'h 634;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_125_OFFSET = 13'h 638;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_126_OFFSET = 13'h 63c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_127_OFFSET = 13'h 640;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_128_OFFSET = 13'h 644;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_129_OFFSET = 13'h 648;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_130_OFFSET = 13'h 64c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_131_OFFSET = 13'h 650;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_132_OFFSET = 13'h 654;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_133_OFFSET = 13'h 658;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_134_OFFSET = 13'h 65c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_135_OFFSET = 13'h 660;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_136_OFFSET = 13'h 664;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_137_OFFSET = 13'h 668;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_138_OFFSET = 13'h 66c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_139_OFFSET = 13'h 670;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_140_OFFSET = 13'h 674;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_141_OFFSET = 13'h 678;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_142_OFFSET = 13'h 67c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_143_OFFSET = 13'h 680;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_144_OFFSET = 13'h 684;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_145_OFFSET = 13'h 688;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_146_OFFSET = 13'h 68c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_147_OFFSET = 13'h 690;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_148_OFFSET = 13'h 694;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_149_OFFSET = 13'h 698;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_150_OFFSET = 13'h 69c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_151_OFFSET = 13'h 6a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_152_OFFSET = 13'h 6a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_153_OFFSET = 13'h 6a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_154_OFFSET = 13'h 6ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_155_OFFSET = 13'h 6b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_156_OFFSET = 13'h 6b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_157_OFFSET = 13'h 6b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_158_OFFSET = 13'h 6bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_159_OFFSET = 13'h 6c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_160_OFFSET = 13'h 6c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_161_OFFSET = 13'h 6c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_162_OFFSET = 13'h 6cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_163_OFFSET = 13'h 6d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_164_OFFSET = 13'h 6d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_165_OFFSET = 13'h 6d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_166_OFFSET = 13'h 6dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_167_OFFSET = 13'h 6e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_168_OFFSET = 13'h 6e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_169_OFFSET = 13'h 6e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_170_OFFSET = 13'h 6ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_171_OFFSET = 13'h 6f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_172_OFFSET = 13'h 6f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_173_OFFSET = 13'h 6f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_174_OFFSET = 13'h 6fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_175_OFFSET = 13'h 700;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_176_OFFSET = 13'h 704;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_177_OFFSET = 13'h 708;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_178_OFFSET = 13'h 70c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_179_OFFSET = 13'h 710;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_180_OFFSET = 13'h 714;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_181_OFFSET = 13'h 718;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_182_OFFSET = 13'h 71c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_183_OFFSET = 13'h 720;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_184_OFFSET = 13'h 724;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_185_OFFSET = 13'h 728;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_186_OFFSET = 13'h 72c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_187_OFFSET = 13'h 730;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_188_OFFSET = 13'h 734;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_189_OFFSET = 13'h 738;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_190_OFFSET = 13'h 73c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_191_OFFSET = 13'h 740;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_192_OFFSET = 13'h 744;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_193_OFFSET = 13'h 748;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_194_OFFSET = 13'h 74c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_195_OFFSET = 13'h 750;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_196_OFFSET = 13'h 754;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_197_OFFSET = 13'h 758;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_198_OFFSET = 13'h 75c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_199_OFFSET = 13'h 760;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_200_OFFSET = 13'h 764;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_201_OFFSET = 13'h 768;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_202_OFFSET = 13'h 76c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_203_OFFSET = 13'h 770;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_204_OFFSET = 13'h 774;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_205_OFFSET = 13'h 778;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_206_OFFSET = 13'h 77c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_207_OFFSET = 13'h 780;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_208_OFFSET = 13'h 784;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_209_OFFSET = 13'h 788;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_210_OFFSET = 13'h 78c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_211_OFFSET = 13'h 790;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_212_OFFSET = 13'h 794;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_213_OFFSET = 13'h 798;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_214_OFFSET = 13'h 79c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_215_OFFSET = 13'h 7a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_216_OFFSET = 13'h 7a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_217_OFFSET = 13'h 7a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_218_OFFSET = 13'h 7ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_219_OFFSET = 13'h 7b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_220_OFFSET = 13'h 7b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_221_OFFSET = 13'h 7b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_222_OFFSET = 13'h 7bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_223_OFFSET = 13'h 7c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_224_OFFSET = 13'h 7c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_225_OFFSET = 13'h 7c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_226_OFFSET = 13'h 7cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_227_OFFSET = 13'h 7d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_228_OFFSET = 13'h 7d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_229_OFFSET = 13'h 7d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_230_OFFSET = 13'h 7dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_231_OFFSET = 13'h 7e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_232_OFFSET = 13'h 7e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_233_OFFSET = 13'h 7e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_234_OFFSET = 13'h 7ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_235_OFFSET = 13'h 7f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_236_OFFSET = 13'h 7f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_237_OFFSET = 13'h 7f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_238_OFFSET = 13'h 7fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_239_OFFSET = 13'h 800;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_240_OFFSET = 13'h 804;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_241_OFFSET = 13'h 808;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_242_OFFSET = 13'h 80c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_243_OFFSET = 13'h 810;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_244_OFFSET = 13'h 814;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_245_OFFSET = 13'h 818;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_246_OFFSET = 13'h 81c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_247_OFFSET = 13'h 820;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_248_OFFSET = 13'h 824;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_249_OFFSET = 13'h 828;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_250_OFFSET = 13'h 82c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_251_OFFSET = 13'h 830;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_252_OFFSET = 13'h 834;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_253_OFFSET = 13'h 838;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_254_OFFSET = 13'h 83c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_255_OFFSET = 13'h 840;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0_OFFSET = 13'h 844;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1_OFFSET = 13'h 848;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2_OFFSET = 13'h 84c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_3_OFFSET = 13'h 850;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_4_OFFSET = 13'h 854;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_5_OFFSET = 13'h 858;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_6_OFFSET = 13'h 85c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_7_OFFSET = 13'h 860;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_8_OFFSET = 13'h 864;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_9_OFFSET = 13'h 868;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_10_OFFSET = 13'h 86c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_11_OFFSET = 13'h 870;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_12_OFFSET = 13'h 874;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_13_OFFSET = 13'h 878;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_14_OFFSET = 13'h 87c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_15_OFFSET = 13'h 880;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_16_OFFSET = 13'h 884;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_17_OFFSET = 13'h 888;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_18_OFFSET = 13'h 88c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_19_OFFSET = 13'h 890;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_20_OFFSET = 13'h 894;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_21_OFFSET = 13'h 898;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_22_OFFSET = 13'h 89c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_23_OFFSET = 13'h 8a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_24_OFFSET = 13'h 8a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_25_OFFSET = 13'h 8a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_26_OFFSET = 13'h 8ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_27_OFFSET = 13'h 8b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_28_OFFSET = 13'h 8b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_29_OFFSET = 13'h 8b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_30_OFFSET = 13'h 8bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_31_OFFSET = 13'h 8c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_32_OFFSET = 13'h 8c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_33_OFFSET = 13'h 8c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_34_OFFSET = 13'h 8cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_35_OFFSET = 13'h 8d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_36_OFFSET = 13'h 8d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_37_OFFSET = 13'h 8d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_38_OFFSET = 13'h 8dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_39_OFFSET = 13'h 8e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_40_OFFSET = 13'h 8e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_41_OFFSET = 13'h 8e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_42_OFFSET = 13'h 8ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_43_OFFSET = 13'h 8f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_44_OFFSET = 13'h 8f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_45_OFFSET = 13'h 8f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_46_OFFSET = 13'h 8fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_47_OFFSET = 13'h 900;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_48_OFFSET = 13'h 904;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_49_OFFSET = 13'h 908;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_50_OFFSET = 13'h 90c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_51_OFFSET = 13'h 910;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_52_OFFSET = 13'h 914;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_53_OFFSET = 13'h 918;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_54_OFFSET = 13'h 91c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_55_OFFSET = 13'h 920;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_56_OFFSET = 13'h 924;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_57_OFFSET = 13'h 928;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_58_OFFSET = 13'h 92c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_59_OFFSET = 13'h 930;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_60_OFFSET = 13'h 934;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61_OFFSET = 13'h 938;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62_OFFSET = 13'h 93c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63_OFFSET = 13'h 940;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_64_OFFSET = 13'h 944;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_65_OFFSET = 13'h 948;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_66_OFFSET = 13'h 94c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_67_OFFSET = 13'h 950;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_68_OFFSET = 13'h 954;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_69_OFFSET = 13'h 958;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_70_OFFSET = 13'h 95c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_71_OFFSET = 13'h 960;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_72_OFFSET = 13'h 964;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_73_OFFSET = 13'h 968;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_74_OFFSET = 13'h 96c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_75_OFFSET = 13'h 970;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_76_OFFSET = 13'h 974;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_77_OFFSET = 13'h 978;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_78_OFFSET = 13'h 97c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_79_OFFSET = 13'h 980;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_80_OFFSET = 13'h 984;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_81_OFFSET = 13'h 988;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_82_OFFSET = 13'h 98c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_83_OFFSET = 13'h 990;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_84_OFFSET = 13'h 994;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_85_OFFSET = 13'h 998;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_86_OFFSET = 13'h 99c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_87_OFFSET = 13'h 9a0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_88_OFFSET = 13'h 9a4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_89_OFFSET = 13'h 9a8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_90_OFFSET = 13'h 9ac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_91_OFFSET = 13'h 9b0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_92_OFFSET = 13'h 9b4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_93_OFFSET = 13'h 9b8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_94_OFFSET = 13'h 9bc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_95_OFFSET = 13'h 9c0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_96_OFFSET = 13'h 9c4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_97_OFFSET = 13'h 9c8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_98_OFFSET = 13'h 9cc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_99_OFFSET = 13'h 9d0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_100_OFFSET = 13'h 9d4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_101_OFFSET = 13'h 9d8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_102_OFFSET = 13'h 9dc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_103_OFFSET = 13'h 9e0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_104_OFFSET = 13'h 9e4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_105_OFFSET = 13'h 9e8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_106_OFFSET = 13'h 9ec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_107_OFFSET = 13'h 9f0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_108_OFFSET = 13'h 9f4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_109_OFFSET = 13'h 9f8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_110_OFFSET = 13'h 9fc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_111_OFFSET = 13'h a00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_112_OFFSET = 13'h a04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_113_OFFSET = 13'h a08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_114_OFFSET = 13'h a0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_115_OFFSET = 13'h a10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_116_OFFSET = 13'h a14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_117_OFFSET = 13'h a18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_118_OFFSET = 13'h a1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_119_OFFSET = 13'h a20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_120_OFFSET = 13'h a24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_121_OFFSET = 13'h a28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_122_OFFSET = 13'h a2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_123_OFFSET = 13'h a30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_124_OFFSET = 13'h a34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_125_OFFSET = 13'h a38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_126_OFFSET = 13'h a3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_127_OFFSET = 13'h a40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_128_OFFSET = 13'h a44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_129_OFFSET = 13'h a48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_130_OFFSET = 13'h a4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_131_OFFSET = 13'h a50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_132_OFFSET = 13'h a54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_133_OFFSET = 13'h a58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_134_OFFSET = 13'h a5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_135_OFFSET = 13'h a60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_136_OFFSET = 13'h a64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_137_OFFSET = 13'h a68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_138_OFFSET = 13'h a6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_139_OFFSET = 13'h a70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_140_OFFSET = 13'h a74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_141_OFFSET = 13'h a78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_142_OFFSET = 13'h a7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_143_OFFSET = 13'h a80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_144_OFFSET = 13'h a84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_145_OFFSET = 13'h a88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_146_OFFSET = 13'h a8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_147_OFFSET = 13'h a90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_148_OFFSET = 13'h a94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_149_OFFSET = 13'h a98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_150_OFFSET = 13'h a9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_151_OFFSET = 13'h aa0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_152_OFFSET = 13'h aa4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_153_OFFSET = 13'h aa8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_154_OFFSET = 13'h aac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_155_OFFSET = 13'h ab0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_156_OFFSET = 13'h ab4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_157_OFFSET = 13'h ab8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_158_OFFSET = 13'h abc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_159_OFFSET = 13'h ac0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_160_OFFSET = 13'h ac4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_161_OFFSET = 13'h ac8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_162_OFFSET = 13'h acc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_163_OFFSET = 13'h ad0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_164_OFFSET = 13'h ad4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_165_OFFSET = 13'h ad8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_166_OFFSET = 13'h adc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_167_OFFSET = 13'h ae0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_168_OFFSET = 13'h ae4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_169_OFFSET = 13'h ae8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_170_OFFSET = 13'h aec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_171_OFFSET = 13'h af0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_172_OFFSET = 13'h af4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_173_OFFSET = 13'h af8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_174_OFFSET = 13'h afc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_175_OFFSET = 13'h b00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_176_OFFSET = 13'h b04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_177_OFFSET = 13'h b08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_178_OFFSET = 13'h b0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_179_OFFSET = 13'h b10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_180_OFFSET = 13'h b14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_181_OFFSET = 13'h b18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_182_OFFSET = 13'h b1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_183_OFFSET = 13'h b20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_184_OFFSET = 13'h b24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_185_OFFSET = 13'h b28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_186_OFFSET = 13'h b2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_187_OFFSET = 13'h b30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_188_OFFSET = 13'h b34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_189_OFFSET = 13'h b38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_190_OFFSET = 13'h b3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_191_OFFSET = 13'h b40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_192_OFFSET = 13'h b44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_193_OFFSET = 13'h b48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_194_OFFSET = 13'h b4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_195_OFFSET = 13'h b50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_196_OFFSET = 13'h b54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_197_OFFSET = 13'h b58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_198_OFFSET = 13'h b5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_199_OFFSET = 13'h b60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_200_OFFSET = 13'h b64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_201_OFFSET = 13'h b68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_202_OFFSET = 13'h b6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_203_OFFSET = 13'h b70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_204_OFFSET = 13'h b74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_205_OFFSET = 13'h b78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_206_OFFSET = 13'h b7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_207_OFFSET = 13'h b80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_208_OFFSET = 13'h b84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_209_OFFSET = 13'h b88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_210_OFFSET = 13'h b8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_211_OFFSET = 13'h b90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_212_OFFSET = 13'h b94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_213_OFFSET = 13'h b98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_214_OFFSET = 13'h b9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_215_OFFSET = 13'h ba0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_216_OFFSET = 13'h ba4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_217_OFFSET = 13'h ba8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_218_OFFSET = 13'h bac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_219_OFFSET = 13'h bb0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_220_OFFSET = 13'h bb4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_221_OFFSET = 13'h bb8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_222_OFFSET = 13'h bbc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_223_OFFSET = 13'h bc0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_224_OFFSET = 13'h bc4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_225_OFFSET = 13'h bc8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_226_OFFSET = 13'h bcc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_227_OFFSET = 13'h bd0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_228_OFFSET = 13'h bd4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_229_OFFSET = 13'h bd8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_230_OFFSET = 13'h bdc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_231_OFFSET = 13'h be0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_232_OFFSET = 13'h be4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_233_OFFSET = 13'h be8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_234_OFFSET = 13'h bec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_235_OFFSET = 13'h bf0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_236_OFFSET = 13'h bf4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_237_OFFSET = 13'h bf8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_238_OFFSET = 13'h bfc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_239_OFFSET = 13'h c00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_240_OFFSET = 13'h c04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_241_OFFSET = 13'h c08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_242_OFFSET = 13'h c0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_243_OFFSET = 13'h c10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_244_OFFSET = 13'h c14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_245_OFFSET = 13'h c18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_246_OFFSET = 13'h c1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_247_OFFSET = 13'h c20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_248_OFFSET = 13'h c24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_249_OFFSET = 13'h c28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_250_OFFSET = 13'h c2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_251_OFFSET = 13'h c30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_252_OFFSET = 13'h c34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_253_OFFSET = 13'h c38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_254_OFFSET = 13'h c3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_255_OFFSET = 13'h c40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0_OFFSET = 13'h c44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1_OFFSET = 13'h c48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2_OFFSET = 13'h c4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_3_OFFSET = 13'h c50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_4_OFFSET = 13'h c54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_5_OFFSET = 13'h c58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_6_OFFSET = 13'h c5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_7_OFFSET = 13'h c60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_8_OFFSET = 13'h c64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_9_OFFSET = 13'h c68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_10_OFFSET = 13'h c6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_11_OFFSET = 13'h c70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_12_OFFSET = 13'h c74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_13_OFFSET = 13'h c78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_14_OFFSET = 13'h c7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_15_OFFSET = 13'h c80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_16_OFFSET = 13'h c84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_17_OFFSET = 13'h c88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_18_OFFSET = 13'h c8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_19_OFFSET = 13'h c90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_20_OFFSET = 13'h c94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_21_OFFSET = 13'h c98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_22_OFFSET = 13'h c9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_23_OFFSET = 13'h ca0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_24_OFFSET = 13'h ca4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_25_OFFSET = 13'h ca8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_26_OFFSET = 13'h cac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_27_OFFSET = 13'h cb0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_28_OFFSET = 13'h cb4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_29_OFFSET = 13'h cb8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_30_OFFSET = 13'h cbc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_31_OFFSET = 13'h cc0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_32_OFFSET = 13'h cc4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_33_OFFSET = 13'h cc8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_34_OFFSET = 13'h ccc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_35_OFFSET = 13'h cd0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_36_OFFSET = 13'h cd4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_37_OFFSET = 13'h cd8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_38_OFFSET = 13'h cdc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_39_OFFSET = 13'h ce0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_40_OFFSET = 13'h ce4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_41_OFFSET = 13'h ce8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_42_OFFSET = 13'h cec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_43_OFFSET = 13'h cf0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_44_OFFSET = 13'h cf4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_45_OFFSET = 13'h cf8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_46_OFFSET = 13'h cfc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_47_OFFSET = 13'h d00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_48_OFFSET = 13'h d04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_49_OFFSET = 13'h d08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_50_OFFSET = 13'h d0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_51_OFFSET = 13'h d10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_52_OFFSET = 13'h d14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_53_OFFSET = 13'h d18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_54_OFFSET = 13'h d1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_55_OFFSET = 13'h d20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_56_OFFSET = 13'h d24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_57_OFFSET = 13'h d28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_58_OFFSET = 13'h d2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_59_OFFSET = 13'h d30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60_OFFSET = 13'h d34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61_OFFSET = 13'h d38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62_OFFSET = 13'h d3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63_OFFSET = 13'h d40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_64_OFFSET = 13'h d44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_65_OFFSET = 13'h d48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_66_OFFSET = 13'h d4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_67_OFFSET = 13'h d50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_68_OFFSET = 13'h d54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_69_OFFSET = 13'h d58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_70_OFFSET = 13'h d5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_71_OFFSET = 13'h d60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_72_OFFSET = 13'h d64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_73_OFFSET = 13'h d68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_74_OFFSET = 13'h d6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_75_OFFSET = 13'h d70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_76_OFFSET = 13'h d74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_77_OFFSET = 13'h d78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_78_OFFSET = 13'h d7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_79_OFFSET = 13'h d80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_80_OFFSET = 13'h d84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_81_OFFSET = 13'h d88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_82_OFFSET = 13'h d8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_83_OFFSET = 13'h d90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_84_OFFSET = 13'h d94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_85_OFFSET = 13'h d98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_86_OFFSET = 13'h d9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_87_OFFSET = 13'h da0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_88_OFFSET = 13'h da4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_89_OFFSET = 13'h da8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_90_OFFSET = 13'h dac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_91_OFFSET = 13'h db0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_92_OFFSET = 13'h db4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_93_OFFSET = 13'h db8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_94_OFFSET = 13'h dbc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_95_OFFSET = 13'h dc0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_96_OFFSET = 13'h dc4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_97_OFFSET = 13'h dc8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_98_OFFSET = 13'h dcc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_99_OFFSET = 13'h dd0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_100_OFFSET = 13'h dd4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_101_OFFSET = 13'h dd8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_102_OFFSET = 13'h ddc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_103_OFFSET = 13'h de0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_104_OFFSET = 13'h de4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_105_OFFSET = 13'h de8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_106_OFFSET = 13'h dec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_107_OFFSET = 13'h df0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_108_OFFSET = 13'h df4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_109_OFFSET = 13'h df8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_110_OFFSET = 13'h dfc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_111_OFFSET = 13'h e00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_112_OFFSET = 13'h e04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_113_OFFSET = 13'h e08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_114_OFFSET = 13'h e0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_115_OFFSET = 13'h e10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_116_OFFSET = 13'h e14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_117_OFFSET = 13'h e18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_118_OFFSET = 13'h e1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_119_OFFSET = 13'h e20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_120_OFFSET = 13'h e24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_121_OFFSET = 13'h e28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_122_OFFSET = 13'h e2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_123_OFFSET = 13'h e30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_124_OFFSET = 13'h e34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_125_OFFSET = 13'h e38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_126_OFFSET = 13'h e3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_127_OFFSET = 13'h e40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_128_OFFSET = 13'h e44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_129_OFFSET = 13'h e48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_130_OFFSET = 13'h e4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_131_OFFSET = 13'h e50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_132_OFFSET = 13'h e54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_133_OFFSET = 13'h e58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_134_OFFSET = 13'h e5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_135_OFFSET = 13'h e60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_136_OFFSET = 13'h e64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_137_OFFSET = 13'h e68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_138_OFFSET = 13'h e6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_139_OFFSET = 13'h e70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_140_OFFSET = 13'h e74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_141_OFFSET = 13'h e78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_142_OFFSET = 13'h e7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_143_OFFSET = 13'h e80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_144_OFFSET = 13'h e84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_145_OFFSET = 13'h e88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_146_OFFSET = 13'h e8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_147_OFFSET = 13'h e90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_148_OFFSET = 13'h e94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_149_OFFSET = 13'h e98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_150_OFFSET = 13'h e9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_151_OFFSET = 13'h ea0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_152_OFFSET = 13'h ea4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_153_OFFSET = 13'h ea8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_154_OFFSET = 13'h eac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_155_OFFSET = 13'h eb0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_156_OFFSET = 13'h eb4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_157_OFFSET = 13'h eb8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_158_OFFSET = 13'h ebc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_159_OFFSET = 13'h ec0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_160_OFFSET = 13'h ec4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_161_OFFSET = 13'h ec8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_162_OFFSET = 13'h ecc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_163_OFFSET = 13'h ed0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_164_OFFSET = 13'h ed4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_165_OFFSET = 13'h ed8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_166_OFFSET = 13'h edc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_167_OFFSET = 13'h ee0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_168_OFFSET = 13'h ee4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_169_OFFSET = 13'h ee8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_170_OFFSET = 13'h eec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_171_OFFSET = 13'h ef0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_172_OFFSET = 13'h ef4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_173_OFFSET = 13'h ef8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_174_OFFSET = 13'h efc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_175_OFFSET = 13'h f00;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_176_OFFSET = 13'h f04;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_177_OFFSET = 13'h f08;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_178_OFFSET = 13'h f0c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_179_OFFSET = 13'h f10;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_180_OFFSET = 13'h f14;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_181_OFFSET = 13'h f18;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_182_OFFSET = 13'h f1c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_183_OFFSET = 13'h f20;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_184_OFFSET = 13'h f24;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_185_OFFSET = 13'h f28;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_186_OFFSET = 13'h f2c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_187_OFFSET = 13'h f30;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_188_OFFSET = 13'h f34;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_189_OFFSET = 13'h f38;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_190_OFFSET = 13'h f3c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_191_OFFSET = 13'h f40;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_192_OFFSET = 13'h f44;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_193_OFFSET = 13'h f48;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_194_OFFSET = 13'h f4c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_195_OFFSET = 13'h f50;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_196_OFFSET = 13'h f54;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_197_OFFSET = 13'h f58;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_198_OFFSET = 13'h f5c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_199_OFFSET = 13'h f60;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_200_OFFSET = 13'h f64;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_201_OFFSET = 13'h f68;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_202_OFFSET = 13'h f6c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_203_OFFSET = 13'h f70;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_204_OFFSET = 13'h f74;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_205_OFFSET = 13'h f78;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_206_OFFSET = 13'h f7c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_207_OFFSET = 13'h f80;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_208_OFFSET = 13'h f84;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_209_OFFSET = 13'h f88;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_210_OFFSET = 13'h f8c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_211_OFFSET = 13'h f90;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_212_OFFSET = 13'h f94;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_213_OFFSET = 13'h f98;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_214_OFFSET = 13'h f9c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_215_OFFSET = 13'h fa0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_216_OFFSET = 13'h fa4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_217_OFFSET = 13'h fa8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_218_OFFSET = 13'h fac;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_219_OFFSET = 13'h fb0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_220_OFFSET = 13'h fb4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_221_OFFSET = 13'h fb8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_222_OFFSET = 13'h fbc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_223_OFFSET = 13'h fc0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_224_OFFSET = 13'h fc4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_225_OFFSET = 13'h fc8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_226_OFFSET = 13'h fcc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_227_OFFSET = 13'h fd0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_228_OFFSET = 13'h fd4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_229_OFFSET = 13'h fd8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_230_OFFSET = 13'h fdc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_231_OFFSET = 13'h fe0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_232_OFFSET = 13'h fe4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_233_OFFSET = 13'h fe8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_234_OFFSET = 13'h fec;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_235_OFFSET = 13'h ff0;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_236_OFFSET = 13'h ff4;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_237_OFFSET = 13'h ff8;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_238_OFFSET = 13'h ffc;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_239_OFFSET = 13'h 1000;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_240_OFFSET = 13'h 1004;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_241_OFFSET = 13'h 1008;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_242_OFFSET = 13'h 100c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_243_OFFSET = 13'h 1010;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_244_OFFSET = 13'h 1014;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_245_OFFSET = 13'h 1018;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_246_OFFSET = 13'h 101c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_247_OFFSET = 13'h 1020;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_248_OFFSET = 13'h 1024;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_249_OFFSET = 13'h 1028;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_250_OFFSET = 13'h 102c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_251_OFFSET = 13'h 1030;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_252_OFFSET = 13'h 1034;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_253_OFFSET = 13'h 1038;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_254_OFFSET = 13'h 103c;
+  parameter logic [BlockAw-1:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_255_OFFSET = 13'h 1040;
 
   // Reset values for hwext registers and their fields
   parameter logic [31:0] CACHEPOOL_PERIPHERAL_HW_BARRIER_RESVAL = 32'h 0;
@@ -561,6 +1329,390 @@ package cachepool_peripheral_reg_pkg;
   parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62_STATUS_62_RESVAL = 1'h 0;
   parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63_RESVAL = 1'h 0;
   parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63_STATUS_63_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_64_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_64_STATUS_64_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_65_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_65_STATUS_65_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_66_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_66_STATUS_66_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_67_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_67_STATUS_67_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_68_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_68_STATUS_68_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_69_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_69_STATUS_69_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_70_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_70_STATUS_70_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_71_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_71_STATUS_71_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_72_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_72_STATUS_72_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_73_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_73_STATUS_73_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_74_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_74_STATUS_74_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_75_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_75_STATUS_75_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_76_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_76_STATUS_76_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_77_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_77_STATUS_77_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_78_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_78_STATUS_78_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_79_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_79_STATUS_79_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_80_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_80_STATUS_80_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_81_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_81_STATUS_81_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_82_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_82_STATUS_82_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_83_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_83_STATUS_83_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_84_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_84_STATUS_84_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_85_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_85_STATUS_85_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_86_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_86_STATUS_86_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_87_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_87_STATUS_87_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_88_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_88_STATUS_88_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_89_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_89_STATUS_89_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_90_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_90_STATUS_90_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_91_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_91_STATUS_91_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_92_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_92_STATUS_92_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_93_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_93_STATUS_93_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_94_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_94_STATUS_94_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_95_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_95_STATUS_95_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_96_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_96_STATUS_96_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_97_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_97_STATUS_97_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_98_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_98_STATUS_98_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_99_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_99_STATUS_99_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_100_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_100_STATUS_100_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_101_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_101_STATUS_101_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_102_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_102_STATUS_102_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_103_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_103_STATUS_103_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_104_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_104_STATUS_104_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_105_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_105_STATUS_105_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_106_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_106_STATUS_106_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_107_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_107_STATUS_107_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_108_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_108_STATUS_108_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_109_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_109_STATUS_109_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_110_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_110_STATUS_110_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_111_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_111_STATUS_111_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_112_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_112_STATUS_112_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_113_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_113_STATUS_113_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_114_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_114_STATUS_114_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_115_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_115_STATUS_115_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_116_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_116_STATUS_116_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_117_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_117_STATUS_117_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_118_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_118_STATUS_118_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_119_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_119_STATUS_119_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_120_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_120_STATUS_120_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_121_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_121_STATUS_121_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_122_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_122_STATUS_122_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_123_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_123_STATUS_123_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_124_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_124_STATUS_124_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_125_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_125_STATUS_125_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_126_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_126_STATUS_126_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_127_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_127_STATUS_127_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_128_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_128_STATUS_128_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_129_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_129_STATUS_129_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_130_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_130_STATUS_130_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_131_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_131_STATUS_131_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_132_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_132_STATUS_132_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_133_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_133_STATUS_133_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_134_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_134_STATUS_134_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_135_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_135_STATUS_135_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_136_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_136_STATUS_136_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_137_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_137_STATUS_137_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_138_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_138_STATUS_138_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_139_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_139_STATUS_139_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_140_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_140_STATUS_140_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_141_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_141_STATUS_141_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_142_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_142_STATUS_142_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_143_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_143_STATUS_143_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_144_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_144_STATUS_144_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_145_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_145_STATUS_145_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_146_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_146_STATUS_146_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_147_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_147_STATUS_147_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_148_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_148_STATUS_148_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_149_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_149_STATUS_149_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_150_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_150_STATUS_150_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_151_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_151_STATUS_151_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_152_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_152_STATUS_152_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_153_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_153_STATUS_153_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_154_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_154_STATUS_154_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_155_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_155_STATUS_155_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_156_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_156_STATUS_156_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_157_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_157_STATUS_157_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_158_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_158_STATUS_158_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_159_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_159_STATUS_159_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_160_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_160_STATUS_160_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_161_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_161_STATUS_161_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_162_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_162_STATUS_162_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_163_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_163_STATUS_163_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_164_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_164_STATUS_164_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_165_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_165_STATUS_165_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_166_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_166_STATUS_166_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_167_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_167_STATUS_167_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_168_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_168_STATUS_168_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_169_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_169_STATUS_169_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_170_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_170_STATUS_170_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_171_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_171_STATUS_171_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_172_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_172_STATUS_172_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_173_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_173_STATUS_173_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_174_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_174_STATUS_174_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_175_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_175_STATUS_175_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_176_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_176_STATUS_176_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_177_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_177_STATUS_177_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_178_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_178_STATUS_178_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_179_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_179_STATUS_179_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_180_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_180_STATUS_180_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_181_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_181_STATUS_181_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_182_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_182_STATUS_182_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_183_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_183_STATUS_183_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_184_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_184_STATUS_184_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_185_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_185_STATUS_185_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_186_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_186_STATUS_186_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_187_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_187_STATUS_187_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_188_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_188_STATUS_188_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_189_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_189_STATUS_189_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_190_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_190_STATUS_190_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_191_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_191_STATUS_191_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_192_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_192_STATUS_192_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_193_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_193_STATUS_193_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_194_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_194_STATUS_194_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_195_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_195_STATUS_195_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_196_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_196_STATUS_196_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_197_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_197_STATUS_197_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_198_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_198_STATUS_198_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_199_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_199_STATUS_199_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_200_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_200_STATUS_200_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_201_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_201_STATUS_201_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_202_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_202_STATUS_202_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_203_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_203_STATUS_203_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_204_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_204_STATUS_204_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_205_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_205_STATUS_205_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_206_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_206_STATUS_206_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_207_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_207_STATUS_207_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_208_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_208_STATUS_208_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_209_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_209_STATUS_209_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_210_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_210_STATUS_210_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_211_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_211_STATUS_211_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_212_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_212_STATUS_212_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_213_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_213_STATUS_213_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_214_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_214_STATUS_214_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_215_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_215_STATUS_215_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_216_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_216_STATUS_216_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_217_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_217_STATUS_217_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_218_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_218_STATUS_218_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_219_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_219_STATUS_219_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_220_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_220_STATUS_220_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_221_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_221_STATUS_221_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_222_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_222_STATUS_222_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_223_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_223_STATUS_223_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_224_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_224_STATUS_224_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_225_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_225_STATUS_225_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_226_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_226_STATUS_226_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_227_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_227_STATUS_227_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_228_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_228_STATUS_228_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_229_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_229_STATUS_229_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_230_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_230_STATUS_230_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_231_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_231_STATUS_231_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_232_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_232_STATUS_232_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_233_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_233_STATUS_233_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_234_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_234_STATUS_234_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_235_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_235_STATUS_235_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_236_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_236_STATUS_236_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_237_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_237_STATUS_237_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_238_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_238_STATUS_238_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_239_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_239_STATUS_239_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_240_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_240_STATUS_240_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_241_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_241_STATUS_241_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_242_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_242_STATUS_242_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_243_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_243_STATUS_243_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_244_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_244_STATUS_244_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_245_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_245_STATUS_245_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_246_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_246_STATUS_246_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_247_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_247_STATUS_247_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_248_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_248_STATUS_248_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_249_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_249_STATUS_249_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_250_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_250_STATUS_250_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_251_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_251_STATUS_251_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_252_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_252_STATUS_252_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_253_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_253_STATUS_253_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_254_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_254_STATUS_254_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_255_RESVAL = 1'h 0;
+  parameter logic [0:0] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_255_STATUS_255_RESVAL = 1'h 0;
 
   // Register index
   typedef enum int {
@@ -645,6 +1797,198 @@ package cachepool_peripheral_reg_pkg;
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_64,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_65,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_66,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_67,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_68,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_69,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_70,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_71,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_72,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_73,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_74,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_75,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_76,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_77,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_78,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_79,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_80,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_81,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_82,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_83,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_84,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_85,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_86,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_87,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_88,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_89,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_90,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_91,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_92,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_93,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_94,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_95,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_96,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_97,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_98,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_99,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_100,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_101,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_102,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_103,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_104,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_105,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_106,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_107,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_108,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_109,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_110,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_111,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_112,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_113,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_114,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_115,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_116,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_117,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_118,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_119,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_120,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_121,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_122,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_123,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_124,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_125,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_126,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_127,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_128,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_129,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_130,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_131,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_132,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_133,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_134,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_135,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_136,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_137,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_138,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_139,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_140,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_141,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_142,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_143,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_144,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_145,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_146,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_147,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_148,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_149,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_150,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_151,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_152,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_153,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_154,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_155,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_156,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_157,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_158,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_159,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_160,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_161,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_162,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_163,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_164,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_165,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_166,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_167,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_168,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_169,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_170,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_171,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_172,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_173,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_174,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_175,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_176,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_177,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_178,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_179,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_180,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_181,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_182,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_183,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_184,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_185,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_186,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_187,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_188,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_189,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_190,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_191,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_192,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_193,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_194,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_195,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_196,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_197,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_198,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_199,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_200,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_201,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_202,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_203,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_204,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_205,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_206,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_207,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_208,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_209,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_210,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_211,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_212,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_213,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_214,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_215,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_216,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_217,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_218,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_219,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_220,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_221,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_222,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_223,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_224,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_225,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_226,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_227,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_228,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_229,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_230,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_231,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_232,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_233,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_234,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_235,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_236,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_237,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_238,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_239,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_240,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_241,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_242,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_243,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_244,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_245,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_246,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_247,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_248,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_249,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_250,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_251,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_252,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_253,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_254,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_255,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2,
@@ -709,6 +2053,198 @@ package cachepool_peripheral_reg_pkg;
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62,
     CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_64,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_65,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_66,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_67,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_68,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_69,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_70,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_71,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_72,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_73,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_74,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_75,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_76,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_77,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_78,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_79,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_80,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_81,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_82,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_83,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_84,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_85,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_86,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_87,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_88,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_89,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_90,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_91,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_92,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_93,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_94,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_95,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_96,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_97,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_98,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_99,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_100,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_101,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_102,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_103,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_104,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_105,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_106,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_107,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_108,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_109,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_110,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_111,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_112,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_113,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_114,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_115,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_116,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_117,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_118,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_119,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_120,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_121,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_122,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_123,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_124,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_125,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_126,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_127,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_128,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_129,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_130,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_131,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_132,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_133,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_134,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_135,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_136,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_137,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_138,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_139,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_140,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_141,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_142,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_143,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_144,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_145,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_146,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_147,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_148,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_149,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_150,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_151,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_152,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_153,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_154,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_155,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_156,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_157,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_158,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_159,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_160,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_161,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_162,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_163,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_164,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_165,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_166,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_167,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_168,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_169,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_170,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_171,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_172,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_173,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_174,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_175,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_176,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_177,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_178,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_179,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_180,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_181,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_182,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_183,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_184,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_185,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_186,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_187,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_188,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_189,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_190,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_191,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_192,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_193,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_194,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_195,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_196,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_197,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_198,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_199,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_200,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_201,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_202,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_203,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_204,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_205,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_206,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_207,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_208,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_209,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_210,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_211,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_212,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_213,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_214,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_215,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_216,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_217,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_218,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_219,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_220,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_221,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_222,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_223,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_224,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_225,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_226,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_227,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_228,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_229,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_230,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_231,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_232,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_233,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_234,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_235,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_236,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_237,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_238,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_239,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_240,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_241,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_242,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_243,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_244,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_245,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_246,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_247,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_248,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_249,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_250,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_251,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_252,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_253,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_254,
+    CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_255,
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0,
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1,
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2,
@@ -773,6 +2309,198 @@ package cachepool_peripheral_reg_pkg;
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61,
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62,
     CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_64,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_65,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_66,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_67,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_68,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_69,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_70,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_71,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_72,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_73,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_74,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_75,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_76,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_77,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_78,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_79,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_80,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_81,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_82,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_83,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_84,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_85,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_86,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_87,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_88,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_89,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_90,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_91,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_92,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_93,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_94,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_95,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_96,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_97,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_98,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_99,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_100,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_101,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_102,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_103,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_104,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_105,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_106,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_107,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_108,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_109,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_110,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_111,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_112,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_113,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_114,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_115,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_116,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_117,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_118,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_119,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_120,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_121,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_122,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_123,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_124,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_125,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_126,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_127,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_128,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_129,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_130,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_131,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_132,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_133,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_134,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_135,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_136,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_137,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_138,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_139,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_140,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_141,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_142,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_143,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_144,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_145,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_146,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_147,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_148,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_149,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_150,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_151,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_152,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_153,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_154,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_155,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_156,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_157,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_158,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_159,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_160,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_161,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_162,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_163,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_164,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_165,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_166,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_167,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_168,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_169,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_170,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_171,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_172,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_173,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_174,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_175,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_176,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_177,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_178,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_179,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_180,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_181,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_182,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_183,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_184,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_185,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_186,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_187,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_188,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_189,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_190,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_191,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_192,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_193,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_194,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_195,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_196,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_197,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_198,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_199,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_200,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_201,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_202,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_203,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_204,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_205,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_206,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_207,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_208,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_209,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_210,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_211,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_212,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_213,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_214,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_215,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_216,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_217,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_218,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_219,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_220,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_221,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_222,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_223,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_224,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_225,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_226,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_227,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_228,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_229,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_230,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_231,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_232,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_233,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_234,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_235,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_236,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_237,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_238,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_239,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_240,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_241,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_242,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_243,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_244,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_245,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_246,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_247,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_248,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_249,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_250,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_251,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_252,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_253,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_254,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_255,
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0,
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1,
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2,
@@ -836,284 +2564,1244 @@ package cachepool_peripheral_reg_pkg;
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60,
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61,
     CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62,
-    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_64,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_65,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_66,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_67,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_68,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_69,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_70,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_71,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_72,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_73,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_74,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_75,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_76,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_77,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_78,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_79,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_80,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_81,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_82,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_83,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_84,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_85,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_86,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_87,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_88,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_89,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_90,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_91,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_92,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_93,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_94,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_95,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_96,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_97,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_98,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_99,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_100,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_101,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_102,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_103,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_104,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_105,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_106,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_107,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_108,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_109,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_110,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_111,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_112,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_113,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_114,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_115,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_116,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_117,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_118,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_119,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_120,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_121,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_122,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_123,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_124,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_125,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_126,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_127,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_128,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_129,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_130,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_131,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_132,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_133,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_134,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_135,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_136,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_137,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_138,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_139,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_140,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_141,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_142,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_143,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_144,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_145,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_146,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_147,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_148,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_149,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_150,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_151,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_152,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_153,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_154,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_155,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_156,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_157,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_158,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_159,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_160,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_161,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_162,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_163,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_164,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_165,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_166,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_167,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_168,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_169,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_170,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_171,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_172,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_173,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_174,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_175,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_176,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_177,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_178,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_179,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_180,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_181,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_182,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_183,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_184,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_185,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_186,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_187,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_188,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_189,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_190,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_191,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_192,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_193,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_194,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_195,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_196,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_197,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_198,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_199,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_200,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_201,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_202,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_203,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_204,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_205,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_206,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_207,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_208,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_209,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_210,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_211,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_212,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_213,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_214,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_215,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_216,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_217,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_218,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_219,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_220,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_221,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_222,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_223,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_224,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_225,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_226,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_227,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_228,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_229,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_230,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_231,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_232,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_233,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_234,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_235,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_236,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_237,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_238,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_239,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_240,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_241,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_242,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_243,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_244,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_245,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_246,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_247,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_248,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_249,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_250,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_251,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_252,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_253,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_254,
+    CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_255
   } cachepool_peripheral_id_e;
 
   // Register width information to check illegal writes
-  parameter logic [3:0] CACHEPOOL_PERIPHERAL_PERMIT [273] = '{
-    4'b 1111, // index[  0] CACHEPOOL_PERIPHERAL_HW_BARRIER
-    4'b 0001, // index[  1] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE
-    4'b 0001, // index[  2] CACHEPOOL_PERIPHERAL_SPATZ_STATUS
-    4'b 1111, // index[  3] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE
-    4'b 1111, // index[  4] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL
-    4'b 0001, // index[  5] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT
-    4'b 0011, // index[  6] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM
-    4'b 0001, // index[  7] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN
-    4'b 1111, // index[  8] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0
-    4'b 1111, // index[  9] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1
-    4'b 0001, // index[ 10] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT
-    4'b 0001, // index[ 11] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT
-    4'b 0001, // index[ 12] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS
-    4'b 0001, // index[ 13] CACHEPOOL_PERIPHERAL_L1D_PRIVATE
-    4'b 1111, // index[ 14] CACHEPOOL_PERIPHERAL_L1D_ADDR
-    4'b 0001, // index[ 15] CACHEPOOL_PERIPHERAL_XBAR_OFFSET
-    4'b 0001, // index[ 16] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
-    4'b 0001, // index[ 17] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_0
-    4'b 0001, // index[ 18] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_1
-    4'b 0001, // index[ 19] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_2
-    4'b 0001, // index[ 20] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_3
-    4'b 0001, // index[ 21] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_4
-    4'b 0001, // index[ 22] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_5
-    4'b 0001, // index[ 23] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_6
-    4'b 0001, // index[ 24] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_7
-    4'b 0001, // index[ 25] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_8
-    4'b 0001, // index[ 26] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_9
-    4'b 0001, // index[ 27] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_10
-    4'b 0001, // index[ 28] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_11
-    4'b 0001, // index[ 29] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_12
-    4'b 0001, // index[ 30] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_13
-    4'b 0001, // index[ 31] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_14
-    4'b 0001, // index[ 32] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_15
-    4'b 0001, // index[ 33] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_16
-    4'b 0001, // index[ 34] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_17
-    4'b 0001, // index[ 35] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_18
-    4'b 0001, // index[ 36] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_19
-    4'b 0001, // index[ 37] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_20
-    4'b 0001, // index[ 38] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_21
-    4'b 0001, // index[ 39] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_22
-    4'b 0001, // index[ 40] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_23
-    4'b 0001, // index[ 41] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_24
-    4'b 0001, // index[ 42] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_25
-    4'b 0001, // index[ 43] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_26
-    4'b 0001, // index[ 44] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_27
-    4'b 0001, // index[ 45] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_28
-    4'b 0001, // index[ 46] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_29
-    4'b 0001, // index[ 47] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_30
-    4'b 0001, // index[ 48] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_31
-    4'b 0001, // index[ 49] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_32
-    4'b 0001, // index[ 50] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_33
-    4'b 0001, // index[ 51] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_34
-    4'b 0001, // index[ 52] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_35
-    4'b 0001, // index[ 53] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_36
-    4'b 0001, // index[ 54] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_37
-    4'b 0001, // index[ 55] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_38
-    4'b 0001, // index[ 56] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_39
-    4'b 0001, // index[ 57] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_40
-    4'b 0001, // index[ 58] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_41
-    4'b 0001, // index[ 59] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_42
-    4'b 0001, // index[ 60] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_43
-    4'b 0001, // index[ 61] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_44
-    4'b 0001, // index[ 62] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_45
-    4'b 0001, // index[ 63] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_46
-    4'b 0001, // index[ 64] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_47
-    4'b 0001, // index[ 65] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_48
-    4'b 0001, // index[ 66] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_49
-    4'b 0001, // index[ 67] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_50
-    4'b 0001, // index[ 68] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_51
-    4'b 0001, // index[ 69] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_52
-    4'b 0001, // index[ 70] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_53
-    4'b 0001, // index[ 71] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_54
-    4'b 0001, // index[ 72] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_55
-    4'b 0001, // index[ 73] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_56
-    4'b 0001, // index[ 74] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_57
-    4'b 0001, // index[ 75] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_58
-    4'b 0001, // index[ 76] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_59
-    4'b 0001, // index[ 77] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_60
-    4'b 0001, // index[ 78] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61
-    4'b 0001, // index[ 79] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62
-    4'b 0001, // index[ 80] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63
-    4'b 1111, // index[ 81] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0
-    4'b 1111, // index[ 82] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1
-    4'b 1111, // index[ 83] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2
-    4'b 1111, // index[ 84] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_3
-    4'b 1111, // index[ 85] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_4
-    4'b 1111, // index[ 86] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_5
-    4'b 1111, // index[ 87] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_6
-    4'b 1111, // index[ 88] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_7
-    4'b 1111, // index[ 89] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_8
-    4'b 1111, // index[ 90] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_9
-    4'b 1111, // index[ 91] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_10
-    4'b 1111, // index[ 92] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_11
-    4'b 1111, // index[ 93] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_12
-    4'b 1111, // index[ 94] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_13
-    4'b 1111, // index[ 95] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_14
-    4'b 1111, // index[ 96] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_15
-    4'b 1111, // index[ 97] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_16
-    4'b 1111, // index[ 98] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_17
-    4'b 1111, // index[ 99] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_18
-    4'b 1111, // index[100] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_19
-    4'b 1111, // index[101] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_20
-    4'b 1111, // index[102] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_21
-    4'b 1111, // index[103] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_22
-    4'b 1111, // index[104] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_23
-    4'b 1111, // index[105] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_24
-    4'b 1111, // index[106] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_25
-    4'b 1111, // index[107] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_26
-    4'b 1111, // index[108] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_27
-    4'b 1111, // index[109] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_28
-    4'b 1111, // index[110] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_29
-    4'b 1111, // index[111] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_30
-    4'b 1111, // index[112] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_31
-    4'b 1111, // index[113] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_32
-    4'b 1111, // index[114] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_33
-    4'b 1111, // index[115] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_34
-    4'b 1111, // index[116] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_35
-    4'b 1111, // index[117] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_36
-    4'b 1111, // index[118] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_37
-    4'b 1111, // index[119] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_38
-    4'b 1111, // index[120] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_39
-    4'b 1111, // index[121] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_40
-    4'b 1111, // index[122] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_41
-    4'b 1111, // index[123] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_42
-    4'b 1111, // index[124] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_43
-    4'b 1111, // index[125] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_44
-    4'b 1111, // index[126] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_45
-    4'b 1111, // index[127] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_46
-    4'b 1111, // index[128] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_47
-    4'b 1111, // index[129] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_48
-    4'b 1111, // index[130] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_49
-    4'b 1111, // index[131] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_50
-    4'b 1111, // index[132] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_51
-    4'b 1111, // index[133] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_52
-    4'b 1111, // index[134] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_53
-    4'b 1111, // index[135] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_54
-    4'b 1111, // index[136] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_55
-    4'b 1111, // index[137] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_56
-    4'b 1111, // index[138] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_57
-    4'b 1111, // index[139] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_58
-    4'b 1111, // index[140] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_59
-    4'b 1111, // index[141] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_60
-    4'b 1111, // index[142] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61
-    4'b 1111, // index[143] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62
-    4'b 1111, // index[144] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63
-    4'b 0001, // index[145] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0
-    4'b 0001, // index[146] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1
-    4'b 0001, // index[147] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2
-    4'b 0001, // index[148] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_3
-    4'b 0001, // index[149] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_4
-    4'b 0001, // index[150] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_5
-    4'b 0001, // index[151] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_6
-    4'b 0001, // index[152] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_7
-    4'b 0001, // index[153] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_8
-    4'b 0001, // index[154] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_9
-    4'b 0001, // index[155] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_10
-    4'b 0001, // index[156] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_11
-    4'b 0001, // index[157] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_12
-    4'b 0001, // index[158] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_13
-    4'b 0001, // index[159] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_14
-    4'b 0001, // index[160] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_15
-    4'b 0001, // index[161] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_16
-    4'b 0001, // index[162] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_17
-    4'b 0001, // index[163] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_18
-    4'b 0001, // index[164] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_19
-    4'b 0001, // index[165] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_20
-    4'b 0001, // index[166] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_21
-    4'b 0001, // index[167] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_22
-    4'b 0001, // index[168] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_23
-    4'b 0001, // index[169] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_24
-    4'b 0001, // index[170] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_25
-    4'b 0001, // index[171] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_26
-    4'b 0001, // index[172] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_27
-    4'b 0001, // index[173] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_28
-    4'b 0001, // index[174] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_29
-    4'b 0001, // index[175] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_30
-    4'b 0001, // index[176] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_31
-    4'b 0001, // index[177] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_32
-    4'b 0001, // index[178] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_33
-    4'b 0001, // index[179] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_34
-    4'b 0001, // index[180] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_35
-    4'b 0001, // index[181] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_36
-    4'b 0001, // index[182] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_37
-    4'b 0001, // index[183] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_38
-    4'b 0001, // index[184] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_39
-    4'b 0001, // index[185] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_40
-    4'b 0001, // index[186] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_41
-    4'b 0001, // index[187] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_42
-    4'b 0001, // index[188] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_43
-    4'b 0001, // index[189] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_44
-    4'b 0001, // index[190] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_45
-    4'b 0001, // index[191] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_46
-    4'b 0001, // index[192] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_47
-    4'b 0001, // index[193] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_48
-    4'b 0001, // index[194] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_49
-    4'b 0001, // index[195] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_50
-    4'b 0001, // index[196] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_51
-    4'b 0001, // index[197] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_52
-    4'b 0001, // index[198] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_53
-    4'b 0001, // index[199] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_54
-    4'b 0001, // index[200] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_55
-    4'b 0001, // index[201] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_56
-    4'b 0001, // index[202] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_57
-    4'b 0001, // index[203] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_58
-    4'b 0001, // index[204] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_59
-    4'b 0001, // index[205] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_60
-    4'b 0001, // index[206] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61
-    4'b 0001, // index[207] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62
-    4'b 0001, // index[208] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63
-    4'b 0001, // index[209] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0
-    4'b 0001, // index[210] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1
-    4'b 0001, // index[211] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2
-    4'b 0001, // index[212] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_3
-    4'b 0001, // index[213] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_4
-    4'b 0001, // index[214] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_5
-    4'b 0001, // index[215] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_6
-    4'b 0001, // index[216] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_7
-    4'b 0001, // index[217] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_8
-    4'b 0001, // index[218] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_9
-    4'b 0001, // index[219] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_10
-    4'b 0001, // index[220] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_11
-    4'b 0001, // index[221] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_12
-    4'b 0001, // index[222] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_13
-    4'b 0001, // index[223] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_14
-    4'b 0001, // index[224] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_15
-    4'b 0001, // index[225] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_16
-    4'b 0001, // index[226] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_17
-    4'b 0001, // index[227] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_18
-    4'b 0001, // index[228] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_19
-    4'b 0001, // index[229] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_20
-    4'b 0001, // index[230] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_21
-    4'b 0001, // index[231] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_22
-    4'b 0001, // index[232] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_23
-    4'b 0001, // index[233] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_24
-    4'b 0001, // index[234] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_25
-    4'b 0001, // index[235] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_26
-    4'b 0001, // index[236] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_27
-    4'b 0001, // index[237] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_28
-    4'b 0001, // index[238] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_29
-    4'b 0001, // index[239] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_30
-    4'b 0001, // index[240] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_31
-    4'b 0001, // index[241] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_32
-    4'b 0001, // index[242] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_33
-    4'b 0001, // index[243] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_34
-    4'b 0001, // index[244] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_35
-    4'b 0001, // index[245] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_36
-    4'b 0001, // index[246] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_37
-    4'b 0001, // index[247] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_38
-    4'b 0001, // index[248] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_39
-    4'b 0001, // index[249] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_40
-    4'b 0001, // index[250] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_41
-    4'b 0001, // index[251] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_42
-    4'b 0001, // index[252] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_43
-    4'b 0001, // index[253] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_44
-    4'b 0001, // index[254] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_45
-    4'b 0001, // index[255] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_46
-    4'b 0001, // index[256] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_47
-    4'b 0001, // index[257] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_48
-    4'b 0001, // index[258] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_49
-    4'b 0001, // index[259] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_50
-    4'b 0001, // index[260] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_51
-    4'b 0001, // index[261] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_52
-    4'b 0001, // index[262] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_53
-    4'b 0001, // index[263] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_54
-    4'b 0001, // index[264] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_55
-    4'b 0001, // index[265] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_56
-    4'b 0001, // index[266] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_57
-    4'b 0001, // index[267] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_58
-    4'b 0001, // index[268] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_59
-    4'b 0001, // index[269] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60
-    4'b 0001, // index[270] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61
-    4'b 0001, // index[271] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62
-    4'b 0001  // index[272] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63
+  parameter logic [3:0] CACHEPOOL_PERIPHERAL_PERMIT [1041] = '{
+    4'b 1111, // index[   0] CACHEPOOL_PERIPHERAL_HW_BARRIER
+    4'b 0001, // index[   1] CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE
+    4'b 0001, // index[   2] CACHEPOOL_PERIPHERAL_SPATZ_STATUS
+    4'b 1111, // index[   3] CACHEPOOL_PERIPHERAL_SPATZ_CYCLE
+    4'b 1111, // index[   4] CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL
+    4'b 0001, // index[   5] CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT
+    4'b 0011, // index[   6] CACHEPOOL_PERIPHERAL_CFG_L1D_SPM
+    4'b 0001, // index[   7] CACHEPOOL_PERIPHERAL_CFG_L1D_INSN
+    4'b 1111, // index[   8] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0
+    4'b 1111, // index[   9] CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1
+    4'b 0001, // index[  10] CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT
+    4'b 0001, // index[  11] CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT
+    4'b 0001, // index[  12] CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS
+    4'b 0001, // index[  13] CACHEPOOL_PERIPHERAL_L1D_PRIVATE
+    4'b 1111, // index[  14] CACHEPOOL_PERIPHERAL_L1D_ADDR
+    4'b 0001, // index[  15] CACHEPOOL_PERIPHERAL_XBAR_OFFSET
+    4'b 0001, // index[  16] CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT
+    4'b 0001, // index[  17] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_0
+    4'b 0001, // index[  18] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_1
+    4'b 0001, // index[  19] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_2
+    4'b 0001, // index[  20] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_3
+    4'b 0001, // index[  21] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_4
+    4'b 0001, // index[  22] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_5
+    4'b 0001, // index[  23] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_6
+    4'b 0001, // index[  24] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_7
+    4'b 0001, // index[  25] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_8
+    4'b 0001, // index[  26] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_9
+    4'b 0001, // index[  27] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_10
+    4'b 0001, // index[  28] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_11
+    4'b 0001, // index[  29] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_12
+    4'b 0001, // index[  30] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_13
+    4'b 0001, // index[  31] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_14
+    4'b 0001, // index[  32] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_15
+    4'b 0001, // index[  33] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_16
+    4'b 0001, // index[  34] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_17
+    4'b 0001, // index[  35] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_18
+    4'b 0001, // index[  36] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_19
+    4'b 0001, // index[  37] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_20
+    4'b 0001, // index[  38] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_21
+    4'b 0001, // index[  39] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_22
+    4'b 0001, // index[  40] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_23
+    4'b 0001, // index[  41] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_24
+    4'b 0001, // index[  42] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_25
+    4'b 0001, // index[  43] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_26
+    4'b 0001, // index[  44] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_27
+    4'b 0001, // index[  45] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_28
+    4'b 0001, // index[  46] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_29
+    4'b 0001, // index[  47] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_30
+    4'b 0001, // index[  48] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_31
+    4'b 0001, // index[  49] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_32
+    4'b 0001, // index[  50] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_33
+    4'b 0001, // index[  51] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_34
+    4'b 0001, // index[  52] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_35
+    4'b 0001, // index[  53] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_36
+    4'b 0001, // index[  54] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_37
+    4'b 0001, // index[  55] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_38
+    4'b 0001, // index[  56] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_39
+    4'b 0001, // index[  57] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_40
+    4'b 0001, // index[  58] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_41
+    4'b 0001, // index[  59] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_42
+    4'b 0001, // index[  60] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_43
+    4'b 0001, // index[  61] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_44
+    4'b 0001, // index[  62] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_45
+    4'b 0001, // index[  63] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_46
+    4'b 0001, // index[  64] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_47
+    4'b 0001, // index[  65] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_48
+    4'b 0001, // index[  66] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_49
+    4'b 0001, // index[  67] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_50
+    4'b 0001, // index[  68] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_51
+    4'b 0001, // index[  69] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_52
+    4'b 0001, // index[  70] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_53
+    4'b 0001, // index[  71] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_54
+    4'b 0001, // index[  72] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_55
+    4'b 0001, // index[  73] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_56
+    4'b 0001, // index[  74] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_57
+    4'b 0001, // index[  75] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_58
+    4'b 0001, // index[  76] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_59
+    4'b 0001, // index[  77] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_60
+    4'b 0001, // index[  78] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_61
+    4'b 0001, // index[  79] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_62
+    4'b 0001, // index[  80] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_63
+    4'b 0001, // index[  81] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_64
+    4'b 0001, // index[  82] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_65
+    4'b 0001, // index[  83] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_66
+    4'b 0001, // index[  84] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_67
+    4'b 0001, // index[  85] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_68
+    4'b 0001, // index[  86] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_69
+    4'b 0001, // index[  87] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_70
+    4'b 0001, // index[  88] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_71
+    4'b 0001, // index[  89] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_72
+    4'b 0001, // index[  90] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_73
+    4'b 0001, // index[  91] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_74
+    4'b 0001, // index[  92] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_75
+    4'b 0001, // index[  93] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_76
+    4'b 0001, // index[  94] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_77
+    4'b 0001, // index[  95] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_78
+    4'b 0001, // index[  96] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_79
+    4'b 0001, // index[  97] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_80
+    4'b 0001, // index[  98] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_81
+    4'b 0001, // index[  99] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_82
+    4'b 0001, // index[ 100] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_83
+    4'b 0001, // index[ 101] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_84
+    4'b 0001, // index[ 102] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_85
+    4'b 0001, // index[ 103] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_86
+    4'b 0001, // index[ 104] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_87
+    4'b 0001, // index[ 105] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_88
+    4'b 0001, // index[ 106] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_89
+    4'b 0001, // index[ 107] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_90
+    4'b 0001, // index[ 108] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_91
+    4'b 0001, // index[ 109] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_92
+    4'b 0001, // index[ 110] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_93
+    4'b 0001, // index[ 111] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_94
+    4'b 0001, // index[ 112] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_95
+    4'b 0001, // index[ 113] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_96
+    4'b 0001, // index[ 114] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_97
+    4'b 0001, // index[ 115] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_98
+    4'b 0001, // index[ 116] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_99
+    4'b 0001, // index[ 117] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_100
+    4'b 0001, // index[ 118] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_101
+    4'b 0001, // index[ 119] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_102
+    4'b 0001, // index[ 120] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_103
+    4'b 0001, // index[ 121] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_104
+    4'b 0001, // index[ 122] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_105
+    4'b 0001, // index[ 123] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_106
+    4'b 0001, // index[ 124] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_107
+    4'b 0001, // index[ 125] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_108
+    4'b 0001, // index[ 126] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_109
+    4'b 0001, // index[ 127] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_110
+    4'b 0001, // index[ 128] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_111
+    4'b 0001, // index[ 129] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_112
+    4'b 0001, // index[ 130] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_113
+    4'b 0001, // index[ 131] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_114
+    4'b 0001, // index[ 132] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_115
+    4'b 0001, // index[ 133] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_116
+    4'b 0001, // index[ 134] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_117
+    4'b 0001, // index[ 135] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_118
+    4'b 0001, // index[ 136] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_119
+    4'b 0001, // index[ 137] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_120
+    4'b 0001, // index[ 138] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_121
+    4'b 0001, // index[ 139] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_122
+    4'b 0001, // index[ 140] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_123
+    4'b 0001, // index[ 141] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_124
+    4'b 0001, // index[ 142] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_125
+    4'b 0001, // index[ 143] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_126
+    4'b 0001, // index[ 144] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_127
+    4'b 0001, // index[ 145] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_128
+    4'b 0001, // index[ 146] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_129
+    4'b 0001, // index[ 147] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_130
+    4'b 0001, // index[ 148] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_131
+    4'b 0001, // index[ 149] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_132
+    4'b 0001, // index[ 150] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_133
+    4'b 0001, // index[ 151] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_134
+    4'b 0001, // index[ 152] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_135
+    4'b 0001, // index[ 153] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_136
+    4'b 0001, // index[ 154] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_137
+    4'b 0001, // index[ 155] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_138
+    4'b 0001, // index[ 156] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_139
+    4'b 0001, // index[ 157] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_140
+    4'b 0001, // index[ 158] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_141
+    4'b 0001, // index[ 159] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_142
+    4'b 0001, // index[ 160] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_143
+    4'b 0001, // index[ 161] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_144
+    4'b 0001, // index[ 162] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_145
+    4'b 0001, // index[ 163] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_146
+    4'b 0001, // index[ 164] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_147
+    4'b 0001, // index[ 165] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_148
+    4'b 0001, // index[ 166] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_149
+    4'b 0001, // index[ 167] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_150
+    4'b 0001, // index[ 168] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_151
+    4'b 0001, // index[ 169] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_152
+    4'b 0001, // index[ 170] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_153
+    4'b 0001, // index[ 171] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_154
+    4'b 0001, // index[ 172] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_155
+    4'b 0001, // index[ 173] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_156
+    4'b 0001, // index[ 174] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_157
+    4'b 0001, // index[ 175] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_158
+    4'b 0001, // index[ 176] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_159
+    4'b 0001, // index[ 177] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_160
+    4'b 0001, // index[ 178] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_161
+    4'b 0001, // index[ 179] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_162
+    4'b 0001, // index[ 180] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_163
+    4'b 0001, // index[ 181] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_164
+    4'b 0001, // index[ 182] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_165
+    4'b 0001, // index[ 183] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_166
+    4'b 0001, // index[ 184] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_167
+    4'b 0001, // index[ 185] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_168
+    4'b 0001, // index[ 186] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_169
+    4'b 0001, // index[ 187] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_170
+    4'b 0001, // index[ 188] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_171
+    4'b 0001, // index[ 189] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_172
+    4'b 0001, // index[ 190] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_173
+    4'b 0001, // index[ 191] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_174
+    4'b 0001, // index[ 192] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_175
+    4'b 0001, // index[ 193] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_176
+    4'b 0001, // index[ 194] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_177
+    4'b 0001, // index[ 195] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_178
+    4'b 0001, // index[ 196] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_179
+    4'b 0001, // index[ 197] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_180
+    4'b 0001, // index[ 198] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_181
+    4'b 0001, // index[ 199] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_182
+    4'b 0001, // index[ 200] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_183
+    4'b 0001, // index[ 201] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_184
+    4'b 0001, // index[ 202] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_185
+    4'b 0001, // index[ 203] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_186
+    4'b 0001, // index[ 204] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_187
+    4'b 0001, // index[ 205] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_188
+    4'b 0001, // index[ 206] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_189
+    4'b 0001, // index[ 207] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_190
+    4'b 0001, // index[ 208] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_191
+    4'b 0001, // index[ 209] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_192
+    4'b 0001, // index[ 210] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_193
+    4'b 0001, // index[ 211] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_194
+    4'b 0001, // index[ 212] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_195
+    4'b 0001, // index[ 213] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_196
+    4'b 0001, // index[ 214] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_197
+    4'b 0001, // index[ 215] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_198
+    4'b 0001, // index[ 216] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_199
+    4'b 0001, // index[ 217] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_200
+    4'b 0001, // index[ 218] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_201
+    4'b 0001, // index[ 219] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_202
+    4'b 0001, // index[ 220] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_203
+    4'b 0001, // index[ 221] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_204
+    4'b 0001, // index[ 222] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_205
+    4'b 0001, // index[ 223] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_206
+    4'b 0001, // index[ 224] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_207
+    4'b 0001, // index[ 225] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_208
+    4'b 0001, // index[ 226] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_209
+    4'b 0001, // index[ 227] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_210
+    4'b 0001, // index[ 228] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_211
+    4'b 0001, // index[ 229] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_212
+    4'b 0001, // index[ 230] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_213
+    4'b 0001, // index[ 231] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_214
+    4'b 0001, // index[ 232] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_215
+    4'b 0001, // index[ 233] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_216
+    4'b 0001, // index[ 234] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_217
+    4'b 0001, // index[ 235] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_218
+    4'b 0001, // index[ 236] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_219
+    4'b 0001, // index[ 237] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_220
+    4'b 0001, // index[ 238] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_221
+    4'b 0001, // index[ 239] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_222
+    4'b 0001, // index[ 240] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_223
+    4'b 0001, // index[ 241] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_224
+    4'b 0001, // index[ 242] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_225
+    4'b 0001, // index[ 243] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_226
+    4'b 0001, // index[ 244] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_227
+    4'b 0001, // index[ 245] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_228
+    4'b 0001, // index[ 246] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_229
+    4'b 0001, // index[ 247] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_230
+    4'b 0001, // index[ 248] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_231
+    4'b 0001, // index[ 249] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_232
+    4'b 0001, // index[ 250] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_233
+    4'b 0001, // index[ 251] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_234
+    4'b 0001, // index[ 252] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_235
+    4'b 0001, // index[ 253] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_236
+    4'b 0001, // index[ 254] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_237
+    4'b 0001, // index[ 255] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_238
+    4'b 0001, // index[ 256] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_239
+    4'b 0001, // index[ 257] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_240
+    4'b 0001, // index[ 258] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_241
+    4'b 0001, // index[ 259] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_242
+    4'b 0001, // index[ 260] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_243
+    4'b 0001, // index[ 261] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_244
+    4'b 0001, // index[ 262] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_245
+    4'b 0001, // index[ 263] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_246
+    4'b 0001, // index[ 264] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_247
+    4'b 0001, // index[ 265] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_248
+    4'b 0001, // index[ 266] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_249
+    4'b 0001, // index[ 267] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_250
+    4'b 0001, // index[ 268] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_251
+    4'b 0001, // index[ 269] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_252
+    4'b 0001, // index[ 270] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_253
+    4'b 0001, // index[ 271] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_254
+    4'b 0001, // index[ 272] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_255
+    4'b 1111, // index[ 273] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_0
+    4'b 1111, // index[ 274] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_1
+    4'b 1111, // index[ 275] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_2
+    4'b 1111, // index[ 276] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_3
+    4'b 1111, // index[ 277] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_4
+    4'b 1111, // index[ 278] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_5
+    4'b 1111, // index[ 279] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_6
+    4'b 1111, // index[ 280] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_7
+    4'b 1111, // index[ 281] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_8
+    4'b 1111, // index[ 282] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_9
+    4'b 1111, // index[ 283] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_10
+    4'b 1111, // index[ 284] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_11
+    4'b 1111, // index[ 285] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_12
+    4'b 1111, // index[ 286] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_13
+    4'b 1111, // index[ 287] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_14
+    4'b 1111, // index[ 288] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_15
+    4'b 1111, // index[ 289] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_16
+    4'b 1111, // index[ 290] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_17
+    4'b 1111, // index[ 291] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_18
+    4'b 1111, // index[ 292] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_19
+    4'b 1111, // index[ 293] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_20
+    4'b 1111, // index[ 294] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_21
+    4'b 1111, // index[ 295] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_22
+    4'b 1111, // index[ 296] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_23
+    4'b 1111, // index[ 297] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_24
+    4'b 1111, // index[ 298] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_25
+    4'b 1111, // index[ 299] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_26
+    4'b 1111, // index[ 300] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_27
+    4'b 1111, // index[ 301] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_28
+    4'b 1111, // index[ 302] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_29
+    4'b 1111, // index[ 303] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_30
+    4'b 1111, // index[ 304] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_31
+    4'b 1111, // index[ 305] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_32
+    4'b 1111, // index[ 306] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_33
+    4'b 1111, // index[ 307] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_34
+    4'b 1111, // index[ 308] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_35
+    4'b 1111, // index[ 309] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_36
+    4'b 1111, // index[ 310] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_37
+    4'b 1111, // index[ 311] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_38
+    4'b 1111, // index[ 312] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_39
+    4'b 1111, // index[ 313] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_40
+    4'b 1111, // index[ 314] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_41
+    4'b 1111, // index[ 315] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_42
+    4'b 1111, // index[ 316] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_43
+    4'b 1111, // index[ 317] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_44
+    4'b 1111, // index[ 318] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_45
+    4'b 1111, // index[ 319] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_46
+    4'b 1111, // index[ 320] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_47
+    4'b 1111, // index[ 321] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_48
+    4'b 1111, // index[ 322] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_49
+    4'b 1111, // index[ 323] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_50
+    4'b 1111, // index[ 324] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_51
+    4'b 1111, // index[ 325] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_52
+    4'b 1111, // index[ 326] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_53
+    4'b 1111, // index[ 327] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_54
+    4'b 1111, // index[ 328] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_55
+    4'b 1111, // index[ 329] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_56
+    4'b 1111, // index[ 330] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_57
+    4'b 1111, // index[ 331] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_58
+    4'b 1111, // index[ 332] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_59
+    4'b 1111, // index[ 333] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_60
+    4'b 1111, // index[ 334] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_61
+    4'b 1111, // index[ 335] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_62
+    4'b 1111, // index[ 336] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_63
+    4'b 1111, // index[ 337] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_64
+    4'b 1111, // index[ 338] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_65
+    4'b 1111, // index[ 339] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_66
+    4'b 1111, // index[ 340] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_67
+    4'b 1111, // index[ 341] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_68
+    4'b 1111, // index[ 342] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_69
+    4'b 1111, // index[ 343] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_70
+    4'b 1111, // index[ 344] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_71
+    4'b 1111, // index[ 345] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_72
+    4'b 1111, // index[ 346] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_73
+    4'b 1111, // index[ 347] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_74
+    4'b 1111, // index[ 348] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_75
+    4'b 1111, // index[ 349] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_76
+    4'b 1111, // index[ 350] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_77
+    4'b 1111, // index[ 351] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_78
+    4'b 1111, // index[ 352] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_79
+    4'b 1111, // index[ 353] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_80
+    4'b 1111, // index[ 354] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_81
+    4'b 1111, // index[ 355] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_82
+    4'b 1111, // index[ 356] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_83
+    4'b 1111, // index[ 357] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_84
+    4'b 1111, // index[ 358] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_85
+    4'b 1111, // index[ 359] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_86
+    4'b 1111, // index[ 360] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_87
+    4'b 1111, // index[ 361] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_88
+    4'b 1111, // index[ 362] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_89
+    4'b 1111, // index[ 363] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_90
+    4'b 1111, // index[ 364] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_91
+    4'b 1111, // index[ 365] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_92
+    4'b 1111, // index[ 366] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_93
+    4'b 1111, // index[ 367] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_94
+    4'b 1111, // index[ 368] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_95
+    4'b 1111, // index[ 369] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_96
+    4'b 1111, // index[ 370] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_97
+    4'b 1111, // index[ 371] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_98
+    4'b 1111, // index[ 372] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_99
+    4'b 1111, // index[ 373] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_100
+    4'b 1111, // index[ 374] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_101
+    4'b 1111, // index[ 375] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_102
+    4'b 1111, // index[ 376] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_103
+    4'b 1111, // index[ 377] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_104
+    4'b 1111, // index[ 378] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_105
+    4'b 1111, // index[ 379] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_106
+    4'b 1111, // index[ 380] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_107
+    4'b 1111, // index[ 381] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_108
+    4'b 1111, // index[ 382] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_109
+    4'b 1111, // index[ 383] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_110
+    4'b 1111, // index[ 384] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_111
+    4'b 1111, // index[ 385] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_112
+    4'b 1111, // index[ 386] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_113
+    4'b 1111, // index[ 387] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_114
+    4'b 1111, // index[ 388] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_115
+    4'b 1111, // index[ 389] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_116
+    4'b 1111, // index[ 390] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_117
+    4'b 1111, // index[ 391] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_118
+    4'b 1111, // index[ 392] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_119
+    4'b 1111, // index[ 393] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_120
+    4'b 1111, // index[ 394] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_121
+    4'b 1111, // index[ 395] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_122
+    4'b 1111, // index[ 396] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_123
+    4'b 1111, // index[ 397] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_124
+    4'b 1111, // index[ 398] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_125
+    4'b 1111, // index[ 399] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_126
+    4'b 1111, // index[ 400] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_127
+    4'b 1111, // index[ 401] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_128
+    4'b 1111, // index[ 402] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_129
+    4'b 1111, // index[ 403] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_130
+    4'b 1111, // index[ 404] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_131
+    4'b 1111, // index[ 405] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_132
+    4'b 1111, // index[ 406] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_133
+    4'b 1111, // index[ 407] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_134
+    4'b 1111, // index[ 408] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_135
+    4'b 1111, // index[ 409] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_136
+    4'b 1111, // index[ 410] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_137
+    4'b 1111, // index[ 411] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_138
+    4'b 1111, // index[ 412] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_139
+    4'b 1111, // index[ 413] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_140
+    4'b 1111, // index[ 414] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_141
+    4'b 1111, // index[ 415] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_142
+    4'b 1111, // index[ 416] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_143
+    4'b 1111, // index[ 417] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_144
+    4'b 1111, // index[ 418] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_145
+    4'b 1111, // index[ 419] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_146
+    4'b 1111, // index[ 420] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_147
+    4'b 1111, // index[ 421] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_148
+    4'b 1111, // index[ 422] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_149
+    4'b 1111, // index[ 423] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_150
+    4'b 1111, // index[ 424] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_151
+    4'b 1111, // index[ 425] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_152
+    4'b 1111, // index[ 426] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_153
+    4'b 1111, // index[ 427] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_154
+    4'b 1111, // index[ 428] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_155
+    4'b 1111, // index[ 429] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_156
+    4'b 1111, // index[ 430] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_157
+    4'b 1111, // index[ 431] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_158
+    4'b 1111, // index[ 432] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_159
+    4'b 1111, // index[ 433] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_160
+    4'b 1111, // index[ 434] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_161
+    4'b 1111, // index[ 435] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_162
+    4'b 1111, // index[ 436] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_163
+    4'b 1111, // index[ 437] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_164
+    4'b 1111, // index[ 438] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_165
+    4'b 1111, // index[ 439] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_166
+    4'b 1111, // index[ 440] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_167
+    4'b 1111, // index[ 441] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_168
+    4'b 1111, // index[ 442] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_169
+    4'b 1111, // index[ 443] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_170
+    4'b 1111, // index[ 444] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_171
+    4'b 1111, // index[ 445] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_172
+    4'b 1111, // index[ 446] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_173
+    4'b 1111, // index[ 447] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_174
+    4'b 1111, // index[ 448] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_175
+    4'b 1111, // index[ 449] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_176
+    4'b 1111, // index[ 450] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_177
+    4'b 1111, // index[ 451] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_178
+    4'b 1111, // index[ 452] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_179
+    4'b 1111, // index[ 453] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_180
+    4'b 1111, // index[ 454] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_181
+    4'b 1111, // index[ 455] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_182
+    4'b 1111, // index[ 456] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_183
+    4'b 1111, // index[ 457] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_184
+    4'b 1111, // index[ 458] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_185
+    4'b 1111, // index[ 459] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_186
+    4'b 1111, // index[ 460] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_187
+    4'b 1111, // index[ 461] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_188
+    4'b 1111, // index[ 462] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_189
+    4'b 1111, // index[ 463] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_190
+    4'b 1111, // index[ 464] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_191
+    4'b 1111, // index[ 465] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_192
+    4'b 1111, // index[ 466] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_193
+    4'b 1111, // index[ 467] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_194
+    4'b 1111, // index[ 468] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_195
+    4'b 1111, // index[ 469] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_196
+    4'b 1111, // index[ 470] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_197
+    4'b 1111, // index[ 471] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_198
+    4'b 1111, // index[ 472] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_199
+    4'b 1111, // index[ 473] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_200
+    4'b 1111, // index[ 474] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_201
+    4'b 1111, // index[ 475] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_202
+    4'b 1111, // index[ 476] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_203
+    4'b 1111, // index[ 477] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_204
+    4'b 1111, // index[ 478] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_205
+    4'b 1111, // index[ 479] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_206
+    4'b 1111, // index[ 480] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_207
+    4'b 1111, // index[ 481] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_208
+    4'b 1111, // index[ 482] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_209
+    4'b 1111, // index[ 483] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_210
+    4'b 1111, // index[ 484] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_211
+    4'b 1111, // index[ 485] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_212
+    4'b 1111, // index[ 486] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_213
+    4'b 1111, // index[ 487] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_214
+    4'b 1111, // index[ 488] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_215
+    4'b 1111, // index[ 489] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_216
+    4'b 1111, // index[ 490] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_217
+    4'b 1111, // index[ 491] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_218
+    4'b 1111, // index[ 492] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_219
+    4'b 1111, // index[ 493] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_220
+    4'b 1111, // index[ 494] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_221
+    4'b 1111, // index[ 495] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_222
+    4'b 1111, // index[ 496] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_223
+    4'b 1111, // index[ 497] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_224
+    4'b 1111, // index[ 498] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_225
+    4'b 1111, // index[ 499] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_226
+    4'b 1111, // index[ 500] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_227
+    4'b 1111, // index[ 501] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_228
+    4'b 1111, // index[ 502] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_229
+    4'b 1111, // index[ 503] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_230
+    4'b 1111, // index[ 504] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_231
+    4'b 1111, // index[ 505] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_232
+    4'b 1111, // index[ 506] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_233
+    4'b 1111, // index[ 507] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_234
+    4'b 1111, // index[ 508] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_235
+    4'b 1111, // index[ 509] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_236
+    4'b 1111, // index[ 510] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_237
+    4'b 1111, // index[ 511] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_238
+    4'b 1111, // index[ 512] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_239
+    4'b 1111, // index[ 513] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_240
+    4'b 1111, // index[ 514] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_241
+    4'b 1111, // index[ 515] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_242
+    4'b 1111, // index[ 516] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_243
+    4'b 1111, // index[ 517] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_244
+    4'b 1111, // index[ 518] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_245
+    4'b 1111, // index[ 519] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_246
+    4'b 1111, // index[ 520] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_247
+    4'b 1111, // index[ 521] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_248
+    4'b 1111, // index[ 522] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_249
+    4'b 1111, // index[ 523] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_250
+    4'b 1111, // index[ 524] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_251
+    4'b 1111, // index[ 525] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_252
+    4'b 1111, // index[ 526] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_253
+    4'b 1111, // index[ 527] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_254
+    4'b 1111, // index[ 528] CACHEPOOL_PERIPHERAL_CFG_LP1_CMO_ADDR_255
+    4'b 0001, // index[ 529] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_0
+    4'b 0001, // index[ 530] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_1
+    4'b 0001, // index[ 531] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_2
+    4'b 0001, // index[ 532] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_3
+    4'b 0001, // index[ 533] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_4
+    4'b 0001, // index[ 534] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_5
+    4'b 0001, // index[ 535] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_6
+    4'b 0001, // index[ 536] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_7
+    4'b 0001, // index[ 537] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_8
+    4'b 0001, // index[ 538] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_9
+    4'b 0001, // index[ 539] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_10
+    4'b 0001, // index[ 540] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_11
+    4'b 0001, // index[ 541] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_12
+    4'b 0001, // index[ 542] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_13
+    4'b 0001, // index[ 543] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_14
+    4'b 0001, // index[ 544] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_15
+    4'b 0001, // index[ 545] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_16
+    4'b 0001, // index[ 546] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_17
+    4'b 0001, // index[ 547] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_18
+    4'b 0001, // index[ 548] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_19
+    4'b 0001, // index[ 549] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_20
+    4'b 0001, // index[ 550] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_21
+    4'b 0001, // index[ 551] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_22
+    4'b 0001, // index[ 552] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_23
+    4'b 0001, // index[ 553] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_24
+    4'b 0001, // index[ 554] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_25
+    4'b 0001, // index[ 555] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_26
+    4'b 0001, // index[ 556] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_27
+    4'b 0001, // index[ 557] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_28
+    4'b 0001, // index[ 558] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_29
+    4'b 0001, // index[ 559] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_30
+    4'b 0001, // index[ 560] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_31
+    4'b 0001, // index[ 561] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_32
+    4'b 0001, // index[ 562] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_33
+    4'b 0001, // index[ 563] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_34
+    4'b 0001, // index[ 564] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_35
+    4'b 0001, // index[ 565] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_36
+    4'b 0001, // index[ 566] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_37
+    4'b 0001, // index[ 567] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_38
+    4'b 0001, // index[ 568] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_39
+    4'b 0001, // index[ 569] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_40
+    4'b 0001, // index[ 570] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_41
+    4'b 0001, // index[ 571] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_42
+    4'b 0001, // index[ 572] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_43
+    4'b 0001, // index[ 573] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_44
+    4'b 0001, // index[ 574] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_45
+    4'b 0001, // index[ 575] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_46
+    4'b 0001, // index[ 576] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_47
+    4'b 0001, // index[ 577] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_48
+    4'b 0001, // index[ 578] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_49
+    4'b 0001, // index[ 579] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_50
+    4'b 0001, // index[ 580] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_51
+    4'b 0001, // index[ 581] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_52
+    4'b 0001, // index[ 582] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_53
+    4'b 0001, // index[ 583] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_54
+    4'b 0001, // index[ 584] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_55
+    4'b 0001, // index[ 585] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_56
+    4'b 0001, // index[ 586] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_57
+    4'b 0001, // index[ 587] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_58
+    4'b 0001, // index[ 588] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_59
+    4'b 0001, // index[ 589] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_60
+    4'b 0001, // index[ 590] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_61
+    4'b 0001, // index[ 591] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_62
+    4'b 0001, // index[ 592] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_63
+    4'b 0001, // index[ 593] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_64
+    4'b 0001, // index[ 594] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_65
+    4'b 0001, // index[ 595] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_66
+    4'b 0001, // index[ 596] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_67
+    4'b 0001, // index[ 597] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_68
+    4'b 0001, // index[ 598] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_69
+    4'b 0001, // index[ 599] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_70
+    4'b 0001, // index[ 600] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_71
+    4'b 0001, // index[ 601] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_72
+    4'b 0001, // index[ 602] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_73
+    4'b 0001, // index[ 603] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_74
+    4'b 0001, // index[ 604] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_75
+    4'b 0001, // index[ 605] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_76
+    4'b 0001, // index[ 606] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_77
+    4'b 0001, // index[ 607] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_78
+    4'b 0001, // index[ 608] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_79
+    4'b 0001, // index[ 609] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_80
+    4'b 0001, // index[ 610] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_81
+    4'b 0001, // index[ 611] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_82
+    4'b 0001, // index[ 612] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_83
+    4'b 0001, // index[ 613] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_84
+    4'b 0001, // index[ 614] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_85
+    4'b 0001, // index[ 615] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_86
+    4'b 0001, // index[ 616] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_87
+    4'b 0001, // index[ 617] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_88
+    4'b 0001, // index[ 618] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_89
+    4'b 0001, // index[ 619] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_90
+    4'b 0001, // index[ 620] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_91
+    4'b 0001, // index[ 621] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_92
+    4'b 0001, // index[ 622] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_93
+    4'b 0001, // index[ 623] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_94
+    4'b 0001, // index[ 624] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_95
+    4'b 0001, // index[ 625] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_96
+    4'b 0001, // index[ 626] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_97
+    4'b 0001, // index[ 627] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_98
+    4'b 0001, // index[ 628] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_99
+    4'b 0001, // index[ 629] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_100
+    4'b 0001, // index[ 630] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_101
+    4'b 0001, // index[ 631] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_102
+    4'b 0001, // index[ 632] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_103
+    4'b 0001, // index[ 633] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_104
+    4'b 0001, // index[ 634] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_105
+    4'b 0001, // index[ 635] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_106
+    4'b 0001, // index[ 636] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_107
+    4'b 0001, // index[ 637] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_108
+    4'b 0001, // index[ 638] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_109
+    4'b 0001, // index[ 639] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_110
+    4'b 0001, // index[ 640] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_111
+    4'b 0001, // index[ 641] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_112
+    4'b 0001, // index[ 642] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_113
+    4'b 0001, // index[ 643] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_114
+    4'b 0001, // index[ 644] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_115
+    4'b 0001, // index[ 645] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_116
+    4'b 0001, // index[ 646] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_117
+    4'b 0001, // index[ 647] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_118
+    4'b 0001, // index[ 648] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_119
+    4'b 0001, // index[ 649] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_120
+    4'b 0001, // index[ 650] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_121
+    4'b 0001, // index[ 651] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_122
+    4'b 0001, // index[ 652] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_123
+    4'b 0001, // index[ 653] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_124
+    4'b 0001, // index[ 654] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_125
+    4'b 0001, // index[ 655] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_126
+    4'b 0001, // index[ 656] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_127
+    4'b 0001, // index[ 657] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_128
+    4'b 0001, // index[ 658] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_129
+    4'b 0001, // index[ 659] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_130
+    4'b 0001, // index[ 660] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_131
+    4'b 0001, // index[ 661] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_132
+    4'b 0001, // index[ 662] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_133
+    4'b 0001, // index[ 663] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_134
+    4'b 0001, // index[ 664] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_135
+    4'b 0001, // index[ 665] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_136
+    4'b 0001, // index[ 666] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_137
+    4'b 0001, // index[ 667] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_138
+    4'b 0001, // index[ 668] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_139
+    4'b 0001, // index[ 669] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_140
+    4'b 0001, // index[ 670] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_141
+    4'b 0001, // index[ 671] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_142
+    4'b 0001, // index[ 672] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_143
+    4'b 0001, // index[ 673] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_144
+    4'b 0001, // index[ 674] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_145
+    4'b 0001, // index[ 675] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_146
+    4'b 0001, // index[ 676] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_147
+    4'b 0001, // index[ 677] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_148
+    4'b 0001, // index[ 678] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_149
+    4'b 0001, // index[ 679] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_150
+    4'b 0001, // index[ 680] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_151
+    4'b 0001, // index[ 681] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_152
+    4'b 0001, // index[ 682] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_153
+    4'b 0001, // index[ 683] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_154
+    4'b 0001, // index[ 684] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_155
+    4'b 0001, // index[ 685] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_156
+    4'b 0001, // index[ 686] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_157
+    4'b 0001, // index[ 687] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_158
+    4'b 0001, // index[ 688] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_159
+    4'b 0001, // index[ 689] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_160
+    4'b 0001, // index[ 690] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_161
+    4'b 0001, // index[ 691] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_162
+    4'b 0001, // index[ 692] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_163
+    4'b 0001, // index[ 693] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_164
+    4'b 0001, // index[ 694] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_165
+    4'b 0001, // index[ 695] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_166
+    4'b 0001, // index[ 696] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_167
+    4'b 0001, // index[ 697] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_168
+    4'b 0001, // index[ 698] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_169
+    4'b 0001, // index[ 699] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_170
+    4'b 0001, // index[ 700] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_171
+    4'b 0001, // index[ 701] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_172
+    4'b 0001, // index[ 702] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_173
+    4'b 0001, // index[ 703] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_174
+    4'b 0001, // index[ 704] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_175
+    4'b 0001, // index[ 705] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_176
+    4'b 0001, // index[ 706] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_177
+    4'b 0001, // index[ 707] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_178
+    4'b 0001, // index[ 708] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_179
+    4'b 0001, // index[ 709] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_180
+    4'b 0001, // index[ 710] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_181
+    4'b 0001, // index[ 711] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_182
+    4'b 0001, // index[ 712] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_183
+    4'b 0001, // index[ 713] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_184
+    4'b 0001, // index[ 714] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_185
+    4'b 0001, // index[ 715] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_186
+    4'b 0001, // index[ 716] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_187
+    4'b 0001, // index[ 717] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_188
+    4'b 0001, // index[ 718] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_189
+    4'b 0001, // index[ 719] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_190
+    4'b 0001, // index[ 720] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_191
+    4'b 0001, // index[ 721] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_192
+    4'b 0001, // index[ 722] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_193
+    4'b 0001, // index[ 723] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_194
+    4'b 0001, // index[ 724] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_195
+    4'b 0001, // index[ 725] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_196
+    4'b 0001, // index[ 726] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_197
+    4'b 0001, // index[ 727] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_198
+    4'b 0001, // index[ 728] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_199
+    4'b 0001, // index[ 729] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_200
+    4'b 0001, // index[ 730] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_201
+    4'b 0001, // index[ 731] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_202
+    4'b 0001, // index[ 732] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_203
+    4'b 0001, // index[ 733] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_204
+    4'b 0001, // index[ 734] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_205
+    4'b 0001, // index[ 735] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_206
+    4'b 0001, // index[ 736] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_207
+    4'b 0001, // index[ 737] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_208
+    4'b 0001, // index[ 738] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_209
+    4'b 0001, // index[ 739] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_210
+    4'b 0001, // index[ 740] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_211
+    4'b 0001, // index[ 741] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_212
+    4'b 0001, // index[ 742] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_213
+    4'b 0001, // index[ 743] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_214
+    4'b 0001, // index[ 744] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_215
+    4'b 0001, // index[ 745] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_216
+    4'b 0001, // index[ 746] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_217
+    4'b 0001, // index[ 747] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_218
+    4'b 0001, // index[ 748] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_219
+    4'b 0001, // index[ 749] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_220
+    4'b 0001, // index[ 750] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_221
+    4'b 0001, // index[ 751] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_222
+    4'b 0001, // index[ 752] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_223
+    4'b 0001, // index[ 753] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_224
+    4'b 0001, // index[ 754] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_225
+    4'b 0001, // index[ 755] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_226
+    4'b 0001, // index[ 756] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_227
+    4'b 0001, // index[ 757] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_228
+    4'b 0001, // index[ 758] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_229
+    4'b 0001, // index[ 759] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_230
+    4'b 0001, // index[ 760] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_231
+    4'b 0001, // index[ 761] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_232
+    4'b 0001, // index[ 762] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_233
+    4'b 0001, // index[ 763] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_234
+    4'b 0001, // index[ 764] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_235
+    4'b 0001, // index[ 765] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_236
+    4'b 0001, // index[ 766] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_237
+    4'b 0001, // index[ 767] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_238
+    4'b 0001, // index[ 768] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_239
+    4'b 0001, // index[ 769] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_240
+    4'b 0001, // index[ 770] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_241
+    4'b 0001, // index[ 771] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_242
+    4'b 0001, // index[ 772] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_243
+    4'b 0001, // index[ 773] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_244
+    4'b 0001, // index[ 774] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_245
+    4'b 0001, // index[ 775] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_246
+    4'b 0001, // index[ 776] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_247
+    4'b 0001, // index[ 777] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_248
+    4'b 0001, // index[ 778] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_249
+    4'b 0001, // index[ 779] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_250
+    4'b 0001, // index[ 780] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_251
+    4'b 0001, // index[ 781] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_252
+    4'b 0001, // index[ 782] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_253
+    4'b 0001, // index[ 783] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_254
+    4'b 0001, // index[ 784] CACHEPOOL_PERIPHERAL_LP1_CMO_COMMIT_255
+    4'b 0001, // index[ 785] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_0
+    4'b 0001, // index[ 786] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_1
+    4'b 0001, // index[ 787] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_2
+    4'b 0001, // index[ 788] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_3
+    4'b 0001, // index[ 789] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_4
+    4'b 0001, // index[ 790] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_5
+    4'b 0001, // index[ 791] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_6
+    4'b 0001, // index[ 792] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_7
+    4'b 0001, // index[ 793] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_8
+    4'b 0001, // index[ 794] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_9
+    4'b 0001, // index[ 795] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_10
+    4'b 0001, // index[ 796] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_11
+    4'b 0001, // index[ 797] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_12
+    4'b 0001, // index[ 798] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_13
+    4'b 0001, // index[ 799] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_14
+    4'b 0001, // index[ 800] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_15
+    4'b 0001, // index[ 801] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_16
+    4'b 0001, // index[ 802] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_17
+    4'b 0001, // index[ 803] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_18
+    4'b 0001, // index[ 804] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_19
+    4'b 0001, // index[ 805] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_20
+    4'b 0001, // index[ 806] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_21
+    4'b 0001, // index[ 807] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_22
+    4'b 0001, // index[ 808] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_23
+    4'b 0001, // index[ 809] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_24
+    4'b 0001, // index[ 810] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_25
+    4'b 0001, // index[ 811] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_26
+    4'b 0001, // index[ 812] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_27
+    4'b 0001, // index[ 813] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_28
+    4'b 0001, // index[ 814] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_29
+    4'b 0001, // index[ 815] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_30
+    4'b 0001, // index[ 816] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_31
+    4'b 0001, // index[ 817] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_32
+    4'b 0001, // index[ 818] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_33
+    4'b 0001, // index[ 819] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_34
+    4'b 0001, // index[ 820] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_35
+    4'b 0001, // index[ 821] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_36
+    4'b 0001, // index[ 822] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_37
+    4'b 0001, // index[ 823] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_38
+    4'b 0001, // index[ 824] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_39
+    4'b 0001, // index[ 825] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_40
+    4'b 0001, // index[ 826] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_41
+    4'b 0001, // index[ 827] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_42
+    4'b 0001, // index[ 828] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_43
+    4'b 0001, // index[ 829] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_44
+    4'b 0001, // index[ 830] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_45
+    4'b 0001, // index[ 831] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_46
+    4'b 0001, // index[ 832] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_47
+    4'b 0001, // index[ 833] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_48
+    4'b 0001, // index[ 834] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_49
+    4'b 0001, // index[ 835] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_50
+    4'b 0001, // index[ 836] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_51
+    4'b 0001, // index[ 837] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_52
+    4'b 0001, // index[ 838] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_53
+    4'b 0001, // index[ 839] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_54
+    4'b 0001, // index[ 840] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_55
+    4'b 0001, // index[ 841] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_56
+    4'b 0001, // index[ 842] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_57
+    4'b 0001, // index[ 843] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_58
+    4'b 0001, // index[ 844] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_59
+    4'b 0001, // index[ 845] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_60
+    4'b 0001, // index[ 846] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_61
+    4'b 0001, // index[ 847] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_62
+    4'b 0001, // index[ 848] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_63
+    4'b 0001, // index[ 849] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_64
+    4'b 0001, // index[ 850] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_65
+    4'b 0001, // index[ 851] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_66
+    4'b 0001, // index[ 852] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_67
+    4'b 0001, // index[ 853] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_68
+    4'b 0001, // index[ 854] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_69
+    4'b 0001, // index[ 855] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_70
+    4'b 0001, // index[ 856] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_71
+    4'b 0001, // index[ 857] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_72
+    4'b 0001, // index[ 858] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_73
+    4'b 0001, // index[ 859] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_74
+    4'b 0001, // index[ 860] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_75
+    4'b 0001, // index[ 861] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_76
+    4'b 0001, // index[ 862] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_77
+    4'b 0001, // index[ 863] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_78
+    4'b 0001, // index[ 864] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_79
+    4'b 0001, // index[ 865] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_80
+    4'b 0001, // index[ 866] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_81
+    4'b 0001, // index[ 867] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_82
+    4'b 0001, // index[ 868] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_83
+    4'b 0001, // index[ 869] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_84
+    4'b 0001, // index[ 870] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_85
+    4'b 0001, // index[ 871] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_86
+    4'b 0001, // index[ 872] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_87
+    4'b 0001, // index[ 873] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_88
+    4'b 0001, // index[ 874] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_89
+    4'b 0001, // index[ 875] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_90
+    4'b 0001, // index[ 876] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_91
+    4'b 0001, // index[ 877] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_92
+    4'b 0001, // index[ 878] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_93
+    4'b 0001, // index[ 879] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_94
+    4'b 0001, // index[ 880] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_95
+    4'b 0001, // index[ 881] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_96
+    4'b 0001, // index[ 882] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_97
+    4'b 0001, // index[ 883] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_98
+    4'b 0001, // index[ 884] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_99
+    4'b 0001, // index[ 885] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_100
+    4'b 0001, // index[ 886] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_101
+    4'b 0001, // index[ 887] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_102
+    4'b 0001, // index[ 888] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_103
+    4'b 0001, // index[ 889] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_104
+    4'b 0001, // index[ 890] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_105
+    4'b 0001, // index[ 891] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_106
+    4'b 0001, // index[ 892] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_107
+    4'b 0001, // index[ 893] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_108
+    4'b 0001, // index[ 894] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_109
+    4'b 0001, // index[ 895] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_110
+    4'b 0001, // index[ 896] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_111
+    4'b 0001, // index[ 897] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_112
+    4'b 0001, // index[ 898] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_113
+    4'b 0001, // index[ 899] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_114
+    4'b 0001, // index[ 900] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_115
+    4'b 0001, // index[ 901] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_116
+    4'b 0001, // index[ 902] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_117
+    4'b 0001, // index[ 903] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_118
+    4'b 0001, // index[ 904] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_119
+    4'b 0001, // index[ 905] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_120
+    4'b 0001, // index[ 906] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_121
+    4'b 0001, // index[ 907] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_122
+    4'b 0001, // index[ 908] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_123
+    4'b 0001, // index[ 909] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_124
+    4'b 0001, // index[ 910] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_125
+    4'b 0001, // index[ 911] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_126
+    4'b 0001, // index[ 912] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_127
+    4'b 0001, // index[ 913] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_128
+    4'b 0001, // index[ 914] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_129
+    4'b 0001, // index[ 915] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_130
+    4'b 0001, // index[ 916] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_131
+    4'b 0001, // index[ 917] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_132
+    4'b 0001, // index[ 918] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_133
+    4'b 0001, // index[ 919] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_134
+    4'b 0001, // index[ 920] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_135
+    4'b 0001, // index[ 921] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_136
+    4'b 0001, // index[ 922] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_137
+    4'b 0001, // index[ 923] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_138
+    4'b 0001, // index[ 924] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_139
+    4'b 0001, // index[ 925] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_140
+    4'b 0001, // index[ 926] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_141
+    4'b 0001, // index[ 927] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_142
+    4'b 0001, // index[ 928] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_143
+    4'b 0001, // index[ 929] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_144
+    4'b 0001, // index[ 930] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_145
+    4'b 0001, // index[ 931] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_146
+    4'b 0001, // index[ 932] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_147
+    4'b 0001, // index[ 933] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_148
+    4'b 0001, // index[ 934] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_149
+    4'b 0001, // index[ 935] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_150
+    4'b 0001, // index[ 936] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_151
+    4'b 0001, // index[ 937] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_152
+    4'b 0001, // index[ 938] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_153
+    4'b 0001, // index[ 939] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_154
+    4'b 0001, // index[ 940] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_155
+    4'b 0001, // index[ 941] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_156
+    4'b 0001, // index[ 942] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_157
+    4'b 0001, // index[ 943] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_158
+    4'b 0001, // index[ 944] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_159
+    4'b 0001, // index[ 945] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_160
+    4'b 0001, // index[ 946] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_161
+    4'b 0001, // index[ 947] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_162
+    4'b 0001, // index[ 948] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_163
+    4'b 0001, // index[ 949] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_164
+    4'b 0001, // index[ 950] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_165
+    4'b 0001, // index[ 951] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_166
+    4'b 0001, // index[ 952] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_167
+    4'b 0001, // index[ 953] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_168
+    4'b 0001, // index[ 954] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_169
+    4'b 0001, // index[ 955] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_170
+    4'b 0001, // index[ 956] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_171
+    4'b 0001, // index[ 957] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_172
+    4'b 0001, // index[ 958] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_173
+    4'b 0001, // index[ 959] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_174
+    4'b 0001, // index[ 960] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_175
+    4'b 0001, // index[ 961] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_176
+    4'b 0001, // index[ 962] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_177
+    4'b 0001, // index[ 963] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_178
+    4'b 0001, // index[ 964] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_179
+    4'b 0001, // index[ 965] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_180
+    4'b 0001, // index[ 966] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_181
+    4'b 0001, // index[ 967] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_182
+    4'b 0001, // index[ 968] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_183
+    4'b 0001, // index[ 969] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_184
+    4'b 0001, // index[ 970] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_185
+    4'b 0001, // index[ 971] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_186
+    4'b 0001, // index[ 972] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_187
+    4'b 0001, // index[ 973] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_188
+    4'b 0001, // index[ 974] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_189
+    4'b 0001, // index[ 975] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_190
+    4'b 0001, // index[ 976] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_191
+    4'b 0001, // index[ 977] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_192
+    4'b 0001, // index[ 978] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_193
+    4'b 0001, // index[ 979] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_194
+    4'b 0001, // index[ 980] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_195
+    4'b 0001, // index[ 981] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_196
+    4'b 0001, // index[ 982] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_197
+    4'b 0001, // index[ 983] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_198
+    4'b 0001, // index[ 984] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_199
+    4'b 0001, // index[ 985] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_200
+    4'b 0001, // index[ 986] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_201
+    4'b 0001, // index[ 987] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_202
+    4'b 0001, // index[ 988] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_203
+    4'b 0001, // index[ 989] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_204
+    4'b 0001, // index[ 990] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_205
+    4'b 0001, // index[ 991] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_206
+    4'b 0001, // index[ 992] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_207
+    4'b 0001, // index[ 993] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_208
+    4'b 0001, // index[ 994] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_209
+    4'b 0001, // index[ 995] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_210
+    4'b 0001, // index[ 996] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_211
+    4'b 0001, // index[ 997] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_212
+    4'b 0001, // index[ 998] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_213
+    4'b 0001, // index[ 999] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_214
+    4'b 0001, // index[1000] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_215
+    4'b 0001, // index[1001] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_216
+    4'b 0001, // index[1002] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_217
+    4'b 0001, // index[1003] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_218
+    4'b 0001, // index[1004] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_219
+    4'b 0001, // index[1005] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_220
+    4'b 0001, // index[1006] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_221
+    4'b 0001, // index[1007] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_222
+    4'b 0001, // index[1008] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_223
+    4'b 0001, // index[1009] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_224
+    4'b 0001, // index[1010] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_225
+    4'b 0001, // index[1011] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_226
+    4'b 0001, // index[1012] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_227
+    4'b 0001, // index[1013] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_228
+    4'b 0001, // index[1014] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_229
+    4'b 0001, // index[1015] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_230
+    4'b 0001, // index[1016] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_231
+    4'b 0001, // index[1017] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_232
+    4'b 0001, // index[1018] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_233
+    4'b 0001, // index[1019] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_234
+    4'b 0001, // index[1020] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_235
+    4'b 0001, // index[1021] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_236
+    4'b 0001, // index[1022] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_237
+    4'b 0001, // index[1023] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_238
+    4'b 0001, // index[1024] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_239
+    4'b 0001, // index[1025] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_240
+    4'b 0001, // index[1026] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_241
+    4'b 0001, // index[1027] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_242
+    4'b 0001, // index[1028] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_243
+    4'b 0001, // index[1029] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_244
+    4'b 0001, // index[1030] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_245
+    4'b 0001, // index[1031] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_246
+    4'b 0001, // index[1032] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_247
+    4'b 0001, // index[1033] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_248
+    4'b 0001, // index[1034] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_249
+    4'b 0001, // index[1035] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_250
+    4'b 0001, // index[1036] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_251
+    4'b 0001, // index[1037] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_252
+    4'b 0001, // index[1038] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_253
+    4'b 0001, // index[1039] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_254
+    4'b 0001  // index[1040] CACHEPOOL_PERIPHERAL_LP1_CMO_STATUS_255
   };
 
 endpackage

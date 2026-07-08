@@ -11,11 +11,16 @@
         },
         { name: "NumLp1CmoRegs",
         desc: '''Number of per-core LP1 (private-L1) CMO register slots -- one per core /
-                 per private L1.  Core `cid` uses slot `cid`.  Default 64 covers every
-                 currently-built config (2g/4g full = 32 cores; 2g/4g/16g tiny up to
-                 64 cores).  Bump to 256 for full 16g (256 cores).''',
+                 per private L1.  Core `cid` uses slot `cid`, so this MUST be >= the
+                 target config's total core count; otherwise cores with cid >= this
+                 value spin forever on LP1_CMO_STATUS (their slot is never decoded)
+                 -> cluster barrier deadlock.  This is regenerated per config by
+                 `make update-periph-reg`, which overrides this default with num_cores
+                 (32 for 2g/4g, 64 for *_tiny, 256 for full 16g).  The default below is
+                 only a safe max for a standalone regtool run; the block still fits the
+                 64 kB ClusterPeriphSize window at 256.''',
         type: "int",
-        default: "64"
+        default: "256"
         },
     ],
     name: "cachepool_peripheral",
