@@ -53,7 +53,7 @@ with args.clustercfg as file:
     except ValueError:
         raise SystemExit(sys.exc_info()[1])
 
-DataWidth = int(cfg["cluster"]["dma_data_width"])
+DataWidth = int(cfg["cluster"].get("bootrom_data_width", 32))
 DataOffset = int(log2(DataWidth / 8))
 if DataWidth < 32:
     sys.exit("DataWidth must be larger than 32")
