@@ -340,7 +340,7 @@ module cachepool_tile
       reqWords:           1,
       reqTransIdWidth:    LP1TidWidth + LP1NumWordOffsetBits,
       reqSrcIdWidth:      $clog2(LP1NrRequesters), // selects requester port (0 Spatz / 1 Snitch / 2 CMO)
-      victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_PLRU,
+      victimSel:          hpdcache_pkg::HPDCACHE_VICTIM_RANDOM,
       dataWaysPerRamWord: 1,
       dataSetsPerRam:     LP1NumSets,
       dataRamByteEnable:  1'b1,

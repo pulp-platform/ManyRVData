@@ -83,15 +83,24 @@ void fft_p1 (float *src, float *buf, const float *twi,
     // im_l_o = (re_u_i - re_l_i) * im_twi + (im_u_i - im_l_i) * re_twi;
     asm volatile("vsetvli %0, %1, e32, m4, ta, ma" : "=r"(vl) : "r"(avl));
 
+    // LP1 (private-L1) is write-through & non-coherent.  The butterfly inputs
+    // (re/im upper/lower wings) are data another core wrote in the previous
+    // stage, so invalidate this core's private lines before EACH input load to
+    // force a miss down to the fresh copy in shared L2.  (Twiddles are
+    // read-only constants -- no staleness -- so they are not invalidated.)
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v0, (%0);" ::"r"(re_u_i)); // v0: Re upper wing
     re_u_i += vl;
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v4, (%0);" ::"r"(re_l_i)); // v4: Re lower wing
     re_l_i += vl;
     asm volatile("vfadd.vv v16, v0, v4"); // v16: Re butterfly output upper wing
     asm volatile("vfsub.vv v0, v0, v4");  // v0: Re butterfly output upper wing
 
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v8, (%0);" ::"r"(im_u_i)); // v8: Im upper wing
     im_u_i += vl;
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v12, (%0);" ::"r"(im_l_i)); // v12: Im lower wing
     im_l_i += vl;
 
@@ -99,9 +108,11 @@ void fft_p1 (float *src, float *buf, const float *twi,
 
     asm volatile("vfsub.vv v4, v8, v12"); // v4: Im butterfly output upper wing
 
-    // Load the twiddle vector
+    // Load the twiddle vector (read-only, no invalidate needed)
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v8, (%0);" ::"r"(re_twi)); // v8: Re twi
     re_twi += vl;
+    LP1_INVAL_BEFORE_LOAD();
     asm volatile("vle32.v v12, (%0);" ::"r"(im_twi)); // v12: Im twi
     im_twi += vl;
 
@@ -113,18 +124,24 @@ void fft_p1 (float *src, float *buf, const float *twi,
     asm volatile("vfmul.vv v24, v0, v8");
     asm volatile("vfnmsac.vv v24, v4, v12"); // v24: Re butterfly output
                                              // twiddled lower wing
+    // Flush after EACH store so the write-through output reaches shared L2 and
+    // becomes visible to the cores that consume it in the next stage.
     asm volatile("vse32.v v16, (%0)" ::"r"(re_u_o));
     re_u_o += vl;
+    LP1_FLUSH_AFTER_STORE();
     asm volatile("vse32.v v20, (%0)" ::"r"(im_u_o));
     im_u_o += vl;
+    LP1_FLUSH_AFTER_STORE();
     asm volatile("vfmul.vv v28, v0, v12");
     asm volatile("vfmacc.vv v28, v4, v8"); // v28: Im butterfly output
                                            // twiddled lower wing
 
     asm volatile("vse32.v v24, (%0)" ::"r"(re_l_o));
     re_l_o += vl;
+    LP1_FLUSH_AFTER_STORE();
     asm volatile("vse32.v v28, (%0)" ::"r"(im_l_o));
     im_l_o += vl;
+    LP1_FLUSH_AFTER_STORE();
   }
 }
 

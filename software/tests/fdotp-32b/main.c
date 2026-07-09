@@ -165,8 +165,8 @@ int main() {
 #ifdef LP1
       // Consumer: drop stale private-L1 copies of result[] (from a previous
       // measure_iter pass) so the peer partials are refetched fresh from L2.
-      snrt_fence();
-      lp1_wt_flush();
+      // snrt_fence();
+      // lp1_wt_flush();
       lp1_inval();
       snrt_fence();
 #endif

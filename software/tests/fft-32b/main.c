@@ -24,6 +24,51 @@
 #include <string.h>
 
 #include DATAHEADER
+
+// LP1 (private-L1) coherency protection toggle.
+// LP1 is per-core, write-through, NON-coherent.  Coherency between cores is
+// re-established purely in software with CMOs + fences:
+//   producer/release: snrt_fence_spatz(); snrt_fence(); lp1_wt_flush();
+//   consumer/acquire: lp1_inval();       snrt_fence();
+// snrt_fence_spatz() (sfence.vma) is required before every flush because the
+// FFT kernels write with asynchronous Spatz vector stores.
+//
+// Phase 1 (fft_p1) performs cross-core data swapping *at the granularity of the
+// individual vector load/store*, so a single invalidate at call entry is NOT
+// enough: data another core wrote is not guaranteed visible to this core's
+// later loads.  We therefore invalidate before *every* butterfly-input load and
+// flush after *every* output store, from inside the kernel (see kernel/fft.c).
+// These helpers are defined here, above the kernel include, so fft_p1 can call
+// them.  Phase-2 interior stays bare -- its s<->buf swaps are local to each
+// core's own LP1 -- only the phase boundaries around fft_p2 are bracketed.
+#define LP1
+
+#ifdef LP1
+#include <lp1cache.h>
+// Release: make this core's write-through output visible in shared L2.
+// Used both after each fft_p1 output store and at the phase-2 exit boundary.
+static inline void lp1_release() {
+  // snrt_fence_spatz();  // wait for async Spatz vector stores to retire
+  snrt_fence();
+  lp1_wt_flush();      // drain the write-through write buffer to L2
+  snrt_fence();
+}
+// Acquire: drop stale private lines so the following read misses to fresh L2.
+// Used both before each fft_p1 butterfly-input load and at consumer boundaries.
+static inline void lp1_acquire() {
+  lp1_inval();
+  snrt_fence();
+}
+// Per-load / per-store hooks used inside the fft_p1 kernel.
+#define LP1_INVAL_BEFORE_LOAD()  lp1_acquire()
+#define LP1_FLUSH_AFTER_STORE()  lp1_release()
+#else
+static inline void lp1_release() {}
+static inline void lp1_acquire() {}
+#define LP1_INVAL_BEFORE_LOAD()  do {} while (0)
+#define LP1_FLUSH_AFTER_STORE()  do {} while (0)
+#endif
+
 #include "kernel/fft.c"
 
 static inline int fp_check(const float a, const float b) {
@@ -103,7 +148,13 @@ int main() {
 
     for (uint32_t i = 0; i < log2_nfft1; i ++) {
       if (cid < active_cores) {
+        // fft_p1 self-protects: it invalidates before every butterfly-input
+        // load and flushes after every output store (cross-core swapping is
+        // per-load/store, not just per-call).  The inter-stage barrier below
+        // still provides the ordering between producers and consumers.
+        lp1_acquire();
         fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
+        lp1_release();
         // each round will use half the twiddle than previous round
         // the first round needs re/im NFFT/2 twiddles
         src_p1 = (i & 1) ? samples_dram : buffer_dram;
@@ -113,13 +164,18 @@ int main() {
       }
 
       // In first part of calculation, we need barrier after each round
-      // TODO: might need an L1 fence (flush) here
       snrt_cluster_hw_barrier();
     }
 
     if (cid < active_cores) {
+      // Consumer acquire: phase-2 reads this core's contiguous chunk
+      // (samples/buffer_dram + cid*NFFTpc), whose data was produced by other
+      // cores under phase 1's (different) partition.  Drop stale local lines.
+      lp1_acquire();
       // Fall back into the single-core case
       // Each core just do a FFT on (NFFT >> stage_in_P1) data
+      // Phase-2 interior needs no CMOs: its s<->buf swaps stay within this
+      // core's own LP1.
       if (p2_switch) {
         fft_p2(buf_p2, src_p2, twi_p2, out_p2, store_idx_dram, (NFFT>>log2_nfft1),
               NFFT, log2_nfft2, stride, log2_nfft1, NTWI_P2);
@@ -127,6 +183,8 @@ int main() {
         fft_p2(src_p2, buf_p2, twi_p2, out_p2, store_idx_dram, (NFFT>>log2_nfft1),
               NFFT, log2_nfft2, stride, log2_nfft1, NTWI_P2);
       }
+      // Producer release: publish out[] to L2 for core-0 verification.
+      lp1_release();
     }
     // Wait for all cores to finish fft
     snrt_cluster_hw_barrier();
@@ -148,6 +206,9 @@ int main() {
 
     if (cid == 0) {
       if ((iter == 0) && CHECK) {
+        // Consumer acquire: drop core-0's stale private lines so the checks
+        // read the freshly-produced out[] from L2.
+        lp1_acquire();
         // Verify the real part
         for (unsigned int i = 0; i < NFFT; i++) {
           if (fp_check(out[i], gold_out_dram[2 * i])) {
