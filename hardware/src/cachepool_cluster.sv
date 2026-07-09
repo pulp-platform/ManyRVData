@@ -6,6 +6,8 @@
 
 `include "axi/typedef.svh"
 `include "register_interface/typedef.svh"
+`include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 
 /// CachePool cluster: instantiates NumGroups groups connected via FlooNoC mesh,
 /// with shared L2 memory and peripheral fabric.
@@ -75,8 +77,6 @@ module cachepool_cluster
     parameter int                     unsigned               MaxSlvTrans                        = 4,
     /// # Interface
     /// AXI Ports
-    parameter type                                           axi_in_req_t                       = logic,
-    parameter type                                           axi_in_resp_t                      = logic,
     parameter type                                           axi_out_req_t                      = logic,
     parameter type                                           axi_out_resp_t                     = logic,
     /// SRAM configuration
@@ -121,9 +121,9 @@ module cachepool_cluster
     /// Per-cluster probe on the cluster status. Can be written by the cores to indicate
     /// to the overall system that the cluster is executing something.
     output logic                                  cluster_probe_o,
-    /// AXI Core cluster in-port.
-    input  axi_in_req_t                           axi_in_req_i,
-    output axi_in_resp_t                          axi_in_resp_o,
+    /// External peripheral REQRSP in-port (from TB/SoC, 32b narrow, refill_user_t).
+    input  peri_narrow_req_t                      peri_ext_req_i,
+    output peri_narrow_rsp_t                      peri_ext_rsp_o,
     /// AXI Narrow out-port (UART)
     output axi_uart_req_t                         axi_narrow_req_o,
     input  axi_uart_resp_t                        axi_narrow_resp_i,
@@ -160,9 +160,6 @@ module cachepool_cluster
   // Post-chimney AXI types (used for axi_cut and DRAM output).
   `AXI_TYPEDEF_ALL(axi_slv_cache,    addr_t, id_cache_slv_t,    data_cache_t, strb_cache_t, user_cache_t)
 
-  // Narrow-data types with chimney output ID (for DW downsizer master side).
-  `AXI_TYPEDEF_ALL(axi_peri_dw, addr_t, id_cache_slv_t, axi_narrow_data_t, axi_narrow_strb_t, user_cache_t)
-
   // ----------------
   // Wire Definitions
   // ----------------
@@ -170,9 +167,9 @@ module cachepool_cluster
   axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
   axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
 
-  // HBM0 peripheral demux port (module-scope; driven inside gen_hbm_west[0]).
-  axi_slv_cache_req_t  hbm0_peri_req;
-  axi_slv_cache_resp_t hbm0_peri_rsp;
+  // HBM0 peripheral demux port: narrowed 32b REQRSP with refill_user_t (same user as wide side).
+  peri_narrow_req_t  hbm0_peri_narrow_req;
+  peri_narrow_rsp_t  hbm0_peri_narrow_rsp;
 
   // 2. Peripherals
   axi_addr_t                                private_start_addr;
@@ -220,13 +217,19 @@ module cachepool_cluster
   // CachePool Group
   // ---------------
 
-  // Per-group L2 refill floo link arrays [NumGroupsX][NumGroupsY][West:North]
-  import floo_cachepool_noc_pkg::floo_req_t;
-  import floo_cachepool_noc_pkg::floo_rsp_t;
-  floo_req_t [NumGroupsX-1:0][NumGroupsY-1:0][floo_pkg::West:floo_pkg::North] l2_floo_req_out;
-  floo_req_t [NumGroupsX-1:0][NumGroupsY-1:0][floo_pkg::West:floo_pkg::North] l2_floo_req_in;
-  floo_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][floo_pkg::West:floo_pkg::North] l2_floo_rsp_out;
-  floo_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][floo_pkg::West:floo_pkg::North] l2_floo_rsp_in;
+  // Per-group L2 refill TCDM mesh signals [NumGroupsX][NumGroupsY][direction 0..3]
+  l2_noc_req_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_out;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_out_valid;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_out_ready;
+  l2_noc_req_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_in;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_in_valid;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_req_in_ready;
+  l2_noc_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_out;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_out_valid;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_out_ready;
+  l2_noc_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in_valid;
+  logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in_ready;
 
   assign error_o = |group_error;
 
@@ -234,8 +237,6 @@ module cachepool_cluster
     for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_group_x
       // Flat group index: row-major (matches L1 mesh wiring which uses gx + gy*NumGroupsX)
       localparam int unsigned g = gy * NumGroupsX + gx;
-      // Column-major index for floogen endpoint enumeration (GroupX0Y0, X0Y1, ...)
-      localparam int unsigned g_floo = gx * NumGroupsY + gy;
       cachepool_group_noc_wrapper #(
         .AxiAddrWidth             ( AxiAddrWidth             ),
         .AxiDataWidth             ( AxiDataWidth             ),
@@ -258,8 +259,6 @@ module cachepool_cluster
         .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
         .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
         .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-        .axi_in_req_t             ( axi_in_req_t             ),
-        .axi_in_resp_t            ( axi_in_resp_t            ),
         .axi_out_req_t            ( logic                    ),
         .axi_out_resp_t           ( logic                    ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
@@ -283,15 +282,21 @@ module cachepool_cluster
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
         .private_start_addr_i     ( private_start_addr                              ),
-        // L2 refill floo mesh links (4 directions)
-        .l2_floo_req_o            ( l2_floo_req_out[gx][gy]                         ),
-        .l2_floo_rsp_o            ( l2_floo_rsp_out[gx][gy]                         ),
-        .l2_floo_req_i            ( l2_floo_req_in [gx][gy]                         ),
-        .l2_floo_rsp_i            ( l2_floo_rsp_in [gx][gy]                         ),
-        .l2_floo_id_i             ( floo_cachepool_noc_pkg::id_t'(
-                                      floo_cachepool_noc_pkg::GroupX0Y0 + g_floo)    ),
-        .l2_floo_route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[
-                                      floo_cachepool_noc_pkg::GroupX0Y0 + g_floo]    ),
+        // L2 refill TCDM mesh (4 directions)
+        .l2_req_o                 ( l2_req_out       [gx][gy]                       ),
+        .l2_req_valid_o           ( l2_req_out_valid  [gx][gy]                       ),
+        .l2_req_ready_i           ( l2_req_out_ready  [gx][gy]                       ),
+        .l2_req_i                 ( l2_req_in         [gx][gy]                       ),
+        .l2_req_valid_i           ( l2_req_in_valid   [gx][gy]                       ),
+        .l2_req_ready_o           ( l2_req_in_ready   [gx][gy]                       ),
+        .l2_rsp_o                 ( l2_rsp_out       [gx][gy]                       ),
+        .l2_rsp_valid_o           ( l2_rsp_out_valid  [gx][gy]                       ),
+        .l2_rsp_ready_i           ( l2_rsp_out_ready  [gx][gy]                       ),
+        .l2_rsp_i                 ( l2_rsp_in         [gx][gy]                       ),
+        .l2_rsp_valid_i           ( l2_rsp_in_valid   [gx][gy]                       ),
+        .l2_rsp_ready_o           ( l2_rsp_in_ready   [gx][gy]                       ),
+        .l2_id_i                  ( floo_cachepool_noc_pkg::id_t'(gx * NumGroupsY + gy) ),
+        .l2_route_table_i         ( floo_cachepool_noc_pkg::RoutingTables[gx * NumGroupsY + gy] ),
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
         .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
@@ -513,241 +518,466 @@ module cachepool_cluster
   end
 
   // -------------------------------------------------------
-  // L2 Refill Mesh + HBM Chimneys (peripheral via HBM0 demux)
+  // L2 Refill TCDM Mesh + HBM Edge Adapters
   // -------------------------------------------------------
 
   if (NumGroups > 1) begin : gen_l2_refill_mesh
 
     // --------------------------------------------------
-    // L2 mesh interior cross-connections (floo links)
+    // L2 mesh interior cross-connections (valid/ready)
     // --------------------------------------------------
 
     // East-West connections
     for (genvar gx = 0; gx < NumGroupsX - 1; gx++) begin : gen_l2_ew
       for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_l2_ew_y
-        // East output of (gx,gy) → West input of (gx+1,gy)
-        assign l2_floo_req_in[gx+1][gy][floo_pkg::West] = l2_floo_req_out[gx][gy][floo_pkg::East];
-        assign l2_floo_rsp_in[gx+1][gy][floo_pkg::West] = l2_floo_rsp_out[gx][gy][floo_pkg::East];
-        // West output of (gx+1,gy) → East input of (gx,gy)
-        assign l2_floo_req_in[gx][gy][floo_pkg::East]   = l2_floo_req_out[gx+1][gy][floo_pkg::West];
-        assign l2_floo_rsp_in[gx][gy][floo_pkg::East]   = l2_floo_rsp_out[gx+1][gy][floo_pkg::West];
+        // East(1) output of (gx,gy) → West(3) input of (gx+1,gy)
+        assign l2_req_in       [gx+1][gy][3] = l2_req_out       [gx][gy][1];
+        assign l2_req_in_valid [gx+1][gy][3] = l2_req_out_valid  [gx][gy][1];
+        assign l2_req_out_ready[gx]  [gy][1] = l2_req_in_ready   [gx+1][gy][3];
+        assign l2_rsp_in       [gx+1][gy][3] = l2_rsp_out       [gx][gy][1];
+        assign l2_rsp_in_valid [gx+1][gy][3] = l2_rsp_out_valid  [gx][gy][1];
+        assign l2_rsp_out_ready[gx]  [gy][1] = l2_rsp_in_ready   [gx+1][gy][3];
+        // West(3) output of (gx+1,gy) → East(1) input of (gx,gy)
+        assign l2_req_in       [gx][gy][1] = l2_req_out       [gx+1][gy][3];
+        assign l2_req_in_valid [gx][gy][1] = l2_req_out_valid  [gx+1][gy][3];
+        assign l2_req_out_ready[gx+1][gy][3] = l2_req_in_ready[gx]  [gy][1];
+        assign l2_rsp_in       [gx][gy][1] = l2_rsp_out       [gx+1][gy][3];
+        assign l2_rsp_in_valid [gx][gy][1] = l2_rsp_out_valid  [gx+1][gy][3];
+        assign l2_rsp_out_ready[gx+1][gy][3] = l2_rsp_in_ready[gx]  [gy][1];
       end
     end
 
     // North-South connections
     for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_ns
       for (genvar gy = 0; gy < NumGroupsY - 1; gy++) begin : gen_l2_ns_y
-        // North output of (gx,gy) → South input of (gx,gy+1)
-        assign l2_floo_req_in[gx][gy+1][floo_pkg::South] = l2_floo_req_out[gx][gy][floo_pkg::North];
-        assign l2_floo_rsp_in[gx][gy+1][floo_pkg::South] = l2_floo_rsp_out[gx][gy][floo_pkg::North];
-        // South output of (gx,gy+1) → North input of (gx,gy)
-        assign l2_floo_req_in[gx][gy][floo_pkg::North]   = l2_floo_req_out[gx][gy+1][floo_pkg::South];
-        assign l2_floo_rsp_in[gx][gy][floo_pkg::North]   = l2_floo_rsp_out[gx][gy+1][floo_pkg::South];
+        // North(0) output of (gx,gy) → South(2) input of (gx,gy+1)
+        assign l2_req_in       [gx][gy+1][2] = l2_req_out       [gx][gy][0];
+        assign l2_req_in_valid [gx][gy+1][2] = l2_req_out_valid  [gx][gy][0];
+        assign l2_req_out_ready[gx][gy]  [0] = l2_req_in_ready   [gx][gy+1][2];
+        assign l2_rsp_in       [gx][gy+1][2] = l2_rsp_out       [gx][gy][0];
+        assign l2_rsp_in_valid [gx][gy+1][2] = l2_rsp_out_valid  [gx][gy][0];
+        assign l2_rsp_out_ready[gx][gy]  [0] = l2_rsp_in_ready   [gx][gy+1][2];
+        // South(2) output of (gx,gy+1) → North(0) input of (gx,gy)
+        assign l2_req_in       [gx][gy][0] = l2_req_out       [gx][gy+1][2];
+        assign l2_req_in_valid [gx][gy][0] = l2_req_out_valid  [gx][gy+1][2];
+        assign l2_req_out_ready[gx][gy+1][2] = l2_req_in_ready[gx][gy]  [0];
+        assign l2_rsp_in       [gx][gy][0] = l2_rsp_out       [gx][gy+1][2];
+        assign l2_rsp_in_valid [gx][gy][0] = l2_rsp_out_valid  [gx][gy+1][2];
+        assign l2_rsp_out_ready[gx][gy+1][2] = l2_rsp_in_ready[gx][gy]  [0];
       end
     end
 
     // --------------------------------------------------
-    // HBM subordinate chimneys at mesh boundaries
-    // West HBMs: HBM[gy] at West port of (0, gy)
-    // East HBMs: HBM[NumGroupsY+gy] at East port of (NumGroupsX-1, gy)
-    // HBM0 also carries peripheral traffic (demuxed below chimney).
+    // Boundary tie-offs (North/South edges)
+    // --------------------------------------------------
+
+    // North boundary (gy=NumGroupsY-1, direction North=0)
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_north_bnd
+      assign l2_req_in       [gx][NumGroupsY-1][0] = '0;
+      assign l2_req_in_valid [gx][NumGroupsY-1][0] = 1'b0;
+      assign l2_req_out_ready[gx][NumGroupsY-1][0] = 1'b1;
+      assign l2_rsp_in       [gx][NumGroupsY-1][0] = '0;
+      assign l2_rsp_in_valid [gx][NumGroupsY-1][0] = 1'b0;
+      assign l2_rsp_out_ready[gx][NumGroupsY-1][0] = 1'b1;
+    end
+
+    // South boundary (gy=0, direction South=2)
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_south_bnd
+      assign l2_req_in       [gx][0][2] = '0;
+      assign l2_req_in_valid [gx][0][2] = 1'b0;
+      assign l2_req_out_ready[gx][0][2] = 1'b1;
+      assign l2_rsp_in       [gx][0][2] = '0;
+      assign l2_rsp_in_valid [gx][0][2] = 1'b0;
+      assign l2_rsp_out_ready[gx][0][2] = 1'b1;
+    end
+
+    // --------------------------------------------------
+    // West HBM ejection points (HBM channels 0..NumGroupsY-1)
+    // floo_tcdm_chimney (SbrPort, no router) at mesh edge:
+    //   unpack req flit → reqrsp_to_axi → DRAM
+    //   response → chimney packs flit with source route back to requester
+    // HBM0: axi_demux splits DRAM from peripheral traffic.
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
       localparam int unsigned HbmIdx = gy;
+      localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
-      floo_req_t hbm_floo_req_in, hbm_floo_req_out;
-      floo_rsp_t hbm_floo_rsp_in, hbm_floo_rsp_out;
+      // Chimney subordinate port ↔ REQRSP bundle bridge
+      cache_trans_req_chan_t hbm_sbr_req;
+      logic                 hbm_sbr_req_valid;
+      logic                 hbm_sbr_req_ready;
+      cache_trans_rsp_chan_t hbm_sbr_rsp;
+      logic                 hbm_sbr_rsp_valid;
+      logic                 hbm_sbr_rsp_ready;
 
-      // Connect chimney to router (0, gy) West port
-      assign l2_floo_req_in[0][gy][floo_pkg::West] = hbm_floo_req_out;
-      assign l2_floo_rsp_in[0][gy][floo_pkg::West] = hbm_floo_rsp_out;
-      assign hbm_floo_req_in = l2_floo_req_out[0][gy][floo_pkg::West];
-      assign hbm_floo_rsp_in = l2_floo_rsp_out[0][gy][floo_pkg::West];
-
-      // Chimney AXI output (intermediate for HBM0 demux, direct for others)
-      axi_slv_cache_req_t  hbm_chimney_req;
-      axi_slv_cache_resp_t hbm_chimney_rsp;
-
-      floo_axi_chimney #(
-        .AxiCfg       ( floo_cachepool_noc_pkg::AxiCfg                        ),
-        // Subordinate-only: receives requests from mesh, outputs AXI to DRAM
-        .ChimneyCfg   ( floo_pkg::set_ports(floo_pkg::ChimneyDefaultCfg,
-                          1'b1, 1'b0)                                         ),
-        .RouteCfg     ( floo_cachepool_noc_pkg::RouteCfg                      ),
-        .AtopSupport  ( 1'b0                                                  ),
-        .MaxAtomicTxns( 0                                                     ),
-        .id_t         ( floo_cachepool_noc_pkg::id_t                          ),
-        .rob_idx_t    ( floo_cachepool_noc_pkg::rob_idx_t                     ),
-        .route_t      ( floo_cachepool_noc_pkg::route_t                       ),
-        .dst_t        ( floo_cachepool_noc_pkg::route_t                       ),
-        .hdr_t        ( floo_cachepool_noc_pkg::hdr_t                         ),
-        .sam_rule_t   ( floo_cachepool_noc_pkg::sam_rule_t                    ),
-        .Sam          ( floo_cachepool_noc_pkg::Sam                           ),
-        .axi_in_req_t ( floo_cachepool_noc_pkg::axi_wide_in_req_t            ),
-        .axi_in_rsp_t ( floo_cachepool_noc_pkg::axi_wide_in_rsp_t            ),
-        .axi_out_req_t( axi_slv_cache_req_t                                  ),
-        .axi_out_rsp_t( axi_slv_cache_resp_t                                 ),
-        .floo_req_t   ( floo_cachepool_noc_pkg::floo_req_t                    ),
-        .floo_rsp_t   ( floo_cachepool_noc_pkg::floo_rsp_t                    )
+      floo_tcdm_chimney #(
+        .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg   ),
+        .EnMgrPort  ( 1'b0                               ),
+        .EnSbrPort  ( 1'b1                               ),
+        .MaxTxns    ( 64                                  ),
+        .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+        .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+        .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+        .hdr_t      ( l2_noc_hdr_t                        ),
+        .req_chan_t  ( cache_trans_req_chan_t               ),
+        .rsp_chan_t  ( cache_trans_rsp_chan_t               ),
+        .floo_req_t ( l2_noc_req_t                        ),
+        .floo_rsp_t ( l2_noc_rsp_t                        ),
+        .addr_t     ( axi_addr_t                          ),
+        .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t   ),
+        .Sam        ( floo_cachepool_noc_pkg::Sam          )
       ) i_hbm_chimney (
-        .clk_i          ( clk_i                                               ),
-        .rst_ni         ( rst_ni                                              ),
-        .test_enable_i  ( 1'b0                                                ),
-        .sram_cfg_i     ( '0                                                  ),
-        .axi_in_req_i   ( '0                                                  ),
-        .axi_in_rsp_o   (                                                     ),
-        .axi_out_req_o  ( hbm_chimney_req                                    ),
-        .axi_out_rsp_i  ( hbm_chimney_rsp                                    ),
-        .id_i           ( floo_cachepool_noc_pkg::id_t'(
-                            floo_cachepool_noc_pkg::Hbm0 + HbmIdx)            ),
-        .route_table_i  ( floo_cachepool_noc_pkg::RoutingTables[
-                            floo_cachepool_noc_pkg::Hbm0 + HbmIdx]            ),
-        .floo_req_o     ( hbm_floo_req_out                                    ),
-        .floo_rsp_o     ( hbm_floo_rsp_out                                    ),
-        .floo_req_i     ( hbm_floo_req_in                                     ),
-        .floo_rsp_i     ( hbm_floo_rsp_in                                     )
+        .clk_i            ( clk_i                                          ),
+        .rst_ni           ( rst_ni                                         ),
+        .test_enable_i    ( 1'b0                                           ),
+        // Manager port: unused
+        .mgr_req_i        ( '0                                             ),
+        .mgr_req_valid_i  ( 1'b0                                           ),
+        .mgr_req_ready_o  (                                                ),
+        .mgr_rsp_o        (                                                ),
+        .mgr_rsp_valid_o  (                                                ),
+        .mgr_rsp_ready_i  ( 1'b0                                           ),
+        // Subordinate port: drives reqrsp_to_axi
+        .sbr_req_o        ( hbm_sbr_req                                    ),
+        .sbr_req_valid_o  ( hbm_sbr_req_valid                              ),
+        .sbr_req_ready_i  ( hbm_sbr_req_ready                              ),
+        .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
+        .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
+        .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+        // Routing
+        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)   ),
+        .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
+        // Request flit from mesh West(3) edge (no router)
+        .floo_req_o       (                                                ),
+        .floo_req_valid_o (                                                ),
+        .floo_req_ready_i ( 1'b1                                           ),
+        .floo_req_i       ( l2_req_out[0][gy][3]                           ),
+        .floo_req_valid_i ( l2_req_out_valid[0][gy][3]                     ),
+        .floo_req_ready_o ( l2_req_out_ready[0][gy][3]                     ),
+        // Response flit into mesh West(3) edge
+        .floo_rsp_o       ( l2_rsp_in[0][gy][3]                           ),
+        .floo_rsp_valid_o ( l2_rsp_in_valid[0][gy][3]                     ),
+        .floo_rsp_ready_i ( l2_rsp_in_ready[0][gy][3]                     ),
+        .floo_rsp_i       ( '0                                             ),
+        .floo_rsp_valid_i ( 1'b0                                           ),
+        .floo_rsp_ready_o (                                                )
       );
 
-      // HBM0: demux DRAM vs peripheral traffic
+      // Tie off: no requests injected from HBM, drain stray outgoing responses
+      assign l2_req_in       [0][gy][3] = '0;
+      assign l2_req_in_valid [0][gy][3] = 1'b0;
+      assign l2_rsp_out_ready[0][gy][3] = 1'b1;
+
+      // Pack chimney sbr signals into REQRSP bundle
+      cache_trans_req_t  hbm_reqrsp_req;
+      cache_trans_rsp_t  hbm_reqrsp_rsp;
+
+      assign hbm_reqrsp_req = '{
+        q:       hbm_sbr_req,
+        q_valid: hbm_sbr_req_valid,
+        p_ready: hbm_sbr_rsp_ready
+      };
+      assign hbm_sbr_req_ready = hbm_reqrsp_rsp.q_ready;
+      assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
+      assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
+
+      // HBM0: splits DRAM vs peripheral before AXI conversion. Uses
+      // reqrsp_xbar rather than reqrsp_demux: the demux tracked every
+      // dispatched request (regardless of target) in a single shared
+      // in-order ID FIFO sized RespDepth, capping outstanding HBM0 refills
+      // far below the windows available at the chimney/reqrsp_to_axi. The
+      // xbar lets each downstream path track its own outstanding requests
+      // independently. Reordering across the two paths is safe because
+      // miss/request info lives in refill_user_t, not in arrival order.
+      // Each path still has its own reqrsp_to_axi so the user-field FIFO
+      // stays in-order per path and refill_user_t is preserved end-to-end.
       if (HbmIdx == 0) begin : gen_hbm0_demux
-        axi_slv_cache_req_t  [1:0] hbm0_demux_req;
-        axi_slv_cache_resp_t [1:0] hbm0_demux_rsp;
 
-        // Address decode: DRAM range → port 0, everything else → port 1
-        logic hbm0_aw_sel, hbm0_ar_sel;
-        assign hbm0_aw_sel = !((hbm_chimney_req.aw.addr >= DramAddr) &&
-                                (hbm_chimney_req.aw.addr <  DramAddr + DramPerChSize));
-        assign hbm0_ar_sel = !((hbm_chimney_req.ar.addr >= DramAddr) &&
-                                (hbm_chimney_req.ar.addr <  DramAddr + DramPerChSize));
+        // Address-based select: DRAM = port 0, Peripheral = port 1
+        logic hbm0_reqrsp_sel;
+        assign hbm0_reqrsp_sel = !((hbm_reqrsp_req.q.addr >= DramAddr) &&
+                                    (hbm_reqrsp_req.q.addr <  DramAddr + DramPerChSize));
 
-        axi_demux #(
-          .AxiIdWidth  ( WideIdWidthOut              ),
-          .AtopSupport ( 1'b0                        ),
-          .aw_chan_t   ( axi_slv_cache_aw_chan_t      ),
-          .w_chan_t    ( axi_slv_cache_w_chan_t        ),
-          .b_chan_t    ( axi_slv_cache_b_chan_t        ),
-          .ar_chan_t   ( axi_slv_cache_ar_chan_t       ),
-          .r_chan_t    ( axi_slv_cache_r_chan_t        ),
-          .axi_req_t   ( axi_slv_cache_req_t          ),
-          .axi_resp_t  ( axi_slv_cache_resp_t         ),
-          .NoMstPorts  ( 2                            ),
-          .MaxTrans    ( 4                            )
-        ) i_hbm0_demux (
-          .clk_i           ( clk_i                    ),
-          .rst_ni          ( rst_ni                   ),
-          .test_i          ( 1'b0                     ),
-          .slv_req_i       ( hbm_chimney_req          ),
-          .slv_aw_select_i ( hbm0_aw_sel              ),
-          .slv_ar_select_i ( hbm0_ar_sel              ),
-          .slv_resp_o      ( hbm_chimney_rsp          ),
-          .mst_reqs_o      ( hbm0_demux_req           ),
-          .mst_resps_i     ( hbm0_demux_rsp           )
+        cache_trans_req_t  [1:0] hbm0_demux_req;
+        cache_trans_rsp_t  [1:0] hbm0_demux_rsp;
+
+        cache_trans_req_chan_t [1:0] hbm0_xbar_mst_req;
+        logic                   [1:0] hbm0_xbar_mst_req_valid;
+        logic                   [1:0] hbm0_xbar_mst_req_ready;
+        cache_trans_rsp_chan_t [1:0] hbm0_xbar_mst_rsp;
+        logic                   [1:0] hbm0_xbar_mst_rsp_valid;
+        logic                   [1:0] hbm0_xbar_mst_rsp_ready;
+
+        logic                   hbm0_xbar_slv_req_ready;
+        cache_trans_rsp_chan_t  hbm0_xbar_slv_rsp;
+        logic                   hbm0_xbar_slv_rsp_valid;
+
+        reqrsp_xbar #(
+          .NumInp          ( 1                       ),
+          .NumOut          ( 2                       ),
+          .PipeReg         ( 1'b1                    ),
+          .RspReg          ( 1'b1                    ),
+          .tcdm_req_chan_t ( cache_trans_req_chan_t  ),
+          .tcdm_rsp_chan_t ( cache_trans_rsp_chan_t  )
+        ) i_hbm0_reqrsp_xbar (
+          .clk_i            ( clk_i                       ),
+          .rst_ni           ( rst_ni                      ),
+          .slv_req_i        ( hbm_reqrsp_req.q            ),
+          .slv_rr_i         ( '0                          ),
+          .slv_req_valid_i  ( hbm_reqrsp_req.q_valid      ),
+          .slv_req_ready_o  ( hbm0_xbar_slv_req_ready     ),
+          .slv_rsp_o        ( hbm0_xbar_slv_rsp           ),
+          .slv_rsp_valid_o  ( hbm0_xbar_slv_rsp_valid     ),
+          .slv_rsp_ready_i  ( hbm_reqrsp_req.p_ready      ),
+          .slv_sel_i        ( hbm0_reqrsp_sel             ),
+          .slv_selected_o   (                             ),
+          .mst_req_o        ( hbm0_xbar_mst_req           ),
+          .mst_req_valid_o  ( hbm0_xbar_mst_req_valid     ),
+          .mst_req_ready_i  ( hbm0_xbar_mst_req_ready     ),
+          .mst_rsp_i        ( hbm0_xbar_mst_rsp           ),
+          .mst_rr_i         ( '0                          ),
+          .mst_rsp_valid_i  ( hbm0_xbar_mst_rsp_valid     ),
+          .mst_rsp_ready_o  ( hbm0_xbar_mst_rsp_ready     ),
+          .mst_sel_i        ( '0                          )
         );
 
-        // Port 0: DRAM
-        assign wide_axi_slv_req[0] = hbm0_demux_req[0];
-        assign hbm0_demux_rsp[0]   = wide_axi_slv_rsp[0];
+        assign hbm_reqrsp_rsp = '{
+          q_ready: hbm0_xbar_slv_req_ready,
+          p:       hbm0_xbar_slv_rsp,
+          p_valid: hbm0_xbar_slv_rsp_valid
+        };
 
-        // Port 1: Peripheral traffic (wired to module-scope hbm0_peri_*)
-        assign hbm0_peri_req     = hbm0_demux_req[1];
-        assign hbm0_demux_rsp[1] = hbm0_peri_rsp;
+        for (genvar p = 0; p < 2; p++) begin : gen_hbm0_xbar_bundle
+          assign hbm0_demux_req[p] = '{
+            q:       hbm0_xbar_mst_req[p],
+            q_valid: hbm0_xbar_mst_req_valid[p],
+            p_ready: hbm0_xbar_mst_rsp_ready[p]
+          };
+          assign hbm0_xbar_mst_req_ready[p] = hbm0_demux_rsp[p].q_ready;
+          assign hbm0_xbar_mst_rsp[p]       = hbm0_demux_rsp[p].p;
+          assign hbm0_xbar_mst_rsp_valid[p] = hbm0_demux_rsp[p].p_valid;
+        end
+
+        // Port 0: DRAM — reqrsp_to_axi → axi_cut → TB
+        axi_slv_cache_req_t  hbm0_dram_axi_req;
+        axi_slv_cache_resp_t hbm0_dram_axi_rsp;
+
+        reqrsp_to_axi #(
+          .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+          .ID           ( 0                     ),
+          .EnBurst      ( 1                     ),
+          .ShuffleId    ( 1                     ),
+          .AxiIdWidth   ( WideIdWidthOut        ),
+          .DataWidth    ( AxiDataWidth          ),
+          .UserWidth    ( $bits(refill_user_t)  ),
+          .AxiUserWidth ( AxiUserWidth          ),
+          .reqrsp_req_t ( cache_trans_req_t     ),
+          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
+          .axi_req_t    ( axi_slv_cache_req_t   ),
+          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        ) i_hbm0_dram_reqrsp_to_axi (
+          .clk_i        ( clk_i              ),
+          .rst_ni       ( rst_ni             ),
+          .user_i       ( '0                 ),
+          .reqrsp_req_i ( hbm0_demux_req[0]  ),
+          .reqrsp_rsp_o ( hbm0_demux_rsp[0]  ),
+          .axi_req_o    ( hbm0_dram_axi_req  ),
+          .axi_rsp_i    ( hbm0_dram_axi_rsp  )
+        );
+
+        assign wide_axi_slv_req[0] = hbm0_dram_axi_req;
+        assign hbm0_dram_axi_rsp   = wide_axi_slv_rsp[0];
+
+
+        // Port 1: Non-DRAM — revert VA back to PA, then DW convert to 32b
+        // All paths through the interconnect use scrambled (VA) addresses.
+        // revertAddr recovers the physical address for the peripheral endpoint.
+        cache_trans_req_t hbm0_peri_reqrsp_req;
+        always_comb begin
+          hbm0_peri_reqrsp_req        = hbm0_demux_req[1];
+          hbm0_peri_reqrsp_req.q.addr = revertAddr(hbm0_demux_req[1].q.addr);
+        end
+
+        cache_trans_rsp_t hbm0_peri_reqrsp_rsp;
+        assign hbm0_demux_rsp[1] = hbm0_peri_reqrsp_rsp;
+
+        // W2N converter: 512b REQRSP → 32b REQRSP
+        // Same user type (refill_user_t) on both sides.
+        reqrsp_w2n_converter #(
+          .SlvDataWidth ( AxiDataWidth              ),
+          .MstDataWidth ( 32                        ),
+          .AddrWidth    ( AxiAddrWidth              ),
+          .SlvUserWidth ( $bits(refill_user_t)      ),
+          .MstUserWidth ( $bits(refill_user_t)      ),
+          .MaxTrans     ( 4                         ),
+          .slv_req_t    ( cache_trans_req_t         ),
+          .slv_rsp_t    ( cache_trans_rsp_t         ),
+          .mst_req_t    ( peri_narrow_req_t         ),
+          .mst_rsp_t    ( peri_narrow_rsp_t         ),
+          .slv_user_t   ( refill_user_t             )
+        ) i_hbm0_peri_dw (
+          .clk_i      ( clk_i                       ),
+          .rst_ni     ( rst_ni                      ),
+          .slv_req_i  ( hbm0_peri_reqrsp_req        ),
+          .slv_rsp_o  ( hbm0_peri_reqrsp_rsp        ),
+          .mst_req_o  ( hbm0_peri_narrow_req        ),
+          .mst_rsp_i  ( hbm0_peri_narrow_rsp        )
+        );
 
       end else begin : gen_hbm_direct
-        // Other West HBMs: direct connection
-        assign wide_axi_slv_req[HbmIdx] = hbm_chimney_req;
-        assign hbm_chimney_rsp           = wide_axi_slv_rsp[HbmIdx];
+        // Non-HBM0: single reqrsp_to_axi → DRAM
+        axi_slv_cache_req_t  hbm_axi_req;
+        axi_slv_cache_resp_t hbm_axi_rsp;
+
+        reqrsp_to_axi #(
+          .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+          .ID           ( 0                     ),
+          .EnBurst      ( 1                     ),
+          .ShuffleId    ( 1                     ),
+          .AxiIdWidth   ( WideIdWidthOut        ),
+          .DataWidth    ( AxiDataWidth          ),
+          .UserWidth    ( $bits(refill_user_t)  ),
+          .AxiUserWidth ( AxiUserWidth          ),
+          .reqrsp_req_t ( cache_trans_req_t     ),
+          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
+          .axi_req_t    ( axi_slv_cache_req_t   ),
+          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        ) i_hbm_reqrsp_to_axi (
+          .clk_i        ( clk_i            ),
+          .rst_ni       ( rst_ni           ),
+          .user_i       ( '0               ),
+          .reqrsp_req_i ( hbm_reqrsp_req   ),
+          .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
+          .axi_req_o    ( hbm_axi_req      ),
+          .axi_rsp_i    ( hbm_axi_rsp      )
+        );
+
+        assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
+        assign hbm_axi_rsp               = wide_axi_slv_rsp[HbmIdx];
       end
     end
 
+    // --------------------------------------------------
+    // East HBM ejection points (HBM channels NumGroupsY..2*NumGroupsY-1)
+    // floo_tcdm_chimney (SbrPort, no router) at mesh edge.
+    // --------------------------------------------------
+
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_east
       localparam int unsigned HbmIdx = NumGroupsY + gy;
+      localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
-      floo_req_t hbm_floo_req_in, hbm_floo_req_out;
-      floo_rsp_t hbm_floo_rsp_in, hbm_floo_rsp_out;
+      // Chimney subordinate port ↔ REQRSP bundle bridge
+      cache_trans_req_chan_t hbm_sbr_req;
+      logic                 hbm_sbr_req_valid;
+      logic                 hbm_sbr_req_ready;
+      cache_trans_rsp_chan_t hbm_sbr_rsp;
+      logic                 hbm_sbr_rsp_valid;
+      logic                 hbm_sbr_rsp_ready;
 
-      // Connect chimney to router (NumGroupsX-1, gy) East port
-      assign l2_floo_req_in[NumGroupsX-1][gy][floo_pkg::East] = hbm_floo_req_out;
-      assign l2_floo_rsp_in[NumGroupsX-1][gy][floo_pkg::East] = hbm_floo_rsp_out;
-      assign hbm_floo_req_in = l2_floo_req_out[NumGroupsX-1][gy][floo_pkg::East];
-      assign hbm_floo_rsp_in = l2_floo_rsp_out[NumGroupsX-1][gy][floo_pkg::East];
-
-      floo_axi_chimney #(
-        .AxiCfg       ( floo_cachepool_noc_pkg::AxiCfg                        ),
-        .ChimneyCfg   ( floo_pkg::set_ports(floo_pkg::ChimneyDefaultCfg,
-                          1'b1, 1'b0)                                         ),
-        .RouteCfg     ( floo_cachepool_noc_pkg::RouteCfg                      ),
-        .AtopSupport  ( 1'b0                                                  ),
-        .MaxAtomicTxns( 0                                                     ),
-        .id_t         ( floo_cachepool_noc_pkg::id_t                          ),
-        .rob_idx_t    ( floo_cachepool_noc_pkg::rob_idx_t                     ),
-        .route_t      ( floo_cachepool_noc_pkg::route_t                       ),
-        .dst_t        ( floo_cachepool_noc_pkg::route_t                       ),
-        .hdr_t        ( floo_cachepool_noc_pkg::hdr_t                         ),
-        .sam_rule_t   ( floo_cachepool_noc_pkg::sam_rule_t                    ),
-        .Sam          ( floo_cachepool_noc_pkg::Sam                           ),
-        .axi_in_req_t ( floo_cachepool_noc_pkg::axi_wide_in_req_t            ),
-        .axi_in_rsp_t ( floo_cachepool_noc_pkg::axi_wide_in_rsp_t            ),
-        .axi_out_req_t( axi_slv_cache_req_t                                  ),
-        .axi_out_rsp_t( axi_slv_cache_resp_t                                 ),
-        .floo_req_t   ( floo_cachepool_noc_pkg::floo_req_t                    ),
-        .floo_rsp_t   ( floo_cachepool_noc_pkg::floo_rsp_t                    )
+      floo_tcdm_chimney #(
+        .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg   ),
+        .EnMgrPort  ( 1'b0                               ),
+        .EnSbrPort  ( 1'b1                               ),
+        .MaxTxns    ( 64                                  ),
+        .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+        .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+        .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+        .hdr_t      ( l2_noc_hdr_t                        ),
+        .req_chan_t  ( cache_trans_req_chan_t               ),
+        .rsp_chan_t  ( cache_trans_rsp_chan_t               ),
+        .floo_req_t ( l2_noc_req_t                        ),
+        .floo_rsp_t ( l2_noc_rsp_t                        ),
+        .addr_t     ( axi_addr_t                          ),
+        .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t   ),
+        .Sam        ( floo_cachepool_noc_pkg::Sam          )
       ) i_hbm_chimney (
-        .clk_i          ( clk_i                                               ),
-        .rst_ni         ( rst_ni                                              ),
-        .test_enable_i  ( 1'b0                                                ),
-        .sram_cfg_i     ( '0                                                  ),
-        .axi_in_req_i   ( '0                                                  ),
-        .axi_in_rsp_o   (                                                     ),
-        .axi_out_req_o  ( wide_axi_slv_req[HbmIdx]                           ),
-        .axi_out_rsp_i  ( wide_axi_slv_rsp[HbmIdx]                           ),
-        .id_i           ( floo_cachepool_noc_pkg::id_t'(
-                            floo_cachepool_noc_pkg::Hbm0 + HbmIdx)            ),
-        .route_table_i  ( floo_cachepool_noc_pkg::RoutingTables[
-                            floo_cachepool_noc_pkg::Hbm0 + HbmIdx]            ),
-        .floo_req_o     ( hbm_floo_req_out                                    ),
-        .floo_rsp_o     ( hbm_floo_rsp_out                                    ),
-        .floo_req_i     ( hbm_floo_req_in                                     ),
-        .floo_rsp_i     ( hbm_floo_rsp_in                                     )
+        .clk_i            ( clk_i                                          ),
+        .rst_ni           ( rst_ni                                         ),
+        .test_enable_i    ( 1'b0                                           ),
+        // Manager port: unused
+        .mgr_req_i        ( '0                                             ),
+        .mgr_req_valid_i  ( 1'b0                                           ),
+        .mgr_req_ready_o  (                                                ),
+        .mgr_rsp_o        (                                                ),
+        .mgr_rsp_valid_o  (                                                ),
+        .mgr_rsp_ready_i  ( 1'b0                                           ),
+        // Subordinate port: drives reqrsp_to_axi
+        .sbr_req_o        ( hbm_sbr_req                                    ),
+        .sbr_req_valid_o  ( hbm_sbr_req_valid                              ),
+        .sbr_req_ready_i  ( hbm_sbr_req_ready                              ),
+        .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
+        .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
+        .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+        // Routing
+        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)   ),
+        .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
+        // Request flit from mesh East(1) edge (no router)
+        .floo_req_o       (                                                ),
+        .floo_req_valid_o (                                                ),
+        .floo_req_ready_i ( 1'b1                                           ),
+        .floo_req_i       ( l2_req_out[NumGroupsX-1][gy][1]               ),
+        .floo_req_valid_i ( l2_req_out_valid[NumGroupsX-1][gy][1]         ),
+        .floo_req_ready_o ( l2_req_out_ready[NumGroupsX-1][gy][1]         ),
+        // Response flit into mesh East(1) edge
+        .floo_rsp_o       ( l2_rsp_in[NumGroupsX-1][gy][1]               ),
+        .floo_rsp_valid_o ( l2_rsp_in_valid[NumGroupsX-1][gy][1]         ),
+        .floo_rsp_ready_i ( l2_rsp_in_ready[NumGroupsX-1][gy][1]         ),
+        .floo_rsp_i       ( '0                                             ),
+        .floo_rsp_valid_i ( 1'b0                                           ),
+        .floo_rsp_ready_o (                                                )
       );
 
+      // Tie off unused
+      assign l2_req_in       [NumGroupsX-1][gy][1] = '0;
+      assign l2_req_in_valid [NumGroupsX-1][gy][1] = 1'b0;
+      assign l2_rsp_out_ready[NumGroupsX-1][gy][1] = 1'b1;
+
+      // Pack chimney sbr signals into REQRSP bundle for reqrsp_to_axi
+      cache_trans_req_t  hbm_reqrsp_req;
+      cache_trans_rsp_t  hbm_reqrsp_rsp;
+
+      assign hbm_reqrsp_req = '{
+        q:       hbm_sbr_req,
+        q_valid: hbm_sbr_req_valid,
+        p_ready: hbm_sbr_rsp_ready
+      };
+      assign hbm_sbr_req_ready = hbm_reqrsp_rsp.q_ready;
+      assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
+      assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
+
+      // REQRSP → AXI conversion
+      axi_slv_cache_req_t  hbm_axi_req;
+      axi_slv_cache_resp_t hbm_axi_rsp;
+
+      reqrsp_to_axi #(
+        .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+        .ID           ( 0                     ),
+        .EnBurst      ( 1                     ),
+        .ShuffleId    ( 1                     ),
+        .AxiIdWidth   ( WideIdWidthOut        ),
+        .DataWidth    ( AxiDataWidth          ),
+        .UserWidth    ( $bits(refill_user_t)  ),
+        .AxiUserWidth ( AxiUserWidth          ),
+        .reqrsp_req_t ( cache_trans_req_t     ),
+        .reqrsp_rsp_t ( cache_trans_rsp_t     ),
+        .axi_req_t    ( axi_slv_cache_req_t   ),
+        .axi_rsp_t    ( axi_slv_cache_resp_t  )
+      ) i_hbm_reqrsp_to_axi (
+        .clk_i        ( clk_i            ),
+        .rst_ni       ( rst_ni           ),
+        .user_i       ( '0               ),
+        .reqrsp_req_i ( hbm_reqrsp_req   ),
+        .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
+        .axi_req_o    ( hbm_axi_req      ),
+        .axi_rsp_i    ( hbm_axi_rsp      )
+      );
+
+      assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
+      assign hbm_axi_rsp               = wide_axi_slv_rsp[HbmIdx];
+
     end
 
-    // --------------------------------------------------
-    // L2 mesh boundary tie-offs
-    // --------------------------------------------------
-
-    // North boundary (gy=NumGroupsY-1): no endpoint, tie off
-    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_north_bnd
-      assign l2_floo_req_in[gx][NumGroupsY-1][floo_pkg::North] = '0;
-      assign l2_floo_rsp_in[gx][NumGroupsY-1][floo_pkg::North] = '0;
-    end
-
-    // South boundary (gy=0): all tied off (no separate HostPeri endpoint)
-    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_south_bnd
-      assign l2_floo_req_in[gx][0][floo_pkg::South] = '0;
-      assign l2_floo_rsp_in[gx][0][floo_pkg::South] = '0;
-    end
-
-    // West boundary (gx=0): all connected to HBM chimneys (gen_hbm_west)
-    // East boundary (gx=NumGroupsX-1): all connected to HBM chimneys (gen_hbm_east)
-    // → no additional tie-offs needed for West/East
-
-  end else begin : gen_l2_no_mesh
-    // Single-group: no mesh. The wrapper's internal chimney+router directional
-    // ports are unused. Tie them off.
-    for (genvar d = floo_pkg::North; d <= floo_pkg::West; d++) begin : gen_l2_tieoff
-      assign l2_floo_req_in[0][0][d] = '0;
-      assign l2_floo_rsp_in[0][0][d] = '0;
-    end
-    // No HBM chimneys in single-group mode. Tie off wide AXI to DRAM.
-    // TODO: For single-group bypass, connect group's L2 path directly to axi_cut
-    // without going through the floo mesh.
-    for (genvar ch = 0; ch < ClusterWideOutAxiPorts; ch++) begin : gen_l2_no_mesh_tieoff
-      assign wide_axi_slv_req[ch] = '0;
-    end
-    // No HBM0 peripheral path in single-group mode.
-    assign hbm0_peri_req = '0;
   end
 
   // --------------------------------------------------
@@ -774,241 +1004,241 @@ module cachepool_cluster
   end
 
   // --------------------------------------------------
-  // Peripheral Fabric
+  // Peripheral Fabric (REQRSP-based 2×3 xbar)
   // --------------------------------------------------
   //
-  // Data path:
-  //   HBM0 demux port 1 (512b, WideIdWidthOut ID)
-  //     → axi_dw_converter (512b → 32b)
-  //     → axi_id_serialize (WideIdWidthOut → CsrSerIdWidth=2)
-  //     → 2×2 AXI xbar slave [0]
+  // Data path (all 32b REQRSP):
+  //   Source [0]: HBM0 demux port 1 → reqrsp_w2n_converter (512b→32b) → pad src_id=0
+  //   Source [1]: peri_ext_req_i (TB/SoC, already 32b REQRSP)       → pad src_id=1
   //
-  //   axi_in_req_i (TB/SoC, AxiIdWidthIn)
-  //     → axi_id_serialize (AxiIdWidthIn → CsrSerIdWidth=2)
-  //     → 2×2 AXI xbar slave [1]
+  //   Target [0]: BootROM   → reqrsp_to_reg → bootrom
+  //   Target [1]: CSR       → reqrsp_to_reg → cachepool_peripheral
+  //   Target [2]: UART      → reqrsp_to_axi → axi_narrow_req_o
   //
-  //   Xbar master [0] → UART (axi_narrow_req_o)
-  //   Xbar master [1] → barrier → axi_to_reg → cachepool_peripheral
+  // Response routing: mst_sel_i = mst_rsp.user.src_id (1-bit, 0=NoC, 1=TB)
 
-  `REG_BUS_TYPEDEF_ALL(reg, narrow_addr_t, narrow_data_t, narrow_strb_t)
+  localparam int unsigned PeriXbarNumSrc = 2;
+  localparam int unsigned PeriXbarNumTgt = 3;
 
-  reg_req_t reg_req;
-  reg_rsp_t reg_rsp;
+  localparam int unsigned PeriTgtBootROM = 0;
+  localparam int unsigned PeriTgtCSR     = 1;
+  localparam int unsigned PeriTgtUART    = 2;
 
-  // ---- HBM0 peripheral path: DW downsize (512 → 32) ----
-
-  axi_peri_dw_req_t  peri_dw_req;
-  axi_peri_dw_resp_t peri_dw_rsp;
-
-  axi_dw_converter #(
-    .AxiAddrWidth        ( AxiAddrWidth            ),
-    .AxiIdWidth          ( WideIdWidthOut           ),
-    .AxiMaxReads         ( 2                        ),
-    .AxiSlvPortDataWidth ( AxiDataWidth             ),
-    .AxiMstPortDataWidth ( SpatzAxiNarrowDataWidth  ),
-    .ar_chan_t           ( axi_slv_cache_ar_chan_t   ),
-    .aw_chan_t           ( axi_slv_cache_aw_chan_t   ),
-    .b_chan_t            ( axi_slv_cache_b_chan_t    ),
-    .slv_r_chan_t        ( axi_slv_cache_r_chan_t    ),
-    .slv_w_chan_t        ( axi_slv_cache_w_chan_t    ),
-    .axi_slv_req_t       ( axi_slv_cache_req_t      ),
-    .axi_slv_resp_t      ( axi_slv_cache_resp_t     ),
-    .mst_r_chan_t        ( axi_peri_dw_r_chan_t      ),
-    .mst_w_chan_t        ( axi_peri_dw_w_chan_t      ),
-    .axi_mst_req_t       ( axi_peri_dw_req_t        ),
-    .axi_mst_resp_t      ( axi_peri_dw_resp_t       )
-  ) i_peri_dw_downsize (
-    .clk_i      ( clk_i              ),
-    .rst_ni     ( rst_ni             ),
-    .slv_req_i  ( hbm0_peri_req      ),
-    .slv_resp_o ( hbm0_peri_rsp  ),
-    .mst_req_o  ( peri_dw_req        ),
-    .mst_resp_i ( peri_dw_rsp        )
-  );
-
-  // ---- HBM0 peripheral path: ID serialize (WideIdWidthOut → CsrSerIdWidth) ----
-
-  axi_csr_ser_req_t  peri_hbm0_ser_req;
-  axi_csr_ser_resp_t peri_hbm0_ser_rsp;
-
-  axi_id_serialize #(
-    .AxiSlvPortIdWidth      ( WideIdWidthOut          ),
-    .AxiSlvPortMaxTxns      ( 2                       ),
-    .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
-    .AxiMstPortMaxUniqIds   ( 1                       ),
-    .AxiMstPortMaxTxnsPerId ( 2                       ),
-    .AxiAddrWidth           ( AxiAddrWidth            ),
-    .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
-    .AxiUserWidth           ( AxiUserWidth            ),
-    .AtopSupport            ( 1'b0                    ),
-    .slv_req_t              ( axi_peri_dw_req_t       ),
-    .slv_resp_t             ( axi_peri_dw_resp_t      ),
-    .mst_req_t              ( axi_csr_ser_req_t       ),
-    .mst_resp_t             ( axi_csr_ser_resp_t      ),
-    .IdMapNumEntries        ( 1                       ),
-    .IdMap                  ( '{'{32'd0, 32'd0}}      )
-  ) i_peri_hbm0_id_serialize (
-    .clk_i      ( clk_i               ),
-    .rst_ni     ( rst_ni              ),
-    .slv_req_i  ( peri_dw_req         ),
-    .slv_resp_o ( peri_dw_rsp         ),
-    .mst_req_o  ( peri_hbm0_ser_req   ),
-    .mst_resp_i ( peri_hbm0_ser_rsp   )
-  );
-
-  // ---- TB/SoC axi_in: ID serialize (AxiIdWidthIn → CsrSerIdWidth) ----
-
-  axi_csr_ser_req_t  peri_axi_in_ser_req;
-  axi_csr_ser_resp_t peri_axi_in_ser_rsp;
-
-  axi_id_serialize #(
-    .AxiSlvPortIdWidth      ( AxiIdWidthIn            ),
-    .AxiSlvPortMaxTxns      ( 2                       ),
-    .AxiMstPortIdWidth      ( CsrSerIdWidth           ),
-    .AxiMstPortMaxUniqIds   ( 1                       ),
-    .AxiMstPortMaxTxnsPerId ( 2                       ),
-    .AxiAddrWidth           ( AxiAddrWidth            ),
-    .AxiDataWidth           ( SpatzAxiNarrowDataWidth ),
-    .AxiUserWidth           ( AxiUserWidth            ),
-    .AtopSupport            ( 1'b0                    ),
-    .slv_req_t              ( axi_in_req_t            ),
-    .slv_resp_t             ( axi_in_resp_t           ),
-    .mst_req_t              ( axi_csr_ser_req_t       ),
-    .mst_resp_t             ( axi_csr_ser_resp_t      ),
-    .IdMapNumEntries        ( 1                       ),
-    .IdMap                  ( '{'{32'd0, 32'd0}}      )
-  ) i_peri_axi_in_id_serialize (
-    .clk_i      ( clk_i                ),
-    .rst_ni     ( rst_ni               ),
-    .slv_req_i  ( axi_in_req_i         ),
-    .slv_resp_o ( axi_in_resp_o        ),
-    .mst_req_o  ( peri_axi_in_ser_req  ),
-    .mst_resp_i ( peri_axi_in_ser_rsp  )
-  );
-
-  // ---- 2×2 Peripheral AXI Xbar ----
-  // Slave [0]: HBM0 peripheral (serialized)
-  // Slave [1]: TB/SoC axi_in (serialized)
-  // Master [0]: UART
-  // Master [1]: CSR/Peripheral registers
-
-  localparam int unsigned PeriXbarNumSlv = 2;
-  localparam int unsigned PeriXbarNumMst = 2;
-
-  localparam int unsigned PeriXbarMstUart = 0;
-  localparam int unsigned PeriXbarMstCsr  = 1;
-
-  // Calculate the peripheral base address (needed for xbar rules and barrier).
+  // Calculate the peripheral base address (needed for xbar rules).
   localparam logic [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
   addr_t tcdm_start_address, tcdm_end_address;
   assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
   assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
 
-  localparam axi_pkg::xbar_cfg_t PeriXbarCfg = '{
-    NoSlvPorts        : PeriXbarNumSlv,
-    NoMstPorts        : PeriXbarNumMst,
-    MaxMstTrans       : 2,
-    MaxSlvTrans       : 2,
-    FallThrough       : 1'b0,
-    LatencyMode       : axi_pkg::NO_LATENCY,
-    AxiIdWidthSlvPorts: CsrSerIdWidth,
-    AxiIdUsedSlvPorts : CsrSerIdWidth,
-    UniqueIds         : 1'b0,
-    AxiAddrWidth      : AxiAddrWidth,
-    AxiDataWidth      : SpatzAxiNarrowDataWidth,
-    NoAddrRules       : 2,
-    default           : '0
-  };
+  // ---- Address decode: source address → target index ----
+  typedef logic [$clog2(PeriXbarNumTgt)-1:0] peri_tgt_sel_t;
+  typedef logic                              peri_src_sel_t;
 
-  typedef axi_pkg::xbar_rule_32_t peri_xbar_rule_t;
+  function automatic peri_tgt_sel_t peri_addr_decode(input addr_t addr);
+    if (addr >= BootAddr && addr < BootAddr + 32'h1_0000)
+      return peri_tgt_sel_t'(PeriTgtBootROM);
+    else if (addr >= UartAddr && addr < UartAddr + 32'h1_0000)
+      return peri_tgt_sel_t'(PeriTgtUART);
+    else
+      return peri_tgt_sel_t'(PeriTgtCSR);
+  endfunction
 
-  // UART and CSR get explicit rules; unmatched addresses get AXI DECERR.
-  peri_xbar_rule_t [1:0] peri_xbar_addr_map;
-  assign peri_xbar_addr_map = '{
-    '{idx: PeriXbarMstUart, start_addr: UartAddr,
-      end_addr: UartAddr + 32'h1_0000},
-    '{idx: PeriXbarMstCsr,  start_addr: tcdm_end_address,
-      end_addr: tcdm_end_address + ClusterPeriphSize * 1024}
-  };
+  // ---- Inline src_id packing: peri_narrow → peri_xbar (add 1-bit src_id) ----
 
-  axi_csr_ser_req_t  [PeriXbarNumSlv-1:0] peri_xbar_slv_req;
-  axi_csr_ser_resp_t [PeriXbarNumSlv-1:0] peri_xbar_slv_rsp;
-  axi_csr_slv_req_t  [PeriXbarNumMst-1:0] peri_xbar_mst_req;
-  axi_csr_slv_resp_t [PeriXbarNumMst-1:0] peri_xbar_mst_rsp;
+  peri_xbar_req_chan_t [PeriXbarNumSrc-1:0] peri_xbar_src_req;
+  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_req_valid;
+  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_req_ready;
+  peri_xbar_rsp_chan_t [PeriXbarNumSrc-1:0] peri_xbar_src_rsp;
+  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_valid;
+  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_ready;
 
-  assign peri_xbar_slv_req[0] = peri_hbm0_ser_req;
-  assign peri_hbm0_ser_rsp    = peri_xbar_slv_rsp[0];
-  assign peri_xbar_slv_req[1] = peri_axi_in_ser_req;
-  assign peri_axi_in_ser_rsp  = peri_xbar_slv_rsp[1];
+  peri_xbar_req_chan_t [PeriXbarNumTgt-1:0] peri_xbar_tgt_req;
+  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_valid;
+  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_ready;
+  peri_xbar_rsp_chan_t [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp;
+  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_valid;
+  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_ready;
 
-  axi_xbar #(
-    .Cfg           ( PeriXbarCfg              ),
-    .ATOPs         ( 0                        ),
-    .slv_aw_chan_t ( axi_csr_ser_aw_chan_t     ),
-    .mst_aw_chan_t ( axi_csr_slv_aw_chan_t     ),
-    .w_chan_t      ( axi_csr_ser_w_chan_t      ),
-    .slv_b_chan_t  ( axi_csr_ser_b_chan_t      ),
-    .mst_b_chan_t  ( axi_csr_slv_b_chan_t      ),
-    .slv_ar_chan_t ( axi_csr_ser_ar_chan_t     ),
-    .mst_ar_chan_t ( axi_csr_slv_ar_chan_t     ),
-    .slv_r_chan_t  ( axi_csr_ser_r_chan_t      ),
-    .mst_r_chan_t  ( axi_csr_slv_r_chan_t      ),
-    .slv_req_t     ( axi_csr_ser_req_t        ),
-    .slv_resp_t    ( axi_csr_ser_resp_t       ),
-    .mst_req_t     ( axi_csr_slv_req_t        ),
-    .mst_resp_t    ( axi_csr_slv_resp_t       ),
-    .rule_t        ( peri_xbar_rule_t         )
+  // Source [0]: HBM0 (src_id = 0)
+  always_comb begin
+    peri_xbar_src_req[0]       = '0;
+    peri_xbar_src_req[0].addr  = hbm0_peri_narrow_req.q.addr;
+    peri_xbar_src_req[0].write = hbm0_peri_narrow_req.q.write;
+    peri_xbar_src_req[0].amo   = hbm0_peri_narrow_req.q.amo;
+    peri_xbar_src_req[0].data  = hbm0_peri_narrow_req.q.data;
+    peri_xbar_src_req[0].strb  = hbm0_peri_narrow_req.q.strb;
+    peri_xbar_src_req[0].size  = hbm0_peri_narrow_req.q.size;
+    peri_xbar_src_req[0].user  = '{src_id: 1'b0, refill: hbm0_peri_narrow_req.q.user};
+  end
+  assign peri_xbar_src_req_valid[0] = hbm0_peri_narrow_req.q_valid;
+  assign peri_xbar_src_rsp_ready[0] = hbm0_peri_narrow_req.p_ready;
+
+  assign hbm0_peri_narrow_rsp.q_ready = peri_xbar_src_req_ready[0];
+  assign hbm0_peri_narrow_rsp.p.data  = peri_xbar_src_rsp[0].data;
+  assign hbm0_peri_narrow_rsp.p.error = peri_xbar_src_rsp[0].error;
+  assign hbm0_peri_narrow_rsp.p.write = peri_xbar_src_rsp[0].write;
+  assign hbm0_peri_narrow_rsp.p.user  = peri_xbar_src_rsp[0].user.refill;
+  assign hbm0_peri_narrow_rsp.p_valid = peri_xbar_src_rsp_valid[0];
+
+  // Source [1]: TB/SoC external (src_id = 1)
+  always_comb begin
+    peri_xbar_src_req[1]       = '0;
+    peri_xbar_src_req[1].addr  = peri_ext_req_i.q.addr;
+    peri_xbar_src_req[1].write = peri_ext_req_i.q.write;
+    peri_xbar_src_req[1].amo   = peri_ext_req_i.q.amo;
+    peri_xbar_src_req[1].data  = peri_ext_req_i.q.data;
+    peri_xbar_src_req[1].strb  = peri_ext_req_i.q.strb;
+    peri_xbar_src_req[1].size  = peri_ext_req_i.q.size;
+    peri_xbar_src_req[1].user  = '{src_id: 1'b1, refill: peri_ext_req_i.q.user};
+  end
+  assign peri_xbar_src_req_valid[1] = peri_ext_req_i.q_valid;
+  assign peri_xbar_src_rsp_ready[1] = peri_ext_req_i.p_ready;
+
+  assign peri_ext_rsp_o.q_ready = peri_xbar_src_req_ready[1];
+  assign peri_ext_rsp_o.p.data  = peri_xbar_src_rsp[1].data;
+  assign peri_ext_rsp_o.p.error = peri_xbar_src_rsp[1].error;
+  assign peri_ext_rsp_o.p.write = peri_xbar_src_rsp[1].write;
+  assign peri_ext_rsp_o.p.user  = peri_xbar_src_rsp[1].user.refill;
+  assign peri_ext_rsp_o.p_valid = peri_xbar_src_rsp_valid[1];
+
+  // ---- Address decode per source ----
+  peri_tgt_sel_t [PeriXbarNumSrc-1:0] peri_slv_sel;
+  assign peri_slv_sel[0] = peri_addr_decode(hbm0_peri_narrow_req.q.addr);
+  assign peri_slv_sel[1] = peri_addr_decode(peri_ext_req_i.q.addr);
+
+  // ---- Response routing per target: use src_id from user field ----
+  peri_src_sel_t [PeriXbarNumTgt-1:0] peri_mst_sel;
+  assign peri_mst_sel[0] = peri_xbar_tgt_rsp[0].user.src_id;
+  assign peri_mst_sel[1] = peri_xbar_tgt_rsp[1].user.src_id;
+  assign peri_mst_sel[2] = peri_xbar_tgt_rsp[2].user.src_id;
+
+  // ---- 2×3 REQRSP Xbar ----
+  reqrsp_xbar #(
+    .NumInp         ( PeriXbarNumSrc       ),
+    .NumOut         ( PeriXbarNumTgt       ),
+    .PipeReg        ( 1'b1                 ),
+    .RspReg         ( 1'b1                 ),
+    .ExtReqPrio     ( 1'b0                 ),
+    .ExtRspPrio     ( 1'b0                 ),
+    .tcdm_req_chan_t ( peri_xbar_req_chan_t ),
+    .tcdm_rsp_chan_t ( peri_xbar_rsp_chan_t ),
+    .Topology       ( snitch_pkg::LogarithmicInterconnect )
   ) i_peri_xbar (
-    .clk_i                 ( clk_i                        ),
-    .rst_ni                ( rst_ni                       ),
-    .test_i                ( 1'b0                         ),
-    .slv_ports_req_i       ( peri_xbar_slv_req             ),
-    .slv_ports_resp_o      ( peri_xbar_slv_rsp             ),
-    .mst_ports_req_o       ( peri_xbar_mst_req             ),
-    .mst_ports_resp_i      ( peri_xbar_mst_rsp             ),
-    .addr_map_i            ( peri_xbar_addr_map            ),
-    .en_default_mst_port_i ( '0                            ),
-    .default_mst_port_i    ( '0                            )
+    .clk_i           ( clk_i                    ),
+    .rst_ni          ( rst_ni                   ),
+    .slv_req_i       ( peri_xbar_src_req        ),
+    .slv_rr_i        ( '0                       ),
+    .slv_req_valid_i ( peri_xbar_src_req_valid   ),
+    .slv_req_ready_o ( peri_xbar_src_req_ready   ),
+    .slv_rsp_o       ( peri_xbar_src_rsp        ),
+    .slv_rsp_valid_o ( peri_xbar_src_rsp_valid   ),
+    .slv_rsp_ready_i ( peri_xbar_src_rsp_ready   ),
+    .slv_sel_i       ( peri_slv_sel             ),
+    .slv_selected_o  ( /* unused */             ),
+    .mst_req_o       ( peri_xbar_tgt_req        ),
+    .mst_req_valid_o ( peri_xbar_tgt_req_valid   ),
+    .mst_req_ready_i ( peri_xbar_tgt_req_ready   ),
+    .mst_rsp_i       ( peri_xbar_tgt_rsp        ),
+    .mst_rr_i        ( '0                       ),
+    .mst_rsp_valid_i ( peri_xbar_tgt_rsp_valid   ),
+    .mst_rsp_ready_o ( peri_xbar_tgt_rsp_ready   ),
+    .mst_sel_i       ( peri_mst_sel             )
   );
 
-  // ---- UART output (xbar master [0]) ----
-  // axi_uart_req_t and axi_csr_slv_req_t have the same field widths
-  // (CsrAxiSlvIdWidth = SpatzAxiUartIdWidth = CsrSerIdWidth + 1).
-  assign axi_narrow_req_o     = axi_uart_req_t'(peri_xbar_mst_req[PeriXbarMstUart]);
-  assign peri_xbar_mst_rsp[PeriXbarMstUart] = axi_csr_slv_resp_t'(axi_narrow_resp_i);
+  // ---- Target [0]: BootROM → reqrsp_to_reg → bootrom ----
 
-  // ---- CSR path (xbar master [1]) → axi_to_reg → peripheral ----
-  // Barrier synchronization is handled by direct wires (tile_barrier / barrier_done),
-  // so no cluster_barrier module is needed on the AXI path.
+  `REG_BUS_TYPEDEF_ALL(reg_bootrom, addr_t, narrow_data_t, narrow_strb_t)
 
-  axi_to_reg #(
-    .ADDR_WIDTH         ( AxiAddrWidth            ),
-    .DATA_WIDTH         ( SpatzAxiNarrowDataWidth  ),
-    .AXI_MAX_WRITE_TXNS ( 1                        ),
-    .AXI_MAX_READ_TXNS  ( 1                        ),
-    .DECOUPLE_W         ( 0                        ),
-    .ID_WIDTH           ( CsrAxiSlvIdWidth         ),
-    .USER_WIDTH         ( AxiUserWidth             ),
-    .axi_req_t          ( axi_csr_slv_req_t        ),
-    .axi_rsp_t          ( axi_csr_slv_resp_t       ),
-    .reg_req_t          ( reg_req_t                ),
-    .reg_rsp_t          ( reg_rsp_t                )
-  ) i_csr_axi_to_reg (
-    .clk_i              ( clk_i                    ),
-    .rst_ni             ( rst_ni                   ),
-    .testmode_i         ( 1'b0                     ),
-    .axi_req_i          ( peri_xbar_mst_req[PeriXbarMstCsr] ),
-    .axi_rsp_o          ( peri_xbar_mst_rsp[PeriXbarMstCsr] ),
-    .reg_req_o          ( reg_req                   ),
-    .reg_rsp_i          ( reg_rsp                   )
+  peri_xbar_req_t peri_bootrom_req;
+  peri_xbar_rsp_t peri_bootrom_rsp;
+
+  // Bundle xbar split channels into REQRSP struct
+  assign peri_bootrom_req.q       = peri_xbar_tgt_req[PeriTgtBootROM];
+  assign peri_bootrom_req.q_valid = peri_xbar_tgt_req_valid[PeriTgtBootROM];
+  assign peri_bootrom_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtBootROM];
+  assign peri_xbar_tgt_req_ready[PeriTgtBootROM] = peri_bootrom_rsp.q_ready;
+  assign peri_xbar_tgt_rsp[PeriTgtBootROM]       = peri_bootrom_rsp.p;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtBootROM]  = peri_bootrom_rsp.p_valid;
+
+  reg_bootrom_req_t bootrom_reg_req;
+  reg_bootrom_rsp_t bootrom_reg_rsp;
+
+  reqrsp_to_reg #(
+    .AddrWidth    ( AxiAddrWidth              ),
+    .DataWidth    ( 32                        ),
+    .UserWidth    ( $bits(peri_xbar_user_t)   ),
+    .FifoDepth    ( 2                         ),
+    .ShiftResponse( 1'b0                      ),
+    .user_t       ( peri_xbar_user_t          ),
+    .reqrsp_req_t ( peri_xbar_req_t           ),
+    .reqrsp_rsp_t ( peri_xbar_rsp_t           ),
+    .reg_req_t    ( reg_bootrom_req_t         ),
+    .reg_rsp_t    ( reg_bootrom_rsp_t         )
+  ) i_reqrsp_to_reg_bootrom (
+    .clk_i      ( clk_i            ),
+    .rst_ni     ( rst_ni           ),
+    .reqrsp_req_i ( peri_bootrom_req ),
+    .reqrsp_rsp_o ( peri_bootrom_rsp ),
+    .reg_req_o  ( bootrom_reg_req  ),
+    .reg_rsp_i  ( bootrom_reg_rsp  )
+  );
+
+  bootrom #(
+    .DataWidth ( 32          ),
+    .AddrWidth ( AxiAddrWidth )
+  ) i_bootrom (
+    .clk_i   ( clk_i                           ),
+    .req_i   ( bootrom_reg_req.valid            ),
+    .addr_i  ( addr_t'(bootrom_reg_req.addr)    ),
+    .rdata_o ( bootrom_reg_rsp.rdata            )
+  );
+  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+  assign bootrom_reg_rsp.error = 1'b0;
+
+  // ---- Target [1]: CSR → reqrsp_to_reg → cachepool_peripheral ----
+
+  `REG_BUS_TYPEDEF_ALL(reg_csr, addr_t, narrow_data_t, narrow_strb_t)
+
+  peri_xbar_req_t peri_csr_req;
+  peri_xbar_rsp_t peri_csr_rsp;
+
+  // Bundle xbar split channels into REQRSP struct
+  assign peri_csr_req.q       = peri_xbar_tgt_req[PeriTgtCSR];
+  assign peri_csr_req.q_valid = peri_xbar_tgt_req_valid[PeriTgtCSR];
+  assign peri_csr_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtCSR];
+  assign peri_xbar_tgt_req_ready[PeriTgtCSR] = peri_csr_rsp.q_ready;
+  assign peri_xbar_tgt_rsp[PeriTgtCSR]       = peri_csr_rsp.p;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtCSR]  = peri_csr_rsp.p_valid;
+
+  reg_csr_req_t reg_req;
+  reg_csr_rsp_t reg_rsp;
+
+  reqrsp_to_reg #(
+    .AddrWidth    ( AxiAddrWidth              ),
+    .DataWidth    ( 32                        ),
+    .UserWidth    ( $bits(peri_xbar_user_t)   ),
+    .FifoDepth    ( 2                         ),
+    .ShiftResponse( 1'b0                      ),
+    .user_t       ( peri_xbar_user_t          ),
+    .reqrsp_req_t ( peri_xbar_req_t           ),
+    .reqrsp_rsp_t ( peri_xbar_rsp_t           ),
+    .reg_req_t    ( reg_csr_req_t             ),
+    .reg_rsp_t    ( reg_csr_rsp_t             )
+  ) i_reqrsp_to_reg_csr (
+    .clk_i      ( clk_i      ),
+    .rst_ni     ( rst_ni     ),
+    .reqrsp_req_i ( peri_csr_req ),
+    .reqrsp_rsp_o ( peri_csr_rsp ),
+    .reg_req_o  ( reg_req    ),
+    .reg_rsp_i  ( reg_rsp    )
   );
 
   cachepool_peripheral #(
     .AddrWidth     ( AxiAddrWidth    ),
     .SPMWidth      ( $clog2(L1NumSet)),
     .NumTiles      ( NumTiles        ),
-    .reg_req_t     ( reg_req_t       ),
-    .reg_rsp_t     ( reg_rsp_t       ),
+    .reg_req_t     ( reg_csr_req_t   ),
+    .reg_rsp_t     ( reg_csr_rsp_t   ),
     .cache_insn_t  ( cache_insn_t    )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    ( clk_i                 ),
@@ -1029,6 +1259,39 @@ module cachepool_cluster
     .l1d_insn_valid_o         ( l1d_insn_valid        ),
     .l1d_insn_ready_i         ( l1d_insn_ready        ),
     .l1d_busy_o               ( l1d_busy              )
+  );
+
+  // ---- Target [2]: UART → reqrsp_to_axi → axi_narrow_req_o ----
+
+  peri_xbar_req_t peri_uart_req;
+  peri_xbar_rsp_t peri_uart_rsp;
+
+  // Bundle xbar split channels into REQRSP struct
+  assign peri_uart_req.q       = peri_xbar_tgt_req[PeriTgtUART];
+  assign peri_uart_req.q_valid = peri_xbar_tgt_req_valid[PeriTgtUART];
+  assign peri_uart_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtUART];
+  assign peri_xbar_tgt_req_ready[PeriTgtUART] = peri_uart_rsp.q_ready;
+  assign peri_xbar_tgt_rsp[PeriTgtUART]       = peri_uart_rsp.p;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtUART]  = peri_uart_rsp.p_valid;
+
+  reqrsp_to_axi #(
+    .MaxTrans     ( 4                            ),
+    .AxiIdWidth   ( SpatzAxiUartIdWidth           ),
+    .DataWidth    ( 32                           ),
+    .UserWidth    ( $bits(peri_xbar_user_t)       ),
+    .AxiUserWidth ( AxiUserWidth                 ),
+    .reqrsp_req_t ( peri_xbar_req_t              ),
+    .reqrsp_rsp_t ( peri_xbar_rsp_t              ),
+    .axi_req_t    ( axi_uart_req_t               ),
+    .axi_rsp_t    ( axi_uart_resp_t              )
+  ) i_reqrsp_to_axi_uart (
+    .clk_i        ( clk_i                       ),
+    .rst_ni       ( rst_ni                      ),
+    .user_i       ( '0                          ),
+    .reqrsp_req_i ( peri_uart_req               ),
+    .reqrsp_rsp_o ( peri_uart_rsp               ),
+    .axi_req_o    ( axi_narrow_req_o            ),
+    .axi_rsp_i    ( axi_narrow_resp_i           )
   );
 
 endmodule

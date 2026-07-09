@@ -26,12 +26,12 @@ export_include_dirs:
 
 sources:
   # Level 0
+  - hardware/src/reqrsp_to_reg.sv
+  - hardware/src/reqrsp_w2n_converter.sv
   - hardware/src/reqrsp_xbar.sv
   - hardware/src/tcdm_cache_interco.sv
   - hardware/src/tcdm_id_remapper.sv
   - hardware/src/spatz_cache_amo.sv
-  # FlooNoC
-  - hardware/generated/floo_cachepool_noc_pkg.sv
   # Memory-mapped register
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_pkg.sv
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_top.sv
@@ -39,6 +39,7 @@ sources:
   # Bootrom
   - hardware/bootrom/bootrom.sv
   # Level 1
+  - hardware/generated/floo_cachepool_noc_pkg.sv
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
   # Barrier

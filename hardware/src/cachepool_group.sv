@@ -81,9 +81,6 @@ module cachepool_group
     parameter type                                      axi_narrow_resp_t         = logic,
     parameter type                                      axi_out_req_t             = logic,
     parameter type                                      axi_out_resp_t            = logic,
-    /// L2 AXI port types (ICache/peripheral bypass path)
-    parameter type                                      l2_axi_req_t              = logic,
-    parameter type                                      l2_axi_rsp_t              = logic,
     /// SRAM configuration
     parameter type                                      impl_in_t                 = logic,
     // Memory latency parameter. Most of the memories have a read latency of 1. In
@@ -130,12 +127,9 @@ module cachepool_group
     input  axi_addr_t                                   cluster_base_addr_i,
     /// Partitioning address
     input  axi_addr_t                                   private_start_addr_i,
-    /// L2 refill reqrsp port (single merged output, goes to mesh chimney)
+    /// L2 refill reqrsp port (single merged output: cache refill + iCache/peripheral)
     output l2_req_t                                     l2_req_o,
     input  l2_rsp_t                                     l2_rsp_i,
-    /// L2 ICache / peripheral AXI port (bypasses refill xbar, goes to mesh via wrapper mux)
-    output l2_axi_req_t                                 l2_axi_req_o,
-    input  l2_axi_rsp_t                                 l2_axi_rsp_i,
 
     /// Peripheral signals
     output icache_l1_events_t             [NrCores-1:0] icache_events_o,
@@ -210,115 +204,31 @@ module cachepool_group
   logic [NumTilesPerGroup-1:0] error;
   assign error_o = |error;
 
-  // Internal tile-side wide AXI: split into two flat arrays by port function
-  // BootROM (TileBootROM=0): muxed into single shared bootrom in this group
-  axi_mst_cache_req_t  [NumTilesPerGroup-1:0] axi_tile_bootrom_req;
-  axi_mst_cache_resp_t [NumTilesPerGroup-1:0] axi_tile_bootrom_rsp;
-  // TileMem (TileMem=1): ICache/peripheral path, goes out via l2_axi_req_o
+  // Per-tile iCache AXI (single port, BootROM moved to cluster level)
   axi_mst_cache_req_t  [NumTilesPerGroup-1:0] axi_tile_mem_req;
   axi_mst_cache_resp_t [NumTilesPerGroup-1:0] axi_tile_mem_rsp;
-
-  // Per-group bootrom mux AXI type: the mux prepends $clog2(NumTilesPerGroup)
-  // bits to the ID, not $clog2(NumTiles) as the package assumes.
-  localparam int unsigned LocalBootRomIdWidth = WideIdWidthIn + $clog2(NumTilesPerGroup);
-  typedef logic [LocalBootRomIdWidth-1:0] local_bootrom_id_t;
-  `AXI_TYPEDEF_ALL(local_bootrom, addr_t, local_bootrom_id_t, data_cache_t, strb_cache_t, user_cache_t)
-
-  // Mux all per-tile BootROM AXI ports into a single bootrom instance
-  local_bootrom_req_t  axi_bootrom_mux_req;
-  local_bootrom_resp_t axi_bootrom_mux_rsp;
-
-  if (NumTilesPerGroup > 1) begin : gen_bootrom_mux
-    axi_mux #(
-      .SlvAxiIDWidth ( WideIdWidthIn            ),
-      .slv_aw_chan_t ( axi_mst_cache_aw_chan_t  ),
-      .mst_aw_chan_t ( local_bootrom_aw_chan_t   ),
-      .w_chan_t      ( axi_mst_cache_w_chan_t   ),
-      .slv_b_chan_t  ( axi_mst_cache_b_chan_t   ),
-      .mst_b_chan_t  ( local_bootrom_b_chan_t    ),
-      .slv_ar_chan_t ( axi_mst_cache_ar_chan_t  ),
-      .mst_ar_chan_t ( local_bootrom_ar_chan_t   ),
-      .slv_r_chan_t  ( axi_mst_cache_r_chan_t   ),
-      .mst_r_chan_t  ( local_bootrom_r_chan_t    ),
-      .slv_req_t     ( axi_mst_cache_req_t      ),
-      .slv_resp_t    ( axi_mst_cache_resp_t     ),
-      .mst_req_t     ( local_bootrom_req_t      ),
-      .mst_resp_t    ( local_bootrom_resp_t     ),
-      .NoSlvPorts    ( NumTilesPerGroup                 ),
-      .FallThrough   ( 0                        ),
-      .SpillAw       ( XbarLatency[4]           ),
-      .SpillW        ( XbarLatency[3]           ),
-      .SpillB        ( XbarLatency[2]           ),
-      .SpillAr       ( XbarLatency[1]           ),
-      .SpillR        ( XbarLatency[0]           ),
-      .MaxWTrans     ( 2                        )
-    ) i_axi_bootrom_mux (
-      .clk_i      ( clk_i                ),
-      .rst_ni     ( rst_ni               ),
-      .test_i     ( '0                   ),
-      .slv_reqs_i ( axi_tile_bootrom_req ),
-      .slv_resps_o( axi_tile_bootrom_rsp ),
-      .mst_req_o  ( axi_bootrom_mux_req  ),
-      .mst_resp_i ( axi_bootrom_mux_rsp  )
-    );
-  end else begin : gen_bootrom_connect
-    // NumTilesPerGroup==1: direct connect, no ID widening needed
-    assign axi_bootrom_mux_req             = local_bootrom_req_t'(axi_tile_bootrom_req[0]);
-    assign axi_tile_bootrom_rsp[0]         = axi_mst_cache_resp_t'(axi_bootrom_mux_rsp);
-  end
-
-  // Single BootROM instance shared across all tiles in the group
-  `REG_BUS_TYPEDEF_ALL(reg_bootrom, addr_t, data_cache_t, strb_cache_t)
-  reg_bootrom_req_t bootrom_reg_req;
-  reg_bootrom_rsp_t bootrom_reg_rsp;
-
-  axi_to_reg #(
-    .ADDR_WIDTH         ( AxiAddrWidth           ),
-    .DATA_WIDTH         ( AxiDataWidth           ),
-    .AXI_MAX_WRITE_TXNS ( 1                      ),
-    .AXI_MAX_READ_TXNS  ( 1                      ),
-    .DECOUPLE_W         ( 0                      ),
-    .ID_WIDTH           ( LocalBootRomIdWidth    ),
-    .USER_WIDTH         ( AxiUserWidth           ),
-    .axi_req_t          ( local_bootrom_req_t  ),
-    .axi_rsp_t          ( local_bootrom_resp_t ),
-    .reg_req_t          ( reg_bootrom_req_t      ),
-    .reg_rsp_t          ( reg_bootrom_rsp_t      )
-  ) i_axi_to_reg_bootrom (
-    .clk_i      ( clk_i              ),
-    .rst_ni     ( rst_ni             ),
-    .testmode_i ( 1'b0               ),
-    .axi_req_i  ( axi_bootrom_mux_req ),
-    .axi_rsp_o  ( axi_bootrom_mux_rsp ),
-    .reg_req_o  ( bootrom_reg_req    ),
-    .reg_rsp_i  ( bootrom_reg_rsp    )
-  );
-
-  bootrom i_bootrom (
-    .clk_i   ( clk_i                             ),
-    .req_i   ( bootrom_reg_req.valid             ),
-    .addr_i  ( addr_t'(bootrom_reg_req.addr)     ),
-    .rdata_o ( bootrom_reg_rsp.rdata             )
-  );
-
-  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
-  assign bootrom_reg_rsp.error = 1'b0;
 
   // Cache refill ports from tiles (NumL1CacheCtrlLocal = NumCores total)
   cache_trans_req_t [NumL1CacheCtrlLocal-1:0] cache_refill_req;
   cache_trans_rsp_t [NumL1CacheCtrlLocal-1:0] cache_refill_rsp;
 
+  // Per-tile peripheral REQRSP (narrow 32b, from tile core mux)
+  periph_req_t [NumTilesPerGroup-1:0] tile_periph_req;
+  periph_rsp_t [NumTilesPerGroup-1:0] tile_periph_rsp;
+
   // L2 Group ICache AXI master output (from axi_hier_interco)
-  // Bypasses refill xbar, goes directly to wrapper for mesh injection.
   axi_mst_cache_req_t  axi_l2icache_mst_req;
   axi_mst_cache_resp_t axi_l2icache_mst_rsp;
+  // L2 Group ICache reqrsp output (to refill xbar port 0)
+  cache_trans_req_t    cache_l2icache_req;
+  cache_trans_rsp_t    cache_l2icache_rsp;
   // L2 Group ICache control (hardwired)
   ro_cache_ctrl_t      l2icache_ctrl;
 
-  // Flat xbar input channels: NumTilesPerGroup * NumL1CtrlTile ports (refill only)
-  cache_trans_req_chan_t [NumTilesPerGroup*NumL1CtrlTile-1:0] tile_req_chan;
-  cache_trans_rsp_chan_t [NumTilesPerGroup*NumL1CtrlTile-1:0] tile_rsp_chan;
-  logic                  [NumTilesPerGroup*NumL1CtrlTile-1:0] tile_req_valid, tile_req_ready,
+  // Flat xbar input channels: NumClusterMst ports per tile (1 iCache + NumL1CtrlTile refill)
+  cache_trans_req_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_req_chan;
+  cache_trans_rsp_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_rsp_chan;
+  logic                  [NumTilesPerGroup*NumClusterMst-1:0] tile_req_valid, tile_req_ready,
                                                       tile_rsp_valid, tile_rsp_ready;
 
   // Xbar output channel: single merged output (N:1 mux)
@@ -328,7 +238,7 @@ module cachepool_group
                         l2_rsp_valid, l2_rsp_ready;
 
   // Response demux selection: which xbar input port does the response target
-  typedef logic [$clog2(NumL1CtrlTile*NumTilesPerGroup)-1:0] l2_sel_t;
+  typedef logic [$clog2(NumClusterMst*NumTilesPerGroup)-1:0] l2_sel_t;
   l2_sel_t l2_sel;
 
   // ---------------------
@@ -338,8 +248,13 @@ module cachepool_group
     l2icache_ctrl               = '0;
     l2icache_ctrl.enable        = 1'b1;
     l2icache_ctrl.flush_valid   = 1'b0;
+    // Rule 0: DRAM range
     l2icache_ctrl.start_addr[0] = DramAddr;
     l2icache_ctrl.end_addr[0]   = DramAddr + DramSize;
+    // Rule 1: BootROM range — routes through Cache path, not Bypass,
+    // to avoid axi_mux MSB ID corruption in snitch_read_only_cache
+    l2icache_ctrl.start_addr[1] = BootAddr;
+    l2icache_ctrl.end_addr[1]   = BootAddr + 'h1000;
   end
 
   axi_hier_interco #(
@@ -370,30 +285,110 @@ module cachepool_group
     .mst_resp_i      ( axi_l2icache_mst_rsp )
   );
 
-  // L2 ICache / peripheral AXI output: bypasses refill xbar, goes to wrapper mux
-  assign l2_axi_req_o       = axi_l2icache_mst_req;
-  assign axi_l2icache_mst_rsp = l2_axi_rsp_i;
+  // Convert L2 ICache AXI output to REQRSP for merging into refill xbar
+  axi_to_reqrsp #(
+    .axi_req_t    ( axi_mst_cache_req_t      ),
+    .axi_rsp_t    ( axi_mst_cache_resp_t     ),
+    .AddrWidth    ( AxiAddrWidth             ),
+    .DataWidth    ( AxiDataWidth             ),
+    .UserWidth    ( $bits(refill_user_t)     ),
+    .IdWidth      ( WideIdWidthIn            ),
+    // Limit to 1 outstanding request to prevent: (1) ID-level head-of-line
+    // blocking at axi_hier_interco (SlvIdWidth == MstIdWidth), and (2)
+    // out-of-order response mismatch from multi-endpoint L2 mesh routing.
+    // The L2 iCache (EnableCache=1) absorbs most instruction fetches.
+    .BufDepth              ( 0                       ),
+    // Pass AXI ID through the reqrsp user field so that the correct ID
+    // survives the round-trip through the NoC mesh (which does not
+    // preserve AXI IDs).
+    .EnUserIdPassthrough   ( 1'b1                    ),
+    .reqrsp_req_t ( cache_trans_req_t        ),
+    .reqrsp_rsp_t ( cache_trans_rsp_t        )
+  ) i_l2icache_axi2reqrsp (
+    .clk_i        ( clk_i                ),
+    .rst_ni       ( rst_ni               ),
+    .busy_o       (                      ),
+    .axi_req_i    ( axi_l2icache_mst_req ),
+    .axi_rsp_o    ( axi_l2icache_mst_rsp ),
+    .reqrsp_req_o ( cache_l2icache_req   ),
+    .reqrsp_rsp_i ( cache_l2icache_rsp   )
+  );
 
   // ---------------------
-  // Wiring: assemble flat xbar input from refill paths only
+  // Wiring: assemble flat xbar input from refill + peripheral + iCache paths
   // ---------------------
-  // Port layout: t * NumL1CtrlTile + b, where t = tile index, b = bank index
-  // ICache / peripheral traffic bypasses the refill xbar via l2_axi_req_o.
+  // Port layout per tile (NumClusterMst = NumL1CtrlTile + 2):
+  //   p = 0..NumL1CtrlTile-1  → refill (bank_id = p, set by tile)
+  //   p = NumL1CtrlTile       → peripheral (bank_id = BankIdPeriph)
+  //   p = NumL1CtrlTile+1     → iCache (bank_id = BankIdICache, only tile 0)
   always_comb begin
     for (int t = 0; t < NumTilesPerGroup; t++) begin
-      for (int b = 0; b < NumL1CtrlTile; b++) begin
-        automatic int unsigned xbar_idx   = t * NumL1CtrlTile + b;
-        automatic int unsigned refill_idx = t * NumL1CtrlTile + b;
+      for (int p = 0; p < NumClusterMst; p++) begin
+        automatic int unsigned xbar_idx = t * NumClusterMst + p;
 
-        tile_req_chan  [xbar_idx]              = cache_refill_req[refill_idx].q;
-        tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_refill_req[refill_idx].q.addr);
-        tile_req_valid [xbar_idx]              = cache_refill_req[refill_idx].q_valid;
-        cache_refill_rsp[refill_idx].q_ready   = tile_req_ready[xbar_idx];
+        if (p < NumL1CtrlTile) begin
+          // Refill path: p maps directly to cache controller index
+          automatic int unsigned refill_idx = t * NumL1CtrlTile + p;
+          tile_req_chan  [xbar_idx]              = cache_refill_req[refill_idx].q;
+          tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_refill_req[refill_idx].q.addr);
+          tile_req_valid [xbar_idx]              = cache_refill_req[refill_idx].q_valid;
+          cache_refill_rsp[refill_idx].q_ready   = tile_req_ready[xbar_idx];
 
-        cache_refill_rsp[refill_idx].p         = tile_rsp_chan [xbar_idx];
-        cache_refill_rsp[refill_idx].p_valid   = tile_rsp_valid[xbar_idx];
-        tile_rsp_ready [xbar_idx]              = cache_refill_req[refill_idx].p_ready;
-        tile_req_chan  [xbar_idx].user.tile_id  = t;
+          cache_refill_rsp[refill_idx].p         = tile_rsp_chan [xbar_idx];
+          cache_refill_rsp[refill_idx].p_valid   = tile_rsp_valid[xbar_idx];
+          tile_rsp_ready [xbar_idx]              = cache_refill_req[refill_idx].p_ready;
+          tile_req_chan  [xbar_idx].user.tile_id  = t;
+
+        end else if (p == BankIdPeriph) begin
+          // Peripheral path: narrow REQRSP directly connected (data width mismatch — placeholder)
+          tile_req_chan  [xbar_idx]              = '0;
+          tile_req_chan  [xbar_idx].addr         = scrambleAddr(tile_periph_req[t].q.addr);
+          tile_req_chan  [xbar_idx].write        = tile_periph_req[t].q.write;
+          tile_req_chan  [xbar_idx].amo          = tile_periph_req[t].q.amo;
+          tile_req_chan  [xbar_idx].size         = tile_periph_req[t].q.size;
+          tile_req_chan  [xbar_idx].data         = axi_wide_data_t'(tile_periph_req[t].q.data);
+          tile_req_chan  [xbar_idx].strb         = axi_wide_strb_t'(tile_periph_req[t].q.strb);
+          tile_req_chan  [xbar_idx].user.tile_id = t;
+          tile_req_chan  [xbar_idx].user.bank_id = BankIdPeriph;
+          // Borrow the info field to carry req_id through the mesh
+          tile_req_chan  [xbar_idx].user.info     = cache_info_t'(tile_periph_req[t].q.user.req_id);
+          tile_req_valid [xbar_idx]              = tile_periph_req[t].q_valid;
+          tile_periph_rsp[t].q_ready             = tile_req_ready[xbar_idx];
+
+          tile_periph_rsp[t].p.data              = tile_rsp_chan[xbar_idx].data[31:0];
+          tile_periph_rsp[t].p.error             = tile_rsp_chan[xbar_idx].error;
+          tile_periph_rsp[t].p.write             = tile_rsp_chan[xbar_idx].write;
+          // Restore req_id from the info field; zero other tcdm_user fields
+          tile_periph_rsp[t].p.user              = '0;
+          tile_periph_rsp[t].p.user.req_id       = reqid_t'(tile_rsp_chan[xbar_idx].user.info);
+          tile_periph_rsp[t].p_valid             = tile_rsp_valid[xbar_idx];
+          tile_rsp_ready [xbar_idx]              = tile_periph_req[t].p_ready;
+
+        end else begin
+          // iCache path: only tile 0 active
+          if (t == 0) begin
+            tile_req_chan  [xbar_idx]              = cache_l2icache_req.q;
+            tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_l2icache_req.q.addr);
+            tile_req_valid [xbar_idx]              = cache_l2icache_req.q_valid;
+            cache_l2icache_rsp.q_ready             = tile_req_ready[xbar_idx];
+
+            cache_l2icache_rsp.p                   = tile_rsp_chan [xbar_idx];
+            cache_l2icache_rsp.p_valid             = tile_rsp_valid[xbar_idx];
+            tile_rsp_ready [xbar_idx]              = cache_l2icache_req.p_ready;
+            tile_req_chan  [xbar_idx].user.tile_id  = '0;
+            tile_req_chan  [xbar_idx].user.bank_id  = BankIdICache;
+            // axi_to_reqrsp with EnUserIdPassthrough packs the AXI ID into
+            // the LSBs of the user field (spanning burst + info).  Move the
+            // ID into info and zero burst so that reqrsp_to_axi (EnBurst+
+            // ShuffleId) sees is_burst=0 → keeps ID=0 for iCache requests.
+            tile_req_chan  [xbar_idx].user.info     = cache_info_t'(cache_l2icache_req.q.user);
+            tile_req_chan  [xbar_idx].user.burst    = '0;
+          end else begin
+            tile_req_chan  [xbar_idx]  = '0;
+            tile_req_valid [xbar_idx]  = 1'b0;
+            tile_rsp_ready [xbar_idx]  = 1'b0;
+          end
+        end
       end
     end
   end
@@ -404,7 +399,7 @@ module cachepool_group
   // No burst protection needed — single output, no multi-channel response demux.
   // ---------------------
   reqrsp_xbar #(
-    .NumInp          ( NumL1CtrlTile*NumTilesPerGroup  ),
+    .NumInp          ( NumClusterMst*NumTilesPerGroup  ),
     .NumOut          ( 1                       ),
     .PipeReg         ( 1'b1                    ),
     .ExtReqPrio      ( 1'b0                    ),
@@ -463,7 +458,7 @@ module cachepool_group
     l2_req_o.p_ready = l2_rsp_ready;
 
     // Response demux: which xbar input port does this response target?
-    l2_sel           = l2_rsp_i.p.user.tile_id * NumL1CtrlTile
+    l2_sel           = l2_rsp_i.p.user.tile_id * NumClusterMst
                      + l2_rsp_i.p.user.bank_id;
   end
 
@@ -562,8 +557,6 @@ module cachepool_group
         .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
         .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
         .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-        .axi_in_req_t             ( axi_in_req_t             ),
-        .axi_in_resp_t            ( axi_in_resp_t            ),
         .axi_narrow_req_t         ( axi_narrow_req_t         ),
         .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
         .axi_out_req_t            ( axi_mst_cache_req_t      ),
@@ -608,9 +601,12 @@ module cachepool_group
         // Cache Refill Ports (now internal, connected to group-level xbar)
         .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
         .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
-        // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
-        .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
-        .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
+        // Peripheral REQRSP (narrow, bypasses wide xbar)
+        .periph_req_o             ( tile_periph_req  [t]                                        ),
+        .periph_rsp_i             ( tile_periph_rsp  [t]                                        ),
+        // iCache L2 (single wide AXI port, BootROM at cluster level)
+        .axi_wide_req_o           ( axi_tile_mem_req[t]                                         ),
+        .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                                         ),
         // Direct-wire barrier
         .barrier_o                ( tile_barrier_o    [t]                                       ),
         .barrier_done_i           ( barrier_done_i                                              ),
@@ -648,8 +644,6 @@ module cachepool_group
         .NumIntOutstandingLoads   ( NumIntOutstandingLoads   ),
         .NumIntOutstandingMem     ( NumIntOutstandingMem     ),
         .NumSpatzOutstandingLoads ( NumSpatzOutstandingLoads ),
-        .axi_in_req_t             ( axi_in_req_t             ),
-        .axi_in_resp_t            ( axi_in_resp_t            ),
         .axi_narrow_req_t         ( axi_narrow_req_t         ),
         .axi_narrow_resp_t        ( axi_narrow_resp_t        ),
         .axi_out_req_t            ( axi_mst_cache_req_t      ),
@@ -694,9 +688,12 @@ module cachepool_group
         // Cache Refill Ports (now internal, connected to group-level xbar)
         .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
         .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
-        // BootROM (goes to cluster) / Core-side Cache Bypass (stays in group)
-        .axi_wide_req_o           ( {axi_tile_mem_req[t],     axi_tile_bootrom_req[t]}          ),
-        .axi_wide_rsp_i           ( {axi_tile_mem_rsp[t],     axi_tile_bootrom_rsp[t]}          ),
+        // Peripheral REQRSP (narrow, bypasses wide xbar)
+        .periph_req_o             ( tile_periph_req  [t]                                        ),
+        .periph_rsp_i             ( tile_periph_rsp  [t]                                        ),
+        // iCache L2 (single wide AXI port, BootROM at cluster level)
+        .axi_wide_req_o           ( axi_tile_mem_req[t]                                         ),
+        .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                                         ),
         // Direct-wire barrier
         .barrier_o                ( tile_barrier_o    [t]                                       ),
         .barrier_done_i           ( barrier_done_i                                              ),

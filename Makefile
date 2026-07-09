@@ -122,7 +122,7 @@ quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 .PHONY: generate
-generate: update_opcodes gen-spatz-cfg
+generate: gen-spatz-cfg update_opcodes update-floonoc
 	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson PYTHON=${PYTHON}
 
 .PHONY: cache-init
@@ -366,6 +366,14 @@ clean.data:
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
+.PHONY: clean
+clean: clean.sw clean.vsim clean.data
+	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
+	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
+	                    $(BOOTROM_DIR)/bootrom.sv \
+	                    $(BOOTROM_DIR)/bootrom.dump \
+	                    $(BOOTROM_DIR)/bootrom.elf
+
 # Common CMake flags shared by sw and vsim targets.
 # vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
 SW_CMAKE_FLAGS = \
@@ -388,13 +396,6 @@ sw: generate bootrom gen-data
 .PHONY: vsim
 vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
-.PHONY: clean
-clean: clean.sw clean.vsim clean.data
-	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
-	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
-	                    $(BOOTROM_DIR)/bootrom.sv \
-	                    $(BOOTROM_DIR)/bootrom.dump \
-	                    $(BOOTROM_DIR)/bootrom.elf
 
 ########
 # Lint #

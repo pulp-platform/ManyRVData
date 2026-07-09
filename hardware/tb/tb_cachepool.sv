@@ -69,9 +69,9 @@ module tb_cachepool;
   // Spatz wide port to SoC (currently dram); IDs narrowed by wrapper-level axi_id_remap.
   spatz_axi_wrapper_out_req_t  [NumL2Channel-1:0] axi_from_cluster_req;
   spatz_axi_wrapper_out_resp_t [NumL2Channel-1:0] axi_from_cluster_resp;
-  // From SoC to Spatz; IDs expanded by wrapper-level axi_id_remap (WrapperAxiIdInWidth → SpatzAxiIdInWidth).
-  spatz_axi_wrapper_in_req_t   axi_to_cluster_req;
-  spatz_axi_wrapper_in_resp_t  axi_to_cluster_resp;
+  // REQRSP peripheral in-port to cluster (32b narrow with refill_user_t).
+  peri_narrow_req_t  peri_to_cluster_req;
+  peri_narrow_rsp_t  peri_to_cluster_rsp;
 
   // UART; IDs compressed by wrapper-level axi_id_remap (SpatzAxiUartIdWidth → WrapperAxiNarrowIdOutWidth).
   spatz_axi_wrapper_narrow_out_req_t   axi_uart_req;
@@ -100,8 +100,8 @@ module tb_cachepool;
     .axi_out_resp_i    (axi_from_cluster_resp ),
     .axi_narrow_req_o  (axi_uart_req          ),
     .axi_narrow_resp_i (axi_uart_rsp          ),
-    .axi_in_req_i      (axi_to_cluster_req    ),
-    .axi_in_resp_o     (axi_to_cluster_resp   ),
+    .peri_ext_req_i    (peri_to_cluster_req   ),
+    .peri_ext_rsp_o    (peri_to_cluster_rsp   ),
     .cluster_probe_o   (cluster_probe         )
   );
 /**************
@@ -137,27 +137,13 @@ module tb_cachepool;
    *  Simulation control  *
    ************************/
 
-  `REQRSP_TYPEDEF_ALL(reqrsp_cluster_in, axi_addr_t, logic [31:0], logic [3:0], tcdm_user_t)
-  reqrsp_cluster_in_req_t to_cluster_req;
-  reqrsp_cluster_in_rsp_t to_cluster_rsp;
+  // REQRSP signals driven by the simulation sequence (fesvr).
+  peri_narrow_req_t to_cluster_req;
+  peri_narrow_rsp_t to_cluster_rsp;
 
-  reqrsp_to_axi #(
-    .DataWidth   (SpatzDataWidth                    ),
-    .AxiUserWidth(SpatzAxiUserWidth                 ),
-    .UserWidth   ($bits(tcdm_user_t)                ),
-    .axi_req_t   (spatz_axi_wrapper_in_req_t        ),
-    .axi_rsp_t   (spatz_axi_wrapper_in_resp_t       ),
-    .reqrsp_req_t(reqrsp_cluster_in_req_t           ),
-    .reqrsp_rsp_t(reqrsp_cluster_in_rsp_t          )
-  ) i_reqrsp_to_axi (
-    .clk_i       (clk                ),
-    .rst_ni      (rst_n              ),
-    .user_i      ('0                 ),
-    .axi_req_o   (axi_to_cluster_req ),
-    .axi_rsp_i   (axi_to_cluster_resp),
-    .reqrsp_req_i(to_cluster_req     ),
-    .reqrsp_rsp_o(to_cluster_rsp     )
-  );
+  // Direct passthrough to cluster wrapper (no AXI conversion needed).
+  assign peri_to_cluster_req = to_cluster_req;
+  assign to_cluster_rsp      = peri_to_cluster_rsp;
 
 
 
@@ -180,7 +166,7 @@ module tb_cachepool;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while
-    repeat (100)
+    repeat (2000)
       @(posedge clk);
 
     // Store the entry point in the Spatz cluster
@@ -309,9 +295,10 @@ module tb_cachepool;
    *  L2  *
    ********/
 
-  localparam int unsigned ConstantBits = $clog2(L2BankBeWidth * Interleave);
-  localparam int unsigned ScrambleBits = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
-  localparam int unsigned ReminderBits = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
+  // Old interleaving constants (unused with SAM-based routing):
+  // localparam int unsigned ConstantBits = $clog2(L2BankBeWidth * Interleave);
+  // localparam int unsigned ScrambleBits = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
+  // localparam int unsigned ReminderBits = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
 
   dram_sim_engine #(
     .ClkPeriod  (ClockPeriod )
@@ -323,6 +310,9 @@ module tb_cachepool;
   localparam int unsigned debug = 0;
 
   // DRAMSys Initialization
+  //
+  // Interleaving-based: uses getDramCTRLInfo to map each byte to the correct
+  // DRAM channel and local address, matching the scrambleAddr routing in HW.
   for (genvar mem = 0; mem < NumL2Channel; mem++) begin : gen_drams_init
     initial begin : l2_init
       byte                              buffer [];
@@ -345,13 +335,14 @@ module tb_cachepool;
           buffer = new[nwords * L2BankBeWidth];
           void'(read_section(address, buffer));
           if (address >= DramBase) begin
-            for (int i = 0; i < nwords * L2BankBeWidth; i++) begin //per byte
+            for (int i = 0; i < nwords * L2BankBeWidth; i++) begin
               automatic dram_ctrl_interleave_t dram_ctrl_info;
               dram_ctrl_info = getDramCTRLInfo(address + i - DramBase);
               if (dram_ctrl_info.dram_ctrl_id == mem) begin
-                gen_dram[mem].i_axi_dram_sim.i_sim_dram.load_a_byte_to_dram(dram_ctrl_info.dram_ctrl_addr, buffer[i]);
+                gen_dram[mem].i_axi_dram_sim.i_sim_dram.load_a_byte_to_dram(
+                    dram_ctrl_info.dram_ctrl_addr, buffer[i]);
                 if (debug == 1) begin
-                  $display("putting data at %x into mem%x", dram_ctrl_info.dram_ctrl_addr, dram_ctrl_info.dram_ctrl_id);
+                  $display("putting data at %x into mem%x", dram_ctrl_info.dram_ctrl_addr, mem);
                 end
               end
             end
@@ -365,8 +356,6 @@ module tb_cachepool;
 
   axi_addr_t [NumL2Channel-1:0] temp_addr_aw, temp_addr_ar;
   dram_ctrl_interleave_t [NumL2Channel-1:0] temp_dram_info_aw, temp_dram_info_ar;
-
-  // DRAMSys address scrambling
   for (genvar ch = 0; ch < NumClusterSlv; ch ++) begin : gen_dram_scrambler
     always_comb begin
       axi_dram_req[ch]         = axi_from_cluster_req[ch];
