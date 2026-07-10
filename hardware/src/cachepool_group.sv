@@ -130,6 +130,11 @@ module cachepool_group
     /// L2 refill reqrsp port (single merged output: cache refill + iCache/peripheral)
     output l2_req_t                                     l2_req_o,
     input  l2_rsp_t                                     l2_rsp_i,
+    /// This group's L2 refill mesh floo endpoint ID. Stamped into
+    /// refill_user_t.l2_src_id on every outgoing L2 request so the HBM
+    /// ejection chimney can route responses back without a local src_id
+    /// FIFO (which assumed in-order HBM completion).
+    input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
 
     /// Peripheral signals
     output icache_l1_events_t             [NrCores-1:0] icache_events_o,
@@ -139,8 +144,8 @@ module cachepool_group
     input  logic              [$clog2(NumL1CtrlTile):0] l1d_private_i,
     input  cache_insn_t                                 l1d_insn_i,
     input  logic                                        l1d_insn_valid_i,
-    output logic               [NumTilesPerGroup-1:0]   l1d_insn_ready_o,
-    input  logic               [NumTilesPerGroup-1:0]   l1d_busy_i,
+    output logic                 [NumTilesPerGroup-1:0] l1d_insn_ready_o,
+    input  logic                 [NumTilesPerGroup-1:0] l1d_busy_i,
 
     /// Inter-group remote access ports (to other groups).
     /// Layout: [NumTilesPerGroup-1:0][NumRemoteGroupPortTile-1:0] flattened to
@@ -156,7 +161,7 @@ module cachepool_group
     output remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_o,
 
     // Direct-wire barrier: one bit per tile
-    output logic               [NumTilesPerGroup-1:0]   tile_barrier_o,
+    output logic                 [NumTilesPerGroup-1:0] tile_barrier_o,
     input  logic                                        barrier_done_i,
 
     /// SRAM Configuration
@@ -213,8 +218,8 @@ module cachepool_group
   cache_trans_rsp_t [NumL1CacheCtrlLocal-1:0] cache_refill_rsp;
 
   // Per-tile peripheral REQRSP (narrow 32b, from tile core mux)
-  periph_req_t [NumTilesPerGroup-1:0] tile_periph_req;
-  periph_rsp_t [NumTilesPerGroup-1:0] tile_periph_rsp;
+  periph_req_t         [NumTilesPerGroup-1:0] tile_periph_req;
+  periph_rsp_t         [NumTilesPerGroup-1:0] tile_periph_rsp;
 
   // L2 Group ICache AXI master output (from axi_hier_interco)
   axi_mst_cache_req_t  axi_l2icache_mst_req;
@@ -229,7 +234,7 @@ module cachepool_group
   cache_trans_req_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_req_chan;
   cache_trans_rsp_chan_t [NumTilesPerGroup*NumClusterMst-1:0] tile_rsp_chan;
   logic                  [NumTilesPerGroup*NumClusterMst-1:0] tile_req_valid, tile_req_ready,
-                                                      tile_rsp_valid, tile_rsp_ready;
+                                                              tile_rsp_valid, tile_rsp_ready;
 
   // Xbar output channel: single merged output (N:1 mux)
   cache_trans_req_chan_t l2_req_chan;
@@ -287,31 +292,24 @@ module cachepool_group
 
   // Convert L2 ICache AXI output to REQRSP for merging into refill xbar
   axi_to_reqrsp #(
-    .axi_req_t    ( axi_mst_cache_req_t      ),
-    .axi_rsp_t    ( axi_mst_cache_resp_t     ),
-    .AddrWidth    ( AxiAddrWidth             ),
-    .DataWidth    ( AxiDataWidth             ),
-    .UserWidth    ( $bits(refill_user_t)     ),
-    .IdWidth      ( WideIdWidthIn            ),
-    // Limit to 1 outstanding request to prevent: (1) ID-level head-of-line
-    // blocking at axi_hier_interco (SlvIdWidth == MstIdWidth), and (2)
-    // out-of-order response mismatch from multi-endpoint L2 mesh routing.
-    // The L2 iCache (EnableCache=1) absorbs most instruction fetches.
-    .BufDepth              ( 0                       ),
-    // Pass AXI ID through the reqrsp user field so that the correct ID
-    // survives the round-trip through the NoC mesh (which does not
-    // preserve AXI IDs).
-    .EnUserIdPassthrough   ( 1'b1                    ),
-    .reqrsp_req_t ( cache_trans_req_t        ),
-    .reqrsp_rsp_t ( cache_trans_rsp_t        )
+    .axi_req_t            ( axi_mst_cache_req_t  ),
+    .axi_rsp_t            ( axi_mst_cache_resp_t ),
+    .AddrWidth            ( AxiAddrWidth         ),
+    .DataWidth            ( AxiDataWidth         ),
+    .UserWidth            ( $bits(refill_user_t) ),
+    .IdWidth              ( WideIdWidthIn        ),
+    .BufDepth             ( 0                    ),
+    .EnUserIdPassthrough  ( 1'b1                 ),
+    .reqrsp_req_t         ( cache_trans_req_t    ),
+    .reqrsp_rsp_t         ( cache_trans_rsp_t    )
   ) i_l2icache_axi2reqrsp (
-    .clk_i        ( clk_i                ),
-    .rst_ni       ( rst_ni               ),
-    .busy_o       (                      ),
-    .axi_req_i    ( axi_l2icache_mst_req ),
-    .axi_rsp_o    ( axi_l2icache_mst_rsp ),
-    .reqrsp_req_o ( cache_l2icache_req   ),
-    .reqrsp_rsp_i ( cache_l2icache_rsp   )
+    .clk_i                ( clk_i                ),
+    .rst_ni               ( rst_ni               ),
+    .busy_o               (                      ),
+    .axi_req_i            ( axi_l2icache_mst_req ),
+    .axi_rsp_o            ( axi_l2icache_mst_rsp ),
+    .reqrsp_req_o         ( cache_l2icache_req   ),
+    .reqrsp_rsp_i         ( cache_l2icache_rsp   )
   );
 
   // ---------------------
@@ -329,54 +327,57 @@ module cachepool_group
         if (p < NumL1CtrlTile) begin
           // Refill path: p maps directly to cache controller index
           automatic int unsigned refill_idx = t * NumL1CtrlTile + p;
-          tile_req_chan  [xbar_idx]              = cache_refill_req[refill_idx].q;
-          tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_refill_req[refill_idx].q.addr);
-          tile_req_valid [xbar_idx]              = cache_refill_req[refill_idx].q_valid;
-          cache_refill_rsp[refill_idx].q_ready   = tile_req_ready[xbar_idx];
+          tile_req_chan  [xbar_idx]                  = cache_refill_req[refill_idx].q;
+          tile_req_chan  [xbar_idx].addr             = scrambleAddr(cache_refill_req[refill_idx].q.addr);
+          tile_req_valid [xbar_idx]                  = cache_refill_req[refill_idx].q_valid;
+          cache_refill_rsp[refill_idx].q_ready       = tile_req_ready[xbar_idx];
 
-          cache_refill_rsp[refill_idx].p         = tile_rsp_chan [xbar_idx];
-          cache_refill_rsp[refill_idx].p_valid   = tile_rsp_valid[xbar_idx];
-          tile_rsp_ready [xbar_idx]              = cache_refill_req[refill_idx].p_ready;
-          tile_req_chan  [xbar_idx].user.tile_id  = t;
+          cache_refill_rsp[refill_idx].p             = tile_rsp_chan [xbar_idx];
+          cache_refill_rsp[refill_idx].p_valid       = tile_rsp_valid[xbar_idx];
+          tile_rsp_ready [xbar_idx]                  = cache_refill_req[refill_idx].p_ready;
+          tile_req_chan  [xbar_idx].user.tile_id     = t;
+          tile_req_chan  [xbar_idx].user.l2_src_id   = l2_group_id_i;
 
         end else if (p == BankIdPeriph) begin
           // Peripheral path: narrow REQRSP directly connected (data width mismatch — placeholder)
-          tile_req_chan  [xbar_idx]              = '0;
-          tile_req_chan  [xbar_idx].addr         = scrambleAddr(tile_periph_req[t].q.addr);
-          tile_req_chan  [xbar_idx].write        = tile_periph_req[t].q.write;
-          tile_req_chan  [xbar_idx].amo          = tile_periph_req[t].q.amo;
-          tile_req_chan  [xbar_idx].size         = tile_periph_req[t].q.size;
-          tile_req_chan  [xbar_idx].data         = axi_wide_data_t'(tile_periph_req[t].q.data);
-          tile_req_chan  [xbar_idx].strb         = axi_wide_strb_t'(tile_periph_req[t].q.strb);
-          tile_req_chan  [xbar_idx].user.tile_id = t;
-          tile_req_chan  [xbar_idx].user.bank_id = BankIdPeriph;
+          tile_req_chan  [xbar_idx]                  = '0;
+          tile_req_chan  [xbar_idx].addr             = scrambleAddr(tile_periph_req[t].q.addr);
+          tile_req_chan  [xbar_idx].write            = tile_periph_req[t].q.write;
+          tile_req_chan  [xbar_idx].amo              = tile_periph_req[t].q.amo;
+          tile_req_chan  [xbar_idx].size             = tile_periph_req[t].q.size;
+          tile_req_chan  [xbar_idx].data             = axi_wide_data_t'(tile_periph_req[t].q.data);
+          tile_req_chan  [xbar_idx].strb             = axi_wide_strb_t'(tile_periph_req[t].q.strb);
+          tile_req_chan  [xbar_idx].user.tile_id     = t;
+          tile_req_chan  [xbar_idx].user.bank_id     = BankIdPeriph;
+          tile_req_chan  [xbar_idx].user.l2_src_id   = l2_group_id_i;
           // Borrow the info field to carry req_id through the mesh
-          tile_req_chan  [xbar_idx].user.info     = cache_info_t'(tile_periph_req[t].q.user.req_id);
-          tile_req_valid [xbar_idx]              = tile_periph_req[t].q_valid;
-          tile_periph_rsp[t].q_ready             = tile_req_ready[xbar_idx];
+          tile_req_chan  [xbar_idx].user.info        = cache_info_t'(tile_periph_req[t].q.user.req_id);
+          tile_req_valid [xbar_idx]                  = tile_periph_req[t].q_valid;
+          tile_periph_rsp[t].q_ready                 = tile_req_ready[xbar_idx];
 
-          tile_periph_rsp[t].p.data              = tile_rsp_chan[xbar_idx].data[31:0];
-          tile_periph_rsp[t].p.error             = tile_rsp_chan[xbar_idx].error;
-          tile_periph_rsp[t].p.write             = tile_rsp_chan[xbar_idx].write;
+          tile_periph_rsp[t].p.data                  = tile_rsp_chan[xbar_idx].data[31:0];
+          tile_periph_rsp[t].p.error                 = tile_rsp_chan[xbar_idx].error;
+          tile_periph_rsp[t].p.write                 = tile_rsp_chan[xbar_idx].write;
           // Restore req_id from the info field; zero other tcdm_user fields
-          tile_periph_rsp[t].p.user              = '0;
-          tile_periph_rsp[t].p.user.req_id       = reqid_t'(tile_rsp_chan[xbar_idx].user.info);
-          tile_periph_rsp[t].p_valid             = tile_rsp_valid[xbar_idx];
-          tile_rsp_ready [xbar_idx]              = tile_periph_req[t].p_ready;
+          tile_periph_rsp[t].p.user                  = '0;
+          tile_periph_rsp[t].p.user.req_id           = reqid_t'(tile_rsp_chan[xbar_idx].user.info);
+          tile_periph_rsp[t].p_valid                 = tile_rsp_valid[xbar_idx];
+          tile_rsp_ready [xbar_idx]                  = tile_periph_req[t].p_ready;
 
         end else begin
           // iCache path: only tile 0 active
           if (t == 0) begin
-            tile_req_chan  [xbar_idx]              = cache_l2icache_req.q;
-            tile_req_chan  [xbar_idx].addr         = scrambleAddr(cache_l2icache_req.q.addr);
-            tile_req_valid [xbar_idx]              = cache_l2icache_req.q_valid;
-            cache_l2icache_rsp.q_ready             = tile_req_ready[xbar_idx];
+            tile_req_chan  [xbar_idx]                = cache_l2icache_req.q;
+            tile_req_chan  [xbar_idx].addr           = scrambleAddr(cache_l2icache_req.q.addr);
+            tile_req_valid [xbar_idx]                = cache_l2icache_req.q_valid;
+            cache_l2icache_rsp.q_ready               = tile_req_ready[xbar_idx];
 
-            cache_l2icache_rsp.p                   = tile_rsp_chan [xbar_idx];
-            cache_l2icache_rsp.p_valid             = tile_rsp_valid[xbar_idx];
-            tile_rsp_ready [xbar_idx]              = cache_l2icache_req.p_ready;
-            tile_req_chan  [xbar_idx].user.tile_id  = '0;
-            tile_req_chan  [xbar_idx].user.bank_id  = BankIdICache;
+            cache_l2icache_rsp.p                     = tile_rsp_chan [xbar_idx];
+            cache_l2icache_rsp.p_valid               = tile_rsp_valid[xbar_idx];
+            tile_rsp_ready [xbar_idx]                = cache_l2icache_req.p_ready;
+            tile_req_chan  [xbar_idx].user.tile_id   = '0;
+            tile_req_chan  [xbar_idx].user.bank_id   = BankIdICache;
+            tile_req_chan  [xbar_idx].user.l2_src_id = l2_group_id_i;
             // axi_to_reqrsp with EnUserIdPassthrough packs the AXI ID into
             // the LSBs of the user field (spanning burst + info).  Move the
             // ID into info and zero burst so that reqrsp_to_axi (EnBurst+
@@ -416,16 +417,16 @@ module cachepool_group
     .slv_rsp_valid_o ( tile_rsp_valid ),
     .slv_rsp_ready_i ( tile_rsp_ready ),
     .slv_sel_i       ( '{default: '0} ),
-    .slv_rr_i        ( '0            ),
-    .slv_selected_o  ( /* unused */  ),
-    .mst_req_o       ( l2_req_chan   ),
-    .mst_req_valid_o ( l2_req_valid  ),
-    .mst_req_ready_i ( l2_req_ready  ),
-    .mst_rsp_i       ( l2_rsp_chan   ),
-    .mst_rr_i        ( '0            ),
-    .mst_rsp_valid_i ( l2_rsp_valid  ),
-    .mst_rsp_ready_o ( l2_rsp_ready  ),
-    .mst_sel_i       ( l2_sel        )
+    .slv_rr_i        ( '0             ),
+    .slv_selected_o  ( /* unused */   ),
+    .mst_req_o       ( l2_req_chan    ),
+    .mst_req_valid_o ( l2_req_valid   ),
+    .mst_req_ready_i ( l2_req_ready   ),
+    .mst_rsp_i       ( l2_rsp_chan    ),
+    .mst_rr_i        ( '0             ),
+    .mst_rsp_valid_i ( l2_rsp_valid   ),
+    .mst_rsp_ready_o ( l2_rsp_ready   ),
+    .mst_sel_i       ( l2_sel         )
   );
 
   // ---------------------
@@ -573,53 +574,53 @@ module cachepool_group
         .MaxMstTrans              ( MaxMstTrans              ),
         .MaxSlvTrans              ( MaxSlvTrans              )
       ) i_tile (
-        .clk_i                    ( clk_i                                                       ),
-        .rst_ni                   ( rst_ni                                                      ),
-        .impl_i                   ( impl_i                                                      ),
-        .error_o                  ( error             [t]                                       ),
-        .debug_req_i              ( debug_req_i                                                 ),
-        .meip_i                   ( meip_i                                                      ),
-        .mtip_i                   ( mtip_i                                                      ),
-        .msip_i                   ( msip_i                                                      ),
-        .hart_base_id_i           ( hart_base_id                                                ),
-        .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
-        .tile_id_i                ( tile_id                                                     ),
-        .private_start_addr_i     ( private_start_addr_i                                        ),
+        .clk_i                    ( clk_i                                            ),
+        .rst_ni                   ( rst_ni                                           ),
+        .impl_i                   ( impl_i                                           ),
+        .error_o                  ( error[t]                                         ),
+        .debug_req_i              ( debug_req_i                                      ),
+        .meip_i                   ( meip_i                                           ),
+        .mtip_i                   ( mtip_i                                           ),
+        .msip_i                   ( msip_i                                           ),
+        .hart_base_id_i           ( hart_base_id                                     ),
+        .cluster_base_addr_i      ( cluster_base_addr_i                              ),
+        .tile_id_i                ( tile_id                                          ),
+        .private_start_addr_i     ( private_start_addr_i                             ),
         // Remote Access Ports
-        .remote_req_o             ( tile_remote_out_req  [t]                                    ),
-        .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),
-        .remote_rsp_i             ( tile_remote_out_rsp  [t]                                    ),
-        .remote_rsp_ready_i       ( tile_remote_out_ready[t]                                    ),
-        .remote_req_i             ( tile_remote_in_req   [t]                                    ),
-        .remote_rsp_o             ( tile_remote_in_rsp   [t]                                    ),
-        .remote_rsp_ready_o       ( tile_remote_in_ready [t]                                    ),
+        .remote_req_o             ( tile_remote_out_req  [t]                         ),
+        .remote_req_dst_o         ( remote_out_sel_tile  [t]                         ),
+        .remote_rsp_i             ( tile_remote_out_rsp  [t]                         ),
+        .remote_rsp_ready_i       ( tile_remote_out_ready[t]                         ),
+        .remote_req_i             ( tile_remote_in_req   [t]                         ),
+        .remote_rsp_o             ( tile_remote_in_rsp   [t]                         ),
+        .remote_rsp_ready_o       ( tile_remote_in_ready [t]                         ),
         // Inter-group Remote Access Ports (directly exposed to group I/O)
-        .remote_group_req_o       (    ),
-        .remote_group_rsp_i       ( '0 ),
-        .remote_group_req_i       ( '0 ),
-        .remote_group_rsp_o       (    ),
+        .remote_group_req_o       (                                                  ),
+        .remote_group_rsp_i       ( '0                                               ),
+        .remote_group_req_i       ( '0                                               ),
+        .remote_group_rsp_o       (                                                  ),
         // Cache Refill Ports (now internal, connected to group-level xbar)
-        .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
-        .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile]            ),
+        .cache_refill_req_o       ( cache_refill_req[t*NumL1CtrlTile+:NumL1CtrlTile] ),
+        .cache_refill_rsp_i       ( cache_refill_rsp[t*NumL1CtrlTile+:NumL1CtrlTile] ),
         // Peripheral REQRSP (narrow, bypasses wide xbar)
-        .periph_req_o             ( tile_periph_req  [t]                                        ),
-        .periph_rsp_i             ( tile_periph_rsp  [t]                                        ),
+        .periph_req_o             ( tile_periph_req [t]                              ),
+        .periph_rsp_i             ( tile_periph_rsp [t]                              ),
         // iCache L2 (single wide AXI port, BootROM at cluster level)
-        .axi_wide_req_o           ( axi_tile_mem_req[t]                                         ),
-        .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                                         ),
+        .axi_wide_req_o           ( axi_tile_mem_req[t]                              ),
+        .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                              ),
         // Direct-wire barrier
-        .barrier_o                ( tile_barrier_o    [t]                                       ),
-        .barrier_done_i           ( barrier_done_i                                              ),
+        .barrier_o                ( tile_barrier_o  [t]                              ),
+        .barrier_done_i           ( barrier_done_i                                   ),
         // Peripherals
-        .icache_events_o          ( /* unused */                                                ),
-        .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
-        .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]            ),
-        .dynamic_offset_i         ( dynamic_offset_i                                            ),
-        .l1d_insn_i               ( l1d_insn_i                                                  ),
-        .l1d_private_i            ( l1d_private_i                                               ),
-        .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
-        .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
-        .l1d_busy_i               ( l1d_busy_i        [t]                                       )
+        .icache_events_o          ( /* unused */                                     ),
+        .icache_prefetch_enable_i ( icache_prefetch_enable_i                         ),
+        .cl_interrupt_i           ( cl_interrupt_i  [t*NumCoresTile+:NumCoresTile]   ),
+        .dynamic_offset_i         ( dynamic_offset_i                                 ),
+        .l1d_insn_i               ( l1d_insn_i                                       ),
+        .l1d_private_i            ( l1d_private_i                                    ),
+        .l1d_insn_valid_i         ( l1d_insn_valid_i                                 ),
+        .l1d_insn_ready_o         ( l1d_insn_ready_o[t]                              ),
+        .l1d_busy_i               ( l1d_busy_i      [t]                              )
       );
     end else begin : gen_tile
       cachepool_tile #(
@@ -663,7 +664,7 @@ module cachepool_group
         .clk_i                    ( clk_i                                                       ),
         .rst_ni                   ( rst_ni                                                      ),
         .impl_i                   ( impl_i                                                      ),
-        .error_o                  ( error             [t]                                       ),
+        .error_o                  ( error[t]                                                    ),
         .debug_req_i              ( debug_req_i                                                 ),
         .meip_i                   ( meip_i                                                      ),
         .mtip_i                   ( mtip_i                                                      ),

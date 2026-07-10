@@ -74,6 +74,12 @@ uint32_t snrt_cluster_core_num() {
     return _snrt_team_current->root->cluster_core_num;
 }
 
+uint32_t snrt_cluster_core_per_tile() {
+    uint32_t c = _snrt_team_current->root->cluster_core_num;
+    uint32_t t = _snrt_bootdata()->tile_count;
+    return c / t;
+}
+
 uint32_t _snrt_barrier_reg_ptr() {
     return _snrt_team_current->root->barrier_reg_ptr;
 }

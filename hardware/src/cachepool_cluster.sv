@@ -172,17 +172,17 @@ module cachepool_cluster
   peri_narrow_rsp_t  hbm0_peri_narrow_rsp;
 
   // 2. Peripherals
-  axi_addr_t                                private_start_addr;
-  logic                                     icache_prefetch_enable;
-  logic         [$clog2(L1AddrWidth)-1:0]   dynamic_offset;
-  cache_insn_t                              l1d_insn;
-  logic                                     l1d_insn_valid;
-  logic         [NumTiles-1:0]              l1d_insn_ready;
-  logic         [NumTiles-1:0]              l1d_busy;
-  logic         [$clog2(NumL1CtrlTile):0]   l1d_private;
+  axi_addr_t                                  private_start_addr;
+  logic                                       icache_prefetch_enable;
+  logic         [$clog2(L1AddrWidth)-1:0]     dynamic_offset;
+  cache_insn_t                                l1d_insn;
+  logic                                       l1d_insn_valid;
+  logic         [NumTiles-1:0]                l1d_insn_ready;
+  logic         [NumTiles-1:0]                l1d_busy;
+  logic         [$clog2(NumL1CtrlTile):0]     l1d_private;
 
   // Per-group error signals.
-  logic              [NumGroups-1:0]       group_error;
+  logic         [NumGroups-1:0]               group_error;
 
   // Direct-wire barrier: one bit per tile across all groups
   logic [NumGroups-1:0][NumTilesPerGroup-1:0] tile_barrier;
@@ -284,18 +284,18 @@ module cachepool_cluster
         .private_start_addr_i     ( private_start_addr                              ),
         // L2 refill TCDM mesh (4 directions)
         .l2_req_o                 ( l2_req_out       [gx][gy]                       ),
-        .l2_req_valid_o           ( l2_req_out_valid  [gx][gy]                       ),
-        .l2_req_ready_i           ( l2_req_out_ready  [gx][gy]                       ),
-        .l2_req_i                 ( l2_req_in         [gx][gy]                       ),
-        .l2_req_valid_i           ( l2_req_in_valid   [gx][gy]                       ),
-        .l2_req_ready_o           ( l2_req_in_ready   [gx][gy]                       ),
+        .l2_req_valid_o           ( l2_req_out_valid  [gx][gy]                      ),
+        .l2_req_ready_i           ( l2_req_out_ready  [gx][gy]                      ),
+        .l2_req_i                 ( l2_req_in         [gx][gy]                      ),
+        .l2_req_valid_i           ( l2_req_in_valid   [gx][gy]                      ),
+        .l2_req_ready_o           ( l2_req_in_ready   [gx][gy]                      ),
         .l2_rsp_o                 ( l2_rsp_out       [gx][gy]                       ),
-        .l2_rsp_valid_o           ( l2_rsp_out_valid  [gx][gy]                       ),
-        .l2_rsp_ready_i           ( l2_rsp_out_ready  [gx][gy]                       ),
-        .l2_rsp_i                 ( l2_rsp_in         [gx][gy]                       ),
-        .l2_rsp_valid_i           ( l2_rsp_in_valid   [gx][gy]                       ),
-        .l2_rsp_ready_o           ( l2_rsp_in_ready   [gx][gy]                       ),
-        .l2_id_i                  ( floo_cachepool_noc_pkg::id_t'(gx * NumGroupsY + gy) ),
+        .l2_rsp_valid_o           ( l2_rsp_out_valid  [gx][gy]                      ),
+        .l2_rsp_ready_i           ( l2_rsp_out_ready  [gx][gy]                      ),
+        .l2_rsp_i                 ( l2_rsp_in         [gx][gy]                      ),
+        .l2_rsp_valid_i           ( l2_rsp_in_valid   [gx][gy]                      ),
+        .l2_rsp_ready_o           ( l2_rsp_in_ready   [gx][gy]                      ),
+        .l2_id_i                  ( floo_cachepool_noc_pkg::id_t'(gx * NumGroupsY + gy)         ),
         .l2_route_table_i         ( floo_cachepool_noc_pkg::RoutingTables[gx * NumGroupsY + gy] ),
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
@@ -337,19 +337,19 @@ module cachepool_cluster
   for (genvar gx = 0; gx < NumGroupsX-1; gx++) begin : gen_ew_conn
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_ew_conn_y
       // East output of (gx,gy) → West input of (gx+1,gy)
-      assign noc_req_in      [gx+1 + gy*NumGroupsX][3] = noc_req_out      [gx + gy*NumGroupsX][1];
-      assign noc_req_in_valid[gx+1 + gy*NumGroupsX][3] = noc_req_out_valid[gx + gy*NumGroupsX][1];
-      assign noc_req_out_ready[gx  + gy*NumGroupsX][1] = noc_req_in_ready [gx+1 + gy*NumGroupsX][3];
-      assign noc_rsp_in      [gx+1 + gy*NumGroupsX][3] = noc_rsp_out      [gx + gy*NumGroupsX][1];
-      assign noc_rsp_in_valid[gx+1 + gy*NumGroupsX][3] = noc_rsp_out_valid[gx + gy*NumGroupsX][1];
-      assign noc_rsp_out_ready[gx  + gy*NumGroupsX][1] = noc_rsp_in_ready [gx+1 + gy*NumGroupsX][3];
+      assign noc_req_in       [gx+1 + gy*NumGroupsX][3] = noc_req_out      [gx   + gy*NumGroupsX][1];
+      assign noc_req_in_valid [gx+1 + gy*NumGroupsX][3] = noc_req_out_valid[gx   + gy*NumGroupsX][1];
+      assign noc_req_out_ready[gx   + gy*NumGroupsX][1] = noc_req_in_ready [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in       [gx+1 + gy*NumGroupsX][3] = noc_rsp_out      [gx   + gy*NumGroupsX][1];
+      assign noc_rsp_in_valid [gx+1 + gy*NumGroupsX][3] = noc_rsp_out_valid[gx   + gy*NumGroupsX][1];
+      assign noc_rsp_out_ready[gx   + gy*NumGroupsX][1] = noc_rsp_in_ready [gx+1 + gy*NumGroupsX][3];
       // West output of (gx+1,gy) → East input of (gx,gy)
-      assign noc_req_in      [gx   + gy*NumGroupsX][1] = noc_req_out      [gx+1 + gy*NumGroupsX][3];
-      assign noc_req_in_valid[gx   + gy*NumGroupsX][1] = noc_req_out_valid[gx+1 + gy*NumGroupsX][3];
-      assign noc_req_out_ready[gx+1 + gy*NumGroupsX][3] = noc_req_in_ready[gx  + gy*NumGroupsX][1];
-      assign noc_rsp_in      [gx   + gy*NumGroupsX][1] = noc_rsp_out      [gx+1 + gy*NumGroupsX][3];
-      assign noc_rsp_in_valid[gx   + gy*NumGroupsX][1] = noc_rsp_out_valid[gx+1 + gy*NumGroupsX][3];
-      assign noc_rsp_out_ready[gx+1 + gy*NumGroupsX][3] = noc_rsp_in_ready[gx  + gy*NumGroupsX][1];
+      assign noc_req_in       [gx   + gy*NumGroupsX][1] = noc_req_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_req_in_valid [gx   + gy*NumGroupsX][1] = noc_req_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_req_out_ready[gx+1 + gy*NumGroupsX][3] = noc_req_in_ready [gx   + gy*NumGroupsX][1];
+      assign noc_rsp_in       [gx   + gy*NumGroupsX][1] = noc_rsp_out      [gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_in_valid [gx   + gy*NumGroupsX][1] = noc_rsp_out_valid[gx+1 + gy*NumGroupsX][3];
+      assign noc_rsp_out_ready[gx+1 + gy*NumGroupsX][3] = noc_rsp_in_ready [gx   + gy*NumGroupsX][1];
     end
   end
 
@@ -357,19 +357,19 @@ module cachepool_cluster
   for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_ns_conn
     for (genvar gy = 0; gy < NumGroupsY-1; gy++) begin : gen_ns_conn_y
       // North output of (gx,gy) (dir 0) → South input of (gx,gy+1) (dir 2)
-      assign noc_req_in      [gx + (gy+1)*NumGroupsX][2] = noc_req_out      [gx + gy*NumGroupsX][0];
-      assign noc_req_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_req_out_valid[gx + gy*NumGroupsX][0];
-      assign noc_req_out_ready[gx +  gy   *NumGroupsX][0] = noc_req_in_ready[gx + (gy+1)*NumGroupsX][2];
-      assign noc_rsp_in      [gx + (gy+1)*NumGroupsX][2] = noc_rsp_out      [gx + gy*NumGroupsX][0];
-      assign noc_rsp_in_valid[gx + (gy+1)*NumGroupsX][2] = noc_rsp_out_valid[gx + gy*NumGroupsX][0];
-      assign noc_rsp_out_ready[gx +  gy   *NumGroupsX][0] = noc_rsp_in_ready[gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_in       [gx + (gy+1)*NumGroupsX][2] = noc_req_out      [gx +  gy   *NumGroupsX][0];
+      assign noc_req_in_valid [gx + (gy+1)*NumGroupsX][2] = noc_req_out_valid[gx +  gy   *NumGroupsX][0];
+      assign noc_req_out_ready[gx +  gy   *NumGroupsX][0] = noc_req_in_ready [gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in       [gx + (gy+1)*NumGroupsX][2] = noc_rsp_out      [gx +  gy   *NumGroupsX][0];
+      assign noc_rsp_in_valid [gx + (gy+1)*NumGroupsX][2] = noc_rsp_out_valid[gx +  gy   *NumGroupsX][0];
+      assign noc_rsp_out_ready[gx +  gy   *NumGroupsX][0] = noc_rsp_in_ready [gx + (gy+1)*NumGroupsX][2];
       // South output of (gx,gy+1) (dir 2) → North input of (gx,gy) (dir 0)
-      assign noc_req_in      [gx +  gy   *NumGroupsX][0] = noc_req_out      [gx + (gy+1)*NumGroupsX][2];
-      assign noc_req_in_valid[gx +  gy   *NumGroupsX][0] = noc_req_out_valid[gx + (gy+1)*NumGroupsX][2];
-      assign noc_req_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_req_in_ready[gx +  gy   *NumGroupsX][0];
-      assign noc_rsp_in      [gx +  gy   *NumGroupsX][0] = noc_rsp_out      [gx + (gy+1)*NumGroupsX][2];
-      assign noc_rsp_in_valid[gx +  gy   *NumGroupsX][0] = noc_rsp_out_valid[gx + (gy+1)*NumGroupsX][2];
-      assign noc_rsp_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_rsp_in_ready[gx +  gy   *NumGroupsX][0];
+      assign noc_req_in       [gx +  gy   *NumGroupsX][0] = noc_req_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_in_valid [gx +  gy   *NumGroupsX][0] = noc_req_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_req_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_req_in_ready [gx +  gy   *NumGroupsX][0];
+      assign noc_rsp_in       [gx +  gy   *NumGroupsX][0] = noc_rsp_out      [gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_in_valid [gx +  gy   *NumGroupsX][0] = noc_rsp_out_valid[gx + (gy+1)*NumGroupsX][2];
+      assign noc_rsp_out_ready[gx + (gy+1)*NumGroupsX][2] = noc_rsp_in_ready [gx +  gy   *NumGroupsX][0];
     end
   end
 
@@ -411,11 +411,11 @@ module cachepool_cluster
 
   // East boundary: gx=NumGroupsX-1 has no East neighbor (dir 1)
   for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_east_bnd
-    assign noc_req_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
-    assign noc_req_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_req_in       [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
+    assign noc_req_in_valid [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
     assign noc_req_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
-    assign noc_rsp_in      [(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
-    assign noc_rsp_in_valid[(NumGroupsX-1) + gy*NumGroupsX][1]  = '0;
+    assign noc_rsp_in       [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
+    assign noc_rsp_in_valid [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
     assign noc_rsp_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
 `ifndef SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_east_chk
@@ -447,11 +447,11 @@ module cachepool_cluster
 
   // South boundary: gy=0 has no South neighbor (dir 2)
   for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_south_bnd
-    assign noc_req_in      [gx][2]  = '0;
-    assign noc_req_in_valid[gx][2]  = '0;
+    assign noc_req_in       [gx][2] = '0;
+    assign noc_req_in_valid [gx][2] = '0;
     assign noc_req_out_ready[gx][2] = '1;
-    assign noc_rsp_in      [gx][2]  = '0;
-    assign noc_rsp_in_valid[gx][2]  = '0;
+    assign noc_rsp_in       [gx][2] = '0;
+    assign noc_rsp_in_valid [gx][2] = '0;
     assign noc_rsp_out_ready[gx][2] = '1;
 `ifndef SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_south_chk
@@ -483,11 +483,11 @@ module cachepool_cluster
 
   // North boundary: gy=NumGroupsY-1 has no North neighbor (dir 0)
   for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_north_bnd
-    assign noc_req_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
-    assign noc_req_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_req_in       [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
+    assign noc_req_in_valid [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
     assign noc_req_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
-    assign noc_rsp_in      [gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
-    assign noc_rsp_in_valid[gx + (NumGroupsY-1)*NumGroupsX][0]  = '0;
+    assign noc_rsp_in       [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
+    assign noc_rsp_in_valid [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
     assign noc_rsp_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
 `ifndef SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_north_chk
@@ -531,19 +531,19 @@ module cachepool_cluster
     for (genvar gx = 0; gx < NumGroupsX - 1; gx++) begin : gen_l2_ew
       for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_l2_ew_y
         // East(1) output of (gx,gy) → West(3) input of (gx+1,gy)
-        assign l2_req_in       [gx+1][gy][3] = l2_req_out       [gx][gy][1];
-        assign l2_req_in_valid [gx+1][gy][3] = l2_req_out_valid  [gx][gy][1];
-        assign l2_req_out_ready[gx]  [gy][1] = l2_req_in_ready   [gx+1][gy][3];
-        assign l2_rsp_in       [gx+1][gy][3] = l2_rsp_out       [gx][gy][1];
-        assign l2_rsp_in_valid [gx+1][gy][3] = l2_rsp_out_valid  [gx][gy][1];
-        assign l2_rsp_out_ready[gx]  [gy][1] = l2_rsp_in_ready   [gx+1][gy][3];
+        assign l2_req_in       [gx+1][gy][3]  = l2_req_out        [gx]  [gy][1];
+        assign l2_req_in_valid [gx+1][gy][3]  = l2_req_out_valid  [gx]  [gy][1];
+        assign l2_req_out_ready[gx]  [gy][1]  = l2_req_in_ready   [gx+1][gy][3];
+        assign l2_rsp_in       [gx+1][gy][3]  = l2_rsp_out        [gx]  [gy][1];
+        assign l2_rsp_in_valid [gx+1][gy][3]  = l2_rsp_out_valid  [gx]  [gy][1];
+        assign l2_rsp_out_ready[gx]  [gy][1]  = l2_rsp_in_ready   [gx+1][gy][3];
         // West(3) output of (gx+1,gy) → East(1) input of (gx,gy)
-        assign l2_req_in       [gx][gy][1] = l2_req_out       [gx+1][gy][3];
-        assign l2_req_in_valid [gx][gy][1] = l2_req_out_valid  [gx+1][gy][3];
-        assign l2_req_out_ready[gx+1][gy][3] = l2_req_in_ready[gx]  [gy][1];
-        assign l2_rsp_in       [gx][gy][1] = l2_rsp_out       [gx+1][gy][3];
-        assign l2_rsp_in_valid [gx][gy][1] = l2_rsp_out_valid  [gx+1][gy][3];
-        assign l2_rsp_out_ready[gx+1][gy][3] = l2_rsp_in_ready[gx]  [gy][1];
+        assign l2_req_in       [gx]  [gy][1]  = l2_req_out        [gx+1][gy][3];
+        assign l2_req_in_valid [gx]  [gy][1]  = l2_req_out_valid  [gx+1][gy][3];
+        assign l2_req_out_ready[gx+1][gy][3]  = l2_req_in_ready   [gx]  [gy][1];
+        assign l2_rsp_in       [gx]  [gy][1]  = l2_rsp_out        [gx+1][gy][3];
+        assign l2_rsp_in_valid [gx]  [gy][1]  = l2_rsp_out_valid  [gx+1][gy][3];
+        assign l2_rsp_out_ready[gx+1][gy][3]  = l2_rsp_in_ready   [gx]  [gy][1];
       end
     end
 
@@ -551,19 +551,19 @@ module cachepool_cluster
     for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_ns
       for (genvar gy = 0; gy < NumGroupsY - 1; gy++) begin : gen_l2_ns_y
         // North(0) output of (gx,gy) → South(2) input of (gx,gy+1)
-        assign l2_req_in       [gx][gy+1][2] = l2_req_out       [gx][gy][0];
-        assign l2_req_in_valid [gx][gy+1][2] = l2_req_out_valid  [gx][gy][0];
-        assign l2_req_out_ready[gx][gy]  [0] = l2_req_in_ready   [gx][gy+1][2];
-        assign l2_rsp_in       [gx][gy+1][2] = l2_rsp_out       [gx][gy][0];
-        assign l2_rsp_in_valid [gx][gy+1][2] = l2_rsp_out_valid  [gx][gy][0];
-        assign l2_rsp_out_ready[gx][gy]  [0] = l2_rsp_in_ready   [gx][gy+1][2];
+        assign l2_req_in       [gx][gy+1][2]  = l2_req_out        [gx][gy]  [0];
+        assign l2_req_in_valid [gx][gy+1][2]  = l2_req_out_valid  [gx][gy]  [0];
+        assign l2_req_out_ready[gx][gy]  [0]  = l2_req_in_ready   [gx][gy+1][2];
+        assign l2_rsp_in       [gx][gy+1][2]  = l2_rsp_out        [gx][gy]  [0];
+        assign l2_rsp_in_valid [gx][gy+1][2]  = l2_rsp_out_valid  [gx][gy]  [0];
+        assign l2_rsp_out_ready[gx][gy]  [0]  = l2_rsp_in_ready   [gx][gy+1][2];
         // South(2) output of (gx,gy+1) → North(0) input of (gx,gy)
-        assign l2_req_in       [gx][gy][0] = l2_req_out       [gx][gy+1][2];
-        assign l2_req_in_valid [gx][gy][0] = l2_req_out_valid  [gx][gy+1][2];
-        assign l2_req_out_ready[gx][gy+1][2] = l2_req_in_ready[gx][gy]  [0];
-        assign l2_rsp_in       [gx][gy][0] = l2_rsp_out       [gx][gy+1][2];
-        assign l2_rsp_in_valid [gx][gy][0] = l2_rsp_out_valid  [gx][gy+1][2];
-        assign l2_rsp_out_ready[gx][gy+1][2] = l2_rsp_in_ready[gx][gy]  [0];
+        assign l2_req_in       [gx][gy]  [0]  = l2_req_out        [gx][gy+1][2];
+        assign l2_req_in_valid [gx][gy]  [0]  = l2_req_out_valid  [gx][gy+1][2];
+        assign l2_req_out_ready[gx][gy+1][2]  = l2_req_in_ready   [gx][gy]  [0];
+        assign l2_rsp_in       [gx][gy]  [0]  = l2_rsp_out        [gx][gy+1][2];
+        assign l2_rsp_in_valid [gx][gy]  [0]  = l2_rsp_out_valid  [gx][gy+1][2];
+        assign l2_rsp_out_ready[gx][gy+1][2]  = l2_rsp_in_ready   [gx][gy]  [0];
       end
     end
 
@@ -612,56 +612,56 @@ module cachepool_cluster
       logic                 hbm_sbr_rsp_ready;
 
       floo_tcdm_chimney #(
-        .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg   ),
-        .EnMgrPort  ( 1'b0                               ),
-        .EnSbrPort  ( 1'b1                               ),
-        .MaxTxns    ( 64                                  ),
-        .id_t       ( floo_cachepool_noc_pkg::id_t        ),
-        .route_t    ( floo_cachepool_noc_pkg::route_t     ),
-        .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
-        .hdr_t      ( l2_noc_hdr_t                        ),
-        .req_chan_t  ( cache_trans_req_chan_t               ),
-        .rsp_chan_t  ( cache_trans_rsp_chan_t               ),
-        .floo_req_t ( l2_noc_req_t                        ),
-        .floo_rsp_t ( l2_noc_rsp_t                        ),
-        .addr_t     ( axi_addr_t                          ),
-        .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t   ),
-        .Sam        ( floo_cachepool_noc_pkg::Sam          )
+        .RouteCfg    ( floo_cachepool_noc_pkg::RouteCfg    ),
+        .EnMgrPort   ( 1'b0                                ),
+        .EnSbrPort   ( 1'b1                                ),
+        .id_t        ( floo_cachepool_noc_pkg::id_t        ),
+        .route_t     ( floo_cachepool_noc_pkg::route_t     ),
+        .dst_t       ( floo_cachepool_noc_pkg::route_t     ),
+        .hdr_t       ( l2_noc_hdr_t                        ),
+        .req_chan_t  ( cache_trans_req_chan_t              ),
+        .rsp_chan_t  ( cache_trans_rsp_chan_t              ),
+        .floo_req_t  ( l2_noc_req_t                        ),
+        .floo_rsp_t  ( l2_noc_rsp_t                        ),
+        .addr_t      ( axi_addr_t                          ),
+        .sam_rule_t  ( floo_cachepool_noc_pkg::sam_rule_t  ),
+        .Sam         ( floo_cachepool_noc_pkg::Sam         )
       ) i_hbm_chimney (
-        .clk_i            ( clk_i                                          ),
-        .rst_ni           ( rst_ni                                         ),
-        .test_enable_i    ( 1'b0                                           ),
+        .clk_i            ( clk_i                                         ),
+        .rst_ni           ( rst_ni                                        ),
+        .test_enable_i    ( 1'b0                                          ),
         // Manager port: unused
-        .mgr_req_i        ( '0                                             ),
-        .mgr_req_valid_i  ( 1'b0                                           ),
-        .mgr_req_ready_o  (                                                ),
-        .mgr_rsp_o        (                                                ),
-        .mgr_rsp_valid_o  (                                                ),
-        .mgr_rsp_ready_i  ( 1'b0                                           ),
+        .mgr_req_i        ( '0                                            ),
+        .mgr_req_valid_i  ( 1'b0                                          ),
+        .mgr_req_ready_o  (                                               ),
+        .mgr_rsp_o        (                                               ),
+        .mgr_rsp_valid_o  (                                               ),
+        .mgr_rsp_ready_i  ( 1'b0                                          ),
         // Subordinate port: drives reqrsp_to_axi
-        .sbr_req_o        ( hbm_sbr_req                                    ),
-        .sbr_req_valid_o  ( hbm_sbr_req_valid                              ),
-        .sbr_req_ready_i  ( hbm_sbr_req_ready                              ),
-        .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
-        .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
-        .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+        .sbr_req_o        ( hbm_sbr_req                                   ),
+        .sbr_req_valid_o  ( hbm_sbr_req_valid                             ),
+        .sbr_req_ready_i  ( hbm_sbr_req_ready                             ),
+        .sbr_rsp_i        ( hbm_sbr_rsp                                   ),
+        .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                             ),
+        .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                             ),
+        .sbr_txn_id_i     ( hbm_sbr_rsp.user.l2_src_id                    ),
         // Routing
-        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)   ),
-        .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
+        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)        ),
+        .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId]),
         // Request flit from mesh West(3) edge (no router)
-        .floo_req_o       (                                                ),
-        .floo_req_valid_o (                                                ),
-        .floo_req_ready_i ( 1'b1                                           ),
-        .floo_req_i       ( l2_req_out[0][gy][3]                           ),
-        .floo_req_valid_i ( l2_req_out_valid[0][gy][3]                     ),
-        .floo_req_ready_o ( l2_req_out_ready[0][gy][3]                     ),
+        .floo_req_o       (                                               ),
+        .floo_req_valid_o (                                               ),
+        .floo_req_ready_i ( 1'b1                                          ),
+        .floo_req_i       ( l2_req_out[0][gy][3]                          ),
+        .floo_req_valid_i ( l2_req_out_valid[0][gy][3]                    ),
+        .floo_req_ready_o ( l2_req_out_ready[0][gy][3]                    ),
         // Response flit into mesh West(3) edge
         .floo_rsp_o       ( l2_rsp_in[0][gy][3]                           ),
         .floo_rsp_valid_o ( l2_rsp_in_valid[0][gy][3]                     ),
         .floo_rsp_ready_i ( l2_rsp_in_ready[0][gy][3]                     ),
-        .floo_rsp_i       ( '0                                             ),
-        .floo_rsp_valid_i ( 1'b0                                           ),
-        .floo_rsp_ready_o (                                                )
+        .floo_rsp_i       ( '0                                            ),
+        .floo_rsp_valid_i ( 1'b0                                          ),
+        .floo_rsp_ready_o (                                               )
       );
 
       // Tie off: no requests injected from HBM, drain stray outgoing responses
@@ -764,7 +764,7 @@ module cachepool_cluster
         axi_slv_cache_resp_t hbm0_dram_axi_rsp;
 
         reqrsp_to_axi #(
-          .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+          .MaxTrans     ( L2RefillMaxTrans ),
           .ID           ( 0                     ),
           .EnBurst      ( 1                     ),
           .ShuffleId    ( 1                     ),
@@ -831,7 +831,7 @@ module cachepool_cluster
         axi_slv_cache_resp_t hbm_axi_rsp;
 
         reqrsp_to_axi #(
-          .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+          .MaxTrans     ( L2RefillMaxTrans ),
           .ID           ( 0                     ),
           .EnBurst      ( 1                     ),
           .ShuffleId    ( 1                     ),
@@ -876,21 +876,20 @@ module cachepool_cluster
       logic                 hbm_sbr_rsp_ready;
 
       floo_tcdm_chimney #(
-        .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg   ),
-        .EnMgrPort  ( 1'b0                               ),
-        .EnSbrPort  ( 1'b1                               ),
-        .MaxTxns    ( 64                                  ),
+        .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
+        .EnMgrPort  ( 1'b0                                ),
+        .EnSbrPort  ( 1'b1                                ),
         .id_t       ( floo_cachepool_noc_pkg::id_t        ),
         .route_t    ( floo_cachepool_noc_pkg::route_t     ),
         .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
         .hdr_t      ( l2_noc_hdr_t                        ),
-        .req_chan_t  ( cache_trans_req_chan_t               ),
-        .rsp_chan_t  ( cache_trans_rsp_chan_t               ),
+        .req_chan_t  ( cache_trans_req_chan_t             ),
+        .rsp_chan_t  ( cache_trans_rsp_chan_t             ),
         .floo_req_t ( l2_noc_req_t                        ),
         .floo_rsp_t ( l2_noc_rsp_t                        ),
         .addr_t     ( axi_addr_t                          ),
-        .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t   ),
-        .Sam        ( floo_cachepool_noc_pkg::Sam          )
+        .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+        .Sam        ( floo_cachepool_noc_pkg::Sam         )
       ) i_hbm_chimney (
         .clk_i            ( clk_i                                          ),
         .rst_ni           ( rst_ni                                         ),
@@ -909,20 +908,21 @@ module cachepool_cluster
         .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
         .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
         .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+        .sbr_txn_id_i     ( hbm_sbr_rsp.user.l2_src_id                     ),
         // Routing
-        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)   ),
+        .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)         ),
         .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
         // Request flit from mesh East(1) edge (no router)
         .floo_req_o       (                                                ),
         .floo_req_valid_o (                                                ),
         .floo_req_ready_i ( 1'b1                                           ),
-        .floo_req_i       ( l2_req_out[NumGroupsX-1][gy][1]               ),
-        .floo_req_valid_i ( l2_req_out_valid[NumGroupsX-1][gy][1]         ),
-        .floo_req_ready_o ( l2_req_out_ready[NumGroupsX-1][gy][1]         ),
+        .floo_req_i       ( l2_req_out[NumGroupsX-1][gy][1]                ),
+        .floo_req_valid_i ( l2_req_out_valid[NumGroupsX-1][gy][1]          ),
+        .floo_req_ready_o ( l2_req_out_ready[NumGroupsX-1][gy][1]          ),
         // Response flit into mesh East(1) edge
-        .floo_rsp_o       ( l2_rsp_in[NumGroupsX-1][gy][1]               ),
-        .floo_rsp_valid_o ( l2_rsp_in_valid[NumGroupsX-1][gy][1]         ),
-        .floo_rsp_ready_i ( l2_rsp_in_ready[NumGroupsX-1][gy][1]         ),
+        .floo_rsp_o       ( l2_rsp_in[NumGroupsX-1][gy][1]                 ),
+        .floo_rsp_valid_o ( l2_rsp_in_valid[NumGroupsX-1][gy][1]           ),
+        .floo_rsp_ready_i ( l2_rsp_in_ready[NumGroupsX-1][gy][1]           ),
         .floo_rsp_i       ( '0                                             ),
         .floo_rsp_valid_i ( 1'b0                                           ),
         .floo_rsp_ready_o (                                                )
@@ -951,7 +951,7 @@ module cachepool_cluster
       axi_slv_cache_resp_t hbm_axi_rsp;
 
       reqrsp_to_axi #(
-        .MaxTrans     ( NumSpatzOutstandingLoads*2 ),
+        .MaxTrans     ( L2RefillMaxTrans ),
         .ID           ( 0                     ),
         .EnBurst      ( 1                     ),
         .ShuffleId    ( 1                     ),
@@ -1046,18 +1046,18 @@ module cachepool_cluster
   // ---- Inline src_id packing: peri_narrow → peri_xbar (add 1-bit src_id) ----
 
   peri_xbar_req_chan_t [PeriXbarNumSrc-1:0] peri_xbar_src_req;
-  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_req_valid;
-  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_req_ready;
+  logic                [PeriXbarNumSrc-1:0] peri_xbar_src_req_valid;
+  logic                [PeriXbarNumSrc-1:0] peri_xbar_src_req_ready;
   peri_xbar_rsp_chan_t [PeriXbarNumSrc-1:0] peri_xbar_src_rsp;
-  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_valid;
-  logic               [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_ready;
+  logic                [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_valid;
+  logic                [PeriXbarNumSrc-1:0] peri_xbar_src_rsp_ready;
 
   peri_xbar_req_chan_t [PeriXbarNumTgt-1:0] peri_xbar_tgt_req;
-  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_valid;
-  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_ready;
+  logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_valid;
+  logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_req_ready;
   peri_xbar_rsp_chan_t [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp;
-  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_valid;
-  logic               [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_ready;
+  logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_valid;
+  logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_ready;
 
   // Source [0]: HBM0 (src_id = 0)
   always_comb begin
@@ -1114,34 +1114,31 @@ module cachepool_cluster
 
   // ---- 2×3 REQRSP Xbar ----
   reqrsp_xbar #(
-    .NumInp         ( PeriXbarNumSrc       ),
-    .NumOut         ( PeriXbarNumTgt       ),
-    .PipeReg        ( 1'b1                 ),
-    .RspReg         ( 1'b1                 ),
-    .ExtReqPrio     ( 1'b0                 ),
-    .ExtRspPrio     ( 1'b0                 ),
+    .NumInp          ( PeriXbarNumSrc       ),
+    .NumOut          ( PeriXbarNumTgt       ),
+    .PipeReg         ( 1'b1                 ),
+    .RspReg          ( 1'b1                 ),
     .tcdm_req_chan_t ( peri_xbar_req_chan_t ),
-    .tcdm_rsp_chan_t ( peri_xbar_rsp_chan_t ),
-    .Topology       ( snitch_pkg::LogarithmicInterconnect )
+    .tcdm_rsp_chan_t ( peri_xbar_rsp_chan_t )
   ) i_peri_xbar (
     .clk_i           ( clk_i                    ),
     .rst_ni          ( rst_ni                   ),
     .slv_req_i       ( peri_xbar_src_req        ),
     .slv_rr_i        ( '0                       ),
-    .slv_req_valid_i ( peri_xbar_src_req_valid   ),
-    .slv_req_ready_o ( peri_xbar_src_req_ready   ),
+    .slv_req_valid_i ( peri_xbar_src_req_valid  ),
+    .slv_req_ready_o ( peri_xbar_src_req_ready  ),
     .slv_rsp_o       ( peri_xbar_src_rsp        ),
-    .slv_rsp_valid_o ( peri_xbar_src_rsp_valid   ),
-    .slv_rsp_ready_i ( peri_xbar_src_rsp_ready   ),
+    .slv_rsp_valid_o ( peri_xbar_src_rsp_valid  ),
+    .slv_rsp_ready_i ( peri_xbar_src_rsp_ready  ),
     .slv_sel_i       ( peri_slv_sel             ),
     .slv_selected_o  ( /* unused */             ),
     .mst_req_o       ( peri_xbar_tgt_req        ),
-    .mst_req_valid_o ( peri_xbar_tgt_req_valid   ),
-    .mst_req_ready_i ( peri_xbar_tgt_req_ready   ),
+    .mst_req_valid_o ( peri_xbar_tgt_req_valid  ),
+    .mst_req_ready_i ( peri_xbar_tgt_req_ready  ),
     .mst_rsp_i       ( peri_xbar_tgt_rsp        ),
     .mst_rr_i        ( '0                       ),
-    .mst_rsp_valid_i ( peri_xbar_tgt_rsp_valid   ),
-    .mst_rsp_ready_o ( peri_xbar_tgt_rsp_ready   ),
+    .mst_rsp_valid_i ( peri_xbar_tgt_rsp_valid  ),
+    .mst_rsp_ready_o ( peri_xbar_tgt_rsp_ready  ),
     .mst_sel_i       ( peri_mst_sel             )
   );
 
@@ -1158,7 +1155,7 @@ module cachepool_cluster
   assign peri_bootrom_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtBootROM];
   assign peri_xbar_tgt_req_ready[PeriTgtBootROM] = peri_bootrom_rsp.q_ready;
   assign peri_xbar_tgt_rsp[PeriTgtBootROM]       = peri_bootrom_rsp.p;
-  assign peri_xbar_tgt_rsp_valid[PeriTgtBootROM]  = peri_bootrom_rsp.p_valid;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtBootROM] = peri_bootrom_rsp.p_valid;
 
   reg_bootrom_req_t bootrom_reg_req;
   reg_bootrom_rsp_t bootrom_reg_rsp;
@@ -1188,9 +1185,9 @@ module cachepool_cluster
     .AddrWidth ( AxiAddrWidth )
   ) i_bootrom (
     .clk_i   ( clk_i                           ),
-    .req_i   ( bootrom_reg_req.valid            ),
-    .addr_i  ( addr_t'(bootrom_reg_req.addr)    ),
-    .rdata_o ( bootrom_reg_rsp.rdata            )
+    .req_i   ( bootrom_reg_req.valid           ),
+    .addr_i  ( addr_t'(bootrom_reg_req.addr)   ),
+    .rdata_o ( bootrom_reg_rsp.rdata           )
   );
   `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
   assign bootrom_reg_rsp.error = 1'b0;
@@ -1208,7 +1205,7 @@ module cachepool_cluster
   assign peri_csr_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtCSR];
   assign peri_xbar_tgt_req_ready[PeriTgtCSR] = peri_csr_rsp.q_ready;
   assign peri_xbar_tgt_rsp[PeriTgtCSR]       = peri_csr_rsp.p;
-  assign peri_xbar_tgt_rsp_valid[PeriTgtCSR]  = peri_csr_rsp.p_valid;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtCSR] = peri_csr_rsp.p_valid;
 
   reg_csr_req_t reg_req;
   reg_csr_rsp_t reg_rsp;
@@ -1241,24 +1238,24 @@ module cachepool_cluster
     .reg_rsp_t     ( reg_csr_rsp_t   ),
     .cache_insn_t  ( cache_insn_t    )
   ) i_cachepool_cluster_peripheral (
-    .clk_i                    ( clk_i                 ),
-    .rst_ni                   ( rst_ni                ),
-    .eoc_o                    ( eoc_o                 ),
-    .reg_req_i                ( reg_req               ),
-    .reg_rsp_o                ( reg_rsp               ),
-    .tcdm_start_address_i     ( tcdm_start_address    ),
-    .tcdm_end_address_i       ( tcdm_end_address      ),
+    .clk_i                    ( clk_i                  ),
+    .rst_ni                   ( rst_ni                 ),
+    .eoc_o                    ( eoc_o                  ),
+    .reg_req_i                ( reg_req                ),
+    .reg_rsp_o                ( reg_rsp                ),
+    .tcdm_start_address_i     ( tcdm_start_address     ),
+    .tcdm_end_address_i       ( tcdm_end_address       ),
     .icache_prefetch_enable_o ( icache_prefetch_enable ),
-    .cluster_hart_base_id_i   ( hart_base_id_i        ),
-    .cluster_probe_o          ( cluster_probe_o       ),
-    .dynamic_offset_o         ( dynamic_offset        ),
-    .private_start_addr_o     ( private_start_addr    ),
-    .l1d_spm_size_o           (                       ),
-    .l1d_private_o            ( l1d_private           ),
-    .l1d_insn_o               ( l1d_insn              ),
-    .l1d_insn_valid_o         ( l1d_insn_valid        ),
-    .l1d_insn_ready_i         ( l1d_insn_ready        ),
-    .l1d_busy_o               ( l1d_busy              )
+    .cluster_hart_base_id_i   ( hart_base_id_i         ),
+    .cluster_probe_o          ( cluster_probe_o        ),
+    .dynamic_offset_o         ( dynamic_offset         ),
+    .private_start_addr_o     ( private_start_addr     ),
+    .l1d_spm_size_o           (                        ),
+    .l1d_private_o            ( l1d_private            ),
+    .l1d_insn_o               ( l1d_insn               ),
+    .l1d_insn_valid_o         ( l1d_insn_valid         ),
+    .l1d_insn_ready_i         ( l1d_insn_ready         ),
+    .l1d_busy_o               ( l1d_busy               )
   );
 
   // ---- Target [2]: UART → reqrsp_to_axi → axi_narrow_req_o ----
@@ -1272,18 +1269,18 @@ module cachepool_cluster
   assign peri_uart_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtUART];
   assign peri_xbar_tgt_req_ready[PeriTgtUART] = peri_uart_rsp.q_ready;
   assign peri_xbar_tgt_rsp[PeriTgtUART]       = peri_uart_rsp.p;
-  assign peri_xbar_tgt_rsp_valid[PeriTgtUART]  = peri_uart_rsp.p_valid;
+  assign peri_xbar_tgt_rsp_valid[PeriTgtUART] = peri_uart_rsp.p_valid;
 
   reqrsp_to_axi #(
-    .MaxTrans     ( 4                            ),
-    .AxiIdWidth   ( SpatzAxiUartIdWidth           ),
-    .DataWidth    ( 32                           ),
-    .UserWidth    ( $bits(peri_xbar_user_t)       ),
-    .AxiUserWidth ( AxiUserWidth                 ),
-    .reqrsp_req_t ( peri_xbar_req_t              ),
-    .reqrsp_rsp_t ( peri_xbar_rsp_t              ),
-    .axi_req_t    ( axi_uart_req_t               ),
-    .axi_rsp_t    ( axi_uart_resp_t              )
+    .MaxTrans     ( 4                           ),
+    .AxiIdWidth   ( SpatzAxiUartIdWidth         ),
+    .DataWidth    ( 32                          ),
+    .UserWidth    ( $bits(peri_xbar_user_t)     ),
+    .AxiUserWidth ( AxiUserWidth                ),
+    .reqrsp_req_t ( peri_xbar_req_t             ),
+    .reqrsp_rsp_t ( peri_xbar_rsp_t             ),
+    .axi_req_t    ( axi_uart_req_t              ),
+    .axi_rsp_t    ( axi_uart_resp_t             )
   ) i_reqrsp_to_axi_uart (
     .clk_i        ( clk_i                       ),
     .rst_ni       ( rst_ni                      ),

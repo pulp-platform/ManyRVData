@@ -13,21 +13,21 @@ module cachepool_cluster_wrapper
  import fpnew_pkg::fpu_implementation_t;
  import snitch_pma_pkg::snitch_pma_t;
  #(
-  parameter int unsigned AxiAddrWidth       = SpatzAxiAddrWidth,
-  parameter int unsigned AxiDataWidth       = SpatzAxiDataWidth,
-  parameter int unsigned AxiUserWidth       = SpatzAxiUserWidth,
+  parameter int unsigned AxiAddrWidth         = SpatzAxiAddrWidth,
+  parameter int unsigned AxiDataWidth         = SpatzAxiDataWidth,
+  parameter int unsigned AxiUserWidth         = SpatzAxiUserWidth,
   // External wide output ID width (wrapper → DRAM); remapped from SpatzAxiIdOutWidth inside.
-  parameter int unsigned AxiOutIdWidth      = WrapperAxiIdOutWidth,
+  parameter int unsigned AxiOutIdWidth        = WrapperAxiIdOutWidth,
   // External narrow output ID width (UART, wrapper → SoC); remapped from SpatzAxiUartIdWidth inside.
-  parameter int unsigned AxiNarrowOutIdWidth = WrapperAxiNarrowIdOutWidth,
+  parameter int unsigned AxiNarrowOutIdWidth  = WrapperAxiNarrowIdOutWidth,
 
   // External wide output types use the wrapper-narrowed ID (WrapperAxiIdOutWidth).
-  parameter type axi_out_req_t              = spatz_axi_wrapper_out_req_t,
-  parameter type axi_out_resp_t             = spatz_axi_wrapper_out_resp_t,
+  parameter type axi_out_req_t                = spatz_axi_wrapper_out_req_t,
+  parameter type axi_out_resp_t               = spatz_axi_wrapper_out_resp_t,
 
   // External narrow output types use the wrapper-narrowed ID (WrapperAxiNarrowIdOutWidth).
-  parameter type axi_narrow_out_req_t       = spatz_axi_wrapper_narrow_out_req_t,
-  parameter type axi_narrow_out_resp_t      = spatz_axi_wrapper_narrow_out_resp_t
+  parameter type axi_narrow_out_req_t         = spatz_axi_wrapper_narrow_out_req_t,
+  parameter type axi_narrow_out_resp_t        = spatz_axi_wrapper_narrow_out_resp_t
 
 )(
   input  logic                                   clk_i,
@@ -51,10 +51,10 @@ module cachepool_cluster_wrapper
 );
 
   // Internal signals between wrapper remappers and cluster (fat IDs).
-  axi_uart_req_t                           axi_cluster_narrow_req;
-  axi_uart_resp_t                          axi_cluster_narrow_resp;
-  spatz_axi_out_req_t  [NumClusterSlv-1:0] axi_cluster_out_req;
-  spatz_axi_out_resp_t [NumClusterSlv-1:0] axi_cluster_out_resp;
+  axi_uart_req_t                                 axi_cluster_narrow_req;
+  axi_uart_resp_t                                axi_cluster_narrow_resp;
+  spatz_axi_out_req_t   [NumClusterSlv-1:0]      axi_cluster_out_req;
+  spatz_axi_out_resp_t  [NumClusterSlv-1:0]      axi_cluster_out_resp;
 
   // Spatz cluster under test.
   // Internal AXI types are fixed (full-width IDs); the wrapper remaps at both boundaries.
@@ -137,23 +137,28 @@ module cachepool_cluster_wrapper
   // Remap SpatzAxiIdOutWidth -> WrapperAxiIdOutWidth per DRAM channel.
   // With FlooNoC mesh, both are 6 bits (no-op remap); kept for interface stability.
   for (genvar ch = 0; ch < NumClusterSlv; ch++) begin : gen_out_id_remap
-    axi_id_remap #(
-      .AxiSlvPortIdWidth    ( SpatzAxiIdOutWidth           ),
-      .AxiSlvPortMaxUniqIds ( NumAxiMaxTrans               ),
-      .AxiMaxTxnsPerId      ( NumAxiMaxTrans               ),
-      .AxiMstPortIdWidth    ( WrapperAxiIdOutWidth         ),
-      .slv_req_t            ( spatz_axi_out_req_t          ),
-      .slv_resp_t           ( spatz_axi_out_resp_t         ),
-      .mst_req_t            ( spatz_axi_wrapper_out_req_t  ),
-      .mst_resp_t           ( spatz_axi_wrapper_out_resp_t )
-    ) i_out_id_remap (
-      .clk_i      ( clk_i                     ),
-      .rst_ni     ( rst_ni                     ),
-      .slv_req_i  ( axi_cluster_out_req  [ch] ),
-      .slv_resp_o ( axi_cluster_out_resp [ch] ),
-      .mst_req_o  ( axi_out_req_o        [ch] ),
-      .mst_resp_i ( axi_out_resp_i       [ch] )
-    );
+    if (SpatzAxiIdOutWidth != WrapperAxiIdOutWidth) begin
+      axi_id_remap #(
+        .AxiSlvPortIdWidth    ( SpatzAxiIdOutWidth           ),
+        .AxiSlvPortMaxUniqIds ( NumAxiMaxTrans               ),
+        .AxiMaxTxnsPerId      ( NumAxiMaxTrans               ),
+        .AxiMstPortIdWidth    ( WrapperAxiIdOutWidth         ),
+        .slv_req_t            ( spatz_axi_out_req_t          ),
+        .slv_resp_t           ( spatz_axi_out_resp_t         ),
+        .mst_req_t            ( spatz_axi_wrapper_out_req_t  ),
+        .mst_resp_t           ( spatz_axi_wrapper_out_resp_t )
+      ) i_out_id_remap (
+        .clk_i      ( clk_i                     ),
+        .rst_ni     ( rst_ni                    ),
+        .slv_req_i  ( axi_cluster_out_req  [ch] ),
+        .slv_resp_o ( axi_cluster_out_resp [ch] ),
+        .mst_req_o  ( axi_out_req_o        [ch] ),
+        .mst_resp_i ( axi_out_resp_i       [ch] )
+      );
+    end else begin
+      assign axi_out_req_o[ch]        = axi_cluster_out_req[ch];
+      assign axi_cluster_out_resp[ch] = axi_out_resp_i[ch];
+    end
   end
 
   // AXI utilization monitor

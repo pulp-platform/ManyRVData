@@ -186,7 +186,14 @@ package cachepool_pkg;
   // AXI Address Width
   localparam int unsigned SpatzAxiAddrWidth       = `ifdef ADDR_WIDTH `ADDR_WIDTH `else 0 `endif;
   // AXI User Width
-  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif + $clog2(NumTiles);
+  // The `+ $bits(floo_cachepool_noc_pkg::id_t)` term accounts for
+  // refill_user_t.l2_src_id, whose width scales with NumEndpoints (groups +
+  // HBM channels) rather than being a fixed constant across configs -- do
+  // not fold this into the per-config axi_user_width define instead, that
+  // was tried and breaks silently whenever NumEndpoints changes width.
+  localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif
+                                                     + $clog2(NumTiles)
+                                                     + $bits(floo_cachepool_noc_pkg::id_t);
 
   // -----------------------
   // AXI ID field structure
@@ -212,10 +219,6 @@ package cachepool_pkg;
   // Alias used by the Spatz-generated wrapper and testbench templates.
   localparam int unsigned SpatzAxiIdInWidth       = ClusterAxiIdWidth;
 
-  // Per-group AXI output ID width (pre-mesh, kept for BootROM path sizing).
-  // The +1 comes from reqrsp_to_axi, which tags each burst with one extra bit.
-  localparam int unsigned GroupAxiIdOutWidth      = ClusterAxiIdWidth + 1;
-
   // Tile wide xbar inputs (iCache only; peripheral bypasses the xbar)
   localparam int unsigned TileWideXbarInputs      = 1;
   localparam int unsigned TileWideXbarIdExtraBits = (TileWideXbarInputs > 1) ? $clog2(TileWideXbarInputs) : 0;
@@ -226,19 +229,28 @@ package cachepool_pkg;
   // and the tile xbar adds TileWideXbarIdExtraBits (0 with 1 master).
   localparam int unsigned GroupWideIdWidth        = TileAxiIdWidth + $clog2(NumTilesPerGroup) + TileWideXbarIdExtraBits;
 
+  // Max outstanding transactions tracked by the L2 refill mesh's DRAM-facing
+  // reqrsp_to_axi converters (HBM0 DRAM path, direct HBM paths). Sized for
+  // the mesh's aggregate in-flight refill window, not per-core outstanding
+  // loads -- deliberately decoupled from NumSpatzOutstandingLoads (that
+  // bounds one core's own outstanding requests, whereas this bounds how many
+  // requests from all cores/groups can be in flight at a single DRAM channel
+  // at once). Chosen to match the previous NumSpatzOutstandingLoads*4 value.
+  localparam int unsigned L2RefillMaxTrans        = 128;
+
   // Cluster-level AXI output ID width (chimney → DRAM).
   // With the FlooNoC mesh, reqrsp_to_axi generates fresh IDs with
   // $clog2(MaxTrans) bits. The chimney carries these through unchanged.
   // No multi-group mux → no extra bits needed.
-  localparam int unsigned SpatzAxiIdOutWidth      = $clog2(NumSpatzOutstandingLoads * 2);
+  localparam int unsigned SpatzAxiIdOutWidth      = $clog2(L2RefillMaxTrans);
 
   // Cluster wrapper external output AXI ID width.
-  // Now equals SpatzAxiIdOutWidth (no compression needed), but kept as a
-  // separate parameter for interface stability.
-  localparam int unsigned WrapperAxiIdOutWidth        = 6;
-  // External SoC/testbench input AXI ID width (host → cluster direction).
-  // axi_id_remap in the wrapper expands these to SpatzAxiIdInWidth internally.
-  localparam int unsigned WrapperAxiIdInWidth         = 4;
+  // Equals SpatzAxiIdOutWidth (no compression needed), but kept as a
+  // separate parameter for interface stability. Must track
+  // SpatzAxiIdOutWidth: if narrower, the id_remap in cachepool_cluster_wrapper
+  // (i_out_id_remap) would reintroduce the same ID-reuse collision problem
+  // (right before DRAM) that widening SpatzAxiIdOutWidth was meant to fix.
+  localparam int unsigned WrapperAxiIdOutWidth        = SpatzAxiIdOutWidth;
   // External narrow output AXI ID width for the UART port (cluster → SoC direction).
   // axi_id_remap in the wrapper compresses SpatzAxiUartIdWidth to this.
   localparam int unsigned WrapperAxiNarrowIdOutWidth  = 4;
@@ -334,7 +346,6 @@ package cachepool_pkg;
 
   typedef logic [SpatzAxiIdInWidth-1:0]         axi_id_in_t;
   typedef logic [SpatzAxiIdOutWidth-1:0]        axi_id_out_t;
-  typedef logic [GroupAxiIdOutWidth-1:0]        axi_id_group_out_t;
 
   typedef logic [SpatzAxiNarrowIdWidth-1:0]     axi_narrow_id_t;
   // legacy name; TODO: remove
@@ -347,7 +358,6 @@ package cachepool_pkg;
   typedef logic [CsrAxiSlvIdWidth-1:0]          axi_id_csr_slv_t;
 
   typedef logic [WrapperAxiIdOutWidth-1:0]       axi_id_wrapper_out_t;
-  typedef logic [WrapperAxiIdInWidth-1:0]        axi_id_wrapper_in_t;
   typedef logic [WrapperAxiNarrowIdOutWidth-1:0] axi_id_wrapper_narrow_out_t;
 
   //////////////////
@@ -410,10 +420,20 @@ package cachepool_pkg;
   } tcdm_user_t;
 
   typedef struct packed {
-    logic [BankIDWidth-1:0] bank_id;
-    logic [TileIDWidth-1:0] tile_id;
-    cache_info_t            info;
-    burst_req_t             burst;
+    logic [BankIDWidth-1:0]      bank_id;
+    logic [TileIDWidth-1:0]      tile_id;
+    // L2 refill mesh source group (floo endpoint ID), stamped at request
+    // formation and read back at the HBM ejection chimney to route the
+    // response without a local src_id FIFO (which assumed in-order HBM
+    // completion). Distinct from tile_id, which stays local to the group
+    // and is used as a routing index for intra-group response delivery.
+    // Placed above info/burst (not appended at the end) because the iCache
+    // path's EnUserIdPassthrough workaround (cachepool_group.sv) truncates
+    // this struct down to cache_info_t width and depends on info/burst
+    // remaining the bottom (LSB) fields.
+    floo_cachepool_noc_pkg::id_t l2_src_id;
+    cache_info_t                 info;
+    burst_req_t                  burst;
   } refill_user_t;
 
   ///////////////////
@@ -577,12 +597,8 @@ package cachepool_pkg;
   `AXI_TYPEDEF_ALL(spatz_axi_narrow,  axi_addr_t, axi_narrow_id_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_in,      axi_addr_t, axi_id_in_t,      axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
-  // Per-group AXI output: narrower ID (pre multi-group mux).
-  `AXI_TYPEDEF_ALL(spatz_axi_group_out, axi_addr_t, axi_id_group_out_t, axi_wide_data_t, axi_wide_strb_t, axi_user_t)
   // Wrapper-level external output type: ID from SpatzAxiIdOutWidth to WrapperAxiIdOutWidth.
   `AXI_TYPEDEF_ALL(spatz_axi_wrapper_out,         axi_addr_t, axi_id_wrapper_out_t,         axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
-  // Wrapper-level external input type: narrow ID from SoC (WrapperAxiIdInWidth → SpatzAxiIdInWidth inside).
-  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_in,          axi_addr_t, axi_id_wrapper_in_t,          axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   // Wrapper-level external narrow output type: ID compressed from SpatzAxiUartIdWidth to WrapperAxiNarrowIdOutWidth.
   `AXI_TYPEDEF_ALL(spatz_axi_wrapper_narrow_out,  axi_addr_t, axi_id_wrapper_narrow_out_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 

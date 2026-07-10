@@ -570,7 +570,6 @@ module cachepool_group_noc_wrapper
     .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
     .EnMgrPort  ( 1'b1                                ),
     .EnSbrPort  ( 1'b0                                ),
-    .MaxTxns    ( 128                                  ),
     .id_t       ( floo_cachepool_noc_pkg::id_t        ),
     .route_t    ( floo_cachepool_noc_pkg::route_t     ),
     .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
@@ -600,6 +599,7 @@ module cachepool_group_noc_wrapper
     .sbr_rsp_i        ( '0                                       ),
     .sbr_rsp_valid_i  ( 1'b0                                     ),
     .sbr_rsp_ready_o  (                                          ),
+    .sbr_txn_id_i     ( '0                                       ),
     // Routing
     .id_i             ( l2_id_i                                  ),
     .route_table_i    ( l2_route_table_i                         ),
@@ -752,6 +752,7 @@ module cachepool_group_noc_wrapper
     .private_start_addr_i     ( private_start_addr_i     ),
     .l2_req_o                 ( l2_group_req              ),
     .l2_rsp_i                 ( l2_group_rsp              ),
+    .l2_group_id_i            ( l2_id_i                   ),
     .remote_group_req_o       ( remote_group_req_from_group ),
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
