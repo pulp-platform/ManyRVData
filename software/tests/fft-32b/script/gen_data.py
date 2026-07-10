@@ -290,25 +290,25 @@ def main():
     emit_str += 'static uint32_t active_cores = {};\n\n'.format(CORES)
 
     # L1 Data
-    emit_str += 'float out[{}]'.format(2 * NFFT) + ' __attribute__((section(".pdcp_src")))  = { [0 ... ' + str(2 * NFFT - 1) + '] = 0 };\n'
+    emit_str += 'float out[{}]'.format(2 * NFFT) + ' __attribute__((section(".data")))  = { [0 ... ' + str(2 * NFFT - 1) + '] = 0 };\n'
 
     # L2 Data
-    emit_str += 'static float samples_dram[{}]'.format(2 * NFFT) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(
+    emit_str += 'static float samples_dram[{}]'.format(2 * NFFT) + ' __attribute__((section(".data"))) = {' + ', '.join(
         map(str, samples_reim.astype(dtype).tolist())) + '};\n'
-    emit_str += 'static float buffer_dram[{}]'.format(2 * NFFT) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(
+    emit_str += 'static float buffer_dram[{}]'.format(2 * NFFT) + ' __attribute__((section(".data"))) = {' + ', '.join(
         map(str, buffer_dram.astype(dtype).tolist())) + '};\n'
     if CORES == 1:
-        emit_str += 'static float twiddle_dram[{}]'.format(2 * N_TWID_P2) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(
+        emit_str += 'static float twiddle_dram[{}]'.format(2 * N_TWID_P2) + ' __attribute__((section(".data"))) = {' + ', '.join(
             map(str, twiddle_vec_reim.astype(dtype).tolist())) + '};\n'
     else:
-        emit_str += 'static float twiddle_dram[{}]'.format(2 * (CORES*N_TWID_P2 + N_TWID_P1)) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(
+        emit_str += 'static float twiddle_dram[{}]'.format(2 * (CORES*N_TWID_P2 + N_TWID_P1)) + ' __attribute__((section(".data"))) = {' + ', '.join(
             map(str, twiddle_vec_reim.astype(dtype).tolist())) + '};\n'
-    emit_str += 'static uint16_t store_idx_dram[{}]'.format(int(np.log2(NFFTpc / 2) * NFFTpc / 2)) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(
+    emit_str += 'static uint16_t store_idx_dram[{}]'.format(int(np.log2(NFFTpc / 2) * NFFTpc / 2)) + ' __attribute__((section(".data"))) = {' + ', '.join(
         map(str, np.array(store_delta).astype(idx_dtype).tolist())) + '};\n'
     emit_str += 'static uint32_t coffset_dram[{}]'.format(int(
-        CORES)) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(map(str, core_offsets)) + '};\n'
+        CORES)) + ' __attribute__((section(".data"))) = {' + ', '.join(map(str, core_offsets)) + '};\n'
     emit_str += 'static float gold_out_dram[{}]'.format(
-        2 * NFFT) + ' __attribute__((section(".pdcp_src"))) = {' + ', '.join(map(str, gold_out_s.astype(dtype).tolist())) + '};\n'
+        2 * NFFT) + ' __attribute__((section(".data"))) = {' + ', '.join(map(str, gold_out_s.astype(dtype).tolist())) + '};\n'
 
     file_path = pathlib.Path(__file__).parent.parent / 'data'
     file = file_path / ('data_' + str(NFFT) + "_" + str(CORES) + ".h")

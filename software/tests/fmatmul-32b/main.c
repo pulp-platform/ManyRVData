@@ -94,7 +94,7 @@ int main() {
   // Set xbar policy and switch to private cache mode for the matmul.
   // All cores will access the same B; scramble based on cacheline.
   l1d_xbar_config(5);
-  l1d_part(4);
+  // l1d_part(4);
 
   a = gemm_A_dram;
   b = gemm_B_dram;
