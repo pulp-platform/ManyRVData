@@ -38,6 +38,7 @@ for {set c 0}  {$c < 4} {incr c} {
 
 
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group lp1[$c] -group ctrl   ${lp1_path}/i_l1_hpdcache/hpdcache_ctrl_i/*
+	add wave -noupdate -group ${parent_grp} -group tile[$1] -group lp1[$c] -group ctrl_pe   ${lp1_path}/i_l1_hpdcache/hpdcache_ctrl_i/hpdcache_ctrl_pe_i/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group lp1[$c] -group wbuf   ${lp1_path}/i_l1_hpdcache/gen_wbuf/hpdcache_wbuf_i/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group lp1[$c] -group coalescer  ${lp1_path}/i_l1_req_coalescer/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group lp1[$c] -group Internal   ${lp1_path}/*

@@ -414,7 +414,8 @@ module cachepool_l1_ctrl
                   : (coal_req_write ? HPDCACHE_REQ_STORE : HPDCACHE_REQ_LOAD);
     // tid: pack the coalescer scatter info + shared user.
     l1_req[0].tid = coal_req_valid
-                  ? pack_tid_spatz(coal_req_info.hitmap, coal_req_info.ofsts,
+                  ? pack_tid_spatz(coal_req_addr[2+:LP1NumWordOffsetBits],
+                                   coal_req_info.hitmap, coal_req_info.ofsts,
                                    coal_meta.user.is_fpu, coal_meta.user.tile_id,
                                    coal_meta.user.core_id,
                                    coal_req_write, coal_meta.user.req_id)
@@ -830,6 +831,7 @@ module cachepool_l1_ctrl
   endfunction
 
   function automatic hpdcache_req_tid_t pack_tid_spatz(
+      input word_offset_t              word_offset,
       input logic [HitmapW-1:0]        hitmap,
       input logic [OfstsW-1:0]         ofsts,
       input logic                      is_fpu,
@@ -845,6 +847,7 @@ module cachepool_l1_ctrl
     pack_tid_spatz[CoreIdLsb  +: CoreIDWidth] = core_id;
     pack_tid_spatz[TileIdLsb  +: TileIDWidth] = tile_id;
     pack_tid_spatz[IsFpuPos]                  = is_fpu;
+    pack_tid_spatz[WordOffLsb +: LP1NumWordOffsetBits] = word_offset;
   endfunction
 
 endmodule

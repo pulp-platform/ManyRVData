@@ -19,10 +19,44 @@
 #include <benchmark.h>
 #include <snrt.h>
 #include <stdio.h>
+#include <team.h>   // SNRT_CACHELINE_SIZE
 
 #include DATAHEADER
 #include "kernel/fmatmul.c"
 
+// ---------------------------------------------------------------------------
+// Private-L1 (LP1): no coherency protection required.  Verified 2026-07-13.
+//
+// The matmul needs none by construction: A and B are read-only shared, and each
+// core writes and verifies its OWN rows of C (producer == consumer).
+//
+// The only cross-core state is `error_arr` (verification bookkeeping): core 0
+// publishes the pointer and every core reads it; each core writes its own slot
+// and core 0 reads them all.  In principle that wants a release/acquire pair.  In
+// practice it works unprotected, and we CONFIRMED it rather than assumed it --
+// injecting a deliberate error into core 1's partition of C, with the CMOs
+// compiled out, still reports "Core 1 error 1" on core 0.  The check is not blind.
+//
+// Why it works: the kernel streams tens of KB of matrices through each private L1,
+// which evicts the small slot cachelines from core 0 long before it re-reads them,
+// so its reads miss down to L2 where the peers' write-through values already sit.
+// That is a CAPACITY ACCIDENT, not a guarantee.  If the bookkeeping ever grows a
+// fast path, or the matrices shrink below the L1, core 0 could hit its own stale
+// zeros and report a silent PASS.  The `#ifdef LP1` blocks below are the correct
+// discipline, kept and working -- enable the define to turn them back on.
+//
+// NOTE the snrt_fence() before verify_matrix is deliberately NOT under LP1.  It is
+// Snitch/Spatz ordering, not coherence: snrt_cluster_hw_barrier() does not drain
+// Spatz, so the scalar verify can otherwise read C before this core's own async
+// vse32.v stores have retired.  That hazard is real with or without a private L1.
+//
+// (The bug that actually broke this test was ALIGNMENT, not coherence -- see the
+// error_ref comment below.)
+// #define LP1
+
+#ifdef LP1
+#include <lp1cache.h>
+#endif
 
 #ifndef KERNEL_SIZE
 #define KERNEL_SIZE 4
@@ -34,7 +68,43 @@ float *c;
 
 // Pointer to per-core error slots; allocated in main by core 0 via snrt_l1alloc.
 // Placed in .data so the pointer word lives at a fixed shared DRAM address.
-int *error_arr __attribute__((section(".data")));
+//
+// MUST occupy a whole cacheline.  This object sits at the head of .data, and
+// gemm_A/B/C_dram follow it with only a float's natural 4-byte alignment.  A bare
+// 4-byte pointer here therefore starts all three matrices at 4 mod 64:
+//
+//   80003940  4        error_arr
+//   80003944  0x10000  gemm_A_dram   <-- 4 mod 64, and the skew propagates
+//
+// That breaks TWO alignment assumptions at once:
+//   * 64B cacheline -- adjacent cores' row partitions of C false-share a line.
+//   * 16B LP1 coalescing window (wordWidth=128b, 4 lanes x 4B) -- Spatz's 4 lanes
+//     stop fitting in one window, so every vector access straddles two and the
+//     coalescer splits it in half.  cachepool_l1_ctrl.sv's coal_be rebuilds the
+//     byte-enable from the LANE INDEX, which is only valid when aligned.
+//
+// Note `aligned(64)` on the pointer alone would NOT fix this: it would start the
+// symbol on a boundary but its size is still 4, so gemm_A_dram still lands at +4.
+// The padding is what does the work -- it makes the whole slot a multiple of the
+// cacheline, so whatever the linker places next starts on a 64B boundary.
+// int *error_arr __attribute__((section(".data")));
+// `ptr` is volatile and error_ref has external linkage on purpose: core 0 writes
+// the pointer and every other core reads it.  If this were `static`, the compiler
+// could see that the only store is under `if (cid == 0)` and constant-fold the
+// pointer to its initial NULL on every other core.
+typedef struct {
+  int     *volatile ptr;
+  uint8_t           _pad[SNRT_CACHELINE_SIZE - sizeof(int *)];
+} error_ref_t;
+
+error_ref_t error_ref
+    __attribute__((section(".data"), aligned(SNRT_CACHELINE_SIZE)));
+
+_Static_assert(sizeof(error_ref_t) == SNRT_CACHELINE_SIZE,
+               "error_ref must occupy exactly one cacheline, or it will skew the "
+               "alignment of gemm_A/B/C_dram in .data");
+
+#define error_arr (error_ref.ptr)
 
 // Verify the matrices
 int verify_matrix(float *matrix, const float *checksum,
@@ -149,6 +219,15 @@ int main() {
     } else {
       return -1;
     }
+
+    // NOT inside #ifdef LP1 -- this is not a coherency guard.  The kernel wrote C
+    // with async Spatz vector stores (vse32.v), but verify_matrix reads C back with
+    // SCALAR loads, and snrt_cluster_hw_barrier() does not drain Spatz.  Without
+    // this fence the verify can read C before this core's own stores have retired.
+    // The hazard is Snitch/Spatz ordering: it exists with or without a private L1
+    // and with or without coherence.  No CMO needed -- producer and consumer of C
+    // are the same core, so its private L1 is self-consistent once ordered.
+    snrt_fence();
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
