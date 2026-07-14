@@ -146,8 +146,13 @@ $(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_
 $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
+SNRT_BOOTINFO_H := $(SOFTWARE_DIR)/snRuntime/include/snrt_bootinfo.h
+
+$(SNRT_BOOTINFO_H): $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT) $(BOOTROM_DIR)/snrt_bootinfo.h.tpl
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t snrt_bootinfo.h.tpl -o $@
+
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld $(SNRT_BOOTINFO_H)
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -372,7 +377,8 @@ clean: clean.sw clean.vsim clean.data
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \
-	                    $(BOOTROM_DIR)/bootrom.elf
+	                    $(BOOTROM_DIR)/bootrom.elf \
+	                    $(SNRT_BOOTINFO_H)
 
 # Common CMake flags shared by sw and vsim targets.
 # vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.

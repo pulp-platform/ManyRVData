@@ -145,8 +145,6 @@ module tb_cachepool;
   assign peri_to_cluster_req = to_cluster_req;
   assign to_cluster_rsp      = peri_to_cluster_rsp;
 
-
-
   logic [31:0] entry_point;
 
   // Simulation Sequence
@@ -166,7 +164,7 @@ module tb_cachepool;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while, so that all cores are in wfi mode
-    repeat (10000)
+    repeat (1000)
       @(posedge clk);
 
     // Store the entry point in the Spatz cluster
@@ -243,6 +241,9 @@ module tb_cachepool;
     begin
       automatic logic [31:0] flush_status;
       do begin
+        // Wait for 100 cycles before polling
+        repeat (100)
+          @(posedge clk);
         to_cluster_req = '{
           q: '{
             addr   : PeriStartAddr + CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET,
@@ -263,6 +264,10 @@ module tb_cachepool;
         to_cluster_req = '0;
       end while (flush_status[0]);
     end
+
+    // Wait for a while, so that all cores are in wfi mode
+    repeat (1000)
+      @(posedge clk);
 
     // Wake up cores
     debug_req = '1;
@@ -294,11 +299,6 @@ module tb_cachepool;
   /********
    *  L2  *
    ********/
-
-  // Old interleaving constants (unused with SAM-based routing):
-  // localparam int unsigned ConstantBits = $clog2(L2BankBeWidth * Interleave);
-  // localparam int unsigned ScrambleBits = (NumL2Channel == 1) ? 1 : $clog2(NumL2Channel);
-  // localparam int unsigned ReminderBits = SpatzAxiAddrWidth - ScrambleBits - ConstantBits;
 
   dram_sim_engine #(
     .ClkPeriod  (ClockPeriod )

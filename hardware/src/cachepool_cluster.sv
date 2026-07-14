@@ -804,25 +804,29 @@ module cachepool_cluster
 
         // W2N converter: 512b REQRSP → 32b REQRSP
         // Same user type (refill_user_t) on both sides.
+        // We add a small 1-entry buffer with MSHR inside to reduce boot time
         reqrsp_w2n_converter #(
-          .SlvDataWidth ( AxiDataWidth              ),
-          .MstDataWidth ( 32                        ),
-          .AddrWidth    ( AxiAddrWidth              ),
-          .SlvUserWidth ( $bits(refill_user_t)      ),
-          .MstUserWidth ( $bits(refill_user_t)      ),
-          .MaxTrans     ( 4                         ),
-          .slv_req_t    ( cache_trans_req_t         ),
-          .slv_rsp_t    ( cache_trans_rsp_t         ),
-          .mst_req_t    ( peri_narrow_req_t         ),
-          .mst_rsp_t    ( peri_narrow_rsp_t         ),
-          .slv_user_t   ( refill_user_t             )
-        ) i_hbm0_peri_dw (
-          .clk_i      ( clk_i                       ),
-          .rst_ni     ( rst_ni                      ),
-          .slv_req_i  ( hbm0_peri_reqrsp_req        ),
-          .slv_rsp_o  ( hbm0_peri_reqrsp_rsp        ),
-          .mst_req_o  ( hbm0_peri_narrow_req        ),
-          .mst_rsp_i  ( hbm0_peri_narrow_rsp        )
+          .SlvDataWidth   ( AxiDataWidth              ),
+          .MstDataWidth   ( 32                        ),
+          .AddrWidth      ( AxiAddrWidth              ),
+          .SlvUserWidth   ( $bits(refill_user_t)      ),
+          .MstUserWidth   ( $bits(refill_user_t)      ),
+          .MaxTrans       ( 4                         ),
+          .EnRdBuf        ( 1'b1                      ),
+          .CacheableBase  ( BootAddr                  ),
+          .CacheableSize  ( 32'h1_0000                ),
+          .slv_req_t      ( cache_trans_req_t         ),
+          .slv_rsp_t      ( cache_trans_rsp_t         ),
+          .mst_req_t      ( peri_narrow_req_t         ),
+          .mst_rsp_t      ( peri_narrow_rsp_t         ),
+          .slv_user_t     ( refill_user_t             )
+        ) i_hbm0_peri_dw  (
+          .clk_i          ( clk_i                     ),
+          .rst_ni         ( rst_ni                    ),
+          .slv_req_i      ( hbm0_peri_reqrsp_req      ),
+          .slv_rsp_o      ( hbm0_peri_reqrsp_rsp      ),
+          .mst_req_o      ( hbm0_peri_narrow_req      ),
+          .mst_rsp_i      ( hbm0_peri_narrow_rsp      )
         );
 
       end else begin : gen_hbm_direct
@@ -831,7 +835,7 @@ module cachepool_cluster
         axi_slv_cache_resp_t hbm_axi_rsp;
 
         reqrsp_to_axi #(
-          .MaxTrans     ( L2RefillMaxTrans ),
+          .MaxTrans     ( L2RefillMaxTrans      ),
           .ID           ( 0                     ),
           .EnBurst      ( 1                     ),
           .ShuffleId    ( 1                     ),
@@ -844,17 +848,17 @@ module cachepool_cluster
           .axi_req_t    ( axi_slv_cache_req_t   ),
           .axi_rsp_t    ( axi_slv_cache_resp_t  )
         ) i_hbm_reqrsp_to_axi (
-          .clk_i        ( clk_i            ),
-          .rst_ni       ( rst_ni           ),
-          .user_i       ( '0               ),
-          .reqrsp_req_i ( hbm_reqrsp_req   ),
-          .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
-          .axi_req_o    ( hbm_axi_req      ),
-          .axi_rsp_i    ( hbm_axi_rsp      )
+          .clk_i        ( clk_i                 ),
+          .rst_ni       ( rst_ni                ),
+          .user_i       ( '0                    ),
+          .reqrsp_req_i ( hbm_reqrsp_req        ),
+          .reqrsp_rsp_o ( hbm_reqrsp_rsp        ),
+          .axi_req_o    ( hbm_axi_req           ),
+          .axi_rsp_i    ( hbm_axi_rsp           )
         );
 
         assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
-        assign hbm_axi_rsp               = wide_axi_slv_rsp[HbmIdx];
+        assign hbm_axi_rsp              = wide_axi_slv_rsp[HbmIdx];
       end
     end
 
@@ -869,11 +873,11 @@ module cachepool_cluster
 
       // Chimney subordinate port ↔ REQRSP bundle bridge
       cache_trans_req_chan_t hbm_sbr_req;
-      logic                 hbm_sbr_req_valid;
-      logic                 hbm_sbr_req_ready;
+      logic                  hbm_sbr_req_valid;
+      logic                  hbm_sbr_req_ready;
       cache_trans_rsp_chan_t hbm_sbr_rsp;
-      logic                 hbm_sbr_rsp_valid;
-      logic                 hbm_sbr_rsp_ready;
+      logic                  hbm_sbr_rsp_valid;
+      logic                  hbm_sbr_rsp_ready;
 
       floo_tcdm_chimney #(
         .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
@@ -883,8 +887,8 @@ module cachepool_cluster
         .route_t    ( floo_cachepool_noc_pkg::route_t     ),
         .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
         .hdr_t      ( l2_noc_hdr_t                        ),
-        .req_chan_t  ( cache_trans_req_chan_t             ),
-        .rsp_chan_t  ( cache_trans_rsp_chan_t             ),
+        .req_chan_t ( cache_trans_req_chan_t              ),
+        .rsp_chan_t ( cache_trans_rsp_chan_t              ),
         .floo_req_t ( l2_noc_req_t                        ),
         .floo_rsp_t ( l2_noc_rsp_t                        ),
         .addr_t     ( axi_addr_t                          ),
@@ -1008,21 +1012,23 @@ module cachepool_cluster
   // --------------------------------------------------
   //
   // Data path (all 32b REQRSP):
-  //   Source [0]: HBM0 demux port 1 → reqrsp_w2n_converter (512b→32b) → pad src_id=0
-  //   Source [1]: peri_ext_req_i (TB/SoC, already 32b REQRSP)       → pad src_id=1
+  //   Source [0]: HBM0 demux port 1 -> reqrsp_w2n_converter (512b-32b) -> pad src_id=0
+  //   Source [1]: peri_ext_req_i (TB/SoC, already 32b REQRSP)          -> pad src_id=1
   //
-  //   Target [0]: BootROM   → reqrsp_to_reg → bootrom
-  //   Target [1]: CSR       → reqrsp_to_reg → cachepool_peripheral
-  //   Target [2]: UART      → reqrsp_to_axi → axi_narrow_req_o
+  //   Target [0]: BootROM   -> reqrsp_to_reg -> bootrom
+  //   Target [1]: CSR       -> reqrsp_to_reg -> cachepool_peripheral
+  //   Target [2]: UART      -> reqrsp_to_axi -> axi_narrow_req_o
   //
   // Response routing: mst_sel_i = mst_rsp.user.src_id (1-bit, 0=NoC, 1=TB)
 
   localparam int unsigned PeriXbarNumSrc = 2;
   localparam int unsigned PeriXbarNumTgt = 3;
 
-  localparam int unsigned PeriTgtBootROM = 0;
-  localparam int unsigned PeriTgtCSR     = 1;
-  localparam int unsigned PeriTgtUART    = 2;
+  typedef enum int unsigned {
+    PeriTgtBootROM = 0,
+    PeriTgtCSR     = 1,
+    PeriTgtUART    = 2
+  } peri_tgt_e;
 
   // Calculate the peripheral base address (needed for xbar rules).
   localparam logic [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
@@ -1030,7 +1036,6 @@ module cachepool_cluster
   assign tcdm_start_address = (cluster_base_addr_i & TCDMMask);
   assign tcdm_end_address   = (tcdm_start_address + TCDMSize) & TCDMMask;
 
-  // ---- Address decode: source address → target index ----
   typedef logic [$clog2(PeriXbarNumTgt)-1:0] peri_tgt_sel_t;
   typedef logic                              peri_src_sel_t;
 

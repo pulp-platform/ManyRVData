@@ -38,7 +38,6 @@ typedef struct snrt_alloc_block {
 // This struct is placed at the end of each clusters TCDM
 struct snrt_team_root {
     struct snrt_team base;
-    const void *bootdata;
     uint32_t global_core_base_hartid;
     uint32_t global_core_num;
     uint32_t cluster_idx;
