@@ -147,8 +147,9 @@ int main() {
         // Consumer/acquire: this stage reads `src`, which for stage > 0 was
         // written by (possibly) other cores in the previous stage.  Drop stale
         // private lines so the reads miss down to the fresh copy in shared L2.
+        lp1_wt_flush();
         lp1_inval();
-        snrt_fence();
+        // snrt_fence();
 #endif
         fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
 #ifdef LP1
@@ -157,7 +158,7 @@ int main() {
         // barrier.  sfence.vma first: the Spatz vector stores are async and must
         // retire into the write buffer before we drain it.
         snrt_fence_spatz();
-        snrt_fence();
+        // snrt_fence();
         lp1_wt_flush();
 #endif
         // each round will use half the twiddle than previous round
@@ -173,13 +174,13 @@ int main() {
     }
 
     if (cid < active_cores) {
-#ifdef LP1
+// #ifdef LP1
       // Consumer/acquire: phase 2 reads samples/buffer_dram + cid*NFFTpc, a
       // DIFFERENT partition than phase 1 used, produced by other cores in the
       // last phase-1 stage.  Drop stale private lines before reading.
-      lp1_inval();
-      snrt_fence();
-#endif
+      // lp1_inval();
+      // snrt_fence();
+// #endif
       // Fall back into the single-core case
       // Each core just do a FFT on (NFFT >> stage_in_P1) data
       // Phase-2 interior needs no CMOs: its s<->buf swaps stay within this
@@ -194,7 +195,7 @@ int main() {
 #ifdef LP1
       // Producer/release: publish out[] down to L2 for core-0 verification.
       snrt_fence_spatz();
-      snrt_fence();
+      // snrt_fence();
       lp1_wt_flush();
 #endif
     }
@@ -217,8 +218,9 @@ int main() {
 #ifdef LP1
         // Consumer/acquire: drop core-0's stale private lines so the checks read
         // the freshly-produced out[] (now in L2/DRAM after the flush above).
+        lp1_wt_flush();
         lp1_inval();
-        snrt_fence();
+        // snrt_fence();
 #endif
 
         // Verify the real part

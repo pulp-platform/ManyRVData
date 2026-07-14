@@ -20,9 +20,31 @@
 #include <snrt.h>
 #include <stdio.h>
 #include <l1cache.h>
+#include <lp1cache.h>
+#include <team.h>   // SNRT_CACHELINE_SIZE
 
 #include "kernel/gemv.c"
 #include DATAHEADER
+
+// ---------------------------------------------------------------------------
+// Private-L1 (LP1): this kernel DOES need coherency protection.
+//
+// Unlike fmatmul-32b (where each core verifies its own rows, so producer ==
+// consumer and no CMO is needed), here core `cid` writes result[cid*m_core ..)
+// but CORE 0 VERIFIES ALL OF THEM.  Producer != consumer, so the shared `result`
+// buffer needs a full release/acquire pair around the barrier:
+//
+//   producer (every core):  snrt_fence(); lp1_wt_flush();
+//   consumer (core 0):      lp1_inval();  snrt_fence();
+//
+// The acquire half is not optional cosmetics.  m_core = M/num_cores is only 4
+// floats (16 B) for M=128 on 32 cores, so FOUR cores share one 64 B cacheline of
+// `result`.  Write-through keeps L2 correct (per-word strobes), but core 0's own
+// cached copy of that line still carries cores 1-3's stale words, and nothing
+// updates it.  It must be invalidated before core 0 reads.
+//
+// A and B are read-only shared -- no protection needed for them.
+// ---------------------------------------------------------------------------
 
 #if (PREC == 64)
 #define T double
@@ -36,6 +58,19 @@
 
 #define SNRT_NFPU_PER_CORE 4
 
+// The kernel output MUST NOT alias the golden reference.
+//
+// The original code did `result = gemv_result`, so the kernel overwrote the
+// reference and fp_check(&result[j], &gemv_result[j]) then compared the array
+// with ITSELF: x - x == 0, always below threshold.  The test could not fail --
+// it would have reported success with the cache off and garbage in memory.
+//
+// Sized from the golden array so it tracks M with no extra macro.  Explicitly
+// cacheline-aligned, and a whole number of cachelines (M is always a multiple of
+// 16 floats here), so it cannot skew the alignment of whatever the linker places
+// next -- see fmatmul-32b/main.c for the hang that alignment skew caused.
+static T gemv_out[sizeof(gemv_result) / sizeof(T)]
+    __attribute__((section(".pdcp_src"), aligned(SNRT_CACHELINE_SIZE)));
 
 static inline int fp_check(const T *a, const T *b) {
   const T threshold = 0.001;
@@ -62,17 +97,20 @@ int main() {
 
   // We use all-private mode for this kernel
   l1d_xbar_config(offset);
-  l1d_part(4);
+  // l1d_part(4);
 
-  // Reset timer
-  unsigned int timer_start, timer_end, timer, timer_iter1;
+  // Reset timer.  `timer` is read by the `timer_temp < timer` test on the very
+  // first iteration, so it must start at max, not at whatever was on the stack.
+  unsigned int timer_start, timer_end, timer_iter1;
+  unsigned int timer = (unsigned int)-1;
 
   // Unroll in M direction?
   int unroll_m = 0;
 
   a = gemv_A_dram;
   b = gemv_B_dram;
-  result = gemv_result;
+  // Output buffer, distinct from the golden gemv_result -- see gemv_out above.
+  result = gemv_out;
 
   // Calculate internal pointers
   T *a_core = a + m_core * cid;
@@ -123,17 +161,34 @@ int main() {
 
     // All cores flush before first-iteration verification
     if (i == 0) {
+      // Producer / release.  snrt_fence() drains this core's outstanding Spatz
+      // vector stores (snrt_cluster_hw_barrier() does NOT -- it is just a scalar
+      // load by Snitch, and Spatz is decoupled); lp1_wt_flush() then drains the
+      // write-through buffer so the values actually reach L2.
+      snrt_fence();
+      lp1_wt_flush();
+
       l1d_cluster_flush();
+
+      // Consumer / acquire.  Core 0 is about to read EVERY core's slice of
+      // `result`, so it must drop the copies in its own private L1 -- the release
+      // above pushed the producers' values to L2 but told core 0 nothing.  Without
+      // this, core 0 can read stale words out of a line it false-shares with cores
+      // 1..3 (m_core is 16 B for M=128 on 32 cores; a line is 64 B).
+      // lp1_inval() drives a per-core CMO slot with no internal barrier, so it is
+      // safe to call from every core.
+      lp1_inval();
+      snrt_fence();
     }
 
     if (cid == 0) {
       if (i == 0) {
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
-            printf("Error: ID: %i Calc", i);
-            snrt_printf_float(result[i]);
+            printf("Error: idx %u Calc:", j);
+            snrt_printf_float(result[j]);
             printf(",Exp:");
-            snrt_printf_float(gemv_result[i]);
+            snrt_printf_float(gemv_result[j]);
             printf("\n");
           }
         }
