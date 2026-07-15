@@ -54,8 +54,6 @@
 // Critical-section entries per core. >1 is what exposes the staleness hazard.
 #define REPS 16
 
-#define LP1
-
 static volatile uint32_t result __attribute__((section(".data")));
 
 spinlock_t lock;
@@ -70,20 +68,16 @@ int main() {
   for (unsigned int r = 0; r < REPS; r++) {
     spin_lock(&lock, 20);
 
-#ifdef LP1
     // Acquire side: drop stale cached copies so the read of `result` is fresh.
     lp1_inval();
     snrt_fence();
-#endif
 
     result += cid;
 
-#ifdef LP1
     // Release side: drain the write-through buffer so this update reaches L2
     // before the lock is handed to the next core. Fence must precede the flush.
     snrt_fence();
     lp1_wt_flush();
-#endif
 
     spin_unlock(&lock, 20);
   }

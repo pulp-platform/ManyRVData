@@ -146,19 +146,24 @@ def emit_GEMM_layer(name="gemm", **kwargs):
     ctypes = {"64": "double", "32": "float", "16": "__fp16", "8": "char"}
 
     dtype = ctypes[str(kwargs["prec"])]
+    # aligned(64): force each matrix onto a cacheline boundary so it is
+    # independent of whatever the linker places before it in .data.  Spatz's LP1
+    # accesses assume both the 64B cacheline (false-sharing of C row partitions)
+    # and the 16B coalescing window (wordWidth=128b, 4 lanes x 4B) are aligned; a
+    # 4-byte-natural start would skew both.  This is why fmatmul-32b/main.c
     if dtype != "char":
         layer_str += (
-            f'static {dtype} {name}_A_dram [{m}*{k}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_A_dram [{m}*{k}] __attribute__((section(".data"), aligned(64))) = '
             + array_to_cstr(mat_A)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_B_dram [{k}*{n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_B_dram [{k}*{n}] __attribute__((section(".data"), aligned(64))) = '
             + array_to_cstr(mat_B)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_C_dram [{m}*{n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_C_dram [{m}*{n}] __attribute__((section(".data"), aligned(64))) = '
             + array_to_cstr(mat_C)
             + ";\n\n\n"
         )
