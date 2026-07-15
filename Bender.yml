@@ -15,7 +15,7 @@ dependencies:
   tech_cells_generic:  { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11               }
   Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/cachepool_dev  }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool            }
-  floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                 }
+  floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     cachepool            }
   cluster_icache:      { git: "https://github.com/pulp-platform/cluster_icache.git",     rev:     main                 }
   spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b        }
 
