@@ -155,8 +155,8 @@ module reqrsp_w2n_converter #(
   // Address allowlist for the post-completion cache (see header comment).
   function automatic logic addr_is_cacheable(input logic [AddrWidth-1:0] addr);
     addr_is_cacheable = (CacheableSize != '0)
-                       && (addr >= CacheableBase)
-                       && (addr < CacheableBase + CacheableSize);
+                      && (addr >= CacheableBase)
+                      && (addr < CacheableBase + CacheableSize);
   endfunction
 
   // ---------------------------------------------------------------------------

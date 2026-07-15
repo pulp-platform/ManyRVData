@@ -82,8 +82,10 @@ test:
           - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
           - byte-enable
   script:
-    # The vsim script writes a .rtlbinary marker here; ensure the dir exists.
-    - mkdir -p sim/bin/logs
+    # The vsim script writes a .rtlbinary marker here; monitor logs need the
+    # core/noc/others subfolders. Build artifacts exclude sim/bin/logs/, so
+    # these must be recreated in the test job too.
+    - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
     - BIN="${SW_PREFIX}${KERNEL}"
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_${KERNEL}.log

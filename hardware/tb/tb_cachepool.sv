@@ -104,6 +104,12 @@ module tb_cachepool;
     .peri_ext_rsp_o    (peri_to_cluster_rsp   ),
     .cluster_probe_o   (cluster_probe         )
   );
+
+  cachepool_monitor i_cachepool_monitor (
+    .clk_i           (clk           ),
+    .rst_ni          (rst_n         ),
+    .cluster_probe_i (cluster_probe )
+  );
 /**************
  *  VCD Dump  *
  **************/

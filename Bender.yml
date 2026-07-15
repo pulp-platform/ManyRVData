@@ -60,4 +60,5 @@ sources:
   - target: cachepool_test
     files:
     - hardware/tb/axi_uart.sv
+    - hardware/tb/cachepool_monitor.sv
     - hardware/tb/tb_cachepool.sv
