@@ -43,7 +43,7 @@ build:
     - make init
     - make dram-build
     - python3 -m pip install --quiet -r requirements.txt
-    - make clean generate vsim config=$CI_CONFIG
+    - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG
   artifacts:
     when: always
     expire_in: 2h
