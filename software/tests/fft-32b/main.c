@@ -26,34 +26,8 @@
 #include DATAHEADER
 #include "kernel/fft.c"
 
-// ---------------------------------------------------------------------------
-// Private-L1 (LP1) coherency protection.
-//
-// LP1 is the per-core, write-through, NON-coherent private cache; Snitch scalar
-// AND Spatz vector accesses both go through it.  Coherency between cores is
-// re-established purely in software, at every cross-core producer->consumer
-// handoff, with the two CMO+fence sequences below:
-//
-//   producer/release: snrt_fence_spatz(); snrt_fence(); lp1_wt_flush();
-//     drain this core's write-through buffer down to shared L2 so peers can see
-//     it.  sfence.vma is mandatory first -- the FFT stores are async Spatz
-//     vector stores and must retire into the write buffer before we drain it.
-//
-//   consumer/acquire: lp1_inval(); snrt_fence();
-//     drop this core's stale private lines so the next reads miss down to the
-//     fresh copy in shared L2.
-//
-// The cluster barrier gives ordering only, not visibility, so BOTH sides are
-// required.  CMOs are issued at stage / phase granularity, never per vector
-// load: a whole-cache INVAL between in-flight Spatz stores races the
-// outstanding stores and corrupts data.
-//
-// Comment out `#define LP1` to fall back to the (all-wrong) unprotected build.
-#define LP1
-
-#ifdef LP1
 #include <lp1cache.h>
-#endif
+
 
 static inline int fp_check(const float a, const float b) {
   const float threshold = 0.01f;
@@ -74,7 +48,7 @@ static inline int fp_check(const float a, const float b) {
 // 1024 -> 64
 
 int main() {
-  const int measure_iter = 1;
+  const int measure_iter = 2;
 
   // twiddle layout: [re_p1, im_p1, re_p2, im_p2]
   const uint32_t num_cores = snrt_cluster_core_num();
@@ -143,24 +117,18 @@ int main() {
 
     for (uint32_t i = 0; i < log2_nfft1; i ++) {
       if (cid < active_cores) {
-#ifdef LP1
-        // Consumer/acquire: this stage reads `src`, which for stage > 0 was
-        // written by (possibly) other cores in the previous stage.  Drop stale
-        // private lines so the reads miss down to the fresh copy in shared L2.
-        lp1_wt_flush();
+        
+        // Consumer/acquire: Drop stale private lines 
+        // so the reads miss down to the fresh copy in shared L2.
         lp1_inval();
-        // snrt_fence();
-#endif
-        fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
-#ifdef LP1
-        // Producer/release: drain this stage's write-through output down to L2
-        // so the next stage's consumers (on other cores) see it after the
-        // barrier.  sfence.vma first: the Spatz vector stores are async and must
-        // retire into the write buffer before we drain it.
-        snrt_fence_spatz();
-        // snrt_fence();
         lp1_wt_flush();
-#endif
+        
+        fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
+        
+        // Producer/release: drain this stage's write-through output down to L2
+        snrt_fence();
+        lp1_wt_flush();
+        
         // each round will use half the twiddle than previous round
         // the first round needs re/im NFFT/2 twiddles
         src_p1 = (i & 1) ? samples_dram : buffer_dram;
@@ -174,13 +142,6 @@ int main() {
     }
 
     if (cid < active_cores) {
-// #ifdef LP1
-      // Consumer/acquire: phase 2 reads samples/buffer_dram + cid*NFFTpc, a
-      // DIFFERENT partition than phase 1 used, produced by other cores in the
-      // last phase-1 stage.  Drop stale private lines before reading.
-      // lp1_inval();
-      // snrt_fence();
-// #endif
       // Fall back into the single-core case
       // Each core just do a FFT on (NFFT >> stage_in_P1) data
       // Phase-2 interior needs no CMOs: its s<->buf swaps stay within this
@@ -192,12 +153,11 @@ int main() {
         fft_p2(src_p2, buf_p2, twi_p2, out_p2, store_idx_dram, (NFFT>>log2_nfft1),
               NFFT, log2_nfft2, stride, log2_nfft1, NTWI_P2);
       }
-#ifdef LP1
-      // Producer/release: publish out[] down to L2 for core-0 verification.
-      snrt_fence_spatz();
-      // snrt_fence();
+      
+      // Producer/release: flush out[] down to L2 for core-0 verification.
+      snrt_fence();
       lp1_wt_flush();
-#endif
+      
     }
     // Wait for all cores to finish fft
     snrt_cluster_hw_barrier();
@@ -212,16 +172,12 @@ int main() {
       stop_kernel();
 
       if ((iter == 0) && CHECK) {
+        // Consumer/acquire: drop core-0's stale private lines
+        lp1_inval();
+        snrt_fence();
+
         l1d_flush();
         l1d_wait();
-
-#ifdef LP1
-        // Consumer/acquire: drop core-0's stale private lines so the checks read
-        // the freshly-produced out[] (now in L2/DRAM after the flush above).
-        lp1_wt_flush();
-        lp1_inval();
-        // snrt_fence();
-#endif
 
         // Verify the real part
         for (unsigned int i = 0; i < NFFT; i++) {

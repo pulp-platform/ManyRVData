@@ -2,7 +2,7 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 //
-// Author: Ho Tin Hung, ETH Zurich
+// Author: Ho Tin Hung, ETH Zurich <hohung@ethz.ch>
 //
 // Per-core private L1 data cache controller.
 //
@@ -382,26 +382,28 @@ module cachepool_l1_ctrl
     end
   end
 
-  // BE for the coalesced (wide) request.
-  // NOTE: preserved hitmap-shift scheme (each hit lane marks its lane-width bytes
-  // at its lane index) rather than the coalescer's wmask, per design intent.
-  // Revisit with owner before switching to coal_req_wmask.
-  logic [WordBytes-1:0] coal_be;
-  always_comb begin : gen_coal_be
-    coal_be = '0;
-    for (int unsigned id = 0; id < NrLP1CoalInputs; id++) begin
-      if (coal_req_info.hitmap[id]) begin
-        coal_be |= ({LaneBytes{1'b1}} << (id * LaneBytes));
-      end
-    end
-  end
+  // BE for the coalesced (wide) request: use the coalescer's wmask
+  // logic [WordBytes-1:0] coal_be;
+  // always_comb begin : gen_coal_be
+  //   coal_be = '0;
+  //   for (int unsigned id = 0; id < NrLP1CoalInputs; id++) begin
+  //     if (coal_req_info.hitmap[id]) begin
+  //       coal_be |= ({LaneBytes{1'b1}} << (id * LaneBytes));
+  //     end
+  //   end
+  // end
 
   always_comb begin : gen_l1_req_spatz
     l1_req[0]             = '0;
     l1_req[0].addr_offset = coal_req_addr[HPDcacheCfg.reqOffsetWidth-1:0];
     l1_req[0].addr_tag    = coal_req_addr[HPDcacheCfg.reqOffsetWidth +: HPDcacheCfg.tagWidth];
     l1_req[0].wdata       = coal_req_wdata;
-    l1_req[0].be          = coal_be;
+    // Stores take the coalescer's wmask (correct slot + correct byte granularity).
+    // Reads keep the old hitmap-shift value: HPDcache only consumes `be` on the
+    // store/AMO/wbuf/uncached paths, and the coalescer leaves wmask = '0 on reads,
+    // so this avoids changing read behaviour while fixing the store path.
+    l1_req[0].be = coal_req_wmask;
+    // l1_req[0].be          = coal_req_write ? coal_req_wmask : coal_be;
     l1_req[0].size        = hpdcache_req_size_t'($clog2(coalescedDataWidth/8));
     l1_req[0].sid         = hpdcache_req_sid_t'(0);   // Spatz
     l1_req[0].need_rsp    = 1'b1;
@@ -429,8 +431,9 @@ module cachepool_l1_ctrl
   // HPDcache requester 1 (Snitch)  //
   ///////////////////////////////////
   // Snitch writes its narrow word into the wide cache word at its byte position.
+  // assign sn_byte_pos = l1_cache_req[SnitchPort].addr_offset % WordBytes;
   logic [$clog2(WordBytes)-1:0] sn_byte_pos;
-  assign sn_byte_pos = l1_cache_req[SnitchPort].addr_offset % WordBytes;
+  assign sn_byte_pos = ($clog2(WordBytes))'(cache_req_word_offset[SnitchPort] * LaneBytes);
 
   always_comb begin : gen_l1_req_snitch
     l1_req[1]             = l1_cache_req[SnitchPort];

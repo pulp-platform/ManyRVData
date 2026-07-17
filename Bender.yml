@@ -14,7 +14,7 @@ dependencies:
   riscv-dbg:           { git: "https://github.com/pulp-platform/riscv-dbg.git",          version: 0.7.0                   }
   tech_cells_generic:  { git: "https://github.com/pulp-platform/tech_cells_generic.git", version: 0.2.11                  }
   # Insitu-Cache:        { git: "https://github.com/pulp-platform/Insitu-Cache.git",       rev:     zexin/cachepool_dev  }
-  Insitu-Cache:        { git: "https://github.com/HHT1228/Insitu-Cache.git",             rev:     hohung-multi-tile       }
+  Insitu-Cache:        { git: "https://github.com/HHT1228/Insitu-Cache.git",             rev:     hohung/cachepool/wt-l1  }
   hpdcache:            { git: "https://github.com/HHT1228/cv-hpdcache.git",              rev:     cachepool/no_coherence  }
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool               }
   floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                    }
