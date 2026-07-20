@@ -108,10 +108,8 @@ module cachepool_group_noc_wrapper
   // -------------------------------------------------------------------------
   // Localparams
   // -------------------------------------------------------------------------
-  // [LP1] Strategy-B collapse: inter-group ports no longer fan out per TCDM plane;
+  // [LP1] inter-group ports no longer fan out per TCDM plane;
   // the per-tile count is NumRemoteGroupPortCore * NumL2Plane (matches cachepool_group).
-  // localparam int unsigned NumRemoteGroupPortTile  = (NumRemoteGroupPortCore == 0) ? 1
-  //                                                   : NumRemoteGroupPortCore * NrTCDMPortsPerCore;
   localparam int unsigned NumRemoteGroupPortTile  = (NumRemoteGroupPortCore == 0) ? 1
                                                     : NumRemoteGroupPortCore * NumL2Plane;
   localparam int unsigned NumRemoteGroupPortGroup = NumRemoteGroupPortTile * NumTilesPerGroup;
@@ -250,7 +248,7 @@ module cachepool_group_noc_wrapper
         assign mst_xbar_mst_sel[n]   = eject_rsp[noc_port].hdr.src_port_id;
       end
 
-      // [LP1] Static port-to-NoC-channel mapping. After the Strategy-B collapse the
+      // [LP1] Static port-to-NoC-channel mapping. After the collapse the
       // tile emits NumRemoteGroupPortCore * NumL2Plane inter-group ports; the L2
       // plane index is p % NumL2Plane, steered to NoC channel (plane % NumNoCPortsPerTile).
       // (With NumL2Plane == 1 every port maps to channel 0.)
@@ -258,7 +256,6 @@ module cachepool_group_noc_wrapper
                                                ? $clog2(NumNoCPortsPerTile) : 1;
       logic [NumRemoteGroupPortTile-1:0][NocMstSelWidth-1:0] noc_mst_sel;
       for (genvar p = 0; p < NumRemoteGroupPortTile; p++) begin : gen_noc_mst_sel
-        // assign noc_mst_sel[p] = NocMstSelWidth'((p % NrTCDMPortsPerCore) % NumNoCPortsPerTile);
         assign noc_mst_sel[p] = NocMstSelWidth'((p % NumL2Plane) % NumNoCPortsPerTile);
       end
 

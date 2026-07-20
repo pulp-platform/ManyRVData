@@ -26,26 +26,6 @@
 #include "kernel/gemv.c"
 #include DATAHEADER
 
-// ---------------------------------------------------------------------------
-// Private-L1 (LP1): this kernel DOES need coherency protection.
-//
-// Unlike fmatmul-32b (where each core verifies its own rows, so producer ==
-// consumer and no CMO is needed), here core `cid` writes result[cid*m_core ..)
-// but CORE 0 VERIFIES ALL OF THEM.  Producer != consumer, so the shared `result`
-// buffer needs a full release/acquire pair around the barrier:
-//
-//   producer (every core):  snrt_fence(); lp1_wt_flush();
-//   consumer (core 0):      lp1_inval();  snrt_fence();
-//
-// The acquire half is not optional cosmetics.  m_core = M/num_cores is only 4
-// floats (16 B) for M=128 on 32 cores, so FOUR cores share one 64 B cacheline of
-// `result`.  Write-through keeps L2 correct (per-word strobes), but core 0's own
-// cached copy of that line still carries cores 1-3's stale words, and nothing
-// updates it.  It must be invalidated before core 0 reads.
-//
-// A and B are read-only shared -- no protection needed for them.
-// ---------------------------------------------------------------------------
-
 #if (PREC == 64)
 #define T double
 #elif (PREC == 32)
@@ -161,22 +141,13 @@ int main() {
 
     // All cores flush before first-iteration verification
     if (i == 0) {
-      // Producer / release.  snrt_fence() drains this core's outstanding Spatz
-      // vector stores (snrt_cluster_hw_barrier() does NOT -- it is just a scalar
-      // load by Snitch, and Spatz is decoupled); lp1_wt_flush() then drains the
-      // write-through buffer so the values actually reach L2.
+      // Producer / release.
       snrt_fence();
       lp1_wt_flush();
 
       l1d_cluster_flush();
 
-      // Consumer / acquire.  Core 0 is about to read EVERY core's slice of
-      // `result`, so it must drop the copies in its own private L1 -- the release
-      // above pushed the producers' values to L2 but told core 0 nothing.  Without
-      // this, core 0 can read stale words out of a line it false-shares with cores
-      // 1..3 (m_core is 16 B for M=128 on 32 cores; a line is 64 B).
-      // lp1_inval() drives a per-core CMO slot with no internal barrier, so it is
-      // safe to call from every core.
+      // Consumer / acquire.  Core 0 drop the copies in its own private L1
       lp1_inval();
       snrt_fence();
     }

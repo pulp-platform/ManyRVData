@@ -398,10 +398,6 @@ module cachepool_l1_ctrl
     l1_req[0].addr_offset = coal_req_addr[HPDcacheCfg.reqOffsetWidth-1:0];
     l1_req[0].addr_tag    = coal_req_addr[HPDcacheCfg.reqOffsetWidth +: HPDcacheCfg.tagWidth];
     l1_req[0].wdata       = coal_req_wdata;
-    // Stores take the coalescer's wmask (correct slot + correct byte granularity).
-    // Reads keep the old hitmap-shift value: HPDcache only consumes `be` on the
-    // store/AMO/wbuf/uncached paths, and the coalescer leaves wmask = '0 on reads,
-    // so this avoids changing read behaviour while fixing the store path.
     l1_req[0].be = coal_req_wmask;
     // l1_req[0].be          = coal_req_write ? coal_req_wmask : coal_be;
     l1_req[0].size        = hpdcache_req_size_t'($clog2(coalescedDataWidth/8));
@@ -441,10 +437,6 @@ module cachepool_l1_ctrl
     l1_req[1].wdata       = hpdcache_req_data_t'(cache_req_data[SnitchPort]) << (sn_byte_pos * ByteWidth);
     l1_req[1].be          = hpdcache_req_be_t'(cache_req_strb[SnitchPort]) << sn_byte_pos;
     l1_req[1].tid         = core_req_i[SnitchPort].q_valid ? l1_cache_req[SnitchPort].tid : '0;
-    // Phase 2: AMOs (incl. LR/SC) are serviced at the shared L2 by spatz_cache_amo,
-    // not inside this private L1. Mark them uncacheable so HPDcache routes them
-    // through its uncached/ATOP handler (forwards the atomic downstream) instead of
-    // doing a local self-update. Plain loads/stores stay cacheable WT.
     l1_req[1].pma.uncacheable = (cache_req_amo[SnitchPort] != AMONone);
   end
 
@@ -597,16 +589,6 @@ module cachepool_l1_ctrl
   ////////////////////////
   // L2 -> L1 response   //
   ////////////////////////
-  // The L2 response valid/ready handshake is (l2_rsp_i.p_valid / l2_rsp_ready_o);
-  // the ready rides on a separate wire (the interco's core_rsp_ready_i), not in
-  // tcdm_rsp_t (whose q_ready is the request grant). HPDcache's mem_resp_*_ready
-  // drives it, so refills/write-acks are properly back-pressured. Read/write
-  // responses are distinguished by p.write and steered to the matching HPDcache
-  // mem channel. The original HPDcache mem id is recovered by removing the
-  // per-private-cache offset the tile added to make ids unique towards the shared
-  // L2 (req_id += core_id + tile_id), i.e. req_id - core_id - tile_id. The L1
-  // controller is core/tile-private and agnostic of its own ids (it reads them
-  // back from the echoed downstream user).
   always_comb begin : rsp_translation
     l1_mem_resp_read_valid  = 1'b0;
     l1_mem_resp_write_valid = 1'b0;
@@ -627,8 +609,7 @@ module cachepool_l1_ctrl
     end
   end
 
-  // Response ready back to the interco: HPDcache mem-resp ready for the matching
-  // channel.
+  // Response ready back to the interco: HPDcache mem-resp ready for the matching channel.
   assign l2_rsp_ready_o = l2_rsp_i.p.write ? l1_mem_resp_write_ready
                                            : l1_mem_resp_read_ready;
 
@@ -658,9 +639,7 @@ module cachepool_l1_ctrl
   assign l1_mem_req_write_ready      = __l1_mem_req_write_ready & l1_mem_req_write_both_valid;
   assign l1_mem_req_write_data_ready = __l1_mem_req_write_ready & l1_mem_req_write_both_valid;
 
-  // Downstream request metadata. The full HPDcache mem id rides in req_id and is
-  // trusted to round-trip; the tile offsets it by core_id for uniqueness across
-  // its private caches (undone on the response). core_id/tile_id tagged at tile.
+  // Downstream request metadata.
   always_comb begin : req_meta
     l1_l2_req_meta         = '0;
     l1_l2_req_meta.is_amo  = (l1_l2_req.mem_req_command == HPDCACHE_MEM_ATOMIC);
@@ -680,13 +659,6 @@ module cachepool_l1_ctrl
     l2_req_o.q.user  = l1_l2_req_meta;
     l2_req_o.q_valid = l1_l2_req_valid;
 
-    // Phase 2 AMO: phase 1 forced q.amo=AMONone (atomics were serviced inside
-    // HPDcache). Now route them to the shared-L2 spatz_cache_amo by translating
-    // HPDcache's AXI5-ATOP subtype back into the reqrsp amo_op_e the AMO unit reads.
-    // Atomics arrive with command==ATOMIC, so q.write stays 0 above: the AMO unit
-    // issues the operand-A read itself and generates its own write-back / SC write.
-    // The operand (rs2) rides on the write-data channel (mem_req_w_data) already
-    // aligned to the target byte offset.
     if (l1_l2_req.mem_req_command == HPDCACHE_MEM_ATOMIC) begin
       unique case (l1_l2_req.mem_req_atomic)
         HPDCACHE_MEM_ATOMIC_ADD : l2_req_o.q.amo = AMOAdd;

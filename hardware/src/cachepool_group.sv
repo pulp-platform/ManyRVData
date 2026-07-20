@@ -93,12 +93,6 @@ module cachepool_group
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
     parameter int unsigned                              NrSramCfg                 = 1,
 
-    // [LP1] Strategy-B collapse: inter-group ports no longer fan out per TCDM
-    // plane; the per-tile count is NumRemoteGroupPortCore * NumL2Plane.
-    // localparam int unsigned                          TotRGPorts                = (NumRemoteGroupPortCore == 0) ? 0 :
-    //                                                                                  NumTilesPerGroup*NumRemoteGroupPortCore*NrTCDMPortsPerCore-1,
-    // localparam int unsigned                          NumRemoteGroupPortTile    = (NumRemoteGroupPortCore == 0) ? 1 :
-    //                                                                                  NumRemoteGroupPortCore * NrTCDMPortsPerCore
     localparam int unsigned                             TotRGPorts                = (NumRemoteGroupPortCore == 0) ? 0 :
                                                                                      NumTilesPerGroup*NumRemoteGroupPortCore*NumL2Plane-1,
     localparam int unsigned                             NumRemoteGroupPortTile    = (NumRemoteGroupPortCore == 0) ? 1 :
@@ -642,26 +636,18 @@ module cachepool_group
 
   // Tile remote access signals
   // In/Out relative to the tile (out--leave a tile; in--enter a tile)
-  // [LP1] Strategy-B + Option-A: tile-side remote ports are cacheline-wide now,
+  // [LP1] tile-side remote ports are cacheline-wide now,
   // and the per-plane (NrTCDMPortsPerCore) xbar fan-out collapses to NumL2Plane.
   // Tile-side flat layout: index = j + r*NumL2Plane (j=xbar idx, r=remote slot within xbar)
-  // tcdm_req_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_req;
-  // tcdm_rsp_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_rsp;
   tcdm_cacheline_req_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_req;
   tcdm_cacheline_rsp_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_out_rsp;
   logic             [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_ready, tile_remote_out_ready;
 
-  // tcdm_req_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_req;
-  // tcdm_rsp_t        [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_rsp;
   tcdm_cacheline_req_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_req;
   tcdm_cacheline_rsp_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0] tile_remote_in_rsp;
 
   // Xbar-side: NumL2Plane xbars, each with NumTilesPerGroup*NumRemotePortCore ports
   // Xbar port index = t*NumRemotePortCore + r
-  // tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_req_chan;
-  // tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_rsp_chan;
-  // tcdm_req_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_req_chan;
-  // tcdm_rsp_chan_t   [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_in_rsp_chan;
   tcdm_cacheline_req_chan_t [NumL2Plane-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_req_chan;
   logic             [NumL2Plane-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_req_valid, tile_remote_out_req_ready;
   tcdm_cacheline_rsp_chan_t [NumL2Plane-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] tile_remote_out_rsp_chan;
@@ -680,12 +666,9 @@ module cachepool_group
   // Tile-side selection: narrow type, only carries tile_id
   remote_tile_sel_t [NumTilesPerGroup-1:0][NumRemotePortTile-1:0]                    remote_out_sel_tile;
   // Xbar-side selection: wider type, encodes tile_id*NumRemotePortCore + core_id%NumRemotePortCore
-  // local_remote_xbar_sel_t [NrTCDMPortsPerCore-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
   local_remote_xbar_sel_t [NumL2Plane-1:0][NumTilesPerGroup*NumRemotePortCore-1:0] remote_out_sel_xbar, remote_in_sel_xbar;
 
   for (genvar t = 0; t < NumTilesPerGroup; t++) begin
-    // [LP1] j now indexes the (single) L2 plane; tile flat index = j + r*NumL2Plane.
-    // for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin
     for (genvar j = 0; j < NumL2Plane; j++) begin
       for (genvar r = 0; r < NumRemotePortCore; r++) begin
         // tile flat index: j + r*NumL2Plane
@@ -909,41 +892,7 @@ module cachepool_group
   // Remote XBar
   // ------------
 
-  // for (genvar p = 0; p < NrTCDMPortsPerCore; p++) begin : gen_remote_tile_xbar
-  //   // Decide which tile to go
-  //   reqrsp_xbar #(
-  //     .NumInp           (NumTilesPerGroup * NumRemotePortCore ),
-  //     .NumOut           (NumTilesPerGroup * NumRemotePortCore ),
-  //     .PipeReg          (1'b1                         ),
-  //     .RspReg           (1'b1                         ),
-  //     .ExtReqPrio       (1'b0                         ),
-  //     .ExtRspPrio       (1'b0                         ),
-  //     .tcdm_req_chan_t  (tcdm_req_chan_t              ),
-  //     .tcdm_rsp_chan_t  (tcdm_rsp_chan_t              )
-  //   ) i_tile_remote_xbar (
-  //     .clk_i            (clk_i                        ),
-  //     .rst_ni           (rst_ni                       ),
-  //     .slv_req_i        (tile_remote_out_req_chan [p] ),
-  //     .slv_req_valid_i  (tile_remote_out_req_valid[p] ),
-  //     .slv_req_ready_o  (tile_remote_out_req_ready[p] ),
-  //     .slv_rsp_o        (tile_remote_out_rsp_chan [p] ),
-  //     .slv_rsp_valid_o  (tile_remote_out_rsp_valid[p] ),
-  //     .slv_rsp_ready_i  (tile_remote_out_rsp_ready[p] ),
-  //     .slv_sel_i        (remote_out_sel_xbar      [p] ),
-  //     .slv_rr_i         ('0                           ),
-  //     .slv_selected_o   (/*selection info in cid*/    ),
-  //     .mst_req_o        (tile_remote_in_req_chan  [p] ),
-  //     .mst_req_valid_o  (tile_remote_in_req_valid [p] ),
-  //     .mst_req_ready_i  (tile_remote_in_req_ready [p] ),
-  //     .mst_rsp_i        (tile_remote_in_rsp_chan  [p] ),
-  //     .mst_rsp_valid_i  (tile_remote_in_rsp_valid [p] ),
-  //     .mst_rsp_ready_o  (tile_remote_in_rsp_ready [p] ),
-  //     .mst_rr_i         ('0                           ),
-  //     .mst_sel_i        (remote_in_sel_xbar       [p] )
-  //   );
-  // end
-
-  // [LP1] Strategy-B collapse: a SINGLE intra-group remote crossbar (NumL2Plane = 1)
+  // [LP1] a SINGLE intra-group remote crossbar (NumL2Plane = 1)
   // carrying cacheline-wide payloads. The de-interleave above maps every tile's
   // remote slots onto plane 0, so this one xbar serves the whole group.
   reqrsp_xbar #(
