@@ -108,12 +108,10 @@ Atomic memory operations are supported end-to-end through the new hierarchy:
   (`AMOSwap/Add/And/Or/Xor/Max/Min/Maxu/Minu` and `LR/SC`) on the request path,
   and re-derives the RISC-V AMO op from HPDcache's `mem` atomic encoding on the
   L1→L2 path. AMOs are never coalesced and carry the hit lane's op.
-- HPDcache forwards uncacheable reqeust directly to the lower hierarchy without
-  touching its local data.
-- `spatz_cache_amo.sv` is the RMW shim in front of the shared SRAMs that executes
+- The Snitch AMO path is marked uncacheable at the L1 requester. HPDcache forwards uncacheable reqeust directly to 
+  the lower hierarchy without touching its local data.
+- `spatz_cache_amo.sv` is the module in front of the shared cache that executes
   the atomics (LR/SC reservations at `DataWidth` granularity).
-- AMOs on the cacheable path flow through HPDcache in phase 1; the Snitch AMO
-  path is marked uncacheable at the L1 requester.
 
 ### Per-core CMO injector (HW side of the software CMO API)
 
