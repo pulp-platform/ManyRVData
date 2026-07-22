@@ -381,3 +381,7 @@ make lint config=cachepool_fpu_4g
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
 - Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_cluster_flush()` or the appropriate cluster-wide partition flush) before reconfiguring.
 - Set `DEBUG=0` to disable `+acc` and speed up simulation (used by CI); default is `DEBUG=1` for waveform visibility.
+
+## License
+
+CachePool is released under permissive open source licenses. Most of CachePool's source code is released under the Apache License 2.0 (`Apache-2.0`), see [LICENSE](LICENSE). The code in `hardware/` is released under Solderpad v0.51 (`SHL-0.51`), see [hardware/LICENSE](hardware/LICENSE).

@@ -1,5 +1,9 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 # Configs and kernel suffixes (without prefix)
-CONFIGS="cachepool_fpu_2g"
-KERNELS="spin-lock load-store fdotp-32b_M32768 gemv_M512_N128_K32 fmatmul-32b_M64_N64_K64 fft-32b_M1024_N16 multi_producer_single_consumer_double_linked_list_M1_N1350_K10 byte-enable"
+CONFIGS="cachepool_fpu_16g"
+KERNELS="spin-lock fdotp-32b_M65536 gemv_M1024_N128_K32 fmatmul-32b_M1024_N32_K32 fft-32b_M1024_N16 "
 PREFIX="test-cachepool-"  # common prefix for all kernels
 ROOT_PATH=../..           # adjust if needed (path to repo root)

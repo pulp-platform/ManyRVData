@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 # Integer dot-product data generator (signed, fixed-precision MAC with wrap)
 # Values limited to [-100, 100] to reduce overflow risk.
 
