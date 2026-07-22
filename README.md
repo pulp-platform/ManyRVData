@@ -8,6 +8,8 @@ CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cac
 - SystemVerilog (via `VLOG_DEFS` at compile time)
 - The Spatz cluster generator (via an auto-generated `config/cachepool.hjson`)
 
+![CachePool block diagram](util/figures/CachePool_block_diagram.png)
+
 ## System Hierarchy
 
 | Level | Module | Description |
@@ -15,9 +17,15 @@ CachePool is a Snitch–Spatz–based many-core system with a shared L1 data cac
 | 1 | Core Complex (CC) | One 32-bit Snitch + one Spatz RVV accelerator |
 | 2 | Tile | 4 CCs + 4 × InSitu-Cache banks |
 | 3 | Group | 4 Tiles connected via crossbar + shared L2 ICache |
-| 4 | Cluster | Multiple Groups connected via FlooNoC XY mesh |
+| 4 | Cluster | Multiple Groups connected via a FlooNoC XY mesh (L1 request/response) plus a separate TCDM-based L2 refill mesh |
 
 All tiles across all groups share one unified L1 data cache, interleaved across cache banks. The bank-selection offset is configurable at runtime via `l1d_xbar_config(...)`.
+
+For `NumGroups > 1`, two independent FlooNoC-based meshes connect the groups:
+- **L1 group mesh** (`cachepool_group_noc_wrapper.sv`): XY-routed mesh of `floo_router` instances carrying inter-group cache-line requests/responses between tiles.
+- **L2 refill mesh** (`cachepool_cluster.sv`, `gen_l2_refill_mesh`): a separate torus-like mesh (distinct flit/header types) that routes DRAM refill traffic from each group to `floo_tcdm_chimney` edge nodes, which bridge into the DRAMSys/HBM channels.
+
+Single-group configurations bypass both meshes; the intra-group crossbar path is unchanged.
 
 ## Requirements
 
@@ -68,33 +76,39 @@ make dram-build CMAKE=/path/to/cmake-3.28.x CC=/path/to/gcc-11.2 CXX=/path/to/g+
 ### Generate Required RTL
 
 Some RTL components (e.g., package headers) must be generated prior to simulation.
-Generation requires specifying a **configuration**. If none is provided, the default is `cachepool_2g`.
+Generation requires specifying a **configuration**. If none is provided, the default is `cachepool_fpu_4g`.
 
 ```bash
-make generate config=cachepool_fpu_2g
+make generate config=cachepool_fpu_4g
 ```
+
+`make generate` now also regenerates the FlooNoC package (`update-floonoc`) as a prerequisite, so the correct mesh topology for the selected `config` is always built automatically. Run `make update-floonoc config=<name>` standalone if you only need to refresh the NoC package (e.g. after editing a `config/floonoc_*.yml` topology file).
 
 ### Build the BootROM
 
 The BootROM is built separately from the RTL generation step:
 
 ```bash
-make bootrom config=cachepool_fpu_2g
+make bootrom config=cachepool_fpu_4g
 ```
 
 ### Compilation and Simulation
 
+Hardware and software builds are decoupled: `make sw` builds software only, `make vsim` builds hardware only. Build whichever you need (or both) independently.
+
 #### Build Software Only
 
 ```bash
-make sw config=cachepool_fpu_2g
+make sw config=cachepool_fpu_4g
 ```
 
-#### Build Hardware + Software (QuestaSim)
+#### Build Hardware Only (QuestaSim)
 
 ```bash
-make vsim config=cachepool_fpu_2g
+make vsim config=cachepool_fpu_4g
 ```
+
+Set `DEBUG=0` to disable `+acc` waveform visibility and speed up simulation (used by CI); default is `DEBUG=1`.
 
 #### Run the Simulation
 
@@ -117,15 +131,17 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 | File | Description |
 |------|-------------|
 | `configs.sh` | Defines configurations (`CONFIGS`) and kernel suffixes (`KERNELS`) to test, along with optional `PREFIX` and `ROOT_PATH`. |
+| `configs-ci.sh` | CI-specific variant of `configs.sh`, used by `run_ci.sh`. |
 | `run_all.sh` | Main automation script that builds each configuration, runs all kernels, saves logs, and generates summaries. |
+| `run_ci.sh` | CI entry point: sources `configs-ci.sh`, builds with `DEBUG=0`, and runs `check-ci.py` on each kernel's log. |
 | `write_results.py` | Extracts `[UART]` lines from simulator logs and appends them to per-configuration summary files. |
-| `check_ci.py` | Scans a simulation log for failures and exits non-zero if any are found (see [CI Checking](#ci-checking)). |
+| `check-ci.py` | Scans a simulation log for failures and exits non-zero if any are found (see [CI Checking](#ci-checking)). |
 
 ### Usage
 
 1. Edit `configs.sh` to list the desired configurations and kernels:
 
-       CONFIGS="cachepool_fpu_2g cachepool_fpu_4g"
+       CONFIGS="cachepool_fpu_4g cachepool_fpu_16g"
        KERNELS="fdotp-32b_M32768 ffft-64b_M16384 fmatmul-64b_M2048"
        PREFIX="test-cachepool-"
        ROOT_PATH=../..
@@ -147,10 +163,10 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 Example directory after a run:
 
     logs/20251028-1230/
-    ├── cachepool_fpu_2g_fdotp-32b_M32768.log
-    ├── cachepool_fpu_2g_fdotp-32b_M32768_pm/
-    ├── cachepool_fpu_2g_summary.txt
+    ├── cachepool_fpu_4g_fdotp-32b_M32768.log
+    ├── cachepool_fpu_4g_fdotp-32b_M32768_pm/
     ├── cachepool_fpu_4g_summary.txt
+    ├── cachepool_fpu_16g_summary.txt
     └── ...
 
 Each run includes:
@@ -162,7 +178,7 @@ This setup allows quick reproducible benchmarks with all results neatly organize
 
 ### CI Checking
 
-`check_ci.py` scans a simulation log and exits non-zero if any failure is detected, making it suitable for integration into CI pipelines. It flags the following patterns:
+`check-ci.py` scans a simulation log and exits non-zero if any failure is detected, making it suitable for integration into CI pipelines. It flags the following patterns:
 
 - Any line containing `FAIL` or `[FAIL]` (case-insensitive)
 - Any line matching `error <N>` where N is non-zero (`error 0` is treated as pass)
@@ -170,40 +186,39 @@ This setup allows quick reproducible benchmarks with all results neatly organize
 Usage:
 
 ```bash
-python3 check_ci.py logs/latest/cachepool_fpu_2g_load-store.log
+python3 check-ci.py logs/latest/cachepool_fpu_4g_load-store.log
 ```
 
 Exit code 0 means all tests passed; exit code 1 means at least one failure was detected. On failure the offending lines and their line numbers are printed for manual inspection.
 
+GitLab CI (`.gitlab-ci.yml`) uses this same flow directly: a `build` stage runs `make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG DEBUG=0` (default `CI_CONFIG=cachepool_fpu_4g`), then a `test` stage runs each kernel in parallel and pipes its log through `check-ci.py`.
+
 ## Configurations
 
-All hardware knobs live in **`config/config.mk`** (and flavor files it includes). The default configuration is **2 groups, 4 tiles/group, 4 cores/tile = 32 cores total**.
+All hardware knobs live in **`config/config.mk`** (and flavor files it includes). The default configuration is **`cachepool_fpu_4g`: 4 groups (2×2 mesh), 4 tiles/group, 4 cores/tile = 64 cores total**. 2-group configurations have been removed — they are no longer compatible with the L2 mesh interconnect.
 
 Configuration names encode the number of groups and whether the FPU is enabled:
 
-| Name | Groups | Mesh | FPU | Cores |
-|------|--------|------|-----|-------|
-| `cachepool_2g` | 2 | 1×2 | No | 32 |
-| `cachepool_fpu_2g` | 2 | 1×2 | Yes | 32 |
-| `cachepool_4g` | 4 | 2×2 | No | 64 |
-| `cachepool_fpu_4g` | 4 | 2×2 | Yes | 64 |
-| `cachepool_fpu_16g` | 16 | 4×4 | Yes | 256 |
+| Name | Groups | Mesh | FPU | Tiles/group | Cores/tile | Cores |
+|------|--------|------|-----|-------------|------------|-------|
+| `cachepool_4g` | 4 | 2×2 | No | 4 | 4 | 64 |
+| `cachepool_fpu_4g` | 4 | 2×2 | Yes | 4 | 4 | 64 |
+| `cachepool_fpu_16g` | 16 | 4×4 | Yes | 4 | 4 | 256 |
+| `cachepool_fpu_16g_tiny` | 16 | 4×4 | Yes | 2 | 2 | 64 |
+
+`cachepool_fpu_16g_tiny` shrinks tiles/group and cores/tile for a faster-to-build, faster-to-simulate smoke test of the full 16-group mesh topology.
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)
 - `config/config.mk` (source of truth)
 
-Multi-group configurations also require a FlooNoC topology file (e.g. `config/floonoc_cachepool_4g.yml`). After changing the group count, regenerate the FlooNoC package:
-
-```bash
-make update-floonoc
-```
+Multi-group configurations also require a FlooNoC topology file (e.g. `config/floonoc_cachepool_4g.yml`, `config/floonoc_cachepool_16g.yml`, `config/floonoc_cachepool_16g_tiny.yml`), auto-selected by the config name suffix. `make generate` regenerates the FlooNoC package automatically; run `make update-floonoc` standalone only if you need to refresh it without a full generate.
 
 To switch configurations, always clean first:
 
 ```bash
 make clean
-make generate config=cachepool_fpu_2g
+make generate config=cachepool_fpu_4g
 ```
 
 ### How configuration flows
@@ -264,28 +279,61 @@ For `insn != 2'b00`, the peripheral sets the tile-select mask to all-ones for co
 
 ### Software API
 
-```c
-// Flush all banks in all tiles (existing behaviour)
-l1d_flush();
+Cluster-wide entry points (`software/snRuntime/src/l1cache.c`) — each of these must be called by **all** cores; they fence, barrier, have core 0 issue the register write(s), and barrier again before returning, so callers don't need to gate by core ID themselves:
 
-// Flush private banks in selected tiles (one-hot tile mask)
-l1d_private_flush(uint32_t tile_mask);
+```c
+// Flush all banks in all tiles
+l1d_cluster_flush();
+
+// Flush private banks in selected tiles (one-hot tile mask, bits 0-63)
+l1d_cluster_private_flush(uint64_t tile_mask);
 
 // Flush shared banks in all tiles
-l1d_shared_flush();
+l1d_cluster_shared_flush();
 
-// Set the private/shared address boundary
+// Set the number of private cache banks per tile (0..NumCache)
+l1d_part(uint32_t size);
+
+// Set the private/shared address boundary (addr >= boundary is private)
 l1d_addr(uint32_t addr);
 
-// Poll until all pending flush operations complete
-l1d_wait();
+// Set the crossbar bank-selection bit offset (clamped to >= cacheline width)
+l1d_xbar_config(uint32_t offset);
 ```
+
+Lower-level, single-shot primitives (`l1d_flush()`, `l1d_private_flush()`, `l1d_shared_flush()`, `l1d_commit()`, `l1d_wait()`) exist for building custom sequences but issue only the register write — the caller is responsible for cluster-wide fence/barrier synchronization around them.
+
+`l1d_addr()` has no hardware completion status bit (unlike flush, which polls `L1D_FLUSH_STATUS` via `l1d_wait()`); its peripheral register write is posted over the interconnect, so it bridges the gap with a fixed-cycle delay on core 0 before the final barrier.
+
+> Changing the partition mode, boundary address, or crossbar offset while the cache contains valid data requires a flush first — `l1d_xbar_config()` and `l1d_part()` flush internally; `l1d_addr()` does not (call a cluster flush before it if needed).
 
 ### Flush completion
 
 Each tile tracks completion per cache controller using a `cache_flush_q` register (one bit per controller). The tile asserts a one-cycle ready pulse to the cluster controller when all targeted controllers have finished. The cluster controller uses a per-tile lock register to track in-flight flushes; a new instruction cannot be issued until all selected tiles report completion.
 
 Cache accesses from cores and remote tiles are gated (`l1d_busy`) while a flush is in progress, preventing stale hits during the flush window.
+
+## Performance Monitor
+
+A simulation-only monitor (`hardware/tb/cachepool_monitor.sv`), instantiated alongside the DUT in the testbench, tracks per-**session** traffic and performance counters — a session is the interval between toggles of the `SPATZ_STATUS.SPATZ_CLUSTER_PROBE` peripheral bit. Software brackets a region of interest with:
+
+```c
+start_kernel();  // opens a new monitoring session
+// ... code to profile ...
+stop_kernel();   // closes the session and dumps counters to file
+```
+
+(call from a single core, e.g. `if (cid == 0) { ... }`; both are declared in `software/tests/include/benchmark.h`).
+
+Each session dumps counter files under `sim/bin/logs/`, split into three subfolders:
+
+| Subfolder | Contents |
+|-----------|----------|
+| `core/` | Per-core statistics (`monitor_core_g<g>_<t>_c<c>.txt`) |
+| `noc/` | Inter-group L1 NoC, L2 refill mesh, and DRAM channel traffic |
+| `others/` | Per-tile local/group/remote request locality and congestion |
+
+CI test jobs recreate these subfolders before running (build artifacts exclude `sim/bin/logs/`) and archive the whole `sim/bin/logs/` tree as job artifacts.
 
 ## Snitch–Spatz Core Complex
 
@@ -318,7 +366,7 @@ Cluster peripherals (including the BootROM and memory-mapped registers) are inst
 SpyGlass lint (optional):
 
 ```bash
-make lint config=cachepool_fpu_2g
+make lint config=cachepool_fpu_4g
 ```
 
 ---
@@ -327,7 +375,9 @@ make lint config=cachepool_fpu_2g
 
 - To see the exact macros passed to vlog, check `VLOG_DEFS` in the Makefile and `sim/work/compile.vsim.tcl`.
 - If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
-- When changing the number of groups, run `make update-floonoc` to regenerate the FlooNoC package before `make generate`.
+- `make generate` regenerates the FlooNoC package automatically; only run `make update-floonoc` standalone if you're iterating on a `config/floonoc_*.yml` topology file without a full generate.
+- `make sw` and `make vsim` are decoupled (hw/sw build independently); rebuild whichever side you changed.
 - Use `make clean` when switching configs to prevent stale build artifacts.
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
-- Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_flush()` or the appropriate partition flush) before reconfiguring.
+- Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_cluster_flush()` or the appropriate cluster-wide partition flush) before reconfiguring.
+- Set `DEBUG=0` to disable `+acc` and speed up simulation (used by CI); default is `DEBUG=1` for waveform visibility.
