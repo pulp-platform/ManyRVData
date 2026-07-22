@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 # Refuse to be sourced to avoid killing the interactive shell on errors/interrupts.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   echo "Error: do not source this script; run it as ./run_all.sh" >&2
