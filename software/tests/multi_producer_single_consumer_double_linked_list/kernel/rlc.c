@@ -162,6 +162,7 @@ void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t 
 
     // Initialize producer done flag
     producer_done = 0;
+    producers_finished = 0;
 
     rlc_ctx_lock = 0;
 
@@ -223,7 +224,7 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
 */
 #define PACKET_SIZE (PAGE_SIZE - sizeof(Node))
 
-/* Consumer behavior (runs on core 0) */
+/* Consumer behavior (runs on cores listed in consumer_core_ids) */
 static void consumer(const unsigned int core_id) {
     while (1) {
         Node *node = list_pop_front(&tosend_llist_lock_2, &rlc_ctx.list);
@@ -302,7 +303,7 @@ static void consumer(const unsigned int core_id) {
     }
 }
 
-/* Producer behavior (runs on cores other than 0) */
+/* Producer behavior (runs on cores listed in producer_core_ids) */
 static void producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     // DEBUG_PRINTF("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
@@ -382,11 +383,27 @@ static void producer(const unsigned int core_id) {
         // delay(200);  /* Delay between node productions */
     }
 
-    // Set producer done flag
-    atomic_store_explicit(&producer_done, 1, memory_order_relaxed);
+    // Only signal producer_done once every producer core has finished --
+    // with multiple producers, the first one to finish must not make the
+    // consumer(s) exit while other producers are still enqueuing work.
+    if (atomic_fetch_add_explicit(&producers_finished, 1, memory_order_relaxed) + 1
+        == NUM_PRODUCER_CORES) {
+        atomic_store_explicit(&producer_done, 1, memory_order_relaxed);
+    }
 }
 
-/* cluster_entry() dispatches behavior based on core_id */
+/* Returns 1 if core_id appears in the given id list. */
+static int core_in_list(const unsigned int core_id, const unsigned int *ids, unsigned int n) {
+    for (unsigned int i = 0; i < n; i++) {
+        if (ids[i] == core_id) return 1;
+    }
+    return 0;
+}
+
+/* cluster_entry() dispatches behavior based on core_id: cores listed in
+   producer_core_ids/consumer_core_ids (see the generated data header) run
+   the RLC kernel; any other core stays idle for this run and just reaches
+   the shared barrier below. */
 void cluster_entry(const unsigned int core_id) {
     uint32_t timer_0, timer_1;
     timer_0 = benchmark_get_cycle();
@@ -395,14 +412,16 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    if (core_id >= 2) {
+    const int is_consumer = core_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
+    const int is_producer = !is_consumer && core_in_list(core_id, producer_core_ids, NUM_PRODUCER_CORES);
+
+    if (is_consumer) {
         consumer(core_id);
-    } else /*if (core_id == 0)*/ {
+    } else if (is_producer) {
         producer(core_id);
-    }/* else {
-        while (1) {}
-    }*/
-    // consumer(core_id);
+    }
+    /* else: idle core for this run -- falls straight through to the
+       shared barrier below. */
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
@@ -411,6 +430,12 @@ void cluster_entry(const unsigned int core_id) {
     }
 
     timer_1 = benchmark_get_cycle();
+
+    // printf is slow -- only cores that actually ran the kernel print
+    // their timing; idle cores skip it entirely.
+    if (!is_consumer && !is_producer) {
+        return;
+    }
 
     int use_mcs_lock;
 #ifdef USE_MCS_LOCK

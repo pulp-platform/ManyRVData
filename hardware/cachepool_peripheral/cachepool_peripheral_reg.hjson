@@ -139,6 +139,26 @@
         }
     },
     {
+        multireg: {
+            name: "HW_BARRIER_PARTICIPATION_MASK",
+            desc: '''Tile participation mask for the cluster-level hardware barrier.
+                     Each 32-bit register covers 32 tiles: register 0 -> tiles 0-31,
+                     register 1 -> tiles 32-63. A tile whose bit is clear is excluded
+                     from the next hardware barrier round.'''
+            swaccess: "rw",
+            hwaccess: "hro",
+            count: "NumTileSelRegs",
+            cname: "hw_barrier_participation_mask",
+            compact: "false",
+            resval: "0xFFFFFFFF",
+            fields: [{
+                bits: "31:0",
+                name: "TILE",
+                desc: "Tile participation bits for this 32-tile bank."
+            }]
+        }
+    },
+    {
         name: "L1D_SPM_COMMIT",
         desc: '''Controls the L1 DCache flushing and invalidation.'''
         // hwext: "true",

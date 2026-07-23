@@ -49,5 +49,6 @@ struct snrt_team_root {
     struct snrt_allocator allocator;
     struct snrt_barrier cluster_barrier;
     uint32_t barrier_reg_ptr;
+    uint32_t barrier_participation_mask_reg_ptr;
     struct snrt_peripherals peripherals;
 };

@@ -112,6 +112,15 @@ def main():
     num_src_slots = src_len // pdu_size
     num_pkgs = min(int(cfg.get('total_pkg_number', num_src_slots)), num_src_slots)
 
+    # Cores that actually run the RLC kernel. Defaults preserve the
+    # historical behavior (core 0 producer, core 1 consumer) if omitted.
+    producer_cores = [int(c) for c in cfg.get('producer_cores', [0])]
+    consumer_cores = [int(c) for c in cfg.get('consumer_cores', [1])]
+    if set(producer_cores) & set(consumer_cores):
+        print("Error: producer_cores and consumer_cores overlap: "
+              f"{sorted(set(producer_cores) & set(consumer_cores))}", file=sys.stderr)
+        sys.exit(1)
+
     # derive output path if not provided
     if args.output:
         out_path = args.output
@@ -156,6 +165,18 @@ def main():
         h.write(f'#define NUM_SRC_SLOTS {num_src_slots}\n')
         h.write(f'#define PDU_SIZE      {pdu_size}\n')
         h.write(f'#define NUM_PKGS      {num_pkgs}\n\n')
+
+        # Producer/consumer core selection: any cluster core id not listed
+        # in either array stays idle for this kernel.
+        h.write(f'#define NUM_PRODUCER_CORES {len(producer_cores)}\n')
+        h.write('static const unsigned int producer_core_ids[NUM_PRODUCER_CORES] = {'
+                + ', '.join(str(c) for c in producer_cores) + '};\n')
+        h.write(f'#define NUM_CONSUMER_CORES {len(consumer_cores)}\n')
+        h.write('static const unsigned int consumer_core_ids[NUM_CONSUMER_CORES] = {'
+                + ', '.join(str(c) for c in consumer_cores) + '};\n')
+        h.write(f'#define NUM_RLC_KERNEL_CORES (NUM_PRODUCER_CORES + NUM_CONSUMER_CORES)\n')
+        h.write('static const unsigned int rlc_kernel_core_ids[NUM_RLC_KERNEL_CORES] = {'
+                + ', '.join(str(c) for c in producer_cores + consumer_cores) + '};\n\n')
 
         # metadata in .pdcp_info
         h.write('static const pdcp_pkg_t __attribute__((section(".pdcp_info"), used)) pdcp_pkgs[NUM_PKGS] = {\n')

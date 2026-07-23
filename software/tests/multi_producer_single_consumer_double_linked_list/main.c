@@ -39,6 +39,14 @@ int main(void) {
     uint32_t offset = 31 - __builtin_clz(L1LineWidth);
     l1d_xbar_config(offset); // cacheline interleaving
 
+    // All-private cache partition (same pattern as fmatmul-32b/main.c):
+    // producer/consumer cores stay within tile 0, so this keeps their
+    // traffic on tile-local banks instead of the cluster-wide scrambled
+    // path. Safe for this kernel's cross-core linked-list handoff since
+    // private partitioning is tile-scoped, not per-core -- see l1cache.c.
+    const unsigned int num_cores_per_tile = snrt_cluster_core_per_tile();
+    l1d_part(num_cores_per_tile);
+
     if (core_id == 0) {
         // Initalize the thread saft printf
         debug_print_lock_init();

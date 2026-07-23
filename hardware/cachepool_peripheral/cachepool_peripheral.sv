@@ -42,7 +42,8 @@ module cachepool_peripheral
   output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
-  output logic [NumTiles-1:0]        l1d_busy_o
+  output logic [NumTiles-1:0]        l1d_busy_o,
+  output logic [NumTiles-1:0]        barrier_participation_mask_o
 );
 
   cachepool_peripheral_reg2hw_t reg2hw;
@@ -130,6 +131,16 @@ module cachepool_peripheral
       tile_sel_raw[i*32 +: 32] = reg2hw.cfg_l1d_tile_sel[i].q;
     end
   end
+
+  // Concatenate all barrier-participation register words into one wide vector
+  // and slice to NumTiles. Unused upper bits (for small configs) are optimised away.
+  logic [NumTileSelWords*32-1:0] barrier_participation_mask_raw;
+  always_comb begin : barrier_participation_mask_concat
+    for (int i = 0; i < NumTileSelWords; i++) begin
+      barrier_participation_mask_raw[i*32 +: 32] = reg2hw.hw_barrier_participation_mask[i].q;
+    end
+  end
+  assign barrier_participation_mask_o = barrier_participation_mask_raw[NumTiles-1:0];
 
   // Cache Flush Controller
   // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is

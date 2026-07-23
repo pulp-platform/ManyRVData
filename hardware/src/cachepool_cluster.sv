@@ -187,6 +187,9 @@ module cachepool_cluster
   // Direct-wire barrier: one bit per tile across all groups
   logic [NumGroups-1:0][NumTilesPerGroup-1:0] tile_barrier;
   logic                                       barrier_done;
+  // Tile participation mask for the cluster-level barrier, software-configured
+  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all tiles).
+  logic [NumTiles-1:0]                        barrier_participation_mask;
 
   cachepool_cluster_barrier #(
     .NrTiles ( NumTiles )
@@ -195,8 +198,7 @@ module cachepool_cluster
     .rst_ni         ( rst_ni         ),
     .tile_barrier_i ( tile_barrier   ),
     .barrier_done_o ( barrier_done   ),
-    // All tiles participate in the barrier (full barrier)
-    .barrier_mask_i ( '1             )
+    .barrier_mask_i ( barrier_participation_mask )
   );
 
   // Inter-group NoC mesh signals (indexed by group, then direction, then port)
@@ -1260,7 +1262,8 @@ module cachepool_cluster
     .l1d_insn_o               ( l1d_insn               ),
     .l1d_insn_valid_o         ( l1d_insn_valid         ),
     .l1d_insn_ready_i         ( l1d_insn_ready         ),
-    .l1d_busy_o               ( l1d_busy               )
+    .l1d_busy_o               ( l1d_busy               ),
+    .barrier_participation_mask_o ( barrier_participation_mask )
   );
 
   // ---- Target [2]: UART → reqrsp_to_axi → axi_narrow_req_o ----
