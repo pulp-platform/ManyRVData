@@ -9,6 +9,41 @@ extern void _snrt_cluster_barrier();
 /// Synchronize cores in a cluster with a hardware barrier
 void snrt_cluster_hw_barrier() { _snrt_cluster_barrier(); }
 
+/// Program the cluster-level tile-participation mask: mask_lo covers tiles
+/// 0-31, mask_hi covers tiles 32-63 (matching the two 32-bit
+/// HW_BARRIER_PARTICIPATION_MASK registers). Configs with <=32 tiles can
+/// pass 0 for mask_hi.
+void snrt_barrier_set_tile_mask(uint32_t mask_lo, uint32_t mask_hi) {
+    volatile uint32_t *reg_lo =
+        (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
+    volatile uint32_t *reg_hi = reg_lo + 1;
+    *reg_lo = mask_lo;
+    *reg_hi = mask_hi;
+}
+
+/// Compute the calling core's tile-local participant mask from a fixed
+/// list of global core ids. cids that don't belong to this core's own tile
+/// are ignored, since they participate in a different tile's barrier
+/// instance. O(n); intended to be called once and the result cached.
+uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n) {
+    uint32_t cpt = snrt_cluster_core_per_tile();
+    uint32_t my_tile = snrt_cluster_tile_idx();
+    uint32_t mask = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (cids[i] / cpt == my_tile) {
+            mask |= 1u << (cids[i] % cpt);
+        }
+    }
+    return mask;
+}
+
+/// Issue a partial hardware barrier restricted to local_mask. A plain
+/// volatile store (unlike the read-based full barrier, a write is never
+/// elided by the compiler regardless of whether its result is used).
+void snrt_cluster_partial_barrier(uint32_t local_mask) {
+    *(volatile uint32_t *)_snrt_barrier_reg_ptr() = local_mask;
+}
+
 /// Synchronize cores in a cluster with a software barrier
 void snrt_cluster_sw_barrier() {
     // Remember previous iteration

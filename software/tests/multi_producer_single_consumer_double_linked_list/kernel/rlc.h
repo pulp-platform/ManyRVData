@@ -117,6 +117,10 @@ spinlock_t pdcp_pkd_ptr __attribute__((section(".data")));
 mcs_lock_t pdcp_pkd_ptr_lock __attribute__((section(".data")));
 
 _Atomic(uint32_t) producer_done __attribute__((section(".data")));
+/* Number of producer cores that have finished; producer_done is only set
+   once this reaches NUM_PRODUCER_CORES, so multiple producers don't cause
+   the consumer(s) to exit early when just the first one finishes. */
+_Atomic(uint32_t) producers_finished __attribute__((section(".data")));
 
 spinlock_t rlc_ctx_lock __attribute__((section(".data")));
 

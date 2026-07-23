@@ -95,6 +95,12 @@ module cachepool_peripheral_reg_top #(
   logic [31:0] cfg_l1d_tile_sel_1_qs;
   logic [31:0] cfg_l1d_tile_sel_1_wd;
   logic cfg_l1d_tile_sel_1_we;
+  logic [31:0] hw_barrier_participation_mask_0_qs;
+  logic [31:0] hw_barrier_participation_mask_0_wd;
+  logic hw_barrier_participation_mask_0_we;
+  logic [31:0] hw_barrier_participation_mask_1_qs;
+  logic [31:0] hw_barrier_participation_mask_1_wd;
+  logic hw_barrier_participation_mask_1_we;
   logic l1d_spm_commit_qs;
   logic l1d_spm_commit_wd;
   logic l1d_spm_commit_we;
@@ -379,6 +385,62 @@ module cachepool_peripheral_reg_top #(
   );
 
 
+
+  // Subregister 0 of Multireg hw_barrier_participation_mask
+  // R[hw_barrier_participation_mask_0]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'hffffffff)
+  ) u_hw_barrier_participation_mask_0 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (hw_barrier_participation_mask_0_we),
+    .wd     (hw_barrier_participation_mask_0_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.hw_barrier_participation_mask[0].q ),
+
+    // to register interface (read)
+    .qs     (hw_barrier_participation_mask_0_qs)
+  );
+
+  // Subregister 1 of Multireg hw_barrier_participation_mask
+  // R[hw_barrier_participation_mask_1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'hffffffff)
+  ) u_hw_barrier_participation_mask_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (hw_barrier_participation_mask_1_we),
+    .wd     (hw_barrier_participation_mask_1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.hw_barrier_participation_mask[1].q ),
+
+    // to register interface (read)
+    .qs     (hw_barrier_participation_mask_1_qs)
+  );
+
+
   // R[l1d_spm_commit]: V(False)
 
   prim_subreg #(
@@ -586,7 +648,7 @@ module cachepool_peripheral_reg_top #(
 
 
 
-  logic [17:0] addr_hit;
+  logic [19:0] addr_hit;
   always_comb begin
     addr_hit = '0;
     addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
@@ -599,14 +661,16 @@ module cachepool_peripheral_reg_top #(
     addr_hit[ 7] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
     addr_hit[ 8] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET);
     addr_hit[ 9] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET);
-    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
-    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
-    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
-    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
-    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
-    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
-    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_OFFSET);
+    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_OFFSET);
+    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_1_OFFSET);
+    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
+    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
+    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
+    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
+    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
+    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
+    addr_hit[18] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
+    addr_hit[19] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -631,7 +695,9 @@ module cachepool_peripheral_reg_top #(
                (addr_hit[14] & (|(CACHEPOOL_PERIPHERAL_PERMIT[14] & ~reg_be))) |
                (addr_hit[15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[15] & ~reg_be))) |
                (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be))) |
-               (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be)))));
+               (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be))) |
+               (addr_hit[18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[18] & ~reg_be))) |
+               (addr_hit[19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[19] & ~reg_be)))));
   end
 
   assign hw_barrier_re = addr_hit[0] & reg_re & !reg_error;
@@ -663,27 +729,33 @@ module cachepool_peripheral_reg_top #(
   assign cfg_l1d_tile_sel_1_we = addr_hit[9] & reg_we & !reg_error;
   assign cfg_l1d_tile_sel_1_wd = reg_wdata[31:0];
 
-  assign l1d_spm_commit_we = addr_hit[10] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_0_we = addr_hit[10] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_0_wd = reg_wdata[31:0];
+
+  assign hw_barrier_participation_mask_1_we = addr_hit[11] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_1_wd = reg_wdata[31:0];
+
+  assign l1d_spm_commit_we = addr_hit[12] & reg_we & !reg_error;
   assign l1d_spm_commit_wd = reg_wdata[0];
 
-  assign l1d_insn_commit_we = addr_hit[11] & reg_we & !reg_error;
+  assign l1d_insn_commit_we = addr_hit[13] & reg_we & !reg_error;
   assign l1d_insn_commit_wd = reg_wdata[0];
 
-  assign l1d_flush_status_re = addr_hit[12] & reg_re & !reg_error;
+  assign l1d_flush_status_re = addr_hit[14] & reg_re & !reg_error;
 
-  assign l1d_private_we = addr_hit[13] & reg_we & !reg_error;
+  assign l1d_private_we = addr_hit[15] & reg_we & !reg_error;
   assign l1d_private_wd = reg_wdata[3:0];
 
-  assign l1d_addr_we = addr_hit[14] & reg_we & !reg_error;
+  assign l1d_addr_we = addr_hit[16] & reg_we & !reg_error;
   assign l1d_addr_wd = reg_wdata[31:0];
 
-  assign xbar_offset_we = addr_hit[15] & reg_we & !reg_error;
+  assign xbar_offset_we = addr_hit[17] & reg_we & !reg_error;
   assign xbar_offset_wd = reg_wdata[4:0];
 
-  assign xbar_offset_commit_we = addr_hit[16] & reg_we & !reg_error;
+  assign xbar_offset_commit_we = addr_hit[18] & reg_we & !reg_error;
   assign xbar_offset_commit_wd = reg_wdata[0];
 
-  assign hw_barrier_participation_mask_we = addr_hit[17] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_we = addr_hit[19] & reg_we & !reg_error;
   assign hw_barrier_participation_mask_wd = reg_wdata[3:0];
 
   // Read data return
@@ -731,34 +803,42 @@ module cachepool_peripheral_reg_top #(
       end
 
       addr_hit[10]: begin
-        reg_rdata_next[0] = l1d_spm_commit_qs;
+        reg_rdata_next[31:0] = hw_barrier_participation_mask_0_qs;
       end
 
       addr_hit[11]: begin
-        reg_rdata_next[0] = l1d_insn_commit_qs;
+        reg_rdata_next[31:0] = hw_barrier_participation_mask_1_qs;
       end
 
       addr_hit[12]: begin
-        reg_rdata_next[0] = l1d_flush_status_qs;
+        reg_rdata_next[0] = l1d_spm_commit_qs;
       end
 
       addr_hit[13]: begin
-        reg_rdata_next[3:0] = l1d_private_qs;
+        reg_rdata_next[0] = l1d_insn_commit_qs;
       end
 
       addr_hit[14]: begin
-        reg_rdata_next[31:0] = l1d_addr_qs;
+        reg_rdata_next[0] = l1d_flush_status_qs;
       end
 
       addr_hit[15]: begin
-        reg_rdata_next[4:0] = xbar_offset_qs;
+        reg_rdata_next[3:0] = l1d_private_qs;
       end
 
       addr_hit[16]: begin
-        reg_rdata_next[0] = xbar_offset_commit_qs;
+        reg_rdata_next[31:0] = l1d_addr_qs;
       end
 
       addr_hit[17]: begin
+        reg_rdata_next[4:0] = xbar_offset_qs;
+      end
+
+      addr_hit[18]: begin
+        reg_rdata_next[0] = xbar_offset_commit_qs;
+      end
+
+      addr_hit[19]: begin
         reg_rdata_next[3:0] = hw_barrier_participation_mask_qs;
       end
 

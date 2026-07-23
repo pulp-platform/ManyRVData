@@ -31,6 +31,13 @@ typedef struct {
 #define PDU_SIZE      1360
 #define NUM_PKGS      300
 
+#define NUM_PRODUCER_CORES 2
+static const unsigned int producer_core_ids[NUM_PRODUCER_CORES] = {0, 1};
+#define NUM_CONSUMER_CORES 2
+static const unsigned int consumer_core_ids[NUM_CONSUMER_CORES] = {2, 3};
+#define NUM_RLC_KERNEL_CORES (NUM_PRODUCER_CORES + NUM_CONSUMER_CORES)
+static const unsigned int rlc_kernel_core_ids[NUM_RLC_KERNEL_CORES] = {0, 1, 2, 3};
+
 static const pdcp_pkg_t __attribute__((section(".pdcp_info"), used)) pdcp_pkgs[NUM_PKGS] = {
     { 0, 0xA0D965C0, 0xB0D965C0, 1360 },
     { 0, 0xA025DA00, 0xB025DA00, 1360 },

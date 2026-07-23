@@ -55,14 +55,17 @@ num_groups_x ?= 1
 num_tiles_per_group ?= 4
 num_tiles = $(shell echo $$(( $(num_groups) * $(num_tiles_per_group))))
 
-num_remote_ports_per_tile ?= 1
+# Intra-group remote ports per core (to other tiles in the same group)
+num_lg_ports_per_core ?= 1
 
 # Number of cores
 num_cores_per_tile ?= 4
 num_cores ?= $(shell echo $$(( $(num_tiles) * $(num_cores_per_tile))))
 
+# Inter-group remote ports per core (to remote groups, via the L1 NoC)
 num_rg_ports_per_core ?= 0
 
+# NoC router channels per tile (concentrates each tile's inter-group traffic)
 num_noc_ports_per_tile ?= 1
 
 # Core datawidth

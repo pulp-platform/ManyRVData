@@ -60,6 +60,28 @@ extern void snrt_cluster_sw_barrier();
 extern void snrt_global_barrier();
 extern void snrt_barrier(struct snrt_barrier *barr, uint32_t n);
 
+/// Partial hardware barrier support. snrt_cluster_hw_barrier() above is
+/// unchanged and always synchronizes every core/tile; these are additive.
+///
+/// Step 1 (cluster level): program which tiles participate in the next
+/// masked barrier round(s). Call from exactly one core, then use
+/// snrt_cluster_hw_barrier() as a resync point before relying on it, since
+/// the cluster barrier FSM samples this mask live when the first
+/// participating tile arrives.
+extern void snrt_barrier_set_tile_mask(uint32_t mask_lo, uint32_t mask_hi);
+
+/// Step 2 (tile level): compute this core's tile-local participant mask
+/// from a fixed list of global core ids (cids outside this core's own tile
+/// are ignored). Every core in `cids` must call this with the identical
+/// (cids, n) for a given round, so all of them derive the same mask
+/// independently. Intended to be called once and cached; the O(n) cost
+/// should not sit in a hot loop.
+extern uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n);
+
+/// Issue a partial hardware barrier restricted to local_mask (as returned
+/// by snrt_cluster_partial_barrier_mask()). O(1) — a single store.
+extern void snrt_cluster_partial_barrier(uint32_t local_mask);
+
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();
 extern struct snrt_peripherals *snrt_peripherals();
@@ -71,13 +93,14 @@ extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
 extern uint32_t snrt_cluster_tile_idx();
 extern uint32_t snrt_cluster_tile_num();
+extern uint32_t snrt_cluster_core_per_tile();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
 
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
 
-/// get pointer to participation barrier register
+/// get pointer to the tile-participation-mask register (word 0 of 2)
 extern uint32_t _snrt_barrier_participation_mask_reg_ptr();
 
 /// get start address of global memory
