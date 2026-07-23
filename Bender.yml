@@ -19,7 +19,8 @@ dependencies:
   dram_rtl_sim:        { git: "https://github.com/pulp-platform/dram_rtl_sim.git",       rev:     cachepool               }
   floo_noc:            { git: "https://github.com/pulp-platform/FlooNoC.git",            rev:     main                    }
   cluster_icache:      { git: "https://github.com/pulp-platform/cluster_icache.git",     rev:     main                    }
-  spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b           }
+  # spatz:               { git: "https://github.com/pulp-platform/spatz.git",              rev:     cachepool-32b           }
+  spatz:               { git: "https://github.com/HHT1228/spatz.git",                    rev:    hohung/cachepool-wt-l1   }
 
 workspace:
   checkout_dir: "./hardware/deps"

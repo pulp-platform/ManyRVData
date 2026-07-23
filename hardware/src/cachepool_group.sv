@@ -145,10 +145,6 @@ module cachepool_group
     input  logic                                        l1d_insn_valid_i,
     output logic               [NumTilesPerGroup-1:0]   l1d_insn_ready_o,
     input  logic               [NumTilesPerGroup-1:0]   l1d_busy_i,
-    // Per-core private-L1 (LP1) CMO injector interface (one slot per core in group).
-    input  lp1_cmo_req_t       [NumCoreGroup-1:0]       lp1_cmo_req_i,
-    input  logic               [NumCoreGroup-1:0]       lp1_cmo_valid_i,
-    output logic               [NumCoreGroup-1:0]       lp1_cmo_done_o,
 
     /// Inter-group remote access ports (to other groups).
     /// Layout: [NumTilesPerGroup-1:0][NumRemoteGroupPortTile-1:0] flattened to
@@ -791,10 +787,7 @@ module cachepool_group
         .l1d_private_i            ( l1d_private_i                                               ),
         .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
         .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
-        .l1d_busy_i               ( l1d_busy_i        [t]                                       ),
-        .lp1_cmo_req_i            ( lp1_cmo_req_i   [t*NumCoresTile +: NumCoresTile]            ),
-        .lp1_cmo_valid_i          ( lp1_cmo_valid_i [t*NumCoresTile +: NumCoresTile]            ),
-        .lp1_cmo_done_o           ( lp1_cmo_done_o  [t*NumCoresTile +: NumCoresTile]            )
+        .l1d_busy_i               ( l1d_busy_i        [t]                                       )
       );
     end else begin : gen_tile
       cachepool_tile #(
@@ -880,10 +873,7 @@ module cachepool_group
         .l1d_private_i            ( l1d_private_i                                               ),
         .l1d_insn_valid_i         ( l1d_insn_valid_i                                            ),
         .l1d_insn_ready_o         ( l1d_insn_ready_o  [t]                                       ),
-        .l1d_busy_i               ( l1d_busy_i        [t]                                       ),
-        .lp1_cmo_req_i            ( lp1_cmo_req_i   [t*NumCoresTile +: NumCoresTile]            ),
-        .lp1_cmo_valid_i          ( lp1_cmo_valid_i [t*NumCoresTile +: NumCoresTile]            ),
-        .lp1_cmo_done_o           ( lp1_cmo_done_o  [t*NumCoresTile +: NumCoresTile]            )
+        .l1d_busy_i               ( l1d_busy_i        [t]                                       )
       );
     end
   end

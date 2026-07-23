@@ -79,10 +79,6 @@ module cachepool_group_noc_wrapper
     input  logic                                                          l1d_insn_valid_i,
     output logic              [NumTilesPerGroup-1:0]                      l1d_insn_ready_o,
     input  logic              [NumTilesPerGroup-1:0]                      l1d_busy_i,
-    // Per-core private-L1 (LP1) CMO injector interface (one slot per core in group).
-    input  lp1_cmo_req_t      [NumCoreGroup-1:0]                          lp1_cmo_req_i,
-    input  logic              [NumCoreGroup-1:0]                          lp1_cmo_valid_i,
-    output logic              [NumCoreGroup-1:0]                          lp1_cmo_done_o,
     input  impl_in_t          [NrSramCfg-1:0]                             impl_i,
     output logic                                                          error_o,
     // XY coordinates of this group in the inter-group mesh
@@ -596,10 +592,7 @@ module cachepool_group_noc_wrapper
     .l1d_insn_i               ( l1d_insn_i                ),
     .l1d_insn_valid_i         ( l1d_insn_valid_i          ),
     .l1d_insn_ready_o         ( l1d_insn_ready_o          ),
-    .l1d_busy_i               ( l1d_busy_i                ),
-    .lp1_cmo_req_i            ( lp1_cmo_req_i             ),
-    .lp1_cmo_valid_i          ( lp1_cmo_valid_i           ),
-    .lp1_cmo_done_o           ( lp1_cmo_done_o            )
+    .l1d_busy_i               ( l1d_busy_i                )
   );
 
 endmodule

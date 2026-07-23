@@ -174,12 +174,6 @@ module cachepool_tile
     input  logic                                          l1d_insn_valid_i,
     output logic                                          l1d_insn_ready_o,
     input  logic                                          l1d_busy_i,
-    // Per-core private-L1 (LP1) CMO injector interface (one slot per core).
-    input  lp1_cmo_req_t      [NumCoresTile-1:0]          lp1_cmo_req_i,
-    input  logic              [NumCoresTile-1:0]          lp1_cmo_valid_i,
-    output logic              [NumCoresTile-1:0]          lp1_cmo_done_o,
-
-
 
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t          [NrSramCfg-1:0]       impl_i,
@@ -543,6 +537,17 @@ module cachepool_tile
   tcdm_rsp_t  [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] cache_rsp_transposed;
   logic       [NumLP1CacheCtrl-1:0][NrTCDMPortsPerCore-1:0] lp1_cache_rsp_ready, lp1_cache_req_ready;
 
+  // Per-core private-L1 (LP1) CMO trigger, sourced from each core's CSR (i.e.
+  // the CSR-driven path that replaces the peripheral one).  core i owns l1_ctrl i.
+  logic         [NumLP1CacheCtrl-1:0]        core_cmo_valid;
+  logic         [NumLP1CacheCtrl-1:0]        core_cmo_done;
+  logic         [NumLP1CacheCtrl-1:0][2:0]   core_cmo_op;
+  logic         [NumLP1CacheCtrl-1:0][31:0]  core_cmo_addr;
+  lp1_cmo_req_t [NumLP1CacheCtrl-1:0]        core_cmo_req;
+  for (genvar c = 0; c < NumLP1CacheCtrl; c++) begin : gen_core_cmo_req
+    assign core_cmo_req[c] = '{op: core_cmo_op[c], addr: core_cmo_addr[c]};
+  end
+
   // Collapsed: one cacheline-wide port per L2 controller
   logic            [NumL1CtrlTile-1:0] cache_req_valid;
   logic            [NumL1CtrlTile-1:0] cache_req_ready;
@@ -725,10 +730,11 @@ module cachepool_tile
       .rst_ni           (rst_ni       ),
       .wbuf_flush_i     (1'b0         ),
 
-      // Per-core CMO injector (slot c = this core)
-      .lp1_cmo_req_i    (lp1_cmo_req_i   [c]),
-      .lp1_cmo_valid_i  (lp1_cmo_valid_i [c]),
-      .lp1_cmo_done_o   (lp1_cmo_done_o  [c]),
+      // Per-core CMO injector (slot c = this core), now CSR-driven from the core.
+      // op/addr from the core are packed into the lp1_cmo_req_t the ctrl expects.
+      .lp1_cmo_req_i    (core_cmo_req   [c]),
+      .lp1_cmo_valid_i  (core_cmo_valid [c]),
+      .lp1_cmo_done_o   (core_cmo_done  [c]),
 
       // Core side (NrTCDMPortsPerCore narrow TCDM ports for this core)
       .core_req_i       (cache_req_transposed [c]),
@@ -1616,6 +1622,10 @@ module cachepool_tile
       .tcdm_req_o       (tcdm_req_wo_user                    ),
       .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]),
       .core_events_o    (core_events[i]                      ),
+      .lp1_cmo_valid_o  (core_cmo_valid[i]                   ),
+      .lp1_cmo_op_o     (core_cmo_op[i]                      ),
+      .lp1_cmo_addr_o   (core_cmo_addr[i]                    ),
+      .lp1_cmo_done_i   (core_cmo_done[i]                    ),
       .tcdm_addr_base_i (tcdm_start_address                  )
     );
     for (genvar j = 0; j < TcdmPorts; j++) begin : gen_tcdm_user

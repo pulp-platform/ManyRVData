@@ -87,10 +87,10 @@ module cachepool_l1_ctrl
   input  logic rst_ni,
   input  logic wbuf_flush_i,
 
-  //  Per-core CMO injector interface (driven by the cluster peripheral).
-  //  lp1_cmo_valid_i pulses for one cycle to request the CMO in lp1_cmo_req_i;
-  //  lp1_cmo_done_o pulses when the CMO has completed (used to clear the
-  //  peripheral's per-core busy/status bit).  FSM implemented in Task 3.
+  //  Per-core CMO injector interface (driven by this core via CSR_LP1CMO).
+  //  lp1_cmo_valid_i is held while a `csrw CSR_LP1CMO` stalls the core; it
+  //  requests the CMO in lp1_cmo_req_i.  lp1_cmo_done_o pulses when the CMO has
+  //  completed, which releases the core's stall.
   input  lp1_cmo_req_t  lp1_cmo_req_i,
   input  logic          lp1_cmo_valid_i,
   output logic          lp1_cmo_done_o,
@@ -446,17 +446,17 @@ module cachepool_l1_ctrl
   //////////////////////////////////////////
   // HPDcache requester 2 (CMO injector)    //
   //////////////////////////////////////////
-  // Converts the peripheral's one-cycle lp1_cmo_valid_i pulse into an HPDcache
-  // CMO on requester port 2, then reports completion via lp1_cmo_done_o (which
-  // clears the peripheral's per-core busy/status bit).  Single outstanding CMO
-  // per core (the peripheral won't issue a new one until done), so no flow
-  // control is needed on the incoming pulse -- it is latched here.
+  // Converts the core's lp1_cmo_valid_i request (asserted by a `csrw CSR_LP1CMO`
+  // that stalls the core) into an HPDcache CMO on requester port 2, then reports
+  // completion via lp1_cmo_done_o, which releases the core's stall.  The core
+  // holds only one CMO in flight (it is blocked until done), so no flow control
+  // is needed on the request -- it is latched here.
   //
   //   IDLE : wait for lp1_cmo_valid_i; decode + latch op/addr.
   //   REQ  : hold l1_req_valid[2] until l1_req_ready[2] accepts the request.
   //   RESP : wait for l1_rsp_valid[2]; pulse lp1_cmo_done_o; return to IDLE.
   //
-  // lp1_cmo_req_i.op encoding (from the peripheral register block):
+  // lp1_cmo_req_i.op encoding (from the core's CSR write):
   //   0 = FENCE (write-through WBUF drain), 1 = INVAL_ALL, 2 = INVAL_NLINE
   localparam int unsigned CmoReqId = 2;
 

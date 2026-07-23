@@ -9,19 +9,16 @@
 //
 // LP1 is the per-core private HPDcache (write-through, no coherence), distinct
 // from the shared distributed L1D controlled in l1cache.h.  These primitives
-// drive the per-core CMO (Cache Management Operation) injector so software can
-// bracket a critical section:
+// issue a per-core CMO (Cache Management Operation) directly from the core via a
+// custom CSR (CSR_LP1CMO); the write blocks in hardware until the CMO completes,
+// so no status polling is needed.  Use them to bracket a critical section:
 //
 //   amoswap acquire (L2) -> lp1_inval() -> CS -> lp1_wt_flush() -> release (L2)
 //
 // Each core acts on its own private L1; call from the core that owns the
-// critical section (no barrier -- the register slot is per-core).
+// critical section (the CSR is core-local, so no barrier is needed).
 
-#include "encoding.h"
-#include "cachepool_peripheral.h"
-#include "team.h"
-
-extern __thread struct snrt_team *_snrt_team_current;
+#include <stdint.h>
 
 void lp1_wt_flush();                 // release: drain write-through write buffer
 void lp1_inval();                    // acquire: invalidate the whole private L1

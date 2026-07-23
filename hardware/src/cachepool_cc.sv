@@ -110,6 +110,11 @@ module cachepool_cc
     input  tcdm_rsp_t    [TCDMPorts-1:0] tcdm_rsp_i,
     // Core event strobes
     output core_events_t                 core_events_o,
+    // Per-core private-L1 (LP1) CMO trigger, driven from the core via CSR.
+    output logic                         lp1_cmo_valid_o,
+    output logic         [2:0]           lp1_cmo_op_o,
+    output logic         [31:0]          lp1_cmo_addr_o,
+    input  logic                         lp1_cmo_done_i,
     input  addr_t                        tcdm_addr_base_i
   );
 
@@ -211,6 +216,10 @@ module cachepool_cc
     .fpu_rnd_mode_o        (fpu_rnd_mode             ),
     .fpu_fmt_mode_o        (fpu_fmt_mode             ),
     .fpu_status_i          (fpu_status               ),
+    .lp1_cmo_valid_o       (lp1_cmo_valid_o          ),
+    .lp1_cmo_op_o          (lp1_cmo_op_o             ),
+    .lp1_cmo_addr_o        (lp1_cmo_addr_o           ),
+    .lp1_cmo_done_i        (lp1_cmo_done_i           ),
     .core_events_o         (snitch_events            )
   );
 

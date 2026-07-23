@@ -32,7 +32,7 @@ packages:
     dependencies:
     - common_cells
   cluster_icache:
-    revision: ce0ed94a5b95f5c76b9fa51940303fcce53f56e5
+    revision: 8e574182b1ed125ec1ed1ec7f1ffc9c2096250b3
     version: null
     source:
       Git: https://github.com/pulp-platform/cluster_icache.git
@@ -56,14 +56,14 @@ packages:
       Git: https://github.com/pulp-platform/common_verification.git
     dependencies: []
   dram_rtl_sim:
-    revision: null
+    revision: fc831811ac0e1b374814f64bb7a53abd8e6171b4
     version: null
     source:
-      Path: hardware/deps/dram_rtl_sim
+      Git: https://github.com/pulp-platform/dram_rtl_sim.git
     dependencies:
     - axi
   floo_noc:
-    revision: a7d46c0aed7475a02de94f888a25495ae74d706f
+    revision: 9a6972a5f9b8117506d1df8a6505ce1da2bc9084
     version: null
     source:
       Git: https://github.com/pulp-platform/FlooNoC.git
@@ -156,10 +156,10 @@ packages:
     dependencies:
     - tech_cells_generic
   spatz:
-    revision: null
+    revision: 14e3e884366ce0e4987c22c36510fa71a369a89b
     version: null
     source:
-      Path: hardware/deps/spatz
+      Git: https://github.com/HHT1228/spatz.git
     dependencies:
     - axi
     - axi_riscv_atomics

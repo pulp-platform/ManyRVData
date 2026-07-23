@@ -9,19 +9,6 @@
         type: "int",
         default: "2"
         },
-        { name: "NumLp1CmoRegs",
-        desc: '''Number of per-core LP1 (private-L1) CMO register slots -- one per core /
-                 per private L1.  Core `cid` uses slot `cid`, so this MUST be >= the
-                 target config's total core count; otherwise cores with cid >= this
-                 value spin forever on LP1_CMO_STATUS (their slot is never decoded)
-                 -> cluster barrier deadlock.  This is regenerated per config by
-                 `make update-periph-reg`, which overrides this default with num_cores
-                 (32 for 2g/4g, 64 for *_tiny, 256 for full 16g).  The default below is
-                 only a safe max for a standalone regtool run; the block still fits the
-                 64 kB ClusterPeriphSize window at 256.''',
-        type: "int",
-        default: "256"
-        },
     ],
     name: "cachepool_peripheral",
     clock_primary: "clk_i",
@@ -240,90 +227,5 @@
             desc: "Commit the xbar offset configurations."
         }]
     },
-    // ---------------------------------------------------------------------------
-    // Per-core private-L1 (LP1) CMO trigger block.
-    // Vectorized per core (multireg, one slot per core) so that independent cores
-    // running unrelated critical sections can issue CMOs concurrently without
-    // racing on a shared trigger register.  Mirrors the CFG_L1D_INSN /
-    // L1D_INSN_COMMIT / L1D_FLUSH_STATUS handshake, one instance per core.
-    // Software: core `cid` writes CFG_LP1_CMO[cid] (+ CFG_LP1_CMO_ADDR[cid] for
-    // INVAL_NLINE), pulses LP1_CMO_COMMIT[cid], then polls LP1_CMO_STATUS[cid].
-    // ---------------------------------------------------------------------------
-    {
-        multireg: {
-            name: "CFG_LP1_CMO",
-            desc: '''Per-core LP1 CMO opcode.  0 = FENCE (write-through WBUF drain),
-                     1 = INVAL_ALL, 2 = INVAL_NLINE.  Paired with CFG_LP1_CMO_ADDR
-                     (INVAL_NLINE only) and triggered by LP1_CMO_COMMIT.'''
-            swaccess: "rw",
-            hwaccess: "hro",
-            count: "NumLp1CmoRegs",
-            cname: "cfg_lp1_cmo",
-            compact: "false",
-            resval: "0",
-            fields: [{
-                bits: "2:0",
-                name: "OP",
-                desc: "CMO opcode: 0=FENCE, 1=INVAL_ALL, 2=INVAL_NLINE."
-            }]
-        }
-    },
-    {
-        multireg: {
-            name: "CFG_LP1_CMO_ADDR",
-            desc: '''Per-core cacheline address for LP1 INVAL_NLINE.  Ignored for
-                     FENCE / INVAL_ALL.'''
-            swaccess: "rw",
-            hwaccess: "hro",
-            count: "NumLp1CmoRegs",
-            cname: "cfg_lp1_cmo_addr",
-            compact: "false",
-            resval: "0",
-            fields: [{
-                bits: "31:0",
-                name: "ADDR",
-                desc: "Cacheline address for INVAL_NLINE."
-            }]
-        }
-    },
-    {
-        multireg: {
-            name: "LP1_CMO_COMMIT",
-            desc: '''Per-core LP1 CMO trigger.  SW writes 1 to commit the opcode in
-                     CFG_LP1_CMO[cid]; hardware clears it to 0 once the CMO is accepted
-                     (mirrors L1D_INSN_COMMIT).'''
-            swaccess: "rw",
-            hwaccess: "hrw",
-            count: "NumLp1CmoRegs",
-            cname: "lp1_cmo_commit",
-            compact: "false",
-            resval: "0",
-            fields: [{
-                bits: "0",
-                name: "COMMIT",
-                desc: "Commit/trigger the CMO for this core."
-            }]
-        }
-    },
-    {
-        multireg: {
-            name: "LP1_CMO_STATUS",
-            desc: '''Per-core LP1 CMO status.  High while this core's CMO is in flight;
-                     Low when idle/complete.  Polled by the runtime (like
-                     L1D_FLUSH_STATUS).'''
-            hwext: "true",
-            swaccess: "ro",
-            hwaccess: "hwo",
-            count: "NumLp1CmoRegs",
-            cname: "lp1_cmo_status",
-            compact: "false",
-            resval: "0",
-            fields: [{
-                bits: "0:0",
-                name: "STATUS",
-                desc: "High for running CMO; Low for idle/complete."
-            }]
-        }
-    }
   ]
 }
