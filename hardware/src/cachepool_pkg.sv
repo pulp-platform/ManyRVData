@@ -99,7 +99,7 @@ package cachepool_pkg;
   // Group-level L2 ICache (shared read-only cache, primarily for coalescing)
   localparam int unsigned L2ICacheLineWidth = 512;
   localparam int unsigned L2ICacheSets      = 4;
-  localparam int unsigned L2ICacheSizeByte  = 8192;
+  localparam int unsigned L2ICacheSizeByte  = 16384;
   localparam int unsigned L2ICacheLineCount = L2ICacheSizeByte / (L2ICacheSets * L2ICacheLineWidth / 8);
 
   // Be careful on unsigned long int passed in from configuration.
@@ -309,9 +309,11 @@ package cachepool_pkg;
   localparam int unsigned L2BankWidth    = `ifdef L2_BANK_WIDTH `L2_BANK_WIDTH `else 0 `endif;
   localparam int unsigned L2BankBeWidth  = L2BankWidth / 8;
 
+`ifndef TARGET_SYNTHESIS
   // Supported values (must match DRAMSys config names): DDR3, DDR4, LPDDR4, HBM2
   parameter string        DramType       = `ifdef DRAM_TYPE `DRAM_TYPE `else "DDR4" `endif;
   parameter  int unsigned DramBase       = 32'h8000_0000;
+`endif
 
   // One more for UART?
   localparam int unsigned NumClusterSlv  = NumL2Channel;
