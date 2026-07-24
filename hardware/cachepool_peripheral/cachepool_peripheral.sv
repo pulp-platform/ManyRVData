@@ -15,8 +15,6 @@ module cachepool_peripheral
   parameter int unsigned SPMWidth     = 0,
   // Number of tiles (used for flush controller granularity)
   parameter int unsigned NumTiles     = 1,
-  // Number of cores.
-  parameter int unsigned NumCores     = 1,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,

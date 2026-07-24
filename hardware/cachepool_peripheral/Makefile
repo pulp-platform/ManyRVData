@@ -15,15 +15,13 @@ PKG=cachepool_peripheral_reg_pkg.sv
 TOP=cachepool_peripheral_reg_top.sv
 CDEF=$(ROOTDIR)/software/snRuntime/include/cachepool_peripheral.h
 
-REGGEN_PARAMS :=
-
 all: $(PKG) $(TOP) $(CDEF)
 
 $(PKG): $(SCHEMA)
-	$(PYTHON3) $(REGTOOL) $(REGGEN_PARAMS) -r -t $(dir $@) $<
+	$(PYTHON3) $(REGTOOL) -r -t $(dir $@) $<
 $(TOP): $(SCHEMA)
-	$(PYTHON3) $(REGTOOL) $(REGGEN_PARAMS) -r -t $(dir $@) $<
+	$(PYTHON3) $(REGTOOL) -r -t $(dir $@) $<
 
 %.h: $(SCHEMA)
-	$(PYTHON3) $(REGTOOL) $(REGGEN_PARAMS) -D -o $@ $<
+	$(PYTHON3) $(REGTOOL) -D -o $@ $<
 	$(CLANG_FORMAT) -i $@

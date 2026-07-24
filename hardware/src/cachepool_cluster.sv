@@ -756,7 +756,6 @@ module cachepool_cluster
     .AddrWidth     (AxiAddrWidth    ),
     .SPMWidth      ($clog2(L1NumSet)),
     .NumTiles      (NumTiles        ),
-    .NumCores      (NumCores        ),
     .reg_req_t     (reg_req_t       ),
     .reg_rsp_t     (reg_rsp_t       ),
     .cache_insn_t  (cache_insn_t    )
