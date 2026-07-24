@@ -97,10 +97,10 @@ packages:
     dependencies:
     - common_cells
   hpdcache:
-    revision: null
+    revision: 957e6f9b30dd5516b57cca3326f3f32e4357cf1b
     version: null
     source:
-      Path: ../cv-hpdcache
+      Git: https://github.com/HHT1228/cv-hpdcache.git
     dependencies: []
   idma:
     revision: 28a36e5e07705549e59fc33db96ab681bc1ca88e
@@ -115,10 +115,10 @@ packages:
     - obi
     - register_interface
   insitu-cache:
-    revision: null
+    revision: 129174e095db1f64136a02735ea9617dc2e29d6c
     version: null
     source:
-      Path: ../Insitu-Cache
+      Git: https://github.com/HHT1228/Insitu-Cache.git
     dependencies:
     - axi
     - common_cells
@@ -156,7 +156,7 @@ packages:
     dependencies:
     - tech_cells_generic
   spatz:
-    revision: 14e3e884366ce0e4987c22c36510fa71a369a89b
+    revision: 6170425f91422aa1daa3b9d8e34cda41f2c05b32
     version: null
     source:
       Git: https://github.com/HHT1228/spatz.git
