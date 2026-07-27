@@ -107,7 +107,7 @@ module cachepool_monitor
               end
             end
 
-            for (int unsigned r = 0; r < NumRemotePortCore; r++) begin
+            for (int unsigned r = 0; r < NumLGPortCore; r++) begin
               if (`TILE_PATH(gy, gx, t).gen_cache_xbar[j].xbar_remote_req_o[r].q_valid) begin
                 group_valid_inc++;
                 if (`TILE_PATH(gy, gx, t).gen_cache_xbar[j].xbar_remote_rsp_i[r].q_ready)
@@ -187,22 +187,27 @@ module cachepool_monitor
 
   // ---------------------------------------------------------------------
   // L1 Inter-Group NoC Monitor.
-  // Cluster-level mesh-link handshakes (noc_req/rsp_out/in), aggregated per
-  // group per direction across all NumTilesPerGroup*NumNoCPortsPerTile
-  // parallel tile-links sharing that direction. One router pair exists per
-  // (group, direction, tile-port) inside cachepool_group_noc_wrapper.sv, but
-  // these cluster-level arrays already carry the same valid/ready handshake
-  // without needing to reach inside the router instances.
+  // Cluster-level mesh-link handshakes (noc_req/rsp_out/in), tracked
+  // per-(group, direction, tile-port) so that each physical tile-level NoC
+  // link can be told apart -- one router pair exists per (group, direction,
+  // tile-port) inside cachepool_group_noc_wrapper.sv, and aggregating them
+  // away (as before) hides load imbalance across tiles sharing a direction.
   // Direction index (floo_pkg order): 0=North, 1=East, 2=South, 3=West.
   // "out" = this group sending on that link, "in" = this group receiving.
+  //
+  // One file is produced per group:
+  //  - monitor_l1noc_g<N>.txt      : human-readable, aggregated over ports.
+  // (The per-link link_l1noc_g<N>.csv export was removed -- superseded by
+  // hardware/tb/cachepool_noc_profiling.sv's cycle-accurate per-flit logs,
+  // consumed by util/scripts/noc_profiling_to_vis4mesh.py.)
   // ---------------------------------------------------------------------
   localparam int unsigned NumNoCLinkPorts = NumTilesPerGroup * NumNoCPortsPerTile;
 
   for (genvar g = 0; g < NumGroups; g++) begin : gen_l1noc_g
-    cnt_t [3:0] req_out_cnt_d,  req_out_cnt_q,  req_out_vcyc_d,  req_out_vcyc_q;
-    cnt_t [3:0] req_in_cnt_d,   req_in_cnt_q,   req_in_vcyc_d,   req_in_vcyc_q;
-    cnt_t [3:0] rsp_out_cnt_d,  rsp_out_cnt_q,  rsp_out_vcyc_d,  rsp_out_vcyc_q;
-    cnt_t [3:0] rsp_in_cnt_d,   rsp_in_cnt_q,   rsp_in_vcyc_d,   rsp_in_vcyc_q;
+    cnt_t [3:0][NumNoCLinkPorts-1:0] req_out_cnt_d,  req_out_cnt_q,  req_out_vcyc_d,  req_out_vcyc_q;
+    cnt_t [3:0][NumNoCLinkPorts-1:0] req_in_cnt_d,   req_in_cnt_q,   req_in_vcyc_d,   req_in_vcyc_q;
+    cnt_t [3:0][NumNoCLinkPorts-1:0] rsp_out_cnt_d,  rsp_out_cnt_q,  rsp_out_vcyc_d,  rsp_out_vcyc_q;
+    cnt_t [3:0][NumNoCLinkPorts-1:0] rsp_in_cnt_d,   rsp_in_cnt_q,   rsp_in_vcyc_d,   rsp_in_vcyc_q;
     `FF(req_out_cnt_q,  req_out_cnt_d,  '0)
     `FF(req_out_vcyc_q, req_out_vcyc_d, '0)
     `FF(req_in_cnt_q,   req_in_cnt_d,   '0)
@@ -213,36 +218,36 @@ module cachepool_monitor
     `FF(rsp_in_vcyc_q,  rsp_in_vcyc_d,  '0)
 
     for (genvar dir = 0; dir < 4; dir++) begin : gen_l1noc_dir
-      always_comb begin
-        automatic cnt_t ro_c, ro_v, ri_c, ri_v, so_c, so_v, si_c, si_v;
-        ro_c = '0; ro_v = '0; ri_c = '0; ri_v = '0;
-        so_c = '0; so_v = '0; si_c = '0; si_v = '0;
-        for (int unsigned p = 0; p < NumNoCLinkPorts; p++) begin
+      for (genvar p = 0; p < NumNoCLinkPorts; p++) begin : gen_l1noc_port
+        always_comb begin
+          automatic cnt_t ro_c, ro_v, ri_c, ri_v, so_c, so_v, si_c, si_v;
+          ro_c = '0; ro_v = '0; ri_c = '0; ri_v = '0;
+          so_c = '0; so_v = '0; si_c = '0; si_v = '0;
           if (`CLUSTER_PATH.noc_req_out_valid[g][dir][p]) begin
-            ro_v++;
-            if (`CLUSTER_PATH.noc_req_out_ready[g][dir][p]) ro_c++;
+            ro_v = 1;
+            if (`CLUSTER_PATH.noc_req_out_ready[g][dir][p]) ro_c = 1;
           end
           if (`CLUSTER_PATH.noc_req_in_valid[g][dir][p]) begin
-            ri_v++;
-            if (`CLUSTER_PATH.noc_req_in_ready[g][dir][p]) ri_c++;
+            ri_v = 1;
+            if (`CLUSTER_PATH.noc_req_in_ready[g][dir][p]) ri_c = 1;
           end
           if (`CLUSTER_PATH.noc_rsp_out_valid[g][dir][p]) begin
-            so_v++;
-            if (`CLUSTER_PATH.noc_rsp_out_ready[g][dir][p]) so_c++;
+            so_v = 1;
+            if (`CLUSTER_PATH.noc_rsp_out_ready[g][dir][p]) so_c = 1;
           end
           if (`CLUSTER_PATH.noc_rsp_in_valid[g][dir][p]) begin
-            si_v++;
-            if (`CLUSTER_PATH.noc_rsp_in_ready[g][dir][p]) si_c++;
+            si_v = 1;
+            if (`CLUSTER_PATH.noc_rsp_in_ready[g][dir][p]) si_c = 1;
           end
+          req_out_cnt_d[dir][p]  = session_edge ? '0 : req_out_cnt_q[dir][p]  + ro_c;
+          req_out_vcyc_d[dir][p] = session_edge ? '0 : req_out_vcyc_q[dir][p] + ro_v;
+          req_in_cnt_d[dir][p]   = session_edge ? '0 : req_in_cnt_q[dir][p]   + ri_c;
+          req_in_vcyc_d[dir][p]  = session_edge ? '0 : req_in_vcyc_q[dir][p]  + ri_v;
+          rsp_out_cnt_d[dir][p]  = session_edge ? '0 : rsp_out_cnt_q[dir][p]  + so_c;
+          rsp_out_vcyc_d[dir][p] = session_edge ? '0 : rsp_out_vcyc_q[dir][p] + so_v;
+          rsp_in_cnt_d[dir][p]   = session_edge ? '0 : rsp_in_cnt_q[dir][p]   + si_c;
+          rsp_in_vcyc_d[dir][p]  = session_edge ? '0 : rsp_in_vcyc_q[dir][p]  + si_v;
         end
-        req_out_cnt_d[dir]  = session_edge ? '0 : req_out_cnt_q[dir]  + ro_c;
-        req_out_vcyc_d[dir] = session_edge ? '0 : req_out_vcyc_q[dir] + ro_v;
-        req_in_cnt_d[dir]   = session_edge ? '0 : req_in_cnt_q[dir]   + ri_c;
-        req_in_vcyc_d[dir]  = session_edge ? '0 : req_in_vcyc_q[dir]  + ri_v;
-        rsp_out_cnt_d[dir]  = session_edge ? '0 : rsp_out_cnt_q[dir]  + so_c;
-        rsp_out_vcyc_d[dir] = session_edge ? '0 : rsp_out_vcyc_q[dir] + so_v;
-        rsp_in_cnt_d[dir]   = session_edge ? '0 : rsp_in_cnt_q[dir]   + si_c;
-        rsp_in_vcyc_d[dir]  = session_edge ? '0 : rsp_in_vcyc_q[dir]  + si_v;
       end
     end
 
@@ -260,25 +265,37 @@ module cachepool_monitor
       $fwrite(l1noc_f, "*** Session %0d (%s): cycles [%0d, %0d) ***\n",
               idx, tag, session_start_cycle_q, cycle_q);
       for (int unsigned dir = 0; dir < 4; dir++) begin
-        automatic real ro_avg = req_out_cnt_q[dir] == 0 ? 0 : real'(req_out_vcyc_q[dir]) / real'(req_out_cnt_q[dir]);
-        automatic real ri_avg = req_in_cnt_q[dir]  == 0 ? 0 : real'(req_in_vcyc_q[dir])  / real'(req_in_cnt_q[dir]);
-        automatic real so_avg = rsp_out_cnt_q[dir] == 0 ? 0 : real'(rsp_out_vcyc_q[dir]) / real'(rsp_out_cnt_q[dir]);
-        automatic real si_avg = rsp_in_cnt_q[dir]  == 0 ? 0 : real'(rsp_in_vcyc_q[dir])  / real'(rsp_in_cnt_q[dir]);
+        automatic cnt_t ro_c, ro_v, ri_c, ri_v, so_c, so_v, si_c, si_v;
+        automatic real ro_avg, ri_avg, so_avg, si_avg;
+        ro_c = '0; ro_v = '0; ri_c = '0; ri_v = '0;
+        so_c = '0; so_v = '0; si_c = '0; si_v = '0;
+        for (int unsigned p = 0; p < NumNoCLinkPorts; p++) begin
+          ro_c += req_out_cnt_q[dir][p];  ro_v += req_out_vcyc_q[dir][p];
+          ri_c += req_in_cnt_q[dir][p];   ri_v += req_in_vcyc_q[dir][p];
+          so_c += rsp_out_cnt_q[dir][p];  so_v += rsp_out_vcyc_q[dir][p];
+          si_c += rsp_in_cnt_q[dir][p];   si_v += rsp_in_vcyc_q[dir][p];
+        end
+        ro_avg = ro_c == 0 ? 0 : real'(ro_v) / real'(ro_c);
+        ri_avg = ri_c == 0 ? 0 : real'(ri_v) / real'(ri_c);
+        so_avg = so_c == 0 ? 0 : real'(so_v) / real'(so_c);
+        si_avg = si_c == 0 ? 0 : real'(si_v) / real'(si_c);
         $fwrite(l1noc_f, "   %s:\n", dir_name[dir]);
         $fwrite(l1noc_f, "     REQ out: accepted=%0d  valid_cyc=%0d  avg_accept_cyc=%0.2f\n",
-                req_out_cnt_q[dir], req_out_vcyc_q[dir], ro_avg);
+                ro_c, ro_v, ro_avg);
         $fwrite(l1noc_f, "     REQ in : accepted=%0d  valid_cyc=%0d  avg_accept_cyc=%0.2f\n",
-                req_in_cnt_q[dir], req_in_vcyc_q[dir], ri_avg);
+                ri_c, ri_v, ri_avg);
         $fwrite(l1noc_f, "     RSP out: accepted=%0d  valid_cyc=%0d  avg_accept_cyc=%0.2f\n",
-                rsp_out_cnt_q[dir], rsp_out_vcyc_q[dir], so_avg);
+                so_c, so_v, so_avg);
         $fwrite(l1noc_f, "     RSP in : accepted=%0d  valid_cyc=%0d  avg_accept_cyc=%0.2f\n",
-                rsp_in_cnt_q[dir], rsp_in_vcyc_q[dir], si_avg);
+                si_c, si_v, si_avg);
       end
       $fwrite(l1noc_f, "\n");
     endfunction
 
     always_ff @(posedge clk_i) begin
-      if (session_edge) dump_l1noc_session(session_idx_q, session_tag(probe_q, 1'b0));
+      if (session_edge) begin
+        dump_l1noc_session(session_idx_q, session_tag(probe_q, 1'b0));
+      end
     end
 
     final begin
@@ -374,7 +391,9 @@ module cachepool_monitor
       endfunction
 
       always_ff @(posedge clk_i) begin
-        if (session_edge) dump_l2noc_session(session_idx_q, session_tag(probe_q, 1'b0));
+        if (session_edge) begin
+          dump_l2noc_session(session_idx_q, session_tag(probe_q, 1'b0));
+        end
       end
 
       final begin
@@ -561,6 +580,117 @@ module cachepool_monitor
           `FF(stats_base_q, stats_base_d, '0)
           assign stats_base_d = session_edge ? read_spatz_stats() : stats_base_q;
 
+          // -------------------------------------------------------------
+          // Snitch scalar-core frontend/LSU monitor. Unlike the Spatz
+          // counters above (cumulative RTL registers, snapshotted and
+          // diffed), these are computed here from live combinational
+          // signals inside i_snitch and reset every session directly, same
+          // pattern as the NoC/tile monitors elsewhere in this file.
+          //
+          // Stall-cause breakdown mutually exclusive and summing to
+          // i_snitch.stall's own assertion count: priority-classified in
+          // the same order as snitch.sv's own `stall` OR-expression --
+          // "no valid instruction" causes (frontend not ready, RAW hazard,
+          // itlb miss) are checked first since they all gate valid_instr
+          // there, then the independent lsu/acc/fence stall sources.
+          // -------------------------------------------------------------
+          cnt_t inst_valid_cyc_d, inst_valid_cyc_q;
+          cnt_t inst_accepted_d,  inst_accepted_q;
+          `FF(inst_valid_cyc_q, inst_valid_cyc_d, '0)
+          `FF(inst_accepted_q,  inst_accepted_d,  '0)
+
+          cnt_t stall_total_d,  stall_total_q;
+          cnt_t stall_ifetch_d, stall_ifetch_q;
+          cnt_t stall_itlb_d,   stall_itlb_q;
+          cnt_t stall_hazard_d, stall_hazard_q;
+          cnt_t stall_lsu_d,    stall_lsu_q;
+          cnt_t stall_acc_d,    stall_acc_q;
+          cnt_t stall_fence_d,  stall_fence_q;
+          `FF(stall_total_q,  stall_total_d,  '0)
+          `FF(stall_ifetch_q, stall_ifetch_d, '0)
+          `FF(stall_itlb_q,   stall_itlb_d,   '0)
+          `FF(stall_hazard_q, stall_hazard_d, '0)
+          `FF(stall_lsu_q,    stall_lsu_d,    '0)
+          `FF(stall_acc_q,    stall_acc_d,    '0)
+          `FF(stall_fence_q,  stall_fence_d,  '0)
+
+          always_comb begin
+            automatic logic inst_valid, inst_ready, stall;
+            automatic logic is_no_instr, is_itlb, is_hazard, is_lsu, is_acc, is_fence;
+
+            inst_valid = `CC_PATH(gy, gx, t, c).i_snitch.inst_valid_o;
+            inst_ready = `CC_PATH(gy, gx, t, c).i_snitch.inst_ready_i;
+            stall      = `CC_PATH(gy, gx, t, c).i_snitch.stall;
+
+            is_no_instr = ~(inst_valid & inst_ready);
+            is_itlb     = `CC_PATH(gy, gx, t, c).i_snitch.trans_active &
+                          ~(`CC_PATH(gy, gx, t, c).i_snitch.itlb_valid &
+                            `CC_PATH(gy, gx, t, c).i_snitch.itlb_ready);
+            is_hazard   = ~(`CC_PATH(gy, gx, t, c).i_snitch.operands_ready &
+                             `CC_PATH(gy, gx, t, c).i_snitch.dst_ready);
+            is_lsu      = `CC_PATH(gy, gx, t, c).i_snitch.lsu_stall;
+            is_acc      = `CC_PATH(gy, gx, t, c).i_snitch.acc_stall;
+            is_fence    = `CC_PATH(gy, gx, t, c).i_snitch.fence_snitch_stall |
+                          `CC_PATH(gy, gx, t, c).i_snitch.fence_spatz_stall |
+                          `CC_PATH(gy, gx, t, c).i_snitch.fence_stall;
+
+            inst_valid_cyc_d = session_edge ? '0 : inst_valid_cyc_q + (inst_valid ? 1 : 0);
+            inst_accepted_d  = session_edge ? '0 :
+                inst_accepted_q + ((inst_valid & inst_ready) ? 1 : 0);
+
+            stall_total_d  = session_edge ? '0 : stall_total_q  + (stall ? 1 : 0);
+            stall_ifetch_d = session_edge ? '0 :
+                stall_ifetch_q + ((stall & is_no_instr) ? 1 : 0);
+            stall_itlb_d   = session_edge ? '0 :
+                stall_itlb_q   + ((stall & ~is_no_instr & is_itlb) ? 1 : 0);
+            stall_hazard_d = session_edge ? '0 :
+                stall_hazard_q + ((stall & ~is_no_instr & ~is_itlb & is_hazard) ? 1 : 0);
+            stall_lsu_d    = session_edge ? '0 :
+                stall_lsu_q    + ((stall & ~is_no_instr & ~is_itlb & ~is_hazard & is_lsu) ? 1 : 0);
+            stall_acc_d    = session_edge ? '0 :
+                stall_acc_q    + ((stall & ~is_no_instr & ~is_itlb & ~is_hazard & ~is_lsu & is_acc) ? 1 : 0);
+            stall_fence_d  = session_edge ? '0 :
+                stall_fence_q  + ((stall & ~is_no_instr & ~is_itlb & ~is_hazard & ~is_lsu & ~is_acc & is_fence) ? 1 : 0);
+          end
+
+          // Scalar LSU load request-to-commit latency (data_req_o port,
+          // loads only). snitch_lsu.sv guarantees in-order responses, so a
+          // FIFO of accepted load requests' cycle-stamps correctly pairs
+          // each commit with its own request even with multiple loads
+          // outstanding.
+          logic snitch_load_req_accept, snitch_load_resp_commit;
+          assign snitch_load_req_accept =
+              `CC_PATH(gy, gx, t, c).i_snitch.data_req_o.q_valid &
+              `CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.q_ready &
+              ~`CC_PATH(gy, gx, t, c).i_snitch.data_req_o.q.write;
+          assign snitch_load_resp_commit =
+              `CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.p_valid &
+              `CC_PATH(gy, gx, t, c).i_snitch.data_req_o.p_ready &
+              ~`CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.p.write;
+
+          cnt_t load_req_ts_q[$];
+          cnt_t snitch_load_lat_sum_q, snitch_load_lat_cnt_q;
+
+          always_ff @(posedge clk_i) begin
+            if (rst_ni) begin
+              if (snitch_load_req_accept) load_req_ts_q.push_back(cycle_q);
+
+              if (session_edge) begin
+                snitch_load_lat_sum_q <= '0;
+                snitch_load_lat_cnt_q <= '0;
+              end else if (snitch_load_resp_commit && load_req_ts_q.size() > 0) begin
+                snitch_load_lat_sum_q <= snitch_load_lat_sum_q + (cycle_q - load_req_ts_q[0]);
+                snitch_load_lat_cnt_q <= snitch_load_lat_cnt_q + 1;
+              end
+
+              if (snitch_load_resp_commit && load_req_ts_q.size() > 0) void'(load_req_ts_q.pop_front());
+            end else begin
+              load_req_ts_q.delete();
+              snitch_load_lat_sum_q <= '0;
+              snitch_load_lat_cnt_q <= '0;
+            end
+          end
+
           int    core_f;
           string core_f_name;
 
@@ -574,6 +704,7 @@ module cachepool_monitor
           function automatic void dump_core_session(input cnt_t idx, input string tag);
             automatic spatz_stats_t now = read_spatz_stats();
             automatic spatz_stats_t d;
+            automatic real snitch_load_lat_avg, inst_serve_avg;
             automatic real load_lat_avg, ctrl_vlsu_wstall, ctrl_vfu_wstall, ctrl_vsldu_wstall;
             automatic real vlsu_vrf_w_util, vlsu_vrf_w_avg_cyc, vlsu_mem_util, vlsu_mem_avg_cyc;
             automatic real vlsu_rob_usage_avg, vlsu_rob_peak_util, vlsu_avg_insn_cyc;
@@ -644,10 +775,28 @@ module cachepool_monitor
             end
             vfu_avg_insn_cyc = d.vfu_insn_cnt == 0 ? 0 : real'(d.vfu_insn_valid_cyc) / real'(d.vfu_insn_cnt);
 
+            snitch_load_lat_avg = snitch_load_lat_cnt_q == 0 ? 0 :
+                real'(snitch_load_lat_sum_q) / real'(snitch_load_lat_cnt_q);
+            inst_serve_avg = inst_accepted_q == 0 ? 0 :
+                real'(inst_valid_cyc_q) / real'(inst_accepted_q);
+
             $fwrite(core_f, "*********************************************************************\n");
             $fwrite(core_f, "*** Session %0d (%s): cycles [%0d, %0d)                    ***\n",
                     idx, tag, session_start_cycle_q, cycle_q);
             $fwrite(core_f, "*********************************************************************\n");
+            $fwrite(core_f, "***            Snitch Scalar Core                                 ***\n");
+            $fwrite(core_f, "   Inst Fetch Accepted Count:        %32d\n", inst_accepted_q          );
+            $fwrite(core_f, "   Inst Fetch AVG Serving Cycles:    %32.2f\n", inst_serve_avg          );
+            $fwrite(core_f, "   Scalar LSU Load Req-to-Commit Count: %29d\n", snitch_load_lat_cnt_q );
+            $fwrite(core_f, "   Scalar LSU Load AVG Req-to-Commit Cyc: %27.2f\n", snitch_load_lat_avg);
+            $fwrite(core_f, "   Stall Cycles Total:               %32d\n", stall_total_q            );
+            $fwrite(core_f, "   Stall Cycles (No Valid Instr):    %32d\n", stall_ifetch_q           );
+            $fwrite(core_f, "   Stall Cycles (ITLB Miss):         %32d\n", stall_itlb_q             );
+            $fwrite(core_f, "   Stall Cycles (RAW Hazard):        %32d\n", stall_hazard_q           );
+            $fwrite(core_f, "   Stall Cycles (LSU Port Busy):     %32d\n", stall_lsu_q              );
+            $fwrite(core_f, "   Stall Cycles (Accelerator Port):  %32d\n", stall_acc_q              );
+            $fwrite(core_f, "   Stall Cycles (Fence Drain):       %32d\n", stall_fence_q            );
+            $fwrite(core_f, "\n"                                                                    );
             $fwrite(core_f, "   VLSU Load Req-to-Commit Count:    %32d\n", d.vlsu_load_lat_cnt       );
             $fwrite(core_f, "   VLSU Load AVG Req-to-Commit Cyc:  %32.2f\n", load_lat_avg             );
             $fwrite(core_f, "\n"                                                                     );

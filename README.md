@@ -335,6 +335,40 @@ Each session dumps counter files under `sim/bin/logs/`, split into three subfold
 
 CI test jobs recreate these subfolders before running (build artifacts exclude `sim/bin/logs/`) and archive the whole `sim/bin/logs/` tree as job artifacts.
 
+### NoC Visualization (Vis4Mesh)
+
+For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_monitor.sv`'s per-session text summaries above), a second simulation-only tap, `hardware/tb/cachepool_noc_profiling.sv`, records cycle-accurate per-router/tile/core state and packet traces to `noc_profiling/*.log`. `util/scripts/noc_profiling_to_vis4mesh.py` converts those logs into a dataset for [Vis4Mesh](https://github.com/DiyouS/vis4mesh) (a fork of [ueqri/vis4mesh](https://github.com/ueqri/vis4mesh) with CachePool-specific fixes), a browser-based NoC traffic visualizer.
+
+1. **Enable the profiler and run a kernel** (default `noc_profiling ?= 1`, so this is on unless you passed `noc_profiling=0`):
+   ```sh
+   make vsim config=<multi-group config> noc_profiling=1
+   ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-cachepool-<test>
+   ```
+   L1 (inter-group cache-access mesh) logs (`router_g*.log`, `tile_g*.log`) only populate with `num_rg_ports_per_core > 0` (a multi-group config); L2 (DRAM-refill mesh) logs (`l2_router_g*.log`) and per-core PE logs (`pe_g*.log`) are always populated.
+
+2. **Convert to a Vis4Mesh dataset**:
+   ```sh
+   python3 util/scripts/noc_profiling_to_vis4mesh.py --level l1 \
+     --num-groups-x <NumGroupsX> --num-groups-y <NumGroupsY> \
+     --num-tiles-per-group <NumTilesPerGroup> --num-noc-ports-per-tile <NumNoCPortsPerTile> \
+     --output-dir util/vis4mesh/visdata/<name>
+   ```
+   `--level` selects the network and channel breakdown:
+   | Level | Network | Channel breakdown |
+   |---|---|---|
+   | `l1` (default) | Inter-group cache-access mesh | Per physical link (tile × NoC port) |
+   | `l1-origin` | Inter-group cache-access mesh | Per originating group |
+   | `l2` | DRAM-refill mesh | Single (per your read/write/resp split via message type) |
+   | `l2-origin` | DRAM-refill mesh | Per originating group/HBM channel |
+
+   `--num-tiles-per-group`/`--num-noc-ports-per-tile` are only needed for `l1`/`l1-origin`. See the script's module docstring for the full data-shape/limitation notes (e.g. hop-distance and transfer-type filters aren't populated yet).
+
+3. **Build and serve Vis4Mesh, then upload the dataset directory**:
+   ```sh
+   make vis4mesh-serve   # clones/builds util/vis4mesh (pinned, see util/vis4mesh.version), serves at http://localhost:8000
+   ```
+   Open the URL, click the upload button, and select the `--output-dir` directory from step 2.
+
 ## Snitch–Spatz Core Complex
 
 The default system uses a 32-bit Snitch core with a Spatz RVV accelerator. Double-precision is disabled by default for scalability; enable the FPU flavor (`cachepool_fpu.mk`) for single/half precision support.

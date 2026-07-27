@@ -105,10 +105,18 @@ module tb_cachepool;
     .cluster_probe_o   (cluster_probe         )
   );
 
+  // Monitor block to generate logs for performance debugging
   cachepool_monitor i_cachepool_monitor (
     .clk_i           (clk           ),
     .rst_ni          (rst_n         ),
     .cluster_probe_i (cluster_probe )
+  );
+
+  // Cycle-accurate per-router/tile/core NoC traffic logs for perfetto_gen.py
+  // (enabled at compile time with +define+NOC_PROFILING)
+  cachepool_noc_profiling i_cachepool_noc_profiling (
+    .clk_i  (clk   ),
+    .rst_ni (rst_n )
   );
 /**************
  *  VCD Dump  *
