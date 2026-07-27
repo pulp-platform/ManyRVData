@@ -94,7 +94,7 @@ typedef struct {
    _Atomic unsigned int sduNumCong __attribute__((aligned(4)));
    _Atomic unsigned int sudCongState __attribute__((aligned(4)));
    _Atomic unsigned int pktdelayEnqueFlag __attribute__((aligned(4)));
-   unsigned int firstSduPktRxCycle __attribute__((aligned(4)));
+   unsigned int latestSduPktRxCycle __attribute__((aligned(4)));
    _Atomic unsigned int recvPdcpPduBytes __attribute__((aligned(4)));
    unsigned int lastRcvOrSubmitDataCyc __attribute__((aligned(4)));
    _Atomic unsigned int sduNum; /* Number of sdus to be sent */

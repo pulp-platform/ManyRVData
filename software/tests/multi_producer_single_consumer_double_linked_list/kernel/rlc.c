@@ -392,7 +392,7 @@ static int producer(const unsigned int core_id) {
     //     pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1],
     //     benchmark_get_cycle());
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
-    rlc_ctx.firstSduPktRxCycle = benchmark_get_cycle();
+    rlc_ctx.latestSduPktRxCycle = benchmark_get_cycle();
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
     if (new_pdcp_pkg_ptr < 0) {
         return -1;  // No more packages
@@ -465,7 +465,7 @@ static int producer(const unsigned int core_id) {
     atomic_fetch_add_explicit(&rlc_ctx.sduBytes, node->data_size, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.sduNum, 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.recvPdcpPduBytes, node->data_size, memory_order_relaxed);
-    rlc_ctx.lastRcvOrSubmitDataCyc = benchmark_get_cycle() - rlc_ctx.firstSduPktRxCycle;
+    rlc_ctx.lastRcvOrSubmitDataCyc = benchmark_get_cycle() - rlc_ctx.latestSduPktRxCycle;
 
     atomic_fetch_add_explicit(&rlc_ctx.rcvPktNum, 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_ctx.rcvPktLength, node->data_size, memory_order_relaxed);
