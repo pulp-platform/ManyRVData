@@ -1023,7 +1023,7 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .BankFactor       (L1BankFactor       ),
-      .LogDebug         (0                  ),
+      // .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),

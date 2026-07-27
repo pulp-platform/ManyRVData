@@ -22,3 +22,4 @@ hardware/bootrom/bootrom.elf
 hardware/bootrom/bootrom.sv
 # Configuration auto-generated files
 config/cachepool.hjson
+*noc_profiling

@@ -469,6 +469,21 @@ ${VIS4MESH_DIR}/dist/index.bundle.js: ${VIS4MESH_DIR}/.git
 vis4mesh-serve: vis4mesh
 	cd ${VIS4MESH_DIR}/dist && ${PYTHON} -m http.server
 
+NOC_VIS_INPUT_DIR      ?= noc_profiling
+NOC_VIS_OUTPUT_PREFIX  ?= ${VIS4MESH_DIR}/visdata/$(config)
+NOC_VIS_SLICE_CYCLES   ?= 500
+NOC_VIS_CLK_FREQ       ?= 1000
+
+.PHONY: vis4mesh-data
+vis4mesh-data:
+	@for level in l1 l1-origin l2 l2-origin; do \
+	  $(PYTHON) $(CACHEPOOL_DIR)/util/scripts/noc_profiling_to_vis4mesh.py --level $$level \
+	    --input-dir $(NOC_VIS_INPUT_DIR) --output-dir $(NOC_VIS_OUTPUT_PREFIX)-$$level \
+	    --num-groups-x $(num_groups_x) --num-groups-y $$(( $(num_groups) / $(num_groups_x) )) \
+	    --num-tiles-per-group $(num_tiles_per_group) --num-noc-ports-per-tile $(num_noc_ports_per_tile) \
+	    --slice-cycles $(NOC_VIS_SLICE_CYCLES) --clk-freq $(NOC_VIS_CLK_FREQ); \
+	done
+
 ########
 # Help #
 ########
@@ -523,6 +538,9 @@ help:
 	@echo "*vis4mesh*:       clone/build the Vis4Mesh frontend into util/vis4mesh (pinned, see util/vis4mesh.version)"
 	@echo "*vis4mesh-serve*: build (if needed) and serve Vis4Mesh at http://localhost:8000"
 	@echo "                  upload a directory from util/scripts/noc_profiling_to_vis4mesh.py's --output-dir"
+	@echo "*vis4mesh-data*:  convert noc_profiling/*.log (see 'noc_profiling' above) into all four Vis4Mesh"
+	@echo "                  datasets (l1/l1-origin/l2/l2-origin) under NOC_VIS_OUTPUT_PREFIX-<level>,"
+	@echo "                  using the current config's group/tile/port counts"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings:"
@@ -532,4 +550,8 @@ help:
 	@echo "*LOGS_DIR*:       logs directory used by avg-log (default: $(LOGS_DIR))"
 	@echo "*VIS4MESH_DIR*:   Vis4Mesh checkout directory (default: $(VIS4MESH_DIR))"
 	@echo "*VIS4MESH_REPO*:  Vis4Mesh git remote (default: $(VIS4MESH_REPO))"
+	@echo "*NOC_VIS_INPUT_DIR*:     vis4mesh-data --input-dir (default: $(NOC_VIS_INPUT_DIR))"
+	@echo "*NOC_VIS_OUTPUT_PREFIX*: vis4mesh-data output dir prefix, -<level> appended (default: $(NOC_VIS_OUTPUT_PREFIX))"
+	@echo "*NOC_VIS_SLICE_CYCLES*:  vis4mesh-data --slice-cycles (default: $(NOC_VIS_SLICE_CYCLES))"
+	@echo "*NOC_VIS_CLK_FREQ*:      vis4mesh-data --clk-freq in MHz (default: $(NOC_VIS_CLK_FREQ))"
 	@echo ""
