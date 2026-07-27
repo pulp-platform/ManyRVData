@@ -40,8 +40,11 @@
 #include <stdatomic.h>
 #include "benchmark.h"
 
-DlschInd dlsch_ind __attribute__((section(".data")));
-UeStateRpt ue_status_rpt_content __attribute__((section(".data")));
+// volatile: these structs model memory traffic (status indications/reports);
+// their loaded values are intentionally unused, so without volatile the
+// compiler would optimize the loads away (PR #12 review).
+volatile DlschInd dlsch_ind __attribute__((section(".data")));
+volatile UeStateRpt ue_status_rpt_content __attribute__((section(".data")));
 
 static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
     const uint8_t *p = (const uint8_t *)a;
