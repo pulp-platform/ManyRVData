@@ -5,6 +5,8 @@ transcript
 *.tdb
 # Toolchain
 install
+# Vis4Mesh (pinned clone, see util/vis4mesh.version -- not tracked here)
+util/vis4mesh
 # Utilization logs
 util/lint/sg_projects
 util/lint/tmp
@@ -20,3 +22,4 @@ hardware/bootrom/bootrom.elf
 hardware/bootrom/bootrom.sv
 # Configuration auto-generated files
 config/cachepool.hjson
+*noc_profiling

@@ -1058,7 +1058,7 @@ module cachepool_tile
       .UseHashWaySelect (UseHashWaySelect   ),
       .UseForwardingBuffer (UseForwardingBuffer ),
       .BankFactor       (L1BankFactor       ),
-      .LogDebug         (0                  ),
+      // .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),

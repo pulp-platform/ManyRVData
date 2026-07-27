@@ -298,7 +298,7 @@ VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
-VLOG_DEFS += -DREMOTE_PORT_PER_CORE=$(num_remote_ports_per_tile)
+VLOG_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
 VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
 VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
 
@@ -320,6 +320,19 @@ VLOG_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
 VLOG_DEFS += -DSTACK_TOT_DEPTH=$(stack_tot_depth)
 
 VLOG_DEFS += -DENABLE_SPATZ_REQ_SCOREBOARD
+
+# Simulation-only debug/profiling toggles (opt-in: add simulation overhead)
+
+# Cycle-accurate per-router/tile/core NoC traffic logs from
+# hardware/tb/cachepool_noc_profiling.sv (noc_profiling/*.log), consumed by
+# util/scripts/noc_profiling_to_vis4mesh.py (see README's "NoC
+# Visualization" section). L1 router/tile logs only produce data with
+# num_rg_ports_per_core > 0 (multi-group configs); L2 logs are always
+# populated.
+noc_profiling ?= 1
+ifeq ($(noc_profiling),1)
+VLOG_DEFS += -DNOC_PROFILING
+endif
 
 ENABLE_CACHEPOOL_TESTS ?= 1
 
@@ -428,6 +441,58 @@ ${LINT_PATH}/tmp/files:
 	${BENDER} script verilator $(VLOG_DEFS) -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
 
 ########
+# Logs #
+########
+LOGS_DIR         ?= ${SIMBIN_DIR}/logs
+
+.PHONY: avg-log
+avg-log:
+	rm -rf $(LOGS_DIR)/average
+	$(PYTHON) $(CACHEPOOL_DIR)/util/scripts/generate_average_log.py --logs-dir $(LOGS_DIR)
+
+#############
+# Vis4Mesh  #
+#############
+# NoC traffic visualization frontend (fork of https://github.com/ueqri/vis4mesh
+# with CachePool-specific fixes/features). Consumes the Vis4Mesh dataset
+# directories produced by util/scripts/noc_profiling_to_vis4mesh.py from
+# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs. Fetched as a
+# plain pinned clone (same pattern as toolchain.mk's riscv-gnu-toolchain/
+# llvm-project targets), not a git submodule.
+NPM             ?= npm
+VIS4MESH_DIR    ?= ${CACHEPOOL_DIR}/util/vis4mesh
+VIS4MESH_REPO   ?= https://github.com/DiyouS/vis4mesh.git
+VIS4MESH_VERSION := $(shell cat ${CACHEPOOL_DIR}/util/vis4mesh.version)
+
+.PHONY: vis4mesh vis4mesh-serve
+vis4mesh: ${VIS4MESH_DIR}/dist/index.bundle.js
+
+${VIS4MESH_DIR}/.git:
+	git clone ${VIS4MESH_REPO} ${VIS4MESH_DIR}
+	cd ${VIS4MESH_DIR} && git checkout ${VIS4MESH_VERSION}
+
+${VIS4MESH_DIR}/dist/index.bundle.js: ${VIS4MESH_DIR}/.git
+	cd ${VIS4MESH_DIR} && ${NPM} install && ${NPM} run build
+
+vis4mesh-serve: vis4mesh
+	cd ${VIS4MESH_DIR}/dist && ${PYTHON} -m http.server
+
+NOC_VIS_INPUT_DIR      ?= noc_profiling
+NOC_VIS_OUTPUT_PREFIX  ?= ${VIS4MESH_DIR}/visdata/$(config)
+NOC_VIS_SLICE_CYCLES   ?= 500
+NOC_VIS_CLK_FREQ       ?= 1000
+
+.PHONY: vis4mesh-data
+vis4mesh-data:
+	@for level in l1 l1-origin l2 l2-origin; do \
+	  $(PYTHON) $(CACHEPOOL_DIR)/util/scripts/noc_profiling_to_vis4mesh.py --level $$level \
+	    --input-dir $(NOC_VIS_INPUT_DIR) --output-dir $(NOC_VIS_OUTPUT_PREFIX)-$$level \
+	    --num-groups-x $(num_groups_x) --num-groups-y $$(( $(num_groups) / $(num_groups_x) )) \
+	    --num-tiles-per-group $(num_tiles_per_group) --num-noc-ports-per-tile $(num_noc_ports_per_tile) \
+	    --slice-cycles $(NOC_VIS_SLICE_CYCLES) --clk-freq $(NOC_VIS_CLK_FREQ); \
+	done
+
+########
 # Help #
 ########
 .PHONY: help
@@ -471,9 +536,30 @@ help:
 	@echo ""
 	@echo "*lint*:           run SpyGlass lint (requires bender + SpyGlass in PATH)"
 	@echo ""
+	@echo "Logs:"
+	@echo ""
+	@echo "*avg-log*:        average the per-core/per-tile/per-group monitor_*.txt logs under LOGS_DIR"
+	@echo ""
+	@echo "--------------------------------------------------------------------------------------------------------"
+	@echo "Vis4Mesh (NoC visualization):"
+	@echo ""
+	@echo "*vis4mesh*:       clone/build the Vis4Mesh frontend into util/vis4mesh (pinned, see util/vis4mesh.version)"
+	@echo "*vis4mesh-serve*: build (if needed) and serve Vis4Mesh at http://localhost:8000"
+	@echo "                  upload a directory from util/scripts/noc_profiling_to_vis4mesh.py's --output-dir"
+	@echo "*vis4mesh-data*:  convert noc_profiling/*.log (see 'noc_profiling' above) into all four Vis4Mesh"
+	@echo "                  datasets (l1/l1-origin/l2/l2-origin) under NOC_VIS_OUTPUT_PREFIX-<level>,"
+	@echo "                  using the current config's group/tile/port counts"
+	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings:"
 	@echo "*config*:         cluster configuration name (default: $(config))"
 	@echo "*CMAKE*:          CMake binary (default: $(CMAKE)); must be >= 3.28 for DRAMSys"
 	@echo "*DEBUG*:          enable +acc for waveform visibility in vsim (default: $(DEBUG))"
+	@echo "*LOGS_DIR*:       logs directory used by avg-log (default: $(LOGS_DIR))"
+	@echo "*VIS4MESH_DIR*:   Vis4Mesh checkout directory (default: $(VIS4MESH_DIR))"
+	@echo "*VIS4MESH_REPO*:  Vis4Mesh git remote (default: $(VIS4MESH_REPO))"
+	@echo "*NOC_VIS_INPUT_DIR*:     vis4mesh-data --input-dir (default: $(NOC_VIS_INPUT_DIR))"
+	@echo "*NOC_VIS_OUTPUT_PREFIX*: vis4mesh-data output dir prefix, -<level> appended (default: $(NOC_VIS_OUTPUT_PREFIX))"
+	@echo "*NOC_VIS_SLICE_CYCLES*:  vis4mesh-data --slice-cycles (default: $(NOC_VIS_SLICE_CYCLES))"
+	@echo "*NOC_VIS_CLK_FREQ*:      vis4mesh-data --clk-freq in MHz (default: $(NOC_VIS_CLK_FREQ))"
 	@echo ""
