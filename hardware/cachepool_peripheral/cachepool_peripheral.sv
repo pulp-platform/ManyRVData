@@ -45,7 +45,8 @@ module cachepool_peripheral
   output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
-  output logic [NumTiles-1:0]        l1d_busy_o
+  output logic [NumTiles-1:0]        l1d_busy_o,
+  output logic [NumTiles-1:0]        barrier_participation_mask_o // SOCMIPO
 );
 
   cachepool_peripheral_reg2hw_t reg2hw;
@@ -199,5 +200,8 @@ module cachepool_peripheral
 
   // The hardware barrier is external and always reads `0`.
   assign hw2reg.hw_barrier.d = 0;
+
+  // write from software
+  assign barrier_participation_mask_o = reg2hw.hw_barrier_participation_mask.q;
 
 endmodule
