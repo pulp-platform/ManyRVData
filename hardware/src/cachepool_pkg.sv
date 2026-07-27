@@ -54,8 +54,8 @@ package cachepool_pkg;
   // How many cores for each tile?
   localparam int unsigned NumCoresTile        = NumCores / NumTiles;
 
-  // How many remote ports for each tile per core's port?
-  localparam int unsigned NumRemotePortCore   = `ifdef REMOTE_PORT_PER_CORE `REMOTE_PORT_PER_CORE `else 0 `endif;
+  // Intra-group remote ports per core (to other tiles in the same group).
+  localparam int unsigned NumLGPortCore   = `ifdef LG_PORT_PER_CORE `LG_PORT_PER_CORE `else 0 `endif;
 
   // How many cores within a tile? This is used to select the ports within a tile.
   localparam int unsigned LogNumCoresTile     = $clog2(NumCoresTile);
@@ -63,8 +63,8 @@ package cachepool_pkg;
   // 4 ports from Spatz + 1 shared port from Snitch/FPU
   localparam int unsigned NrTCDMPortsPerCore  = 5;
 
-  // How many remote ports for each tile in total?
-  localparam int unsigned NumRemotePortTile   = NumRemotePortCore * NrTCDMPortsPerCore;
+  // Intra-group remote ports per tile, in total.
+  localparam int unsigned NumLGPortTile   = NumLGPortCore * NrTCDMPortsPerCore;
 
   ////////////////////
   //  GROUP CONFIG  //
@@ -290,7 +290,7 @@ package cachepool_pkg;
   localparam int unsigned GroupWideDataPorts  = NumL1CtrlTile;
 
   // Correct selection width for remote xbar at group level
-  localparam int unsigned RemoteXbarSelWidth = $clog2(NumTiles * NumRemotePortCore);
+  localparam int unsigned RemoteXbarSelWidth = $clog2(NumTiles * NumLGPortCore);
 
   /***** Cluster Ports *****/
   // Narrow AXI ports:

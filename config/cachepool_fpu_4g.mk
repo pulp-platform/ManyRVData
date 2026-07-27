@@ -26,7 +26,7 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
-num_remote_ports_per_tile ?= 1
+num_lg_ports_per_core ?= 1
 
 num_rg_ports_per_core ?= 1
 

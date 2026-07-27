@@ -144,14 +144,14 @@ module cachepool_tile
     output axi_out_req_t      [TileWideAxiPorts-1:0]      axi_wide_req_o,
     input  axi_out_resp_t     [TileWideAxiPorts-1:0]      axi_wide_rsp_i,
     /// Remote Tile access ports (to remote tiles)
-    output tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_o,
-    output remote_tile_sel_t  [NumRemotePortTile-1:0]     remote_req_dst_o,
-    input  tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_i,
-    input  logic              [NumRemotePortTile-1:0]     remote_rsp_ready_i,
+    output tcdm_req_t         [NumLGPortTile-1:0]     remote_req_o,
+    output remote_tile_sel_t  [NumLGPortTile-1:0]     remote_req_dst_o,
+    input  tcdm_rsp_t         [NumLGPortTile-1:0]     remote_rsp_i,
+    input  logic              [NumLGPortTile-1:0]     remote_rsp_ready_i,
     /// Remote Tile access ports (from remote tiles)
-    input  tcdm_req_t         [NumRemotePortTile-1:0]     remote_req_i,
-    output tcdm_rsp_t         [NumRemotePortTile-1:0]     remote_rsp_o,
-    output logic              [NumRemotePortTile-1:0]     remote_rsp_ready_o,
+    input  tcdm_req_t         [NumLGPortTile-1:0]     remote_req_i,
+    output tcdm_rsp_t         [NumLGPortTile-1:0]     remote_rsp_o,
+    output logic              [NumLGPortTile-1:0]     remote_rsp_ready_o,
     /// Inter-group remote access ports (to other groups).
     /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
     /// where j is the interco instance and r is the inter-group remote slot.
@@ -449,7 +449,7 @@ module cachepool_tile
   assign dynamic_offset = dynamic_offset_i;
   // One entry per flat remote port: flat index = j + r*NrTCDMPortsPerCore
   // where j is the xbar index and r is the remote slot within that xbar.
-  logic [NumRemotePortTile-1:0] remote_out_pready, remote_in_pready;
+  logic [NumLGPortTile-1:0] remote_out_pready, remote_in_pready;
 
   // Intra-group remote port wiring.
   // q_valid and q_ready for incoming requests are passed through without gating:
@@ -459,12 +459,12 @@ module cachepool_tile
   // response-ready (remote_in_pready) is still gated to prevent draining in-flight
   // completions during the flush window.
 
-  tcdm_req_t [NumRemotePortTile-1:0] remote_req_gated;
-  tcdm_rsp_t [NumRemotePortTile-1:0] remote_rsp_xbar;
+  tcdm_req_t [NumLGPortTile-1:0] remote_req_gated;
+  tcdm_rsp_t [NumLGPortTile-1:0] remote_rsp_xbar;
 
   always_comb begin : remote_flush_protection
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
-      for (int r = 0; r < NumRemotePortCore; r++) begin
+      for (int r = 0; r < NumLGPortCore; r++) begin
         automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
         remote_req_gated[flat].q       = remote_req_i[flat].q;
@@ -620,21 +620,21 @@ module cachepool_tile
   end
 
   /// Wire requests after strb handling to the cache controller.
-  /// Each xbar j handles NumRemotePortCore remote slots at flat indices
-  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemotePortCore).
+  /// Each xbar j handles NumLGPortCore remote slots at flat indices
+  /// j + r*NrTCDMPortsPerCore for r in [0, NumLGPortCore).
   /// Similarly, each xbar j handles NumRemoteGroupPortCore inter-group remote slots at flat indices
   /// j + r*NrTCDMPortsPerCore for r in [0, NumRemoteGroupPortCore).
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
-    // Collect the NumRemotePortCore remote slots for this xbar.
-    tcdm_req_t [NumRemotePortCore-1:0] xbar_remote_req_gated;
-    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_xbar;
-    logic      [NumRemotePortCore-1:0] xbar_remote_in_pready;
-    logic      [NumRemotePortCore-1:0] xbar_remote_out_pready;
-    tcdm_rsp_t [NumRemotePortCore-1:0] xbar_remote_rsp_i;
-    remote_tile_sel_t [NumRemotePortCore-1:0] xbar_remote_req_dst;
-    tcdm_req_t        [NumRemotePortCore-1:0] xbar_remote_req_o;
+    // Collect the NumLGPortCore remote slots for this xbar.
+    tcdm_req_t [NumLGPortCore-1:0] xbar_remote_req_gated;
+    tcdm_rsp_t [NumLGPortCore-1:0] xbar_remote_rsp_xbar;
+    logic      [NumLGPortCore-1:0] xbar_remote_in_pready;
+    logic      [NumLGPortCore-1:0] xbar_remote_out_pready;
+    tcdm_rsp_t [NumLGPortCore-1:0] xbar_remote_rsp_i;
+    remote_tile_sel_t [NumLGPortCore-1:0] xbar_remote_req_dst;
+    tcdm_req_t        [NumLGPortCore-1:0] xbar_remote_req_o;
 
-    for (genvar r = 0; r < NumRemotePortCore; r++) begin : gen_remote_slice
+    for (genvar r = 0; r < NumLGPortCore; r++) begin : gen_remote_slice
       localparam int unsigned flat = j + r * NrTCDMPortsPerCore;
       assign xbar_remote_req_gated [r]  = remote_req_gated      [flat];
       assign xbar_remote_in_pready [r]  = remote_in_pready      [flat];
@@ -675,7 +675,7 @@ module cachepool_tile
         .NumCores              (NrCores           ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
-        .NumRemotePort         (NumRemotePortCore ),
+        .NumLGPort         (NumLGPortCore ),
         .NumRemoteGroupPort    (NumRemoteGroupPortCore    ),
         .NumTilesPerGroup      (NumTilesPerGroup  ),
         .AddrWidth             (TCDMAddrWidth     ),
@@ -707,7 +707,7 @@ module cachepool_tile
         .NumCores              (NrCores           ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
-        .NumRemotePort         (NumRemotePortCore ),
+        .NumLGPort         (NumLGPortCore ),
         .AddrWidth             (TCDMAddrWidth     ),
         .TileIDWidth           (TileIDWidth       ),
         .tcdm_req_t            (tcdm_req_t        ),
@@ -1023,7 +1023,7 @@ module cachepool_tile
       .CacheLineWidth   (L1LineWidth        ),
       .SetAssociativity (L1AssoPerCtrl      ),
       .BankFactor       (L1BankFactor       ),
-      // .LogDebug         (0                  ),
+      .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
       // Type
       .core_meta_t      (tcdm_user_t        ),
