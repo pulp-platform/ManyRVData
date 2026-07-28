@@ -9,6 +9,7 @@
 // Author: Diyou Shen <dishen@iis.ee.ethz.ch>
 
 
+`include "common_cells/registers.svh"
 `include "axi/typedef.svh"
 
 module cachepool_group_noc_wrapper
@@ -87,7 +88,7 @@ module cachepool_group_noc_wrapper
     input  logic        [3:0] l2_rsp_valid_i,
     output logic        [3:0] l2_rsp_ready_o,
     // L2 mesh: endpoint ID and source-routing table from floogen
-    input  floo_cachepool_noc_pkg::id_t    l2_id_i,
+    input  floo_cachepool_noc_pkg::id_t                                                     l2_id_i,
     input  floo_cachepool_noc_pkg::route_t [floo_cachepool_noc_pkg::RouteCfg.NumRoutes-1:0] l2_route_table_i,
     output icache_l1_events_t [NrCores-1:0]                               icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
@@ -153,6 +154,37 @@ module cachepool_group_noc_wrapper
   remote_group_req_t [NumRemoteGroupPortGroup-1:0] remote_group_req_from_group;
   remote_group_rsp_t [NumRemoteGroupPortGroup-1:0] remote_group_rsp_to_group;
 
+
+  // Input cuts on some registered signals
+  logic       [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_d, dynamic_offset_q;
+  logic                                   barrier_done_d,   barrier_done_q;
+  logic       [NumTilesPerGroup-1:0]      tile_barrier_d,   tile_barrier_q;
+  logic       [$clog2(NumL1CtrlTile):0]   l1d_private_d,    l1d_private_q;
+  cache_insn_t                            l1d_insn_d,       l1d_insn_q;
+  logic                                   l1d_insn_valid_d, l1d_insn_valid_q;
+  logic       [NumTilesPerGroup-1:0]      l1d_insn_ready_d, l1d_insn_ready_q;
+  logic       [NumTilesPerGroup-1:0]      l1d_busy_d,       l1d_busy_q;
+  axi_addr_t                              private_start_addr_d, private_start_addr_q;
+
+  `FF(dynamic_offset_q, dynamic_offset_d, '0, clk_i, rst_ni)
+  `FF(barrier_done_q,   barrier_done_d,   '0, clk_i, rst_ni)
+  `FF(tile_barrier_q,   tile_barrier_d,   '0, clk_i, rst_ni)
+  `FF(l1d_private_q,    l1d_private_d,    '0, clk_i, rst_ni)
+  `FF(l1d_insn_q,       l1d_insn_d,       '0, clk_i, rst_ni)
+  `FF(l1d_insn_valid_q, l1d_insn_valid_d, '0, clk_i, rst_ni)
+  `FF(l1d_insn_ready_q, l1d_insn_ready_d, '0, clk_i, rst_ni)
+  `FF(l1d_busy_q,       l1d_busy_d,       '0, clk_i, rst_ni)
+  `FF(private_start_addr_q, private_start_addr_d, '0, clk_i, rst_ni)
+
+  assign dynamic_offset_d      = dynamic_offset_i;
+  assign barrier_done_d        = barrier_done_i;
+  assign tile_barrier_o        = tile_barrier_q;
+  assign l1d_private_d         = l1d_private_i;
+  assign l1d_insn_d            = l1d_insn_i;
+  assign l1d_insn_valid_d      = l1d_insn_valid_i;
+  assign l1d_insn_ready_o      = l1d_insn_ready_q;
+  assign l1d_busy_d            = l1d_busy_i;
+  assign private_start_addr_d  = private_start_addr_i;
 
   // -------------------------------------------------------------------------
   // Mesh signals [tile][ch][dir=3:0] and transposition to/from ports
@@ -255,8 +287,7 @@ module cachepool_group_noc_wrapper
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].q_ready = mst_slv_req_ready[p];
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].p       = mst_slv_rsp[p];
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].p_valid = mst_slv_rsp_valid[p];
-        assign mst_slv_rsp_ready[p] =
-          remote_group_req_from_group[t*NumRemoteGroupPortTile+p].p_ready;
+        assign mst_slv_rsp_ready[p] = remote_group_req_from_group[t*NumRemoteGroupPortTile+p].p_ready;
       end
 
       for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_mst_eject_n
@@ -349,9 +380,8 @@ module cachepool_group_noc_wrapper
         floo_router #(
           .NumRoutes       ( 5                    ),
           .NumVirtChannels ( 1                    ),
-          .NumPhysChannels ( 1                    ),
           .InFifoDepth     ( 2                    ),
-          .OutFifoDepth    ( 0                    ),
+          .OutFifoDepth    ( 2                    ),
           .RouteAlgo       ( XYRouting            ),
           .IdWidth         ( $bits(group_xy_id_t) ),
           .id_t            ( group_xy_id_t        ),
@@ -395,9 +425,8 @@ module cachepool_group_noc_wrapper
         floo_router #(
           .NumRoutes       ( 5                    ),
           .NumVirtChannels ( 1                    ),
-          .NumPhysChannels ( 1                    ),
           .InFifoDepth     ( 2                    ),
-          .OutFifoDepth    ( 0                    ),
+          .OutFifoDepth    ( 2                    ),
           .RouteAlgo       ( XYRouting            ),
           .IdWidth         ( $bits(group_xy_id_t) ),
           .id_t            ( group_xy_id_t        ),
@@ -438,9 +467,8 @@ module cachepool_group_noc_wrapper
     for (genvar noc_port = 0; noc_port < NumNoCPortsGroup; noc_port++) begin : gen_slv_sel
       assign slv_xbar_slv_sel[noc_port] = (NumTilesPerGroup == 1)
         ? SlvXbarSelW'(eject_req[noc_port].hdr.src_port_id)
-        : SlvXbarSelW'(eject_req[noc_port].payload.addr[(dynamic_offset_i + NocCacheBankBits) +: NocAddrTileWidth]
-                     * NumRemoteGroupPortTile
-                     + eject_req[noc_port].hdr.src_port_id);
+        : SlvXbarSelW'(eject_req[noc_port].payload.addr[(dynamic_offset_q + NocCacheBankBits) +: NocAddrTileWidth]
+                     * NumRemoteGroupPortTile + eject_req[noc_port].hdr.src_port_id);
 
     end
 
@@ -487,9 +515,9 @@ module cachepool_group_noc_wrapper
       for (genvar p = 0; p < NumRemoteGroupPortTile; p++) begin : gen_slv_deliver_p
         localparam int unsigned port = t * NumRemoteGroupPortTile + p;
 
-        // Placeholder response routing: route response back via the NoC channel
-        // of the same tile (t). Correct cross-tile response routing is deferred.
-        assign slv_xbar_mst_sel[port] = MstXbarSelW'(t * NumNoCPortsPerTile);
+        assign slv_xbar_mst_sel[port] = MstXbarSelW'(
+            remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset-1:0]
+          * NumNoCPortsPerTile);
 
         always_comb begin : proc_req_unpack
           remote_group_req_to_group[port].q                  = slv_xbar_mst_req[port].payload;
@@ -632,9 +660,8 @@ module cachepool_group_noc_wrapper
   floo_router #(
     .NumRoutes      ( 5                           ),
     .NumVirtChannels( 1                           ),
-    .NumPhysChannels( 1                           ),
-    .InFifoDepth    ( 32                          ),
-    .OutFifoDepth   ( 32                          ),
+    .InFifoDepth    ( 2                           ),
+    .OutFifoDepth   ( 2                           ),
     .RouteAlgo      ( floo_pkg::SourceRouting     ),
     .id_t           ( floo_cachepool_noc_pkg::id_t),
     .flit_t         ( l2_noc_req_t                ),
@@ -664,9 +691,8 @@ module cachepool_group_noc_wrapper
   floo_router #(
     .NumRoutes      ( 5                           ),
     .NumVirtChannels( 1                           ),
-    .NumPhysChannels( 1                           ),
-    .InFifoDepth    ( 32                          ),
-    .OutFifoDepth   ( 32                          ),
+    .InFifoDepth    ( 2                           ),
+    .OutFifoDepth   ( 2                           ),
     .RouteAlgo      ( floo_pkg::SourceRouting     ),
     .id_t           ( floo_cachepool_noc_pkg::id_t),
     .flit_t         ( l2_noc_rsp_t                ),
@@ -760,7 +786,7 @@ module cachepool_group_noc_wrapper
     .hart_base_id_i           ( hart_base_id_i              ),
     .tile_base_id_i           ( tile_base_id_i              ),
     .cluster_base_addr_i      ( cluster_base_addr_i         ),
-    .private_start_addr_i     ( private_start_addr_i        ),
+    .private_start_addr_i     ( private_start_addr_q        ),
     .l2_req_o                 ( l2_group_req                ),
     .l2_rsp_i                 ( l2_group_rsp                ),
     .l2_group_id_i            ( l2_id_i                     ),
@@ -768,17 +794,17 @@ module cachepool_group_noc_wrapper
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
     .remote_group_rsp_o       ( remote_group_rsp_from_group ),
-    .tile_barrier_o           ( tile_barrier_o              ),
-    .barrier_done_i           ( barrier_done_i              ),
+    .tile_barrier_o           ( tile_barrier_d              ),
+    .barrier_done_i           ( barrier_done_q              ),
     .icache_events_o          ( icache_events_o             ),
     .icache_prefetch_enable_i ( icache_prefetch_enable_i    ),
     .cl_interrupt_i           ( cl_interrupt_i              ),
-    .dynamic_offset_i         ( dynamic_offset_i            ),
-    .l1d_private_i            ( l1d_private_i               ),
-    .l1d_insn_i               ( l1d_insn_i                  ),
-    .l1d_insn_valid_i         ( l1d_insn_valid_i            ),
-    .l1d_insn_ready_o         ( l1d_insn_ready_o            ),
-    .l1d_busy_i               ( l1d_busy_i                  )
+    .dynamic_offset_i         ( dynamic_offset_q            ),
+    .l1d_private_i            ( l1d_private_q               ),
+    .l1d_insn_i               ( l1d_insn_q                  ),
+    .l1d_insn_valid_i         ( l1d_insn_valid_q            ),
+    .l1d_insn_ready_o         ( l1d_insn_ready_d            ),
+    .l1d_busy_i               ( l1d_busy_q                  )
   );
 
 endmodule

@@ -133,6 +133,7 @@ module spatz_cache_amo
   assign sc_set     = amo_req_valid & amo_req_ready & (amo_insn == AMOSC);
 
   assign is_sc_rsp  = amo_rsp_valid & sc_q &
+                      (sc_user_q.tile_id == amo_rsp.user.tile_id) &
                       (sc_user_q.core_id == amo_rsp.user.core_id) &
                       (sc_user_q.req_id  == amo_rsp.user.req_id);
 
@@ -237,6 +238,7 @@ module spatz_cache_amo
         core_ready        = 1'b0;
         if (amo_rsp_valid &&
              // In case a response of a previous sc from other request trigger this transition
+            (amo_user_q.tile_id == amo_rsp.user.tile_id) &&
             (amo_user_q.core_id == amo_rsp.user.core_id) &&
             (amo_user_q.req_id == amo_rsp.user.req_id)
             ) begin

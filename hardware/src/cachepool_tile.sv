@@ -615,6 +615,7 @@ module cachepool_tile
         end
       end
     end
+
   end else begin : gen_remote_group_no_ports
     // No inter-group remote ports: tie off outputs.
     assign remote_group_rsp_o      = '0;
@@ -716,7 +717,7 @@ module cachepool_tile
         .NumCores              (NrCores           ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
-        .NumLGPort         (NumLGPortCore ),
+        .NumLGPort             (NumLGPortCore     ),
         .AddrWidth             (TCDMAddrWidth     ),
         .TileIDWidth           (TileIDWidth       ),
         .tcdm_req_t            (tcdm_req_t        ),

@@ -48,6 +48,8 @@ static inline int fp_check(const T *a, const T *b) {
   return comp > threshold;
 }
 
+static T *result_dram __attribute__((section(".data")));
+
 int main() {
   T *a;
   T *b;
@@ -60,10 +62,6 @@ int main() {
 
   uint32_t offset = 31 - __builtin_clz(m_core * sizeof(T));
 
-  // We use all-private mode for this kernel
-  l1d_xbar_config(offset);
-  l1d_part(4);
-
   // Reset timer
   unsigned int timer_start, timer_end, timer, timer_iter1;
 
@@ -72,7 +70,20 @@ int main() {
 
   a = gemv_A_dram;
   b = gemv_B_dram;
-  result = gemv_result;
+
+  if (cid == 0) {
+    result_dram = (T *)snrt_malloc(gemv_l.M * sizeof(T));
+  }
+
+  // Barrier here ensures all cores see result_dram before the cache mode
+  // changes to all-private below.
+  snrt_cluster_hw_barrier();
+
+  result = result_dram;
+
+  // We use all-private mode for this kernel
+  l1d_xbar_config(offset);
+  l1d_part(4);
 
   // Calculate internal pointers
   T *a_core = a + m_core * cid;
@@ -131,9 +142,9 @@ int main() {
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
             printf("Error: ID: %i Calc", i);
-            snrt_printf_float(result[i]);
+            snrt_printf_float(result[j]);
             printf(",Exp:");
-            snrt_printf_float(gemv_result[i]);
+            snrt_printf_float(gemv_result[j]);
             printf("\n");
           }
         }

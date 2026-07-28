@@ -58,6 +58,8 @@ static inline int fp_check(const T *a, const T *b) {
 // B vector: 1-by-N
 // results:  M-by-1
 
+static T *result_dram __attribute__((section(".data")));
+
 int main() {
   T *a;
   T *b;
@@ -101,6 +103,14 @@ int main() {
   // offset bits in unit of byte (address)
   uint32_t offset = 31 - __builtin_clz(m_core * elem_width/8);
 
+  if (cid == 0) {
+    result_dram = (T *)snrt_malloc(gemv_l.M * sizeof(T));
+  }
+
+  // Barrier here ensures all cores see result_dram before the cache mode
+  // changes below.
+  snrt_cluster_hw_barrier();
+
   // Set xbar policy
   l1d_xbar_config(offset);
 
@@ -136,7 +146,7 @@ int main() {
   // Notice it might be differnt if the matrix is transposed
   a = gemv_A_dram;
   b = gemv_B_dram;
-  result = gemv_result;
+  result = result_dram;
 
   // Calculate internal pointers
   // This is the starting point without offset for BW utilization
@@ -203,7 +213,7 @@ int main() {
 
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
-            printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[i], gemv_result[i]);
+            printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[j], gemv_result[j]);
           }
         }
       }
