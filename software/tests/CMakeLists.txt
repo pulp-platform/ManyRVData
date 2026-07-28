@@ -74,11 +74,6 @@ add_library(fmatmul-32b fmatmul-32b/kernel/fmatmul.c)
 
 
 ## RLC
-add_library(printf_lock multi_producer_single_consumer_double_linked_list/kernel/printf_lock.c)
-add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
-add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
-add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
-add_library(data_move_vec multi_producer_single_consumer_double_linked_list/kernel/data_move_vec.c)
 
 # Tests
 enable_testing()
@@ -107,6 +102,27 @@ add_spatz_test_zeroParam(cache-coverage-min cache-coverage-min/main.c)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 300)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)
+# TC2 multi-user peak rate: 48 UEs, 800 B packets (data_48_800_*.h)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 1000)
+
+# RLC variant with explicit producer/consumer core counts (thread-scaling runs).
+macro(add_spatz_test_rlc name file param1 param2 param3 pcore ccore)
+    set(target_name ${name}_M${param1}_N${param2}_K${param3}_P${pcore}_C${ccore})
+    add_snitch_test(${target_name} ${file})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+        DATAHEADER="data/data_${param1}_${param2}_${param3}.h"
+        PRODUCER_CORE_NUM=${pcore} CONSUMER_CORE_NUM=${ccore})
+endmacro()
+add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 2 4)
+add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 4 8)
+add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 4 4)
+add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 2 8)
+# TC2 with payload self-check enabled (src vs tgt compare after the barrier)
+add_snitch_test(multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc multi_producer_single_consumer_double_linked_list/main.c)
+target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc PUBLIC DATAHEADER="data/data_48_800_300.h" RLC_SELF_CHECK=1)
 
 ## Vector
 ### Floating-Point

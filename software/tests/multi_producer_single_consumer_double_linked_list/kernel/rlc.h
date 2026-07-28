@@ -29,6 +29,28 @@
 
 #define CACHE_LINE_SIZE 64 // Cache line size in bytes, typically 64 bytes
 
+/* ---- Multi-user / use-case configuration ----------------------------------
+   NUM_USERS = number of RLC entities (one per UE). Comes from the generated
+   data header (ACTIVE_USER_NUMBER); headers generated before the multi-user
+   extension don't define it, so fall back to the TC1 single-user case. */
+#ifndef ACTIVE_USER_NUMBER
+#define ACTIVE_USER_NUMBER 1
+#endif
+#define NUM_USERS ACTIVE_USER_NUMBER
+
+/* Rate pacing. 0 (default): legacy int32 expression, wraps and makes pacing
+   inert — preserved verbatim so TC1 numbers are bit-identical to the
+   pre-extension baseline. 1: 64-bit math, pacing actually engages at
+   INPUT/OUTPUT_DATARATE. */
+#ifndef RLC_ENABLE_PACING
+#define RLC_ENABLE_PACING 0
+#endif
+
+/* Per-user list locks (indexed by RLC entity / user id). */
+static _Atomic mcs_lock_t tosend_llist_lock_2[NUM_USERS] __attribute__((aligned(4))) __attribute__((section(".data")));
+static _Atomic mcs_lock_t sent_llist_lock_2[NUM_USERS]   __attribute__((aligned(4))) __attribute__((section(".data")));
+
+
 typedef struct {
    char data[CACHE_LINE_SIZE];
 } RcvPktHeader;
@@ -135,7 +157,10 @@ typedef struct {
    mm_context_t *mm_ctx __attribute__((aligned(4)));
 } rlc_context_t;
 
-rlc_context_t rlc_ctx __attribute__((section(".data")));
+/* One RLC entity per UE. 64-byte alignment gives every entity its own cache
+   lines (no inter-entity false sharing); at NUM_USERS == 1 the layout is
+   identical to the single-entity kernel. */
+rlc_context_t rlc_ctx[NUM_USERS] __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
 
 /* rlc_init() initializes the RLC context for the given RLC ID and cell ID.
    It sets the initial values for pollPdu, pollByte, pduWithoutPoll, byteWithoutPoll,

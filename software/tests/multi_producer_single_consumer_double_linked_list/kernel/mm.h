@@ -25,7 +25,10 @@
 
 // #define PAGE_SIZE (1024)                 /* Fixed size of each memory page in bytes */
 #define PAGE_SIZE (sizeof(Node))          /* Fixed size of each memory page in bytes */
-#define BUFFER_SIZE (PAGE_SIZE * 1024)      /* memory pool size in byte */
+#ifndef MM_POOL_PAGES
+#define MM_POOL_PAGES 1024                /* live nodes are bounded by min(NUM_PKGS, MM_POOL_PAGES) */
+#endif
+#define BUFFER_SIZE (PAGE_SIZE * MM_POOL_PAGES)      /* memory pool size in byte */
 
 static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))

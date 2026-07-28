@@ -109,7 +109,11 @@ def main():
 
     # PDU configuration
     pdu_size = hdr_len + pkg_len
-    num_src_slots = src_len // pdu_size
+    # Slot stride: slots must stay 4-byte aligned or the word/vector payload
+    # copies in the kernel trap on misaligned bases (e.g. 810-byte PDUs).
+    # The copy length stays pdu_size; padding [pdu_size, pdu_stride) is zero.
+    pdu_stride = (pdu_size + 3) & ~3
+    num_src_slots = src_len // pdu_stride
     num_pkgs = min(int(cfg.get('total_pkg_number', num_src_slots)), num_src_slots)
 
     # derive output path if not provided
@@ -126,10 +130,10 @@ def main():
 
     # assemble metadata and data buffer
     entries = []
-    pdu_buf = [[0] * pdu_size for _ in range(num_src_slots)]
+    pdu_buf = [[0] * pdu_stride for _ in range(num_src_slots)]
     for uid, slot in zip((random.randrange(active_users) for _ in range(num_pkgs)), slots):
-        src_addr = src_base + slot * pdu_size
-        tgt_addr = tgt_base + slot * pdu_size
+        src_addr = src_base + slot * pdu_stride
+        tgt_addr = tgt_base + slot * pdu_stride
         entries.append((uid, src_addr, tgt_addr, pdu_size))
         data = slot
         for i in range(hdr_len, pdu_size):
@@ -144,6 +148,8 @@ def main():
         h.write('#ifndef PDCP_PKG_H\n')
         h.write('#define PDCP_PKG_H\n\n')
 
+        h.write('#include <stdint.h>\n\n')
+
         # type definition
         h.write('typedef struct {\n')
         h.write('    int           user_id;\n')
@@ -155,7 +161,9 @@ def main():
         # constants
         h.write(f'#define NUM_SRC_SLOTS {num_src_slots}\n')
         h.write(f'#define PDU_SIZE      {pdu_size}\n')
-        h.write(f'#define NUM_PKGS      {num_pkgs}\n\n')
+        h.write(f'#define PDU_STRIDE    {pdu_stride}\n')
+        h.write(f'#define NUM_PKGS      {num_pkgs}\n')
+        h.write(f'#define ACTIVE_USER_NUMBER {active_users}\n\n')
 
         # metadata in .pdcp_info
         h.write('static const pdcp_pkg_t __attribute__((section(".pdcp_info"), used)) pdcp_pkgs[NUM_PKGS] = {\n')
@@ -165,7 +173,7 @@ def main():
 
         # src data in its own section so .pdcp_src can be located at src_base
         h.write('static const uint8_t __attribute__((section(".pdcp_src"), used)) '
-               'pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE] = {\n')
+               'pdcp_src_data[NUM_SRC_SLOTS][PDU_STRIDE] = {\n')
         for slot in range(num_src_slots):
             if args.fill_zero:
                 row = ', '.join(f'0x{b:02X}' for b in pdu_buf[slot])

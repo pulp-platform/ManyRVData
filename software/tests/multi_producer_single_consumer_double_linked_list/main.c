@@ -16,6 +16,10 @@
 
 // Author: Zexin Fu     <zexifu@iis.ee.ethz.ch>
 
+#include <stdint.h>
+/* DATAHEADER must be included before the kernel sources so that rlc.c/rlc.h
+   see NUM_PKGS / PDU_SIZE / ACTIVE_USER_NUMBER (rlc.c has a guarded fallback). */
+#include DATAHEADER
 #include "kernel/printf_lock.c"
 #include "kernel/mm.c"
 #include "kernel/rlc.c"
@@ -26,7 +30,6 @@
 #include "printf.h"
 #include "kernel/printf_lock.h"
 #include "mcs_lock.h"
-#include DATAHEADER
 
 #define L1LineWidth (512/8) // 512 bits
 
@@ -47,18 +50,25 @@ int main(void) {
         // Initialize memory management context
         mm_init();
 
-        // Initialize the RLC context
-        rlc_init(0, 0, &mm_ctx);
+        // Initialize all RLC entities (one per UE)
+        for (unsigned int u = 0; u < NUM_USERS; u++) {
+            rlc_init(u, 0, &mm_ctx);
+        }
 
-        // // Initialize the linked list for receiving queue
-        // list_init(&rlc_ctx.list);
+        // Initialize shared/global resources (single producer-descriptor stream)
+        pdcp_pkd_ptr = 0;
+        mcs_lock_init(&pdcp_pkd_ptr_lock);
+        producer_done = 0;
+        rlc_ctx_lock = 0;
 
         // Initialize locks
         mm_lock = 0;
         tosend_llist_lock = 0;
         sent_llist_lock = 0;
-        mcs_lock_init(&tosend_llist_lock_2);
-        mcs_lock_init(&sent_llist_lock_2);
+        for (unsigned int u = 0; u < NUM_USERS; u++) {
+            mcs_lock_init(&tosend_llist_lock_2[u]);
+            mcs_lock_init(&sent_llist_lock_2[u]);
+        }
     } else {
         delay(100*(64/L1LineWidth)); // Ensure core 0 finishes initialization first
     }
