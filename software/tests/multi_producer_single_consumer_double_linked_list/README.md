@@ -46,7 +46,7 @@ software/build/CachePoolTests/test-cachepool-multi_producer_single_consumer_doub
 |---|---|---|
 | `M1_N1350_K{10,100,300}` | TC1 single-user peak (1 UE, 1350 B) | 10 / 100 / 300 |
 | `M48_N800_K{300,1000}` | TC2 multi-user peak (48 UEs, 800 B) | 300 / 1000 |
-| `M48_N800_K300_P<p>_C<c>` | TC2 with explicit producer/consumer core counts — registered: `P2_C4`, `P4_C4`, `P2_C8`, `P4_C8` | 300 |
+| `M48_N800_K300_P<p>_C<c>` | TC2 with explicit producer/consumer core counts — registered: `P2_C2`, `P2_C4`, `P4_C4`, `P2_C8`, `P4_C8` | 300 |
 | `M48_N800_K300_sc` | TC2 with payload self-check enabled | 300 |
 
 Default core mapping: 2 producers (cores 0–1), 2 consumers (cores 2–3), rest idle.

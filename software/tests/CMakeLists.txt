@@ -115,6 +115,7 @@ macro(add_spatz_test_rlc name file param1 param2 param3 pcore ccore)
         DATAHEADER="data/data_${param1}_${param2}_${param3}.h"
         PRODUCER_CORE_NUM=${pcore} CONSUMER_CORE_NUM=${ccore})
 endmacro()
+add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 2 2)
 add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 2 4)
 add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 4 8)
 add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300 4 4)
