@@ -20,9 +20,9 @@
 // No cache coherence is implemented here. Write-through narrows but does not
 // close the cross-core shared-data window; that is accepted for now.
 //
-// Coalescer metadata has no package; all coalescer-facing types (tcdm_meta_t,
-// downstream_info_t, word_offset_t, ...) are defined at the tile and passed in
-// as parameters.
+// The HPDcache config and all coalescer-facing types (HPDcacheCfg, tcdm_meta_t,
+// downstream_info_t, word_offset_t, hpdcache_*_t, ...) live in cachepool_hpd_pkg
+// and are imported below, shared with cachepool_tile.
 `include "axi/typedef.svh"
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
@@ -32,56 +32,33 @@
 
 module cachepool_l1_ctrl
   import cachepool_pkg::*;
+  import cachepool_hpd_pkg::*;
   import hpdcache_pkg::*;
   import reqrsp_pkg::*;
 #(
   // Core-side topology
-  parameter int unsigned NrTCDMPortsPerCore = 5,   // Spatz lanes + 1 Snitch
-  parameter int unsigned DataWidth          = 32,  // narrow (per-lane) data width
+
+  // Spatz lanes + 1 Snitch
+  parameter int unsigned NrTCDMPortsPerCore = 5,
+  // narrow (per-lane) data width
+  parameter int unsigned DataWidth          = 32,
   parameter int unsigned ByteWidth          = 8,
 
-  // tid / coalescer geometry (must match the types below)
-  parameter int unsigned LP1NumWordOffsetBits = 2, // $clog2(wordWidth/DataWidth)
-  parameter int unsigned LP1NrBitsCoalOffset  = 2, // bits per coalescer ofst entry
-                                                   // (lane count is NrLP1CoalInputs, derived below)
+  // tid / coalescer geometry (must match the types below)s
+  // $clog2(wordWidth/DataWidth)
+  parameter int unsigned LP1NumWordOffsetBits = 2,
+  // bits per coalescer ofst entry
+  parameter int unsigned LP1NrBitsCoalOffset  = 2,
 
-  parameter hpdcache_cfg_t HPDcacheCfg = '0,
   parameter type wbuf_timecnt_t = logic,
 
   // Core-side TCDM request/response
   parameter type l1_cache_req_t = logic,
   parameter type l1_cache_rsp_t = logic,
 
-  // Coalescer payload types (defined at tile)
-  parameter type tcdm_meta_t       = logic,  // { tcdm_user_t user; logic write; hpdcache_req_op_t amo; }
-  parameter type downstream_info_t = logic,  // par_coalescer_top downstream info struct
-  parameter type word_offset_t     = logic,  // logic[LP1NumWordOffsetBits-1:0]
-
   // Downstream (L2) TCDM request/response
   parameter type l2_cache_req_t = logic,
-  parameter type l2_cache_rsp_t = logic,
-
-  //  HPDcache request interface types
-  parameter type hpdcache_tag_t        = logic,
-  parameter type hpdcache_data_word_t  = logic,
-  parameter type hpdcache_data_be_t    = logic,
-  parameter type hpdcache_req_offset_t = logic,
-  parameter type hpdcache_req_data_t   = logic,
-  parameter type hpdcache_req_be_t     = logic,
-  parameter type hpdcache_req_sid_t    = logic,
-  parameter type hpdcache_req_tid_t    = logic,
-  parameter type hpdcache_req_t        = logic,
-  parameter type hpdcache_rsp_t        = logic,
-
-  //  HPDcache memory interface types
-  parameter type hpdcache_mem_addr_t   = logic,
-  parameter type hpdcache_mem_id_t     = logic,
-  parameter type hpdcache_mem_data_t   = logic,
-  parameter type hpdcache_mem_be_t     = logic,
-  parameter type hpdcache_mem_req_t    = logic,
-  parameter type hpdcache_mem_req_w_t  = logic,
-  parameter type hpdcache_mem_resp_r_t = logic,
-  parameter type hpdcache_mem_resp_w_t = logic
+  parameter type l2_cache_rsp_t = logic
 ) (
   input  logic clk_i,
   input  logic rst_ni,
@@ -106,7 +83,7 @@ module cachepool_l1_ctrl
   //  Downstream (L2) TCDM interface
   output l2_cache_req_t l2_req_o,
   input  l2_cache_rsp_t l2_rsp_i,
-  output logic          l2_rsp_ready_o,  // response ready -> interco core_rsp_ready_i
+  output logic          l2_rsp_ready_o,
 
   //  Performance events
   output logic          evt_cache_write_miss_o,
@@ -147,10 +124,10 @@ module cachepool_l1_ctrl
   ////////////////
   // PARAMETERS //
   ////////////////
-  localparam int unsigned NrLP1CoalInputs    = NrTCDMPortsPerCore - 1;  // Spatz lanes
-  localparam int unsigned SnitchPort            = NrTCDMPortsPerCore - 1;  // last port
-  localparam int unsigned coalescedDataWidth    = HPDcacheCfg.u.wordWidth; // wide word
-  localparam int unsigned LaneBytes             = DataWidth / ByteWidth;   // bytes per lane word
+  localparam int unsigned NrLP1CoalInputs    = NrTCDMPortsPerCore - 1;
+  localparam int unsigned SnitchPort            = NrTCDMPortsPerCore - 1;
+  localparam int unsigned coalescedDataWidth    = HPDcacheCfg.u.wordWidth;
+  localparam int unsigned LaneBytes             = DataWidth / ByteWidth;
   localparam int unsigned WordBytes             = coalescedDataWidth / ByteWidth;
 
   // tid layout (one fixed, non-overlapping scheme), MSB -> LSB:
@@ -164,7 +141,8 @@ module cachepool_l1_ctrl
   localparam int unsigned HitmapW       = NrLP1CoalInputs;
   localparam int unsigned OfstsW        = NrLP1CoalInputs * LP1NrBitsCoalOffset;
   localparam int unsigned CoalInfoW     = HitmapW + OfstsW;
-  localparam int unsigned TidUserW      = CoreIDWidth + TileIDWidth + ReqIdW + 2;  // {is_fpu,tile_id,core_id,write,req_id}
+  // {is_fpu,tile_id,core_id,write,req_id}
+  localparam int unsigned TidUserW      = CoreIDWidth + TileIDWidth + ReqIdW + 2;
   localparam int unsigned HitmapLsb     = 0;
   localparam int unsigned OfstsLsb      = HitmapW;
   localparam int unsigned ReqIdLsb      = CoalInfoW;
@@ -233,7 +211,7 @@ module cachepool_l1_ctrl
   hpdcache_mem_req_t    l1_mem_req_read, l1_mem_req_write, l1_l2_req;
   hpdcache_mem_req_w_t  l1_mem_req_write_data;
   logic                 l1_mem_req_read_valid,  l1_mem_req_read_ready;
-  logic                 l1_mem_req_write_valid, l1_mem_req_write_ready, __l1_mem_req_write_ready;
+  logic                 l1_mem_req_write_valid, l1_mem_req_write_ready, l1_mem_req_write_gnt;
   logic                 l1_mem_req_write_data_valid, l1_mem_req_write_data_ready;
   logic                 l1_mem_req_write_both_valid;
   logic                 l1_l2_req_valid;
@@ -311,7 +289,7 @@ module cachepool_l1_ctrl
 
     // Coalescer info payload (carried per lane, returned with the response).
     assign cache_req_info[i].user.core_id = cache_req_coreid[i];
-    assign cache_req_info[i].user.tile_id = cache_req_tileid[i];  // round-tripped for core rsp
+    assign cache_req_info[i].user.tile_id = cache_req_tileid[i];
     assign cache_req_info[i].user.is_amo  = (cache_req_amo[i] != AMONone);
     assign cache_req_info[i].user.req_id  = cache_req_reqid[i];
     assign cache_req_info[i].user.is_fpu  = cache_req_is_fpu[i];
@@ -382,26 +360,14 @@ module cachepool_l1_ctrl
     end
   end
 
-  // BE for the coalesced (wide) request: use the coalescer's wmask
-  // logic [WordBytes-1:0] coal_be;
-  // always_comb begin : gen_coal_be
-  //   coal_be = '0;
-  //   for (int unsigned id = 0; id < NrLP1CoalInputs; id++) begin
-  //     if (coal_req_info.hitmap[id]) begin
-  //       coal_be |= ({LaneBytes{1'b1}} << (id * LaneBytes));
-  //     end
-  //   end
-  // end
-
   always_comb begin : gen_l1_req_spatz
     l1_req[0]             = '0;
     l1_req[0].addr_offset = coal_req_addr[HPDcacheCfg.reqOffsetWidth-1:0];
     l1_req[0].addr_tag    = coal_req_addr[HPDcacheCfg.reqOffsetWidth +: HPDcacheCfg.tagWidth];
     l1_req[0].wdata       = coal_req_wdata;
     l1_req[0].be = coal_req_wmask;
-    // l1_req[0].be          = coal_req_write ? coal_req_wmask : coal_be;
     l1_req[0].size        = hpdcache_req_size_t'($clog2(coalescedDataWidth/8));
-    l1_req[0].sid         = hpdcache_req_sid_t'(0);   // Spatz
+    l1_req[0].sid         = hpdcache_req_sid_t'(0);
     l1_req[0].need_rsp    = 1'b1;
     l1_req[0].phys_indexed = 1'b1;
     l1_req[0].pma.uncacheable    = 1'b0;
@@ -488,7 +454,7 @@ module cachepool_l1_ctrl
     l1_req[CmoReqId].addr_tag           = cmo_addr_q[HPDcacheCfg.reqOffsetWidth +: HPDcacheCfg.tagWidth];
     l1_req[CmoReqId].sid                = hpdcache_req_sid_t'(CmoReqId);
     l1_req[CmoReqId].tid                = '0;
-    l1_req[CmoReqId].need_rsp           = 1'b1;   // required: how we learn it completed
+    l1_req[CmoReqId].need_rsp           = 1'b1;
     l1_req[CmoReqId].phys_indexed       = 1'b1;
     l1_req[CmoReqId].pma.uncacheable    = 1'b0;
     l1_req[CmoReqId].pma.io             = 1'b0;
@@ -556,7 +522,7 @@ module cachepool_l1_ctrl
   // per-lane response ready drains the coalescer's resp FIFOs (which absorb the
   // un-back-pressurable HPDcache core response).
   for (genvar i = 0; i < NrLP1CoalInputs; i++) begin : gen_spatz_resp
-    assign core_rsp_o[i].q_ready = cache_req_ready[i];   // request grant (also on core_req_ready_o)
+    assign core_rsp_o[i].q_ready = cache_req_ready[i];
     assign coal_resp_ready[i]    = core_rsp_ready_i[i];
     assign core_rsp_o[i].p_valid = coal_resp_valid[i];
     assign core_rsp_o[i].p.data  = coal_resp_data[i];
@@ -628,7 +594,7 @@ module cachepool_l1_ctrl
     .flush_i (1'b0),
     .rr_i    (1'b1),
     .req_i   ({l1_mem_req_read_valid, l1_mem_req_write_both_valid}),
-    .gnt_o   ({l1_mem_req_read_ready, __l1_mem_req_write_ready}),
+    .gnt_o   ({l1_mem_req_read_ready, l1_mem_req_write_gnt}),
     .data_i  ({l1_mem_req_read, l1_mem_req_write}),
     .req_o   (l1_l2_req_valid),
     .gnt_i   (l2_rsp_i.q_ready),
@@ -636,8 +602,8 @@ module cachepool_l1_ctrl
     .idx_o   ()
   );
 
-  assign l1_mem_req_write_ready      = __l1_mem_req_write_ready & l1_mem_req_write_both_valid;
-  assign l1_mem_req_write_data_ready = __l1_mem_req_write_ready & l1_mem_req_write_both_valid;
+  assign l1_mem_req_write_ready      = l1_mem_req_write_gnt & l1_mem_req_write_both_valid;
+  assign l1_mem_req_write_data_ready = l1_mem_req_write_gnt & l1_mem_req_write_both_valid;
 
   // Downstream request metadata.
   always_comb begin : req_meta
@@ -690,8 +656,8 @@ module cachepool_l1_ctrl
     assign dummy_pma[i].uncacheable    = 1'b0;
     assign dummy_pma[i].io             = 1'b0;
     assign dummy_pma[i].wr_policy_hint = HPDCACHE_WR_POLICY_WT;
-    assign core_req_abort[i]           = 1'b0;     // phys-indexed: never abort
-    assign core_req_tag[i]             = '0;       // phys-indexed: tag in req
+    assign core_req_abort[i]           = 1'b0;
+    assign core_req_tag[i]             = '0;
   end
 
   hpdcache #(

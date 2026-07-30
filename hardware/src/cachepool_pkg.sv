@@ -495,8 +495,6 @@ package cachepool_pkg;
   } remote_group_user_t;
 
   // Inter-group remote (FlooNoC) payload carries cacheline-wide L1->L2 traffic.
-  // (was: narrow_data_t / narrow_strb_t for the old 32b core->L2 path)
-  // `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, narrow_data_t, narrow_strb_t, remote_group_user_t)
   `REQRSP_TYPEDEF_ALL(remote_group, narrow_addr_t, cacheline_data_t, cacheline_strb_t, remote_group_user_t)
 
   // XY mesh coordinates for a group. port_id selects the eject port (always 0 for single-link).

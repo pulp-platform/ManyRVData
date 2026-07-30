@@ -43,6 +43,8 @@ sources:
   - hardware/bootrom/bootrom.sv
   # Level 1
   - hardware/src/cachepool_pkg.sv
+  # Private L1 (LP1) HPDcache config & shared types — after cachepool_pkg, before its users
+  - hardware/src/cachepool_hpd_pkg.sv
   - hardware/src/cachepool_cc.sv
   # Private L1 data cache (per-core HPDcache wrapper) — must precede the tile
   - hardware/src/cachepool_l1_ctrl.sv
