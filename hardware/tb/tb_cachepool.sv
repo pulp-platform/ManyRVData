@@ -115,8 +115,9 @@ module tb_cachepool;
   // Cycle-accurate per-router/tile/core NoC traffic logs for perfetto_gen.py
   // (enabled at compile time with +define+NOC_PROFILING)
   cachepool_noc_profiling i_cachepool_noc_profiling (
-    .clk_i  (clk   ),
-    .rst_ni (rst_n )
+    .clk_i           (clk           ),
+    .rst_ni          (rst_n         ),
+    .cluster_probe_i (cluster_probe )
   );
 /**************
  *  VCD Dump  *

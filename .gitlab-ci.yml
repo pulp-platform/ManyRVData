@@ -8,7 +8,6 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
   APPS: "tests"
-  PATH: '$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:$HOME/.local/bin'
   OBJCACHE: ''
   CC:  '/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc'
   CXX: '/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++'
@@ -28,22 +27,21 @@ stages:
 
 # ---------------------------------------------------------------------------
 # Build stage: compile RTL and software for CI_CONFIG.
-# Parallel jobs within the same pipeline share $HOME, so the toolchain
-# installed by make quick-tool is automatically available to all test jobs.
+# Sources iis-env.sh, which points the toolchain at the prebuilt install dir
+# (replaces `make quick-tool`'s symlink) and sets up the venv for code-gen deps;
+# test-stage jobs run prebuilt artifacts and don't need either, so iis-env.sh is
+# only sourced here.
 # ---------------------------------------------------------------------------
 build:
   stage: build
-  timeout: 4h 30m
   script:
     - echo "Using CC=$CC"
     - echo "Using CXX=$CXX"
     - test -x "$CC"
     - test -x "$CXX"
-    - make quick-tool
-    - python3 -m pip install --quiet dataclasses hjson jsonref jsonschema mako termcolor
+    - source iis-env.sh
     - make init
     - make dram-build
-    - python3 -m pip install --quiet -r requirements.txt
     - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG DEBUG=0 noc_profiling=0
   artifacts:
     when: always
@@ -69,7 +67,6 @@ build:
 # ---------------------------------------------------------------------------
 test:
   stage: test
-  timeout: 1h
   needs: [build]
   parallel:
     matrix:

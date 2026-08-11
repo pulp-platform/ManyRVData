@@ -484,7 +484,7 @@ NOC_VIS_CLK_FREQ       ?= 1000
 
 .PHONY: vis4mesh-data
 vis4mesh-data:
-	@for level in l1 l1-origin l2 l2-origin; do \
+	@for level in l1 l2; do \
 	  $(PYTHON) $(CACHEPOOL_DIR)/util/scripts/noc_profiling_to_vis4mesh.py --level $$level \
 	    --input-dir $(NOC_VIS_INPUT_DIR) --output-dir $(NOC_VIS_OUTPUT_PREFIX)-$$level \
 	    --num-groups-x $(num_groups_x) --num-groups-y $$(( $(num_groups) / $(num_groups_x) )) \
@@ -546,9 +546,9 @@ help:
 	@echo "*vis4mesh*:       clone/build the Vis4Mesh frontend into util/vis4mesh (pinned, see util/vis4mesh.version)"
 	@echo "*vis4mesh-serve*: build (if needed) and serve Vis4Mesh at http://localhost:8000"
 	@echo "                  upload a directory from util/scripts/noc_profiling_to_vis4mesh.py's --output-dir"
-	@echo "*vis4mesh-data*:  convert noc_profiling/*.log (see 'noc_profiling' above) into all four Vis4Mesh"
-	@echo "                  datasets (l1/l1-origin/l2/l2-origin) under NOC_VIS_OUTPUT_PREFIX-<level>,"
-	@echo "                  using the current config's group/tile/port counts"
+	@echo "*vis4mesh-data*:  convert noc_profiling/*.log (see 'noc_profiling' above) into Vis4Mesh datasets"
+	@echo "                  (l1/l2) under NOC_VIS_OUTPUT_PREFIX-<level>, using the current config's"
+	@echo "                  group/tile/port counts; one dataset per session_<N>/ kernel session if present"
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings:"

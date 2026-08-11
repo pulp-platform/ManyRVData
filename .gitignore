@@ -23,3 +23,5 @@ hardware/bootrom/bootrom.sv
 # Configuration auto-generated files
 config/cachepool.hjson
 *noc_profiling
+# CI venv (created by iis-env.sh)
+/cachepool

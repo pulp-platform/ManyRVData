@@ -31,13 +31,8 @@ for {set g 0} {$g < $NUM_GROUPS} {incr g} {
     add wave -noupdate -group "${gwp_name}" -group L2Mesh -group ReqRouter ${group_wp_path}/i_l2_req_router/*
     add wave -noupdate -group "${gwp_name}" -group L2Mesh -group RspRouter ${group_wp_path}/i_l2_rsp_router/*
 
-    # 1b. Plot L1 NoC (inter-group mesh) signals: concentration xbar
-    # (pre-router, one per tile), the routers themselves (one per tile per
-    # channel -- probed by index until an instance isn't found, so this
-    # never has to assume NumNoCPortsPerTile), and the dispatch xbar
-    # (post-router, one per group). Each tile/channel gets its own named
-    # group rather than being collapsed together.
-    for {set tile 0} {$tile < $NUM_TILES} {incr tile} {
+    quietly set tile 0
+    while {[llength [find instances -nodu ${group_wp_path}/gen_noc/gen_mst_t[${tile}]/i_noc_mst_xbar]] > 0} {
         add wave -noupdate -group "${gwp_name}" -group L1NoC -group MstXbar -group tile[${tile}] ${group_wp_path}/gen_noc/gen_mst_t[${tile}]/i_noc_mst_xbar/*
 
         quietly set ch 0
@@ -46,6 +41,7 @@ for {set g 0} {$g < $NUM_GROUPS} {incr g} {
             add wave -noupdate -group "${gwp_name}" -group L1NoC -group RspRouter -group tile[${tile}] -group ch[${ch}] ${group_wp_path}/gen_noc/gen_rsp_router_t[${tile}]/gen_rsp_router_n[${ch}]/i_rsp_router/*
             incr ch
         }
+        incr tile
     }
 
     add wave -noupdate -group "${gwp_name}" -group L1NoC -group SlvXbar ${group_wp_path}/gen_noc/i_noc_slv_xbar/*
