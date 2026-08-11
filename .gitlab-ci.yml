@@ -33,7 +33,6 @@ stages:
 # ---------------------------------------------------------------------------
 build:
   stage: build
-  timeout: 4h 30m
   script:
     - echo "Using CC=$CC"
     - echo "Using CXX=$CXX"
@@ -71,7 +70,6 @@ build:
 # ---------------------------------------------------------------------------
 test:
   stage: test
-  timeout: 1h
   needs: [build]
   parallel:
     matrix:
