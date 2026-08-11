@@ -44,6 +44,7 @@ build:
     - make dram-build
     - python3 -m venv .venv
     - source .venv/bin/activate
+    - python3 -m pip install --quiet --upgrade pip
     - python3 -m pip install --quiet -r requirements.txt
     - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG DEBUG=0 noc_profiling=0
   artifacts:
