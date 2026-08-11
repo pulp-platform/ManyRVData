@@ -50,11 +50,12 @@ Build the RISC-V toolchains (LLVM + GCC). Spike (`riscv-isa-sim`) is also availa
 make toolchain
 ```
 
-For ETH users, a **pre-built toolchain** is available for faster setup:
+For ETH users, a **pre-built toolchain** is available for faster setup. Source `iis-env.sh`
+to point the toolchain at it and set up the Python venv needed for RTL/config generation:
 
 ```bash
-# ETH only: link a prebuilt toolchain
-make quick-tool
+# ETH only: point at a prebuilt toolchain and set up the venv
+source iis-env.sh
 ```
 
 ### Initialize Submodules
@@ -357,11 +358,9 @@ For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_mon
    | Level | Network | Channel breakdown |
    |---|---|---|
    | `l1` (default) | Inter-group cache-access mesh | Per physical link (tile × NoC port) |
-   | `l1-origin` | Inter-group cache-access mesh | Per originating group |
    | `l2` | DRAM-refill mesh | Single (per your read/write/resp split via message type) |
-   | `l2-origin` | DRAM-refill mesh | Per originating group/HBM channel |
 
-   `--num-tiles-per-group`/`--num-noc-ports-per-tile` are only needed for `l1`/`l1-origin`. See the script's module docstring for the full data-shape/limitation notes (e.g. hop-distance and transfer-type filters aren't populated yet).
+   `--num-tiles-per-group`/`--num-noc-ports-per-tile` are only needed for `l1`. See the script's module docstring for the full data-shape/limitation notes (e.g. hop-distance and transfer-type filters aren't populated yet).
 
 3. **Build and serve Vis4Mesh, then upload the dataset directory**:
    ```sh
