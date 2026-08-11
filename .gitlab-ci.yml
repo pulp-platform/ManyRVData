@@ -8,7 +8,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
   APPS: "tests"
-  PATH: '$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:$HOME/.local/bin'
+  PATH: '$HOME/.cargo/bin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:$HOME/.local/bin:$PATH'
   OBJCACHE: ''
   CC:  '/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc'
   CXX: '/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++'
