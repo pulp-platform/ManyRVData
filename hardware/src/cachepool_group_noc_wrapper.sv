@@ -280,8 +280,7 @@ module cachepool_group_noc_wrapper
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].q_ready = mst_slv_req_ready[p];
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].p       = mst_slv_rsp[p];
         assign remote_group_rsp_to_group[t*NumRemoteGroupPortTile+p].p_valid = mst_slv_rsp_valid[p];
-        assign mst_slv_rsp_ready[p] =
-          remote_group_req_from_group[t*NumRemoteGroupPortTile+p].p_ready;
+        assign mst_slv_rsp_ready[p] = remote_group_req_from_group[t*NumRemoteGroupPortTile+p].p_ready;
       end
 
       for (genvar n = 0; n < NumNoCPortsPerTile; n++) begin : gen_mst_eject_n
@@ -462,8 +461,7 @@ module cachepool_group_noc_wrapper
       assign slv_xbar_slv_sel[noc_port] = (NumTilesPerGroup == 1)
         ? SlvXbarSelW'(eject_req[noc_port].hdr.src_port_id)
         : SlvXbarSelW'(eject_req[noc_port].payload.addr[(dynamic_offset_q + NocCacheBankBits) +: NocAddrTileWidth]
-                     * NumRemoteGroupPortTile
-                     + eject_req[noc_port].hdr.src_port_id);
+                     * NumRemoteGroupPortTile + eject_req[noc_port].hdr.src_port_id);
 
     end
 
@@ -510,9 +508,9 @@ module cachepool_group_noc_wrapper
       for (genvar p = 0; p < NumRemoteGroupPortTile; p++) begin : gen_slv_deliver_p
         localparam int unsigned port = t * NumRemoteGroupPortTile + p;
 
-        // Placeholder response routing: route response back via the NoC channel
-        // of the same tile (t). Correct cross-tile response routing is deferred.
-        assign slv_xbar_mst_sel[port] = MstXbarSelW'(t * NumNoCPortsPerTile);
+        assign slv_xbar_mst_sel[port] = MstXbarSelW'(
+            remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset-1:0]
+          * NumNoCPortsPerTile);
 
         always_comb begin : proc_req_unpack
           remote_group_req_to_group[port].q                  = slv_xbar_mst_req[port].payload;
