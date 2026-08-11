@@ -19,9 +19,15 @@ add wave -noupdate -group Cluster -group Periph -group PeriReg ${cluster_path}/i
 
 add wave -noupdate -group Cluster -group Periph -group PeriXBar ${cluster_path}/i_peri_xbar/*
 
-add wave -noupdate -group Cluster -group Periph -group reqrsp2axi ${hbm0_path}/gen_hbm0_demux/i_hbm0_dram_reqrsp_to_axi/*
-add wave -noupdate -group Cluster -group Periph -group demux ${hbm0_path}/gen_hbm0_demux/i_hbm0_reqrsp_demux/*
-add wave -noupdate -group Cluster -group Periph -group dw_conv ${hbm0_path}/gen_hbm0_demux/i_hbm0_peri_dw/*
+if {[llength [find instances -nodu ${hbm0_path}/gen_hbm0_demux/i_hbm0_dram_reqrsp_to_axi]] > 0} {
+    add wave -noupdate -group Cluster -group Periph -group reqrsp2axi ${hbm0_path}/gen_hbm0_demux/i_hbm0_dram_reqrsp_to_axi/*
+}
+if {[llength [find instances -nodu ${hbm0_path}/gen_hbm0_demux/i_hbm0_reqrsp_demux]] > 0} {
+    add wave -noupdate -group Cluster -group Periph -group demux ${hbm0_path}/gen_hbm0_demux/i_hbm0_reqrsp_demux/*
+}
+if {[llength [find instances -nodu ${hbm0_path}/gen_hbm0_demux/i_hbm0_peri_dw]] > 0} {
+    add wave -noupdate -group Cluster -group Periph -group dw_conv ${hbm0_path}/gen_hbm0_demux/i_hbm0_peri_dw/*
+}
 
 
 # Barrier
