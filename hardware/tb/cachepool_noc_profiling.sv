@@ -48,7 +48,9 @@ module cachepool_noc_profiling
   import cachepool_pkg::*;
 (
   input logic clk_i,
-  input logic rst_ni
+  input logic rst_ni,
+  // SPATZ_CLUSTER_PROBE bit (same signal cachepool_monitor.sv uses): gates all tracing to active kernel sessions and opens a new session_<N>/ subfolder per rising edge.
+  input logic cluster_probe_i
 );
 
 `ifndef TARGET_SYNTHESIS
@@ -131,23 +133,114 @@ module cachepool_noc_profiling
   int l2_f_req  [NumGroups];
   int l2_f_resp [NumGroups];
 
+  // Session bookkeeping: session_idx_q numbers each cluster_probe_i rising edge (a kernel session); files_open_q is the trace blocks' write-enable, deliberately registered one cycle behind the actual fopen/fclose (via closing_q) so no always_ff race can hit a file descriptor before it's open or after it's closed.
+  logic probe_q;
+  int   session_idx_q;
+  logic files_open_q;
+  logic closing_q;
+
+  // Opens a fresh log_path/session_<idx>/ subfolder and (re)assigns every file handle to it.
+  task automatic open_session_files(input int idx);
+    string session_path;
+    session_path = $sformatf("%s/session_%0d", log_path, idx);
+    retval = $system({"mkdir -p ", session_path});
+    for (int g = 0; g < NumGroups; g++) begin
+      f_rreq[g]    = $fopen($sformatf("%s/router_g%0d_req.log",     session_path, g), "w");
+      f_rresp[g]   = $fopen($sformatf("%s/router_g%0d_resp.log",    session_path, g), "w");
+      l2_f_req[g]  = $fopen($sformatf("%s/l2_router_g%0d_req.log",  session_path, g), "w");
+      l2_f_resp[g] = $fopen($sformatf("%s/l2_router_g%0d_resp.log", session_path, g), "w");
+      for (int t = 0; t < NumTilesPerGroup; t++) begin
+        f_tile[g][t] = $fopen($sformatf("%s/tile_g%0d_t%0d.log", session_path, g, t), "w");
+        f_pe[g][t]   = $fopen($sformatf("%s/pe_g%0d_t%0d.log",   session_path, g, t), "w");
+      end
+    end
+  endtask
+
+  // Flushes each port's still-open RLE run (same trailing writes the old bare `final` block did) then closes every handle from open_session_files -- shared by a mid-run falling edge and by $finish leaving a session open.
+  task automatic close_session_files();
+    for (int g = 0; g < NumGroups; g++) begin
+      for (int t = 0; t < NumTilesPerGroup; t++) begin
+        if (NumRemoteGroupPortCore > 0) begin
+          for (int n = 0; n < NumNoCPortsPerTile; n++) begin
+            automatic int noc_port = t*NumNoCPortsPerTile + n;
+            for (int d = 0; d < 4; d++) begin
+              $fwrite(f_rreq[g], "%0d S %0d 0 %0d %0d %0d\n", noc_port, d, rsq_start[g][t][n][d][0], cycle_q, rsq_st[g][t][n][d][0]);
+              $fwrite(f_rreq[g], "%0d S %0d 1 %0d %0d %0d\n", noc_port, d, rsq_start[g][t][n][d][1], cycle_q, rsq_st[g][t][n][d][1]);
+            end
+            $fwrite(f_rreq[g], "%0d S 4 0 %0d %0d %0d\n", noc_port, rsq_start[g][t][n][4][0], cycle_q, rsq_st[g][t][n][4][0]);
+            $fwrite(f_rreq[g], "%0d S 4 1 %0d %0d %0d\n", noc_port, rsq_start[g][t][n][4][1], cycle_q, rsq_st[g][t][n][4][1]);
+            for (int d = 0; d < 4; d++) begin
+              $fwrite(f_rresp[g], "%0d S %0d 0 %0d %0d %0d\n", noc_port, d, rsp_start[g][t][n][d][0], cycle_q, rsp_st[g][t][n][d][0]);
+              $fwrite(f_rresp[g], "%0d S %0d 1 %0d %0d %0d\n", noc_port, d, rsp_start[g][t][n][d][1], cycle_q, rsp_st[g][t][n][d][1]);
+            end
+            $fwrite(f_rresp[g], "%0d S 4 0 %0d %0d %0d\n", noc_port, rsp_start[g][t][n][4][0], cycle_q, rsp_st[g][t][n][4][0]);
+            $fwrite(f_rresp[g], "%0d S 4 1 %0d %0d %0d\n", noc_port, rsp_start[g][t][n][4][1], cycle_q, rsp_st[g][t][n][4][1]);
+          end
+          for (int p = 0; p < NumRGPortTile; p++) begin
+            $fwrite(f_tile[g][t], "S 0 1 %0d %0d %0d %0d\n", p, ts_mreq_s[g][t][p], cycle_q, ts_mreq_st[g][t][p]);
+            $fwrite(f_tile[g][t], "S 0 0 %0d %0d %0d %0d\n", p, ts_sreq_s[g][t][p], cycle_q, ts_sreq_st[g][t][p]);
+            $fwrite(f_tile[g][t], "S 1 0 %0d %0d %0d %0d\n", p, ts_mrsp_s[g][t][p], cycle_q, ts_mrsp_st[g][t][p]);
+            $fwrite(f_tile[g][t], "S 1 1 %0d %0d %0d %0d\n", p, ts_srsp_s[g][t][p], cycle_q, ts_srsp_st[g][t][p]);
+          end
+        end
+        $fclose(f_tile[g][t]);
+        for (int c = 0; c < NumCoresTile; c++) begin
+          $fwrite(f_pe[g][t], "%0d S 0 1 0 %0d %0d %0d\n", c, pe_req_s[g][t][c], cycle_q, pe_req_st[g][t][c]);
+          $fwrite(f_pe[g][t], "%0d S 1 0 0 %0d %0d %0d\n", c, pe_rsp_s[g][t][c], cycle_q, pe_rsp_st[g][t][c]);
+        end
+        $fclose(f_pe[g][t]);
+      end
+      $fclose(f_rreq[g]);
+      $fclose(f_rresp[g]);
+      for (int d = 0; d < 4; d++) begin
+        $fwrite(l2_f_req[g], "S %0d 0 %0d %0d %0d\n", d, l2q_start[g][d][0], cycle_q, l2q_st[g][d][0]);
+        $fwrite(l2_f_req[g], "S %0d 1 %0d %0d %0d\n", d, l2q_start[g][d][1], cycle_q, l2q_st[g][d][1]);
+        $fwrite(l2_f_resp[g], "S %0d 0 %0d %0d %0d\n", d, l2p_start[g][d][0], cycle_q, l2p_st[g][d][0]);
+        $fwrite(l2_f_resp[g], "S %0d 1 %0d %0d %0d\n", d, l2p_start[g][d][1], cycle_q, l2p_st[g][d][1]);
+      end
+      $fclose(l2_f_req[g]);
+      $fclose(l2_f_resp[g]);
+    end
+  endtask
+
   initial begin
     void'($value$plusargs("APP=%s", app));
     log_path = "noc_profiling";
     retval   = $system({"mkdir -p ", log_path});
-    for (int g = 0; g < NumGroups; g++) begin
-      f_rreq[g]  = $fopen($sformatf("%s/router_g%0d_req.log",  log_path, g), "w");
-      f_rresp[g] = $fopen($sformatf("%s/router_g%0d_resp.log", log_path, g), "w");
-      l2_f_req[g]  = $fopen($sformatf("%s/l2_router_g%0d_req.log",  log_path, g), "w");
-      l2_f_resp[g] = $fopen($sformatf("%s/l2_router_g%0d_resp.log", log_path, g), "w");
-      for (int t = 0; t < NumTilesPerGroup; t++) begin
-        f_tile[g][t] = $fopen($sformatf("%s/tile_g%0d_t%0d.log", log_path, g, t), "w");
-        f_pe[g][t]   = $fopen($sformatf("%s/pe_g%0d_t%0d.log",   log_path, g, t), "w");
+  end
+
+  // Opens session_<N>/ on each cluster_probe_i rising edge and closes it on the matching falling edge; idle time between sessions is neither opened nor written (see the trace blocks' `!files_open_q` reset gating below).
+  //
+  // files_open_q only becomes visible to the (separately-clocked) trace
+  // blocks the cycle AFTER open_session_files() actually runs, and
+  // close_session_files() itself is deferred by one cycle (via closing_q)
+  // past the cycle files_open_q drops -- both one-cycle offsets exist solely
+  // so no trace block's always_ff can ever race this one's fopen/fclose on
+  // the same edge (assumes sessions are >1 cycle apart, always true for a
+  // real kernel region).
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      probe_q       <= 1'b0;
+      session_idx_q <= '0;
+      files_open_q  <= 1'b0;
+      closing_q     <= 1'b0;
+    end else begin
+      probe_q <= cluster_probe_i;
+      if (cluster_probe_i && !probe_q) begin
+        open_session_files(session_idx_q);
+        session_idx_q <= session_idx_q + 1;
+        files_open_q  <= 1'b1;
+      end else if (!cluster_probe_i && probe_q && files_open_q) begin
+        files_open_q <= 1'b0;
+        closing_q    <= 1'b1;
+      end else if (closing_q) begin
+        close_session_files();
+        closing_q <= 1'b0;
       end
     end
   end
 
-  // Module-scope state registers, flushed by the `final` block below.
+  // Module-scope state registers, flushed by close_session_files above.
   // router: [group][tile][noc-port][portidx 0..4][io 0..1]
   logic [1:0]  rsq_st    [NumGroups][NumTilesPerGroup][NumNoCPortsPerTile][5][2];
   logic [63:0] rsq_start [NumGroups][NumTilesPerGroup][NumNoCPortsPerTile][5][2];
@@ -182,7 +275,7 @@ module cachepool_noc_profiling
       for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_rstate_gx
         localparam int unsigned g = gy * NumGroupsX + gx;
         always_ff @(posedge clk_i or negedge rst_ni) begin
-          if (!rst_ni) begin
+          if (!rst_ni || !files_open_q) begin
             rsq_st[g] <= '{default: '0}; rsq_start[g] <= '{default: '0};
             rsp_st[g] <= '{default: '0}; rsp_start[g] <= '{default: '0};
           end else begin
@@ -353,7 +446,7 @@ module cachepool_noc_profiling
         localparam int unsigned g = gy * NumGroupsX + gx;
         for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_tstate_t
           always_ff @(posedge clk_i or negedge rst_ni) begin
-            if (!rst_ni) begin
+            if (!rst_ni || !files_open_q) begin
               ts_mreq_st[g][t] <= '{default: '0}; ts_mreq_s[g][t] <= '{default: '0};
               ts_sreq_st[g][t] <= '{default: '0}; ts_sreq_s[g][t] <= '{default: '0};
               ts_mrsp_st[g][t] <= '{default: '0}; ts_mrsp_s[g][t] <= '{default: '0};
@@ -444,7 +537,7 @@ module cachepool_noc_profiling
       localparam int unsigned g = gy * NumGroupsX + gx;
       for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_pe_t
         always_ff @(posedge clk_i or negedge rst_ni) begin
-          if (!rst_ni) begin
+          if (!rst_ni || !files_open_q) begin
             pe_req_st[g][t] <= '{default: '0}; pe_req_s[g][t] <= '{default: '0};
             pe_rsp_st[g][t] <= '{default: '0}; pe_rsp_s[g][t] <= '{default: '0};
           end else begin
@@ -496,7 +589,7 @@ module cachepool_noc_profiling
     for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_gx
       localparam int unsigned g = gy * NumGroupsX + gx;
       always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (!rst_ni) begin
+        if (!rst_ni || !files_open_q) begin
           l2q_st[g] <= '{default: '0}; l2q_start[g] <= '{default: '0};
           l2p_st[g] <= '{default: '0}; l2p_start[g] <= '{default: '0};
         end else begin
@@ -554,54 +647,9 @@ module cachepool_noc_profiling
     end
   end
 
-  // ------------------------------------------------------------
-  // End-of-sim flush: write every port's still-open S run, then close every
-  // file. P/Q lines are written as they happen, so they need no flush.
-  // ------------------------------------------------------------
+  // End-of-sim flush: also covers a pending deferred close (closing_q) so a session that fell mid-close at $finish still gets its files flushed/closed.
   final begin
-    for (int g = 0; g < NumGroups; g++) begin
-      for (int t = 0; t < NumTilesPerGroup; t++) begin
-        if (NumRemoteGroupPortCore > 0) begin
-          for (int n = 0; n < NumNoCPortsPerTile; n++) begin
-            automatic int noc_port = t*NumNoCPortsPerTile + n;
-            for (int d = 0; d < 4; d++) begin
-              $fwrite(f_rreq[g], "%0d S %0d 0 %0d %0d %0d\n", noc_port, d, rsq_start[g][t][n][d][0], cycle_q, rsq_st[g][t][n][d][0]);
-              $fwrite(f_rreq[g], "%0d S %0d 1 %0d %0d %0d\n", noc_port, d, rsq_start[g][t][n][d][1], cycle_q, rsq_st[g][t][n][d][1]);
-            end
-            $fwrite(f_rreq[g], "%0d S 4 0 %0d %0d %0d\n", noc_port, rsq_start[g][t][n][4][0], cycle_q, rsq_st[g][t][n][4][0]);
-            $fwrite(f_rreq[g], "%0d S 4 1 %0d %0d %0d\n", noc_port, rsq_start[g][t][n][4][1], cycle_q, rsq_st[g][t][n][4][1]);
-            for (int d = 0; d < 4; d++) begin
-              $fwrite(f_rresp[g], "%0d S %0d 0 %0d %0d %0d\n", noc_port, d, rsp_start[g][t][n][d][0], cycle_q, rsp_st[g][t][n][d][0]);
-              $fwrite(f_rresp[g], "%0d S %0d 1 %0d %0d %0d\n", noc_port, d, rsp_start[g][t][n][d][1], cycle_q, rsp_st[g][t][n][d][1]);
-            end
-            $fwrite(f_rresp[g], "%0d S 4 0 %0d %0d %0d\n", noc_port, rsp_start[g][t][n][4][0], cycle_q, rsp_st[g][t][n][4][0]);
-            $fwrite(f_rresp[g], "%0d S 4 1 %0d %0d %0d\n", noc_port, rsp_start[g][t][n][4][1], cycle_q, rsp_st[g][t][n][4][1]);
-          end
-          for (int p = 0; p < NumRGPortTile; p++) begin
-            $fwrite(f_tile[g][t], "S 0 1 %0d %0d %0d %0d\n", p, ts_mreq_s[g][t][p], cycle_q, ts_mreq_st[g][t][p]);
-            $fwrite(f_tile[g][t], "S 0 0 %0d %0d %0d %0d\n", p, ts_sreq_s[g][t][p], cycle_q, ts_sreq_st[g][t][p]);
-            $fwrite(f_tile[g][t], "S 1 0 %0d %0d %0d %0d\n", p, ts_mrsp_s[g][t][p], cycle_q, ts_mrsp_st[g][t][p]);
-            $fwrite(f_tile[g][t], "S 1 1 %0d %0d %0d %0d\n", p, ts_srsp_s[g][t][p], cycle_q, ts_srsp_st[g][t][p]);
-          end
-        end
-        $fclose(f_tile[g][t]);
-        for (int c = 0; c < NumCoresTile; c++) begin
-          $fwrite(f_pe[g][t], "%0d S 0 1 0 %0d %0d %0d\n", c, pe_req_s[g][t][c], cycle_q, pe_req_st[g][t][c]);
-          $fwrite(f_pe[g][t], "%0d S 1 0 0 %0d %0d %0d\n", c, pe_rsp_s[g][t][c], cycle_q, pe_rsp_st[g][t][c]);
-        end
-        $fclose(f_pe[g][t]);
-      end
-      $fclose(f_rreq[g]);
-      $fclose(f_rresp[g]);
-      for (int d = 0; d < 4; d++) begin
-        $fwrite(l2_f_req[g], "S %0d 0 %0d %0d %0d\n", d, l2q_start[g][d][0], cycle_q, l2q_st[g][d][0]);
-        $fwrite(l2_f_req[g], "S %0d 1 %0d %0d %0d\n", d, l2q_start[g][d][1], cycle_q, l2q_st[g][d][1]);
-        $fwrite(l2_f_resp[g], "S %0d 0 %0d %0d %0d\n", d, l2p_start[g][d][0], cycle_q, l2p_st[g][d][0]);
-        $fwrite(l2_f_resp[g], "S %0d 1 %0d %0d %0d\n", d, l2p_start[g][d][1], cycle_q, l2p_st[g][d][1]);
-      end
-      $fclose(l2_f_req[g]);
-      $fclose(l2_f_resp[g]);
-    end
+    if (files_open_q || closing_q) close_session_files();
   end
 
   `undef NOCPROF_GRP

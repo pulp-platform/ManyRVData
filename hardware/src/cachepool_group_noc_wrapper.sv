@@ -317,18 +317,13 @@ module cachepool_group_noc_wrapper
         .slv_rsp_ready_i ( mst_slv_rsp_ready                          ),
         .slv_sel_i       ( noc_mst_sel                                ),
         .slv_selected_o  ( mst_xbar_slv_selected                      ),
-        .mst_req_o       ( mst_xbar_req[t*NumNoCPortsPerTile +:
-                                        NumNoCPortsPerTile]           ),
-        .mst_req_valid_o ( mst_xbar_req_valid[t*NumNoCPortsPerTile +:
-                                              NumNoCPortsPerTile]     ),
-        .mst_req_ready_i ( mst_xbar_req_ready[t*NumNoCPortsPerTile +:
-                                              NumNoCPortsPerTile]     ),
+        .mst_req_o       ( mst_xbar_req      [t*NumNoCPortsPerTile+:NumNoCPortsPerTile] ),
+        .mst_req_valid_o ( mst_xbar_req_valid[t*NumNoCPortsPerTile+:NumNoCPortsPerTile] ),
+        .mst_req_ready_i ( mst_xbar_req_ready[t*NumNoCPortsPerTile+:NumNoCPortsPerTile] ),
         .mst_rsp_i       ( eject_rsp_payload                          ),
         .mst_rr_i        ( '0                                         ),
-        .mst_rsp_valid_i ( eject_rsp_valid[t*NumNoCPortsPerTile +:
-                                           NumNoCPortsPerTile]        ),
-        .mst_rsp_ready_o ( eject_rsp_ready[t*NumNoCPortsPerTile +:
-                                           NumNoCPortsPerTile]        ),
+        .mst_rsp_valid_i ( eject_rsp_valid   [t*NumNoCPortsPerTile+:NumNoCPortsPerTile] ),
+        .mst_rsp_ready_o ( eject_rsp_ready   [t*NumNoCPortsPerTile+:NumNoCPortsPerTile] ),
         .mst_sel_i       ( mst_xbar_mst_sel                           )
       );
 
