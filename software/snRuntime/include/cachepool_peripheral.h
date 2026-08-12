@@ -124,20 +124,6 @@ extern "C" {
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x48
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_COMMIT_BIT 0
 
-// Hardware barrier participation mask register. This register determines the
-// tiles that are
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_REG_OFFSET 0x4c
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_MASK \
-  0xf
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_OFFSET \
-  0
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_FIELD   \
-  ((bitfield_field32_t){                                                                         \
-      .mask =                                                                                    \
-          CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_MASK, \
-      .index =                                                                                   \
-          CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_OFFSET})
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

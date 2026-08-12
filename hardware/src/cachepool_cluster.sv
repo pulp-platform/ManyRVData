@@ -1118,12 +1118,6 @@ module cachepool_cluster
   assign peri_ext_rsp_o.p.user  = peri_xbar_src_rsp[1].user.refill;
   assign peri_ext_rsp_o.p_valid = peri_xbar_src_rsp_valid[1];
 
-  logic [NumTiles-1:0] use_barrier;
-  // TODO: Connect to CSR
-  //assign use_barrier = {NumTiles{1'b1}}; // for now all is set to 1
-  logic [NumTiles-1:0] barrier_participation_mask;
-  assign use_barrier = barrier_participation_mask;
-
   // ---- Address decode per source ----
   peri_tgt_sel_t [PeriXbarNumSrc-1:0] peri_slv_sel;
   assign peri_slv_sel[0] = peri_addr_decode(hbm0_peri_narrow_req.q.addr);

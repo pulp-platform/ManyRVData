@@ -146,37 +146,22 @@ snitch_max_trans ?= 16
 #                 + cache_info_t + burst_req_t
 #   cache_info_t  = {for_write_pend, depth, way}   -- NOTE: NO tile_id inside.
 #
-# So refill_user_t carries TileIDWidth exactly ONCE.  The values below are
-# deliberately conservative headroom, not an exact fit: the per-tile adjustment
-# adds 2*(idx_width(NumTiles)-1) bits, and cachepool_pkg.sv:163 then adds a
-# further clog2(NumTiles) (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles)),
-# so the tile term ends up over-provisioned.  This is harmless: no RTL reads any
-# AXI user bit above $bits(refill_user_t)-1.
-# (An earlier version of this comment claimed cache_info_t held a second
-#  TileIDWidth copy and therefore doubled idx_width(NumTiles) -- it does not;
-#  the 2x factor is just slack, kept as-is for headroom.)
+# BankIDWidth depends only on cores-per-tile (constant across a tile-count
+# sweep with num_cores_per_tile fixed), not on the total tile count. So the
+# only tile-count-dependent term in refill_user_t is TileIDWidth =
+# clog2(NumTiles), and that's already added exactly once, downstream, by
+# cachepool_pkg.sv (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles) +
+# bits(l2_id_t)) -- no need to also grow axi_user_width with NumTiles here.
 #
-# Do NOT let axi_user_width drop below $bits(refill_user_t): the MSB of bank_id
-# (or higher tile_id) would be truncated on the AXI loopback and refill
-# responses would route back to the wrong slv port (e.g. bank_id=4 aliases to
-# bank_id=0, sending cb=3's refill response to the icache bypass slot, making
-# cb=3 hang).  The ASSERT_INIT above catches this at elaboration.
+# axi_user_base below is the width needed at NumTiles=1 (TileIDWidth=0),
+# i.e. bank_id + cache_info_t + burst_req_t only.
+#
+# Do NOT let axi_user_width drop below that: the MSB of bank_id would be
+# truncated on the AXI loopback and refill responses would route back to the
+# wrong slv port (e.g. bank_id=4 aliases to bank_id=0, sending cb=3's refill
+# response to the icache bypass slot, making cb=3 hang). The ASSERT_INIT
+# above catches this at elaboration.
 
-ifeq ($(num_tiles),1)
-  axi_user_tile_adj := 0
-else ifeq ($(num_tiles),2)
-  axi_user_tile_adj := 0
-else ifeq ($(num_tiles),4)
-  axi_user_tile_adj := 2
-else ifeq ($(num_tiles),8)
-  axi_user_tile_adj := 4
-else ifeq ($(num_tiles),16)
-  axi_user_tile_adj := 6
-else
-  $(error num_tiles=$(num_tiles) not handled by axi_user_width formula; add a case in config.mk)
-endif
-
-# Base widths for NumTiles=1 (= reference values, verified working).
 ifeq ($(l1d_cacheline_width),512)
   axi_user_base := 18
 else ifeq ($(l1d_cacheline_width),256)
@@ -185,7 +170,7 @@ else ifeq ($(l1d_cacheline_width),128)
   axi_user_base := 22
 endif
 
-axi_user_width := $(shell echo $$(( $(axi_user_base) + $(axi_user_tile_adj) )))
+axi_user_width := $(axi_user_base)
 
 #####################
 ##  L2 Main Memory ##

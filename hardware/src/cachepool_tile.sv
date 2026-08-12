@@ -914,20 +914,23 @@ module cachepool_tile
   localparam int unsigned EffectiveCoalFactor = UseSkewedFolded ? 1 : L1CoalFactor;
 `ifndef TARGET_SYNTHESIS
   initial begin
-    $display("Cache Configuration:");
-    $display("  NumCtrl        : %0d", NumL1CtrlTile);
-    $display("  LineWidth      : %0d", L1LineWidth);
-    $display("  NumWordPerLine : %0d", NumWordPerLine);
-    $display("  NumSet         : %0d", L1NumSet);
-    $display("  AssoPerCtrl    : %0d", L1AssoPerCtrl);
-    $display("  BankFactor     : %0d", L1BankFactor);
-    $display("  PartSplit      : %0d", PartSplit);
-    $display("  BankDataWidth  : %0d", BankDataWidth);
-    $display("  NumTagBankPerCtrl : %0d", NumTagBankPerCtrl);
-    $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
-    $display("  CoalFactor     : %0d", EffectiveCoalFactor);
-    $display("  RefillDataWidth: %0d", RefillDataWidth);
-    $display("  DynamicOffset  : %0d", dynamic_offset_q);
+    #1ns;
+    if (tile_id_i == '0) begin
+      $display("Cache Configuration:");
+      $display("  NumCtrl        : %0d", NumL1CtrlTile);
+      $display("  LineWidth      : %0d", L1LineWidth);
+      $display("  NumWordPerLine : %0d", NumWordPerLine);
+      $display("  NumSet         : %0d", L1NumSet);
+      $display("  AssoPerCtrl    : %0d", L1AssoPerCtrl);
+      $display("  BankFactor     : %0d", L1BankFactor);
+      $display("  PartSplit      : %0d", PartSplit);
+      $display("  BankDataWidth  : %0d", BankDataWidth);
+      $display("  NumTagBankPerCtrl : %0d", NumTagBankPerCtrl);
+      $display("  NumDataBankPerCtrl: %0d", NumDataBankPerCtrl);
+      $display("  CoalFactor     : %0d", EffectiveCoalFactor);
+      $display("  RefillDataWidth: %0d", RefillDataWidth);
+      $display("  DynamicOffset  : %0d", dynamic_offset_q);
+    end
   end
 `endif
 

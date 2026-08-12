@@ -203,7 +203,4 @@ module cachepool_peripheral
   // The hardware barrier is external and always reads `0`.
   assign hw2reg.hw_barrier.d = 0;
 
-  // write from software
-  assign barrier_participation_mask_o = reg2hw.hw_barrier_participation_mask.q;
-
 endmodule

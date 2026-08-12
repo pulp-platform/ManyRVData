@@ -57,6 +57,18 @@ l1d_tile_size ?= 256
 # L1 data cache tag width (TODO: should be calcualted)
 l1d_tag_data_width ?= 92
 
+# Use folded (skewed) data banks
+l1d_use_folded ?= 1
+
+# Fold-way group size for skewed folded banks (0 = auto: min(4, ways))
+l1d_fold_way_group ?= 0
+
+# Use hash-based way selection (required by l1d_use_folded / l1d_use_fwd_buf)
+l1d_use_hash_way ?= 1
+
+# Enable the SRAM forwarding buffer (requires l1d_use_hash_way)
+l1d_use_fwd_buf ?= 1
+
 ####################
 ##  CachePool CC  ##
 ####################
