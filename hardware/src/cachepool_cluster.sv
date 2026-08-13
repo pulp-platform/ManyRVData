@@ -1248,12 +1248,13 @@ module cachepool_cluster
   );
 
   cachepool_peripheral #(
-    .AddrWidth     ( AxiAddrWidth    ),
-    .SPMWidth      ( $clog2(L1NumSet)),
-    .NumTiles      ( NumTiles        ),
-    .reg_req_t     ( reg_csr_req_t   ),
-    .reg_rsp_t     ( reg_csr_rsp_t   ),
-    .cache_insn_t  ( cache_insn_t    )
+    .AddrWidth     ( AxiAddrWidth              ),
+    .SPMWidth      ( $clog2(L1NumSet)          ),
+    .NumTiles      ( NumTiles                  ),
+    .PrivateWidth  ( $clog2(NumL1CtrlTile) + 1 ),
+    .reg_req_t     ( reg_csr_req_t             ),
+    .reg_rsp_t     ( reg_csr_rsp_t             ),
+    .cache_insn_t  ( cache_insn_t              )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    ( clk_i                  ),
     .rst_ni                   ( rst_ni                 ),

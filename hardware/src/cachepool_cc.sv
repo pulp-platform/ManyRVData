@@ -125,6 +125,8 @@ module cachepool_cc
     // TCDM Streamer Ports
     output tcdm_req_t    [TCDMPorts-1:0] tcdm_req_o,
     input  tcdm_rsp_t    [TCDMPorts-1:0] tcdm_rsp_i,
+    // Response-side ready, reflecting real downstream capacity (Spatz ports only for now).
+    output logic         [TCDMPorts-1:0] tcdm_rsp_ready_o,
     // Core event strobes
     output core_events_t                 core_events_o,
     input  addr_t                        tcdm_addr_base_i
@@ -165,6 +167,7 @@ module cachepool_cc
   // Spatz Memory consistency signals
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
+  logic       spatz_st_rsp_done;
 
   `SNITCH_VM_TYPEDEF(AddrWidth)
 
@@ -217,6 +220,7 @@ module cachepool_cc
     .acc_pready_o          (acc_demux_snitch_ready   ),
     .acc_mem_finished_i    (spatz_mem_finished       ),
     .acc_mem_str_finished_i(spatz_mem_str_finished   ),
+    .acc_st_rsp_done_i     (spatz_st_rsp_done        ),
     .data_req_o            (snitch_dreq_d            ),
     .data_rsp_i            (snitch_drsp_d            ),
     .ptw_valid_o           (hive_req_o.ptw_valid     ),
@@ -323,6 +327,7 @@ module cachepool_cc
     .spatz_mem_rsp_ready_o   (spatz_mem_rsp_ready   ),
     .spatz_mem_finished_o    (spatz_mem_finished    ),
     .spatz_mem_str_finished_o(spatz_mem_str_finished),
+    .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
     .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
     .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
     .fpu_rnd_mode_i          (fpu_rnd_mode          ),
@@ -354,29 +359,25 @@ module cachepool_cc
       .empty_o   (spatz_mem_rsp_empty[p]),
       .usage_o   (/* Unused */          )
     );
+    assign tcdm_rsp_ready_o[p] = !spatz_mem_rsp_full[p];
+
     always_comb begin
       spatz_mem_rsp_valid[p] = !spatz_mem_rsp_empty[p];
       spatz_mem_rsp[p]       = spatz_mem_fifo[p];
-      // Queue every response to avoid lossy bypass under backpressure.
-      spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid;
+      // Only push once the handshake completes (valid & ready), else the fifo overflows silently.
+      spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid & tcdm_rsp_ready_o[p];
       spatz_mem_rsp_pop[p]   = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
     end
 
-`ifndef TARGET_SYNTHESIS
-    always_ff @(posedge clk_i) begin
-      if (rst_ni && tcdm_rsp_i[p].p_valid && spatz_mem_rsp_full[p] && !spatz_mem_rsp_pop[p]) begin
-        $error("[cachepool_cc] Spatz response FIFO overflow on port %0d", p);
-      end
-    end
-`endif
   end
 
   // ---------------------------------------------------------------------------
-  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY).
+  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY). Loads only -- stores draw
+  // user.req_id from a separate ROB id pool (spatz_vlsu.sv) and can share an id with
+  // an in-flight load, so they're excluded rather than tracked.
   //
-  // Compile-time gated by `EnableSpatzReqScoreboard`.  When the parameter is
-  // 1'b0 the entire `gen_spatz_req_scoreboard` block is elaborated empty and
-  // synthesizes to nothing.
+  // Excluded from synthesis entirely (`ifndef TARGET_SYNTHESIS`), and further
+  // gated by `EnableSpatzReqScoreboard` for simulation.
   //
   // The scoreboard is a per-port table indexed by `user.req_id` (NOT a
   // FIFO).  This is critical because:
@@ -426,6 +427,7 @@ module cachepool_cc
     logic [63:0]  issue_time;    // $time at issue (sim only)
   } spatz_sb_entry_t;
 
+`ifndef TARGET_SYNTHESIS
   if (EnableSpatzReqScoreboard) begin : gen_spatz_req_scoreboard
 
     // Module-scope arrays.  Adding the array name once in the wave window
@@ -439,14 +441,12 @@ module cachepool_cc
     // Per-cycle indices used (waveform aid)
     logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     req_idx;
     logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     rsp_idx;
-`ifndef TARGET_SYNTHESIS
     logic [SpatzSbPorts-1:0][63:0]                             last_progress_time_q;
     logic [SpatzSbPorts-1:0][63:0]                             last_warn_time_q;
     // Loop indices hoisted out of always blocks (debug-only).
     int unsigned                                               sb_log_pp;
     int unsigned                                               wdog_p;
     int unsigned                                               wdog_ii;
-`endif
 
     `FFARN(req_id_q,      req_id_d,      '0, clk_i, rst_ni)
     `FFARN(rsp_id_q,      rsp_id_d,      '0, clk_i, rst_ni)
@@ -454,8 +454,9 @@ module cachepool_cc
     `FFARN(sb_q,          sb_d,          '0, clk_i, rst_ni)
 
     for (genvar p = 0; p < SpatzSbPorts; p++) begin : gen_port
-      assign req_fire[p] = spatz_mem_req_valid[p] & spatz_mem_req_ready[p];
-      assign rsp_fire[p] = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
+      // Loads/stores use separate req_id pools (spatz_vlsu.sv); track loads only.
+      assign req_fire[p] = spatz_mem_req_valid[p] & spatz_mem_req_ready[p] & !spatz_mem_req[p].write;
+      assign rsp_fire[p] = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p] & !spatz_mem_rsp[p].write;
       // Slot index is the lower SpatzSbReqIdW bits of user.req_id.
       // (`reqid_t` is exactly that width, so this is a width match.)
       assign req_idx[p]  = SpatzSbReqIdW'(spatz_mem_req[p].user.req_id);
@@ -473,11 +474,7 @@ module cachepool_cc
           sb_d[p][req_idx[p]].write            = spatz_mem_req[p].write;
           sb_d[p][req_idx[p]].global_id        = req_id_q[p];
           sb_d[p][req_idx[p]].addr             = 32'(spatz_mem_req[p].addr);
-`ifndef TARGET_SYNTHESIS
           sb_d[p][req_idx[p]].issue_time       = 64'($time);
-`else
-          sb_d[p][req_idx[p]].issue_time       = '0;
-`endif
         end
 
         // Pop (slot indexed by response's user.req_id).
@@ -493,7 +490,6 @@ module cachepool_cc
       end
     end : gen_port
 
-`ifndef TARGET_SYNTHESIS
     // Verbose push/pop log (gated by +spatz_sb_verbose plusarg).
     // Useful for debugging the exact request/response sequence on a port.
     // Each event prints time, port, side, req_id, addr (push only).
@@ -591,8 +587,8 @@ module cachepool_cc
         end
       end
     end
-`endif
   end : gen_spatz_req_scoreboard
+`endif
 
   typedef enum integer {
     SnitchMem       = 0,
@@ -891,6 +887,8 @@ module cachepool_cc
     .tcdm_req_o   (tcdm_req_o[NumMemPortsPerSpatz]),
     .tcdm_rsp_i   (tcdm_rsp_i[NumMemPortsPerSpatz])
   );
+  // Scalar/stack port: left on its existing unconditional-accept behavior for now.
+  assign tcdm_rsp_ready_o[NumMemPortsPerSpatz] = 1'b1;
 
   // Core events for performance counters
   assign core_events_o.retired_instr     = snitch_events.retired_instr;

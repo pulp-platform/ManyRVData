@@ -132,9 +132,7 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 | File | Description |
 |------|-------------|
 | `configs.sh` | Defines configurations (`CONFIGS`) and kernel suffixes (`KERNELS`) to test, along with optional `PREFIX` and `ROOT_PATH`. |
-| `configs-ci.sh` | CI-specific variant of `configs.sh`, used by `run_ci.sh`. |
-| `run_all.sh` | Main automation script that builds each configuration, runs all kernels, saves logs, and generates summaries. |
-| `run_ci.sh` | CI entry point: sources `configs-ci.sh`, builds with `DEBUG=0`, and runs `check-ci.py` on each kernel's log. |
+| `run_all.sh` | Builds each configuration with `DEBUG=0`, runs all kernels, saves logs, generates summaries, and runs `check-ci.py` on the results. |
 | `write_results.py` | Extracts `[UART]` lines from simulator logs and appends them to per-configuration summary files. |
 | `check-ci.py` | Scans a simulation log for failures and exits non-zero if any are found (see [CI Checking](#ci-checking)). |
 

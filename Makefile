@@ -339,11 +339,11 @@ ENABLE_CACHEPOOL_TESTS ?= 1
 # Bender targets
 VSIM_BENDER += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
 
-include sim/sim.mk
-
 ######
 # SW #
 ######
+
+include sim/sim.mk
 
 #####################
 ## Data Generation  ##
@@ -423,6 +423,13 @@ sw: generate bootrom gen-data
 .PHONY: vsim
 vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 
+############
+# ShortCut #
+############
+
+# Just a shortcut to build everything
+.PHONY: all
+all: generate bootrom vsim sw
 
 ########
 # Lint #

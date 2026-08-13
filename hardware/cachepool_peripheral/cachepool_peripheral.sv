@@ -15,12 +15,15 @@ module cachepool_peripheral
   parameter int unsigned SPMWidth     = 0,
   // Number of tiles (used for flush controller granularity)
   parameter int unsigned NumTiles     = 1,
+  // Width actually used from the (fixed 4b) L1D_PRIVATE CSR field.
+  parameter int unsigned PrivateWidth = 4,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,
   /// Derived parameter *Do not override*
   parameter type addr_t = logic [AddrWidth-1:0],
-  parameter type spm_size_t = logic [SPMWidth-1:0]
+  parameter type spm_size_t = logic [SPMWidth-1:0],
+  parameter type private_sel_t = logic [PrivateWidth-1:0]
 ) (
   input  logic                       clk_i,
   input  logic                       rst_ni,
@@ -38,7 +41,7 @@ module cachepool_peripheral
   /// For cache xbar dynamic configuration
   output logic [4:0]                 dynamic_offset_o,
   output spm_size_t                  l1d_spm_size_o,
-  output logic [3:0]                 l1d_private_o,
+  output private_sel_t               l1d_private_o,
   output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
@@ -119,7 +122,7 @@ module cachepool_peripheral
   // 10b is enough for 1024 cache lines, we should not need all of them
   assign l1d_spm_size_o       = l1d_spm_size_q[SPMWidth-1:0];
 
-  assign l1d_private_o        = l1d_private_q;
+  assign l1d_private_o        = l1d_private_q[PrivateWidth-1:0];
   assign private_start_addr_o = private_start_addr_q;
 
   // Concatenate all tile-select register words into one wide vector and slice

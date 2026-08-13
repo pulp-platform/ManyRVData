@@ -420,6 +420,8 @@ module cachepool_tile
 
 
   logic  [NrTCDMPortsCores-1:0] unmerge_pready;
+  // Per-core response-side readiness, driven by each i_cachepool_cc instance.
+  logic  [NrTCDMPortsCores-1:0] tcdm_rsp_ready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
   logic  [NumL1CtrlTile-1:0] cache_amo_pready;
 
@@ -428,7 +430,7 @@ module cachepool_tile
       /***** REQ *****/
       unmerge_req[j].q       = tcdm_req[j].q;
       unmerge_req[j].q_valid = tcdm_req[j].q_valid;
-      unmerge_pready[j]      = 1'b1;
+      unmerge_pready[j]      = tcdm_rsp_ready[j];
 
       /***** RSP *****/
       tcdm_rsp[j].p       = unmerge_rsp[j].p;
@@ -1517,19 +1519,20 @@ module cachepool_tile
       .NumSpatzIPUs            (NumSpatzIPUs               ),
       .TCDMAddrWidth           (SPMAddrWidth               )
     ) i_cachepool_cc (
-      .clk_i            (clk_i                               ),
-      .rst_ni           (rst_ni                              ),
-      .testmode_i       (1'b0                                ),
-      .hart_id_i        (hart_id                             ),
-      .hive_req_o       (hive_req[i]                         ),
-      .hive_rsp_i       (hive_rsp[i]                         ),
-      .irq_i            (irq                                 ),
-      .data_req_o       (core_req[i]                         ),
-      .data_rsp_i       (core_rsp[i]                         ),
-      .tcdm_req_o       (tcdm_req_wo_user                    ),
-      .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]),
-      .core_events_o    (core_events[i]                      ),
-      .tcdm_addr_base_i (tcdm_start_address                  )
+      .clk_i            (clk_i                                      ),
+      .rst_ni           (rst_ni                                     ),
+      .testmode_i       (1'b0                                       ),
+      .hart_id_i        (hart_id                                    ),
+      .hive_req_o       (hive_req[i]                                ),
+      .hive_rsp_i       (hive_rsp[i]                                ),
+      .irq_i            (irq                                        ),
+      .data_req_o       (core_req[i]                                ),
+      .data_rsp_i       (core_rsp[i]                                ),
+      .tcdm_req_o       (tcdm_req_wo_user                           ),
+      .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]       ),
+      .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
+      .core_events_o    (core_events[i]                             ),
+      .tcdm_addr_base_i (tcdm_start_address                         )
     );
     for (genvar j = 0; j < TcdmPorts; j++) begin : gen_tcdm_user
       always_comb begin

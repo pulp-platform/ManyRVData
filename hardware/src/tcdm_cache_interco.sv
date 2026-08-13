@@ -46,7 +46,7 @@ module tcdm_cache_interco #(
   /// Number of inputs into the interconnect (Cores per Tile) (`> 0`).
   parameter int unsigned NumCores             = 32'd0,
   /// Number of remote ports added to xbar for intra-group traffic ('>= 0').
-  parameter int unsigned NumLGPort        = 32'd0,
+  parameter int unsigned NumLGPort            = 32'd0,
   /// Number of dedicated inter-group remote ports ('>= 0').
   /// When 0, the module behaves identically to the single-group configuration.
   /// Each inter-group remote port serves as both an output (requests to other groups) and an
@@ -538,8 +538,6 @@ module tcdm_cache_interco #(
 
   // Loop indices hoisted out of always blocks (debug-only).
   int unsigned dbg_xwwatch_p;
-  int unsigned dbg_sb_o;
-  int unsigned dbg_sb_c;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (rst_ni && xbar_write_watch_en) begin
@@ -564,68 +562,6 @@ module tcdm_cache_interco #(
     end
   end
 
-  // Debug scoreboard: track outstanding requests per (output-bank, input-core)
-  // and validate that each response targets a core with outstanding traffic.
-  logic        [NumOut-1:0][NumInp-1:0][31:0] outstanding_q;
-  logic signed [NumOut-1:0][NumInp-1:0][31:0] delta_d;
-  logic        [NumOut-1:0][NumInp-1:0][31:0] outstanding_n;
-  // delta_d/outstanding_n are same-cycle combinational scratch in this debug-only
-  // accumulator; blocking '=' on them is intentional (non-blocking would break the
-  // read-after-write accumulate). Declared at module scope per house rule, so the
-  // always-ff-non-blocking rule is waived rather than satisfied via in-block locals.
-  // verilog_lint: waive-start always-ff-non-blocking
-  always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) begin
-      outstanding_q <= '0;
-    end else begin
-      // Start from previous occupancy.
-      delta_d = '0;
-
-      // Account accepted requests (+1).
-      for (dbg_sb_c = 0; dbg_sb_c < NumInp; dbg_sb_c++) begin
-        if (core_req_valid[dbg_sb_c] && core_req_ready[dbg_sb_c]) begin
-          delta_d[core_req_sel[dbg_sb_c]][dbg_sb_c] =
-              delta_d[core_req_sel[dbg_sb_c]][dbg_sb_c] + 32'sd1;
-        end
-      end
-
-      // Account accepted responses (-1), allowing same-cycle req/rsp for same
-      // (output, core) pair without false mismatch reports.
-      for (dbg_sb_o = 0; dbg_sb_o < NumOut; dbg_sb_o++) begin
-        if (mem_rsp_valid[dbg_sb_o] && mem_rsp_ready[dbg_sb_o]) begin
-          if (mem_rsp_sel[dbg_sb_o] >= (NumInp)) begin
-            $error("[tcdm_cache_interco] Invalid mem_rsp_sel=%0d on output %0d",
-                   mem_rsp_sel[dbg_sb_o], dbg_sb_o);
-          end else if (($signed(outstanding_q[dbg_sb_o][mem_rsp_sel[dbg_sb_o]]) +
-                        delta_d[dbg_sb_o][mem_rsp_sel[dbg_sb_o]]) == 0) begin
-            $error({"[tcdm_cache_interco] Response without outstanding req ",
-                    "on output %0d -> core %0d"},
-                   dbg_sb_o, mem_rsp_sel[dbg_sb_o]);
-          end else begin
-            delta_d[dbg_sb_o][mem_rsp_sel[dbg_sb_o]] =
-                delta_d[dbg_sb_o][mem_rsp_sel[dbg_sb_o]] - 32'sd1;
-          end
-        end
-      end
-
-      // Commit updated outstanding counters.
-      for (dbg_sb_o = 0; dbg_sb_o < NumOut; dbg_sb_o++) begin
-        for (dbg_sb_c = 0; dbg_sb_c < NumInp; dbg_sb_c++) begin
-          outstanding_n[dbg_sb_o][dbg_sb_c] =
-              outstanding_q[dbg_sb_o][dbg_sb_c] + delta_d[dbg_sb_o][dbg_sb_c];
-          if (outstanding_n[dbg_sb_o][dbg_sb_c][31]) begin
-            // Should never go negative.
-            $error("[tcdm_cache_interco] Outstanding underflow on output %0d core %0d",
-                   dbg_sb_o, dbg_sb_c);
-            outstanding_q[dbg_sb_o][dbg_sb_c] <= '0;
-          end else begin
-            outstanding_q[dbg_sb_o][dbg_sb_c] <= outstanding_n[dbg_sb_o][dbg_sb_c];
-          end
-        end
-      end
-    end
-  end
-  // verilog_lint: waive-stop always-ff-non-blocking
 `endif
 
   // -------------------------------------------------------------------------

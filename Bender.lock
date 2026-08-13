@@ -109,7 +109,7 @@ packages:
     - obi
     - register_interface
   insitu-cache:
-    revision: fbabd6a06fd801c960078517ad47f7994130b944
+    revision: f1cbe54dca0989f025b0450e85c42faf2bf5cbf1
     version: null
     source:
       Git: https://github.com/pulp-platform/Insitu-Cache.git
@@ -150,7 +150,7 @@ packages:
     dependencies:
     - tech_cells_generic
   spatz:
-    revision: 3a6e6bed2a774a449997e426d893d15f84420518
+    revision: f6ea19fb26c8bf992ae51a3e4acd3f2a36c6659f
     version: null
     source:
       Git: https://github.com/pulp-platform/spatz.git

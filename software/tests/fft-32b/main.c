@@ -45,7 +45,7 @@ static inline int fp_check(const float a, const float b) {
 // 1024 -> 64
 
 int main() {
-  const int measure_iter = 2;
+  const int measure_iter = 3;
 
   // twiddle layout: [re_p1, im_p1, re_p2, im_p2]
   const uint32_t num_cores = snrt_cluster_core_num();
