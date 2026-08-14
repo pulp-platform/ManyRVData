@@ -45,7 +45,7 @@ static inline int fp_check(const float a, const float b) {
 // 1024 -> 64
 
 int main() {
-  const int measure_iter = 2;
+  const int measure_iter = 3;
 
   // twiddle layout: [re_p1, im_p1, re_p2, im_p2]
   const uint32_t num_cores = snrt_cluster_core_num();
@@ -66,14 +66,9 @@ int main() {
   uint32_t timer = (uint32_t)-1;
   uint32_t timer_tmp, timer_iter1;
 
-  if (cid == 0) {
-    // Set xbar policy
-    // Currently set to fully interleave (log2(512/8))
-    l1d_xbar_config(6);
-  }
-
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
+  // Set xbar policy
+  // Currently set to fully interleave (log2(512/8))
+  l1d_xbar_config(6);
 
   // Calculate pointers for the second butterfly onwards
   float *src_p2 = samples_dram + cid * NFFTpc;
@@ -143,11 +138,15 @@ int main() {
         timer_iter1 = timer;
 
       stop_kernel();
+    }
 
+    // All cores flush before first-iteration verification
+    if ((iter == 0) && CHECK) {
+      l1d_cluster_flush();
+    }
+
+    if (cid == 0) {
       if ((iter == 0) && CHECK) {
-        l1d_flush();
-        l1d_wait();
-
         // Verify the real part
         for (unsigned int i = 0; i < NFFT; i++) {
           if (fp_check(out[i], gold_out_dram[2 * i])) {

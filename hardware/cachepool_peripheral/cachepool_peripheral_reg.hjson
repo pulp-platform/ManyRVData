@@ -4,8 +4,8 @@
 // Licensed under Solderpad Hardware License, Version 0.51, see LICENSE for details.
 {
     param_list: [
-        { name: "NumPerfCounters",
-        desc: "Number of performance counters",
+        { name: "NumTileSelRegs",
+        desc: "Number of 32-bit tile-select registers. Default 2 covers up to 64 tiles (16 groups x 4 tiles).",
         type: "int",
         default: "2"
         },
@@ -17,59 +17,6 @@
     ]
     regwidth: 32,
     registers: [
-    {
-        multireg: {
-            name: "HART_SELECT",
-            desc: '''Select from which hart in the cluster, starting from `0`,
-                     the event should be counted. For each performance counter
-                     the cores can be selected individually. If a hart greater
-                     than the clusters total hart size is selected the selection
-                     will wrap and the hart corresponding to `hart_select % total_harts_in_cluster`
-                     will be selected.'''
-            swaccess: "rw",
-            hwaccess: "hro",
-            count: "NumPerfCounters",
-            cname: "hart_select",
-            compact: "false",
-            fields: [{
-                bits: "9:0",
-                name: "HART_SELECT",
-                desc: "Select source of per-hart performance counter"
-            }]
-        }
-    },
-    {
-        name: "CL_CLINT_SET",
-        desc: '''
-        Set bits in the cluster-local CLINT. Writing a 1 at location i sets the cluster-local interrupt
-        of hart i, where i is relative to the first hart in the cluster, ignoring the cluster base hart ID.
-        '''
-        hwext: "true",
-        hwqe: "true",
-        swaccess: "wo",
-        hwaccess: "hro",
-          fields: [{
-              bits: "31:0",
-              name: "CL_CLINT_SET",
-              desc: "Set cluster-local interrupt of hart i"
-          }]
-    },
-    {
-        name: "CL_CLINT_CLEAR",
-        desc: '''
-        Clear bits in the cluster-local CLINT. Writing a 1 at location i clears the cluster-local interrupt
-        of hart i, where i is relative to the first hart in the cluster, ignoring the cluster base hart ID.
-        '''
-        hwext: "true",
-        hwqe: "true",
-        swaccess: "wo",
-        hwaccess: "hro",
-          fields: [{
-              bits: "31:0",
-              name: "CL_CLINT_CLEAR",
-              desc: "Clear cluster-local interrupt of hart i"
-          }]
-    },
     {
         name: "HW_BARRIER",
         desc: '''Hardware barrier register. Loads to this register will block until all cores have
@@ -173,18 +120,43 @@
         }]
     },
     {
-        name: "CFG_L1D_TILE_SEL",
-        desc: '''Controls Tiles to be flushed'''
-        // hwext: "true",
-        // hwqe: "true",
-        swaccess: "rw",
-        hwaccess: "hro",
-        resval: "0",
-        fields: [{
-            bits: "31:0",
-            name: "TILE",
-            desc: "Select the tile to be flush, only used in private partition flush."
-        }]
+        multireg: {
+            name: "CFG_L1D_TILE_SEL",
+            desc: '''One-hot tile selection mask for private-partition flush.
+                     Each 32-bit register covers 32 tiles: register 0 → tiles 0-31,
+                     register 1 → tiles 32-63.  Only used when CFG_L1D_INSN == 2'b00.'''
+            swaccess: "rw",
+            hwaccess: "hro",
+            count: "NumTileSelRegs",
+            cname: "cfg_l1d_tile_sel",
+            compact: "false",
+            resval: "0",
+            fields: [{
+                bits: "31:0",
+                name: "TILE",
+                desc: "Tile select bits for this 32-tile bank."
+            }]
+        }
+    },
+    {
+        multireg: {
+            name: "HW_BARRIER_PARTICIPATION_MASK",
+            desc: '''Tile participation mask for the cluster-level hardware barrier.
+                     Each 32-bit register covers 32 tiles: register 0 -> tiles 0-31,
+                     register 1 -> tiles 32-63. A tile whose bit is clear is excluded
+                     from the next hardware barrier round.'''
+            swaccess: "rw",
+            hwaccess: "hro",
+            count: "NumTileSelRegs",
+            cname: "hw_barrier_participation_mask",
+            compact: "false",
+            resval: "0xFFFFFFFF",
+            fields: [{
+                bits: "31:0",
+                name: "TILE",
+                desc: "Tile participation bits for this 32-tile bank."
+            }]
+        }
     },
     {
         name: "L1D_SPM_COMMIT",
@@ -273,19 +245,6 @@
             bits: "0",
             name: "COMMIT",
             desc: "Commit the xbar offset configurations."
-        }]
-    },
-        {
-        name: "HW_BARRIER_PARTICIPATION_MASK",
-        desc: '''Hardware barrier participation mask register. This register determines the tiles that are
-        implicated in a barrier. Allows partial barrier implementation.'''
-        swaccess: "rw",
-        hwaccess: "hro",
-        resval: "15",
-        fields: [{
-            bits: "3:0",
-            name: "HW_BARRIER_PARTICIPATION_MASK",
-            desc: "Hardware barrier participation mask register."
         }]
     }
   ]

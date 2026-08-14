@@ -23,13 +23,21 @@ struct snrt_allocator_inst {
 };
 struct snrt_allocator {
     struct snrt_allocator_inst l1;
-    struct snrt_allocator_inst l3;
 };
+
+// DRAM heap block header — padded to exactly one cacheline (64 bytes) so that
+// every header and every payload starts on a cacheline boundary.
+#define SNRT_CACHELINE_SIZE 64
+typedef struct snrt_alloc_block {
+    uint32_t size;                  // payload size in bytes (multiple of SNRT_CACHELINE_SIZE)
+    uint32_t free;                  // 1 = free, 0 = allocated
+    struct snrt_alloc_block *next;  // next block in list (NULL = end of heap)
+    uint8_t  _pad[52];              // pad to SNRT_CACHELINE_SIZE (64 - 12 = 52 bytes)
+} snrt_alloc_block_t;
 
 // This struct is placed at the end of each clusters TCDM
 struct snrt_team_root {
     struct snrt_team base;
-    const void *bootdata;
     uint32_t global_core_base_hartid;
     uint32_t global_core_num;
     uint32_t cluster_idx;
@@ -41,6 +49,6 @@ struct snrt_team_root {
     struct snrt_allocator allocator;
     struct snrt_barrier cluster_barrier;
     uint32_t barrier_reg_ptr;
-    uint32_t barrier_participation_mask_reg_ptr;   //SOCMIPO 
+    uint32_t barrier_participation_mask_reg_ptr;
     struct snrt_peripherals peripherals;
 };

@@ -49,12 +49,10 @@ int main() {
 
   uint32_t offset = 31 - __builtin_clz(dim * sizeof(int));
 
-  if (cid == 0) {
-    // Set xbar policy
-    l1d_init(0);
-    l1d_xbar_config(offset);
-    // Initialize the cache
+  // Set xbar policy
+  l1d_xbar_config(offset);
 
+  if (cid == 0) {
     printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
 

@@ -1,3 +1,7 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 set PROJECT   cachepool_cluster_wrapper
 set TIMESTAMP [exec date +%Y%m%d_%H%M%S]
 
@@ -12,6 +16,11 @@ set_option allow_module_override yes
 set_option designread_disable_flatten no
 set_option nopreserve yes
 set_option top cachepool_cluster_wrapper
+# Large configs (16-group/64-tile) produce AXI ID widths up to 12 bits.
+# axi_id_serialize and axi_demux_simple both create 2^IdWidth structures;
+# raise synthesis thresholds so SpyGlass can elaborate them.
+set_option mthresh 5000
+set_option sgsyn_loop_limit 5000
 
 # Do not elaborate some problematic FPU modules
 set_option stop fpnew_sdotp_multi

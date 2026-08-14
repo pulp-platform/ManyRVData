@@ -35,8 +35,7 @@ void irq_m_cluster(uint32_t core_idx);
 //================================================================================
 
 void snrt_int_init(struct snrt_team_root *team) {
-    // Put the clint address in tls for faster access
-    clint_p = team->peripherals.cl_clint;
+    (void)team;
 }
 
 /**

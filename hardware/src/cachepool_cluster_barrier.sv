@@ -6,144 +6,97 @@
 
 `include "common_cells/registers.svh"
 
-/// Last level of barrier in CachePool
-/// Can perform partial/full barrier based on tile numbers
+/// Cluster-level barrier controller.
+/// Collects per-tile barrier signals (direct wires, no AXI/NoC) and broadcasts
+/// a done signal when all participating tiles have reached the barrier.
+/// Supports partial barriers via `barrier_mask_i`.
 module cachepool_cluster_barrier
-  import snitch_pkg::*;
-  import cachepool_peripheral_reg_pkg::*;
 #(
-  parameter int unsigned AddrWidth  = 0,
-  parameter int          NrPorts    = 0,
-  parameter type axi_req_t      = logic,
-  parameter type axi_rsp_t      = logic,
-  // Used to generate response
-  parameter type axi_id_t       = logic,
-  parameter type axi_user_t     = logic,
-  /// Derived parameter *Do not override*
-  parameter type addr_t         = logic [AddrWidth-1:0]
+  parameter int unsigned NrTiles = 0,
+  parameter int unsigned WaitCyc = 2
 ) (
-  input  logic                       clk_i,
-  input  logic                       rst_ni,
-  // AXI input
-  input  axi_req_t    [NrPorts-1:0]  axi_slv_req_i,
-  output axi_rsp_t    [NrPorts-1:0]  axi_slv_rsp_o,
-  // AXI output
-  output axi_req_t    [NrPorts-1:0]  axi_mst_req_o,
-  input  axi_rsp_t    [NrPorts-1:0]  axi_mst_rsp_i,
-
-  input  logic        [NrPorts-1:0]  barrier_i, // participation barrier
-  input  addr_t                      cluster_periph_start_address_i
+  input  logic                   clk_i,
+  input  logic                   rst_ni,
+  // Per-tile barrier request (active-high, held until barrier completes)
+  input  logic [NrTiles-1:0]     tile_barrier_i,
+  // Broadcast barrier completion to all tiles
+  output logic                   barrier_done_o,
+  // Which tiles participate in the barrier (active-high mask).
+  // Active-low bits mark tiles that are excluded from synchronization.
+  input  logic [NrTiles-1:0]     barrier_mask_i
 );
 
   typedef enum logic [1:0] {
     Idle,
     Wait,
-    Take,
-    Global
+    Done
   } barrier_state_e;
 
-  // FSM State of the barrier
-  barrier_state_e [NrPorts-1:0] state_d,   state_q;
-  // the tiles participate in global barrier
+  barrier_state_e state_d, state_q;
 
-  // (SOCMIP) PARTICIPATION MASK!
-  // (SOCMIP) map to hw then control in sw
-  logic           [NrPorts-1:0] barrier_d, barrier_q;
+  // Latch the mask when barrier starts, so it stays stable during the sequence
+  logic [NrTiles-1:0] mask_d, mask_q;
 
-  addr_t barrier_participation_mask_addr;
-  assign barrier_participation_mask_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_OFFSET;
+  // Exit counter for one iteration of barrier
+  logic [1:0] cnt_d, cnt_q;
 
-  // Infomation stored for response generation
-  typedef struct packed {
-    axi_id_t    id;
-    axi_user_t  user;
-  } info_t;
-
-  info_t [NrPorts-1:0] info_d, info_q;
-
-  addr_t barrier_addr;
-  assign barrier_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET;
-
-  logic [NrPorts-1:0] is_barrier;
-  logic take_barrier;
-
-  // xnor between the is_barrier and the barrier needs to be taken
-  assign take_barrier  = ~(|(barrier_q ^ is_barrier));
+  // Masked barrier: only participating tiles matter
+  logic all_arrived;
+  assign all_arrived = (tile_barrier_i & mask_q) == mask_q;
 
   always_comb begin
-    state_d     = state_q;
-    barrier_d   = barrier_q;
-    info_d      = info_q;
-    is_barrier  = '0;
+    state_d        = state_q;
+    mask_d         = mask_q;
+    cnt_d          = cnt_q;
+    barrier_done_o = 1'b0;
 
-    // Pass through the signals by default
-    axi_mst_req_o = axi_slv_req_i;
-    axi_slv_rsp_o = axi_mst_rsp_i;
-
-    // Maximum barrier counter may only be configured in Idle state
-    barrier_d = (|is_barrier == '0) ? barrier_i : barrier_q;
-
-    for (int i = 0; i < NrPorts; i++) begin
-
-      case (state_q[i])
-        Idle: begin
-          if (axi_slv_req_i[i].ar_valid & axi_slv_req_i[i].ar.addr == barrier_addr) begin
-            // We have received a barrier request
-            // Do not forward it further
-            axi_mst_req_o[i].ar_valid = 0;
-            // Accept the request
-            axi_slv_rsp_o[i].ar_ready = 1;
-            // Record the info need for response
-            info_d[i] = '{
-              id:   axi_slv_req_i[i].ar.id,
-              user: axi_slv_req_i[i].ar.user
-            };
-            // Switch to next state
-            if (barrier_q[i]) begin
-              // Wait for global barrier
-              state_d[i] = Wait;
-            end else begin
-              // Local tile barrier, no need to sync
-              state_d[i] = Take;
-            end
+    case (state_q)
+      Idle: begin
+        cnt_d = '0;
+        // When any participating tile asserts barrier, latch the mask and wait.
+        // Use barrier_mask_i directly here since mask_q may hold the previous mask.
+        if (|(tile_barrier_i & barrier_mask_i)) begin
+          mask_d  = barrier_mask_i;
+          if ((tile_barrier_i & barrier_mask_i) == barrier_mask_i) begin
+            state_d = Done;
+          end else begin
+            state_d = Wait;
           end
         end
+      end
 
-        Wait: begin
-          is_barrier[i] = 1;
-
-          if (take_barrier) begin
-            // Means all tile participate in the barrier have reach the point
-            state_d[i] = Take;
-          end
+      Wait: begin
+        // Wait until all participating tiles have reached the barrier
+        cnt_d = '0;
+        if (all_arrived) begin
+          state_d = Done;
         end
+      end
 
-        Take: begin
-          if (!axi_mst_rsp_i[i].r_valid) begin
-            // Make sure no r packet is in transition
-            axi_slv_rsp_o[i].r        = '0;
-            axi_slv_rsp_o[i].r_valid  = 1'b1;
-            axi_slv_rsp_o[i].r.last   = 1'b1;
-            axi_slv_rsp_o[i].r.id     = info_q[i].id;
-            axi_slv_rsp_o[i].r.user   = info_q[i].user;
-
-            if (axi_slv_req_i[i].r_ready) begin
-              // response accepted, switch back state
-              state_d[i] = Idle;
-              info_d[i]  = '0;
-            end
-          end
+      Done: begin
+        // Assert barrier_done for one cycle, then return to Idle.
+        // Tiles deassert barrier_o the cycle after seeing barrier_done_i,
+        // and no new barrier can start until cores complete the Take sequence.
+        if (cnt_q == '0) begin
+          // We assert done flag in first cycle
+          // We need to wait all tiles receive the propogated signal
+          // And it will travel back => need to wait 2 cycles
+          barrier_done_o = 1'b1;
+          cnt_d = cnt_q + 1;
+        end else if (cnt_q < WaitCyc) begin
+          cnt_d = cnt_q + 1;
+        end else begin
+          // We have finished counting, let's move back for next barrier
+          state_d = Idle;
         end
+      end
 
-        default: state_d[i] = Idle;
-      endcase
-    end
+      default: state_d = Idle;
+    endcase
   end
 
-  for (genvar i = 0; i < NrPorts; i++) begin : gen_ff
-    `FFARN(state_q[i],    state_d[i],   Idle, clk_i, rst_ni)
-    `FFARN(barrier_q[i],  barrier_d[i], '0,   clk_i, rst_ni)
-    `FFARN(info_q[i],     info_d[i],    '0,   clk_i, rst_ni)
-  end
+  `FF(state_q, state_d, Idle, clk_i, rst_ni)
+  `FF(mask_q,  mask_d,  '0,   clk_i, rst_ni)
+  `FF(cnt_q,   cnt_d,   '0,   clk_i, rst_ni)
 
 endmodule

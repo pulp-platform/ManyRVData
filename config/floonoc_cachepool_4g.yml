@@ -1,0 +1,96 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+name: cachepool
+description: "CachePool AXI NoC"
+network_type: "axi"
+
+routing:
+  route_algo: "SRC"
+  use_id_table: true
+
+protocols:
+  - name: "wide_in"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 7
+    user_width: 21
+  - name: "wide_out"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 6
+    user_width: 21
+
+endpoints:
+  - name: "group"
+    array: [2, 2]
+    mgr_port_protocol:
+      - "wide_in"
+  # HBM0 also handles peripheral traffic (demuxed at cluster output)
+  - name: "hbm0"
+    addr_range:
+      - start: 0x0000_0000
+        end: 0x7FFF_FFFF
+      - start: 0x8000_0000
+        end: 0x8FFF_FFFF
+      - start: 0xC000_0000
+        end: 0xFFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm1"
+    addr_range:
+      - start: 0x9000_0000
+        end: 0x9FFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm2"
+    addr_range:
+      - start: 0xA000_0000
+        end: 0xAFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm3"
+    addr_range:
+      - start: 0xB000_0000
+        end: 0xBFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+
+routers:
+  - name: "group_router"
+    array: [2, 2]
+    degree: 5
+
+connections:
+  - src: "group"
+    dst: "group_router"
+    src_range:
+    - [0, 1]
+    - [0, 1]
+    dst_range:
+    - [0, 1]
+    - [0, 1]
+    dst_dir: "Eject"
+  # HBM West (hbm0 at [0,0], hbm1 at [0,1])
+  - src: "hbm0"
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "West"
+  - src: "hbm1"
+    dst: "group_router"
+    dst_idx: [0, 1]
+    dst_dir: "West"
+  # HBM East (hbm2 at [1,0], hbm3 at [1,1])
+  - src: "hbm2"
+    dst: "group_router"
+    dst_idx: [1, 0]
+    dst_dir: "East"
+  - src: "hbm3"
+    dst: "group_router"
+    dst_idx: [1, 1]
+    dst_dir: "East"

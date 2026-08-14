@@ -23,12 +23,6 @@ module cachepool_cc
     parameter int                          unsigned        DataWidth                = 0,
     /// User width of the buses.
     parameter int                          unsigned        UserWidth                = 0,
-    /// Data width of the AXI DMA buses.
-    parameter int                          unsigned        DMADataWidth             = 0,
-    /// Id width of the AXI DMA bus.
-    parameter int                          unsigned        DMAIdWidth               = 0,
-    parameter int                          unsigned        DMAAxiReqFifoDepth       = 0,
-    parameter int                          unsigned        DMAReqFifoDepth          = 0,
 
     parameter int                          unsigned        SpmStackDepth            = 512,
     /// Data port request type.
@@ -75,7 +69,6 @@ module cachepool_cc
     parameter bit                                          XF16ALT                  = 0,
     parameter bit                                          XF8ALT                   = 0,
     /// Enable Snitch DMA
-    parameter bit                                          Xdma                     = 0,
     parameter int                          unsigned        NumIntOutstandingLoads   = 0,
     parameter int                          unsigned        NumIntOutstandingMem     = 0,
     parameter int                          unsigned        NumSpatzOutstandingLoads = 0,
@@ -132,6 +125,8 @@ module cachepool_cc
     // TCDM Streamer Ports
     output tcdm_req_t    [TCDMPorts-1:0] tcdm_req_o,
     input  tcdm_rsp_t    [TCDMPorts-1:0] tcdm_rsp_i,
+    // Response-side ready, reflecting real downstream capacity (Spatz ports only for now).
+    output logic         [TCDMPorts-1:0] tcdm_rsp_ready_o,
     // Core event strobes
     output core_events_t                 core_events_o,
     input  addr_t                        tcdm_addr_base_i
@@ -172,6 +167,7 @@ module cachepool_cc
   // Spatz Memory consistency signals
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
+  logic       spatz_st_rsp_done;
 
   `SNITCH_VM_TYPEDEF(AddrWidth)
 
@@ -193,7 +189,7 @@ module cachepool_cc
     .VMSupport              (1'b0                  ),
     .RVE                    (RVE                   ),
     .FP_EN                  (FPEn                  ),
-    .Xdma                   (Xdma                  ),
+    .Xdma                   (1'b0                  ),
     .RVF                    (RVF                   ),
     .RVD                    (RVD                   ),
     .RVV                    (RVV                   ),
@@ -224,6 +220,7 @@ module cachepool_cc
     .acc_pready_o          (acc_demux_snitch_ready   ),
     .acc_mem_finished_i    (spatz_mem_finished       ),
     .acc_mem_str_finished_i(spatz_mem_str_finished   ),
+    .acc_st_rsp_done_i     (spatz_st_rsp_done        ),
     .data_req_o            (snitch_dreq_d            ),
     .data_rsp_i            (snitch_drsp_d            ),
     .ptw_valid_o           (hive_req_o.ptw_valid     ),
@@ -330,6 +327,7 @@ module cachepool_cc
     .spatz_mem_rsp_ready_o   (spatz_mem_rsp_ready   ),
     .spatz_mem_finished_o    (spatz_mem_finished    ),
     .spatz_mem_str_finished_o(spatz_mem_str_finished),
+    .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
     .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
     .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
     .fpu_rnd_mode_i          (fpu_rnd_mode          ),
@@ -361,29 +359,25 @@ module cachepool_cc
       .empty_o   (spatz_mem_rsp_empty[p]),
       .usage_o   (/* Unused */          )
     );
+    assign tcdm_rsp_ready_o[p] = !spatz_mem_rsp_full[p];
+
     always_comb begin
       spatz_mem_rsp_valid[p] = !spatz_mem_rsp_empty[p];
       spatz_mem_rsp[p]       = spatz_mem_fifo[p];
-      // Queue every response to avoid lossy bypass under backpressure.
-      spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid;
+      // Only push once the handshake completes (valid & ready), else the fifo overflows silently.
+      spatz_mem_rsp_push[p]  = tcdm_rsp_i[p].p_valid & tcdm_rsp_ready_o[p];
       spatz_mem_rsp_pop[p]   = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
     end
 
-`ifndef TARGET_SYNTHESIS
-    always_ff @(posedge clk_i) begin
-      if (rst_ni && tcdm_rsp_i[p].p_valid && spatz_mem_rsp_full[p] && !spatz_mem_rsp_pop[p]) begin
-        $error("[cachepool_cc] Spatz response FIFO overflow on port %0d", p);
-      end
-    end
-`endif
   end
 
   // ---------------------------------------------------------------------------
-  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY).
+  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY). Loads only -- stores draw
+  // user.req_id from a separate ROB id pool (spatz_vlsu.sv) and can share an id with
+  // an in-flight load, so they're excluded rather than tracked.
   //
-  // Compile-time gated by `EnableSpatzReqScoreboard`.  When the parameter is
-  // 1'b0 the entire `gen_spatz_req_scoreboard` block is elaborated empty and
-  // synthesizes to nothing.
+  // Excluded from synthesis entirely (`ifndef TARGET_SYNTHESIS`), and further
+  // gated by `EnableSpatzReqScoreboard` for simulation.
   //
   // The scoreboard is a per-port table indexed by `user.req_id` (NOT a
   // FIFO).  This is critical because:
@@ -433,6 +427,7 @@ module cachepool_cc
     logic [63:0]  issue_time;    // $time at issue (sim only)
   } spatz_sb_entry_t;
 
+`ifndef TARGET_SYNTHESIS
   if (EnableSpatzReqScoreboard) begin : gen_spatz_req_scoreboard
 
     // Module-scope arrays.  Adding the array name once in the wave window
@@ -446,14 +441,12 @@ module cachepool_cc
     // Per-cycle indices used (waveform aid)
     logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     req_idx;
     logic            [SpatzSbPorts-1:0][SpatzSbReqIdW-1:0]     rsp_idx;
-`ifndef TARGET_SYNTHESIS
     logic [SpatzSbPorts-1:0][63:0]                             last_progress_time_q;
     logic [SpatzSbPorts-1:0][63:0]                             last_warn_time_q;
     // Loop indices hoisted out of always blocks (debug-only).
     int unsigned                                               sb_log_pp;
     int unsigned                                               wdog_p;
     int unsigned                                               wdog_ii;
-`endif
 
     `FFARN(req_id_q,      req_id_d,      '0, clk_i, rst_ni)
     `FFARN(rsp_id_q,      rsp_id_d,      '0, clk_i, rst_ni)
@@ -461,8 +454,9 @@ module cachepool_cc
     `FFARN(sb_q,          sb_d,          '0, clk_i, rst_ni)
 
     for (genvar p = 0; p < SpatzSbPorts; p++) begin : gen_port
-      assign req_fire[p] = spatz_mem_req_valid[p] & spatz_mem_req_ready[p];
-      assign rsp_fire[p] = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p];
+      // Loads/stores use separate req_id pools (spatz_vlsu.sv); track loads only.
+      assign req_fire[p] = spatz_mem_req_valid[p] & spatz_mem_req_ready[p] & !spatz_mem_req[p].write;
+      assign rsp_fire[p] = spatz_mem_rsp_valid[p] & spatz_mem_rsp_ready[p] & !spatz_mem_rsp[p].write;
       // Slot index is the lower SpatzSbReqIdW bits of user.req_id.
       // (`reqid_t` is exactly that width, so this is a width match.)
       assign req_idx[p]  = SpatzSbReqIdW'(spatz_mem_req[p].user.req_id);
@@ -480,11 +474,7 @@ module cachepool_cc
           sb_d[p][req_idx[p]].write            = spatz_mem_req[p].write;
           sb_d[p][req_idx[p]].global_id        = req_id_q[p];
           sb_d[p][req_idx[p]].addr             = 32'(spatz_mem_req[p].addr);
-`ifndef TARGET_SYNTHESIS
           sb_d[p][req_idx[p]].issue_time       = 64'($time);
-`else
-          sb_d[p][req_idx[p]].issue_time       = '0;
-`endif
         end
 
         // Pop (slot indexed by response's user.req_id).
@@ -500,7 +490,6 @@ module cachepool_cc
       end
     end : gen_port
 
-`ifndef TARGET_SYNTHESIS
     // Verbose push/pop log (gated by +spatz_sb_verbose plusarg).
     // Useful for debugging the exact request/response sequence on a port.
     // Each event prints time, port, side, req_id, addr (push only).
@@ -598,8 +587,8 @@ module cachepool_cc
         end
       end
     end
-`endif
   end : gen_spatz_req_scoreboard
+`endif
 
   typedef enum integer {
     SnitchMem       = 0,
@@ -898,6 +887,8 @@ module cachepool_cc
     .tcdm_req_o   (tcdm_req_o[NumMemPortsPerSpatz]),
     .tcdm_rsp_i   (tcdm_rsp_i[NumMemPortsPerSpatz])
   );
+  // Scalar/stack port: left on its existing unconditional-accept behavior for now.
+  assign tcdm_rsp_ready_o[NumMemPortsPerSpatz] = 1'b1;
 
   // Core events for performance counters
   assign core_events_o.retired_instr     = snitch_events.retired_instr;
@@ -921,9 +912,6 @@ module cachepool_cc
   `ASSERT(stack_overflow, mem_req_valid[TotStack] |-> (&stack_addr_check == 1'b1), clk_i, !rst_ni,
             "Core ID bits cannot be used for stack")
 
-  int spatz_f;
-  string spatz_f_name;
-
   initial begin
     // We need to schedule the assignment into a safe region, otherwise
     // `hart_id_i` won't have a value assigned at the beginning of the first
@@ -931,13 +919,9 @@ module cachepool_cc
     /* verilator lint_off STMTDLY */
     @(posedge clk_i);
     /* verilator lint_on STMTDLY */
-    $system("mkdir sim/bin/logs -p");
-    $sformat(fn, "sim/bin/logs/trace_hart_%05x.dasm", hart_id_i);
+    $sformat(fn, "sim/bin/logs/core/trace_hart_%05x.dasm", hart_id_i);
     f = $fopen(fn, "w");
     $display("[Tracer] Logging Hart %d to %s", hart_id_i, fn);
-
-    $sformat(spatz_f_name, "sim/bin/logs/monitor_spatz_%05x.txt", hart_id_i);
-    spatz_f = $fopen(spatz_f_name, "w");
   end
 
   // verilog_lint: waive-start always-ff-non-blocking
@@ -1019,167 +1003,7 @@ module cachepool_cc
   end
 
   final begin
-    `ifndef TARGET_SYNTHESIS
-    /***** Controller Report *****/
-    automatic real ctrl_vlsu_insn       = i_spatz.i_controller.ctrl_vlsu_insn_q;
-    automatic real ctrl_vlsu_stall      = i_spatz.i_controller.ctrl_vlsu_stall_q;
-    automatic real ctrl_vlsu_active     = i_spatz.i_controller.ctrl_vlsu_active_q;
-    automatic real ctrl_vlsu_wvalid     = i_spatz.i_controller.ctrl_wvalid_cnt_q[1];
-    automatic real ctrl_vlsu_wtrans     = i_spatz.i_controller.ctrl_wtrans_cnt_q[1];
-    automatic real ctrl_vlsu_wstall     = ctrl_vlsu_wvalid - ctrl_vlsu_wtrans;
-
-    automatic real ctrl_vfu_insn        = i_spatz.i_controller.ctrl_vfu_insn_q;
-    automatic real ctrl_vfu_stall       = i_spatz.i_controller.ctrl_vfu_stall_q;
-    automatic real ctrl_vfu_active      = i_spatz.i_controller.ctrl_vfu_active_q;
-    automatic real ctrl_vfu_wvalid      = i_spatz.i_controller.ctrl_wvalid_cnt_q[0];
-    automatic real ctrl_vfu_wtrans      = i_spatz.i_controller.ctrl_wtrans_cnt_q[0];
-    automatic real ctrl_vfu_wstall      = ctrl_vfu_wvalid - ctrl_vfu_wtrans;
-
-    automatic real ctrl_vsldu_insn      = i_spatz.i_controller.ctrl_vsldu_insn_q;
-    automatic real ctrl_vsldu_stall     = i_spatz.i_controller.ctrl_vsldu_stall_q;
-    automatic real ctrl_vsldu_active    = i_spatz.i_controller.ctrl_vsldu_active_q;
-    automatic real ctrl_vsldu_wvalid    = i_spatz.i_controller.ctrl_wvalid_cnt_q[2];
-    automatic real ctrl_vsldu_wtrans    = i_spatz.i_controller.ctrl_wtrans_cnt_q[2];
-    automatic real ctrl_vsldu_wstall    = ctrl_vsldu_wvalid - ctrl_vsldu_wtrans;
-
-
-    /***** VLSU Report *****/
-    automatic real vlsu_wvalid          = i_spatz.i_vlsu.vrf_wvalid_cnt_q;
-    automatic real vlsu_wtrans          = i_spatz.i_vlsu.vrf_wtrans_cnt_q;
-    automatic real vlsu_vrf_w_util      = i_spatz.i_vlsu.vrf_wvalid_cnt_q == 0 ?
-                                          0 : 100 * i_spatz.i_vlsu.vrf_wtrans_cnt_q / i_spatz.i_vlsu.vrf_wvalid_cnt_q;
-    automatic real vlsu_vrf_w_avg_cyc   = i_spatz.i_vlsu.vrf_wtrans_cnt_q == 0 ?
-                                          0 : i_spatz.i_vlsu.vrf_wvalid_cnt_q / i_spatz.i_vlsu.vrf_wtrans_cnt_q;
-
-    automatic real vlsu_mem_cnt_tot     = i_spatz.i_vlsu.mem_valid_cnt_q;
-    automatic real vlsu_mem_tran_tot    = i_spatz.i_vlsu.mem_trans_cnt_q;
-    automatic real vlsu_mem_util        = vlsu_mem_cnt_tot == 0 ?
-                                          0 : 100 * vlsu_mem_tran_tot / vlsu_mem_cnt_tot;
-    automatic real vlsu_mem_avg_cyc     = vlsu_mem_tran_tot == 0 ?
-                                          0 : vlsu_mem_cnt_tot / vlsu_mem_tran_tot;
-
-    // ROB in use for x cycle, total usage Y: Utilization = Y/(X*depth)
-    automatic real vlsu_rob_usage_avg   = i_spatz.i_vlsu.rob_use_cyc_q == 0 ?
-                                          0 : 100 * i_spatz.i_vlsu.rob_usage_q / i_spatz.i_vlsu.rob_use_cyc_q / NumSpatzOutstandingLoads;
-    automatic real vlsu_rob_peak_util   = 100 * i_spatz.i_vlsu.rob_peak_q / NumSpatzOutstandingLoads;
-
-    automatic real vlsu_stall_cyc       = i_spatz.i_vlsu.rob_full_cyc_q;
-
-    // Average instruction cycle can be used to caclulate the latency from VLSU to memory
-    // AVG_insn_cyc / VLEN = AVG_LD_cyc_per_elem
-    automatic real vlsu_insn_cnt        = i_spatz.i_vlsu.vlsu_insn_cnt_q;
-    automatic real vlsu_avg_insn_cyc    = i_spatz.i_vlsu.vlsu_insn_valid_cyc_q / i_spatz.i_vlsu.vlsu_insn_cnt_q;
-
-    /***** VFU Report *****/
-    automatic real vfu_wvalid           = i_spatz.i_vfu.vrf_wvalid_cnt_q;
-    automatic real vfu_wtrans           = i_spatz.i_vfu.vrf_wtrans_cnt_q;
-    automatic real vfu_vrf_w_util       = i_spatz.i_vfu.vrf_wvalid_cnt_q == 0 ?
-                                          0 : (100 * i_spatz.i_vfu.vrf_wtrans_cnt_q / i_spatz.i_vfu.vrf_wvalid_cnt_q);
-    automatic real vfu_vrf_w_avg_cyc    = i_spatz.i_vfu.vrf_wtrans_cnt_q == 0 ?
-                                          0 : (i_spatz.i_vfu.vrf_wvalid_cnt_q / i_spatz.i_vfu.vrf_wtrans_cnt_q);
-
-    automatic real vfu_rvalid0          = i_spatz.i_vfu.vrf_rvalid_cnt_q[0];
-    automatic real vfu_rtrans0          = i_spatz.i_vfu.vrf_rtrans_cnt_q[0];
-    automatic real vfu_vrf_r_util0      = i_spatz.i_vfu.vrf_rvalid_cnt_q[0] == 0 ?
-                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[0] / i_spatz.i_vfu.vrf_rvalid_cnt_q[0]);
-    automatic real vfu_vrf_r_avg_cyc0   = i_spatz.i_vfu.vrf_rtrans_cnt_q[0] == 0 ?
-                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[0] / i_spatz.i_vfu.vrf_rtrans_cnt_q[0]);
-
-    automatic real vfu_rvalid1          = i_spatz.i_vfu.vrf_rvalid_cnt_q[1];
-    automatic real vfu_rtrans1          = i_spatz.i_vfu.vrf_rtrans_cnt_q[1];
-    automatic real vfu_vrf_r_util1      = i_spatz.i_vfu.vrf_rvalid_cnt_q[1] == 0 ?
-                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[1] / i_spatz.i_vfu.vrf_rvalid_cnt_q[1]);
-    automatic real vfu_vrf_r_avg_cyc1   = i_spatz.i_vfu.vrf_rvalid_cnt_q[1] == 0 ?
-                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[1] / i_spatz.i_vfu.vrf_rtrans_cnt_q[1]);
-
-    automatic real vfu_rvalid2          = i_spatz.i_vfu.vrf_rvalid_cnt_q[2];
-    automatic real vfu_rtrans2          = i_spatz.i_vfu.vrf_rtrans_cnt_q[2];
-    automatic real vfu_vrf_r_util2      = i_spatz.i_vfu.vrf_rvalid_cnt_q[2] == 0 ?
-                                          0 : (100 * i_spatz.i_vfu.vrf_rtrans_cnt_q[2] / i_spatz.i_vfu.vrf_rvalid_cnt_q[2]);
-    automatic real vfu_vrf_r_avg_cyc2   = i_spatz.i_vfu.vrf_rvalid_cnt_q[2] == 0 ?
-                                          0 : (i_spatz.i_vfu.vrf_rvalid_cnt_q[2] / i_spatz.i_vfu.vrf_rtrans_cnt_q[2]);
-
-    automatic real vfu_insn_cnt         = i_spatz.i_vfu.vfu_insn_cnt_q;
-    automatic real vfu_avg_insn_cyc     = i_spatz.i_vfu.vfu_insn_cnt_q == 0 ?
-                                          0 : (i_spatz.i_vfu.vfu_insn_valid_cyc_q / i_spatz.i_vfu.vfu_insn_cnt_q);
-
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "***            Spatz Controller Utilization Report                ***\n");
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "   VLSU:\n"                                                             );
-    $fwrite(spatz_f, "   VLSU Active (not accurate):       %32d\n", ctrl_vlsu_active          );
-    $fwrite(spatz_f, "   VLSU Num Instructions:            %32d\n", ctrl_vlsu_insn            );
-    $fwrite(spatz_f, "   VLSU Stall Cycles:                %32d\n", ctrl_vlsu_stall           );
-    $fwrite(spatz_f, "   VLSU WR Stalls:                   %32d\n", ctrl_vlsu_wstall          );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VFU:\n"                                                              );
-    $fwrite(spatz_f, "   VFU Active (not accurate):        %32d\n", ctrl_vfu_active           );
-    $fwrite(spatz_f, "   VFU Num Instructions:             %32d\n", ctrl_vfu_insn             );
-    $fwrite(spatz_f, "   VFU Stall Cycles:                 %32d\n", ctrl_vfu_stall            );
-    $fwrite(spatz_f, "   VFU WR Stalls:                    %32d\n", ctrl_vfu_wstall           );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VSLDU:\n"                                                            );
-    $fwrite(spatz_f, "   VSLDU Active (not accurate):      %32d\n", ctrl_vsldu_active         );
-    $fwrite(spatz_f, "   VSLDU Num Instructions:           %32d\n", ctrl_vsldu_insn           );
-    $fwrite(spatz_f, "   VSLDU Stall Cycles:               %32d\n", ctrl_vsldu_stall          );
-    $fwrite(spatz_f, "   VSLDU WR Stalls:                  %32d\n", ctrl_vsldu_wstall         );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "***            Spatz VLSU Utilization Report                      ***\n");
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vlsu_wvalid               );
-    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vlsu_wtrans               );
-    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vlsu_vrf_w_util         );
-    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vlsu_vrf_w_avg_cyc      );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   Number of Mem Valid Cycles:       %32d\n", vlsu_mem_cnt_tot          );
-    $fwrite(spatz_f, "   Number of Mem Transaction Counts: %32d\n", vlsu_mem_tran_tot         );
-    $fwrite(spatz_f, "   Mem Utilization:                  %32.2f\n",vlsu_mem_util            );
-    $fwrite(spatz_f, "   Mem AVG Req Accept Cycles:        %32.2f\n",vlsu_mem_avg_cyc         );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VLSU Stall Cycles (ROB Full):     %32d\n", vlsu_stall_cyc            );
-    $fwrite(spatz_f, "   ROB AVG Utilization:              %32.2f\n", vlsu_rob_usage_avg      );
-    $fwrite(spatz_f, "   ROB Peak Utilization:             %32.2f\n", vlsu_rob_peak_util      );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   Total Insn Count:                 %32.2f\n", vlsu_insn_cnt           );
-    $fwrite(spatz_f, "   AVG Insn Cycles:                  %32.2f\n", vlsu_avg_insn_cyc       );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "***            Spatz VFU Utilization Report                       ***\n");
-    $fwrite(spatz_f, "*********************************************************************\n");
-    $fwrite(spatz_f, "   VRF Write Port:\n"                                                   );
-    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_wvalid                );
-    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_wtrans                );
-    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_w_util          );
-    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_w_avg_cyc       );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VRF Read Port 0:\n"                                                  );
-    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid0               );
-    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans0               );
-    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util0         );
-    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc0      );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VRF Read Port 1:\n"                                                  );
-    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid1               );
-    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans1               );
-    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util1         );
-    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc1      );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   VRF Read Port 2:\n"                                                  );
-    $fwrite(spatz_f, "   Number of VRF Valid Cycles:       %32d\n", vfu_rvalid2               );
-    $fwrite(spatz_f, "   Number of VRF Transaction Counts: %32d\n", vfu_rtrans2               );
-    $fwrite(spatz_f, "   VRF W Utilization:                %32.2f\n", vfu_vrf_r_util2         );
-    $fwrite(spatz_f, "   VRF W AVG Cycles:                 %32.2f\n", vfu_vrf_r_avg_cyc2      );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "\n"                                                                     );
-    $fwrite(spatz_f, "   Total Insn Count:                 %32.2f\n", vfu_insn_cnt            );
-    $fwrite(spatz_f, "   AVG Insn Cycles:                  %32.2f\n", vfu_avg_insn_cyc        );
-    $fwrite(spatz_f, "*********************************************************************\n");
-
-    `endif
     $fclose(f);
-    $fclose(spatz_f);
-
   end
 
   // verilog_lint: waive-stop always-ff-non-blocking

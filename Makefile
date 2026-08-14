@@ -67,7 +67,7 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config                ?= cachepool_512
+config                ?= cachepool_fpu_4g
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -122,7 +122,7 @@ quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 .PHONY: generate
-generate: update_opcodes gen-spatz-cfg
+generate: gen-spatz-cfg update_opcodes update-floonoc
 	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson PYTHON=${PYTHON}
 
 .PHONY: cache-init
@@ -146,8 +146,13 @@ $(BOOTROM_DIR)/bootdata_bootrom.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_
 $(BOOTROM_DIR)/bootdata.cc: $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT)
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t bootdata.cc.tpl -o $@
 
+SNRT_BOOTINFO_H := $(SOFTWARE_DIR)/snRuntime/include/snrt_bootinfo.h
+
+$(SNRT_BOOTINFO_H): $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT) $(BOOTROM_DIR)/snrt_bootinfo.h.tpl
+	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t snrt_bootinfo.h.tpl -o $@
+
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
-  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld Makefile
+  $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld $(SNRT_BOOTINFO_H)
 	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
@@ -164,6 +169,38 @@ $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 		$< -c $(HJSON_OUT) --output $@
 
 ###########
+# FlooNoC #
+###########
+FLOO_DIR      ?= $(shell $(BENDER_INSTALL_DIR)/bender path floo_noc)
+FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
+
+# Auto-select FlooNoC YAML based on config name
+ifneq ($(filter %_16g_tiny,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g_tiny.yml
+else ifneq ($(filter %_16g,$(config)),)
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g.yml
+else
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+endif
+FLOO_NAME     = cachepool
+FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
+
+$(info FLOO_DIR: $(FLOO_DIR))
+
+# Generates the sources for FlooNoC
+.PHONY: update-floonoc install-floogen clean-floonoc
+install-floogen:
+	pip install -e $(FLOO_DIR) --quiet
+
+update-floonoc: $(FLOO_NOC)
+$(FLOO_NOC): $(FLOO_CFG)
+	mkdir -p $(FLOO_GEN_OUTDIR)
+	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
+
+clean-floonoc:
+	rm -f $(FLOO_NOC)
+
+###########
 # DramSys #
 ###########
 USE_DRAMSYS ?= 1
@@ -171,7 +208,7 @@ VSIM_FLAGS :=
 VSIM_BENDER =
 
 .PHONY: dram-build
-dram-build: $(DRAMSYS_PATH)/README.md dram-clean dram-config
+dram-build: $(DRAMSYS_PATH)/README.md dram-config
 	cd $(DRAMSYS_PATH) && \
 	if [ ! -d "build" ]; then \
 		mkdir build && cd build; \
@@ -232,22 +269,20 @@ VLOG_FLAGS += -64
 VLOG_DEFS = -DCACHEPOOL
 
 # Cluster configuration
+VLOG_DEFS += -DNUM_GROUPS=$(num_groups)
+VLOG_DEFS += -DNUM_GROUPS_X=$(num_groups_x)
 VLOG_DEFS += -DNUM_TILES=$(num_tiles)
 VLOG_DEFS += -DNUM_CORES=$(num_cores)
 VLOG_DEFS += -DDATA_WIDTH=$(data_width)
 VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
 
 # Tile configuration
-VLOG_DEFS += -DNUM_CORES_PER_TILE=$(num_cores_per_tile)
 VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 
 # L1 Data Cache
 VLOG_DEFS += -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
-VLOG_DEFS += -DL1D_SIZE=$(l1d_size)
-VLOG_DEFS += -DL1D_BANK_FACTOR=$(l1d_bank_factor)
 VLOG_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
 VLOG_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
-VLOG_DEFS += -DL1D_TILE_SIZE=$(l1d_tile_size)
 VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
 VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
 VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
@@ -259,12 +294,13 @@ VLOG_DEFS += -DL1D_USE_HASH_WAY=$(l1d_use_hash_way)
 VLOG_DEFS += -DL1D_USE_FWD_BUF=$(l1d_use_fwd_buf)
 
 # CachePool CC / core cluster
-VLOG_DEFS += -DSPATZ_FPU_EN=$(spatz_fpu_en)
 VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
-VLOG_DEFS += -DREMOTE_PORT_PER_CORE=$(num_remote_ports_per_tile)
+VLOG_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
+VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
+VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
 
 # AXI configuration
 VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
@@ -273,69 +309,127 @@ VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
 VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
 VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
 VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
+# DRAM type string for DRAMSys (passed as a quoted SV string literal)
+VLOG_DEFS += -DDRAM_TYPE='"$(dram_type)"'
 
-# Peripherals / memory map
-VLOG_DEFS += -DSTACK_ADDR=$(stack_addr)
+# Stack / SPM (boot_addr, stack_addr, periph_start_addr, uart_addr used by hjson
+# generator via environment; not consumed as SV defines)
 VLOG_DEFS += -DSTACK_HW_SIZE=$(stack_hw_size)
 VLOG_DEFS += -DSTACK_HW_DEPTH=$(stack_hw_depth)
 VLOG_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
-VLOG_DEFS += -DPERIPH_START_ADDR=$(periph_start_addr)
-VLOG_DEFS += -DBOOT_ADDR=$(boot_addr)
-VLOG_DEFS += -DUART_ADDR=$(uart_addr)
+VLOG_DEFS += -DSTACK_TOT_DEPTH=$(stack_tot_depth)
 
 VLOG_DEFS += -DENABLE_SPATZ_REQ_SCOREBOARD
+
+# Simulation-only debug/profiling toggles (opt-in: add simulation overhead)
+
+# Cycle-accurate per-router/tile/core NoC traffic logs from
+# hardware/tb/cachepool_noc_profiling.sv (noc_profiling/*.log), consumed by
+# util/scripts/noc_profiling_to_vis4mesh.py (see README's "NoC
+# Visualization" section). L1 router/tile logs only produce data with
+# num_rg_ports_per_core > 0 (multi-group configs); L2 logs are always
+# populated.
+noc_profiling ?= 1
+ifeq ($(noc_profiling),1)
+VLOG_DEFS += -DNOC_PROFILING
+endif
 
 ENABLE_CACHEPOOL_TESTS ?= 1
 
 # Bender targets
 VSIM_BENDER += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
 
-include sim/sim.mk
-
 ######
 # SW #
 ######
+
+include sim/sim.mk
+
+#####################
+## Data Generation  ##
+#####################
+
+TESTS_DIR := $(SOFTWARE_DIR)/tests
+
+# Auto-discover every test that has a script/gen_data.py.
+# Convention: script/data_<params>.json → data/data_<params>.h
+# Adding a new test or a new data variant needs no Makefile changes:
+#   - new test:    drop gen_data.py + data_<params>.json into its script/ dir
+#   - new variant: add data_<params>.json to an existing test's script/ dir
+DATA_TESTS := $(patsubst $(TESTS_DIR)/%/script/gen_data.py,%, \
+                $(wildcard $(TESTS_DIR)/*/script/gen_data.py))
+
+define gen_data_rules
+$(1)_DATA    := $$(patsubst $(TESTS_DIR)/$(1)/script/data_%.json, \
+                             $(TESTS_DIR)/$(1)/data/data_%.h, \
+                             $$(wildcard $(TESTS_DIR)/$(1)/script/data_*.json))
+ALL_GEN_DATA += $$($(1)_DATA)
+
+$(TESTS_DIR)/$(1)/data/data_%.h: \
+    $(TESTS_DIR)/$(1)/script/data_%.json \
+    $(TESTS_DIR)/$(1)/script/gen_data.py
+	$$(PYTHON) $(TESTS_DIR)/$(1)/script/gen_data.py -c $$<
+endef
+
+$(foreach test,$(DATA_TESTS),$(eval $(call gen_data_rules,$(test))))
+
+# bandwidth: always outputs data/data.h (fixed name); handled separately.
+BANDWIDTH_DATA := $(TESTS_DIR)/bandwidth/data/data.h
+ALL_GEN_DATA   += $(BANDWIDTH_DATA)
+
+$(BANDWIDTH_DATA): $(TESTS_DIR)/bandwidth/script/data.json \
+                   $(TESTS_DIR)/bandwidth/script/gen_data.py
+	$(PYTHON) $(TESTS_DIR)/bandwidth/script/gen_data.py -c $<
+
+.PHONY: gen-data
+gen-data: $(ALL_GEN_DATA)
+
+.PHONY: clean.data
+clean.data:
+	rm -f $(ALL_GEN_DATA)
 
 .PHONY: clean.sw
 clean.sw:
 	rm -rf ${SOFTWARE_DIR}/build
 
-.PHONY: sw
-sw: generate bootrom clean.sw
-	echo ${SOFTWARE_DIR}
-	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
-
-.PHONY: vsim
-vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
-	echo ${SOFTWARE_DIR}
-	mkdir -p ${SOFTWARE_DIR}/build
-	cd ${SOFTWARE_DIR}/build && ${CMAKE} \
-	  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
-	  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
-	  -DRUNTIME_DIR=${SOFTWARE_DIR} \
-	  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
-	  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
-	  -DGCC_PATH=${GCC_INSTALL_DIR} \
-	  -DPYTHON=${PYTHON} \
-	  -DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim \
-	  -DBUILD_TESTS=ON .. && $(MAKE)
-
 .PHONY: clean
-clean: clean.sw clean.vsim
+clean: clean.sw clean.vsim clean.data
 	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \
-	                    $(BOOTROM_DIR)/bootrom.elf
+	                    $(BOOTROM_DIR)/bootrom.elf \
+	                    $(SNRT_BOOTINFO_H)
+
+# Common CMake flags shared by sw and vsim targets.
+# vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
+SW_CMAKE_FLAGS = \
+  -DENABLE_CACHEPOOL_TESTS=${ENABLE_CACHEPOOL_TESTS} \
+  -DCACHEPOOL_DIR=$(CACHEPOOL_DIR) \
+  -DRUNTIME_DIR=${SOFTWARE_DIR} \
+  -DSPATZ_SW_DIR=$(SPATZ_SW_DIR) \
+  -DLLVM_PATH=${LLVM_INSTALL_DIR} \
+  -DGCC_PATH=${GCC_INSTALL_DIR} \
+  -DPYTHON=${PYTHON} \
+  -DBUILD_TESTS=ON
+
+.PHONY: sw
+sw: generate bootrom gen-data
+	mkdir -p ${SOFTWARE_DIR}/build
+	cd ${SOFTWARE_DIR}/build && ${CMAKE} ${SW_CMAKE_FLAGS} \
+	  $(if $(wildcard ${SIMBIN_DIR}/cachepool_cluster.vsim),-DSNITCH_SIMULATOR=${SIMBIN_DIR}/cachepool_cluster.vsim) \
+	  .. && $(MAKE)
+
+.PHONY: vsim
+vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
+
+############
+# ShortCut #
+############
+
+# Just a shortcut to build everything
+.PHONY: all
+all: generate bootrom vsim sw
 
 ########
 # Lint #
@@ -352,6 +446,58 @@ ${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
 	@if [ ! -x "$(BENDER)" ]; then echo "bender not installed; run 'make bender'"; exit 1; fi
 	${BENDER} script verilator $(VLOG_DEFS) -t rtl -t spatz -t cachepool -t dramsys --define COMMON_CELLS_ASSERTS_OFF > ${LINT_PATH}/tmp/files
+
+########
+# Logs #
+########
+LOGS_DIR         ?= ${SIMBIN_DIR}/logs
+
+.PHONY: avg-log
+avg-log:
+	rm -rf $(LOGS_DIR)/average
+	$(PYTHON) $(CACHEPOOL_DIR)/util/scripts/generate_average_log.py --logs-dir $(LOGS_DIR)
+
+#############
+# Vis4Mesh  #
+#############
+# NoC traffic visualization frontend (fork of https://github.com/ueqri/vis4mesh
+# with CachePool-specific fixes/features). Consumes the Vis4Mesh dataset
+# directories produced by util/scripts/noc_profiling_to_vis4mesh.py from
+# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs. Fetched as a
+# plain pinned clone (same pattern as toolchain.mk's riscv-gnu-toolchain/
+# llvm-project targets), not a git submodule.
+NPM             ?= npm
+VIS4MESH_DIR    ?= ${CACHEPOOL_DIR}/util/vis4mesh
+VIS4MESH_REPO   ?= https://github.com/DiyouS/vis4mesh.git
+VIS4MESH_VERSION := $(shell cat ${CACHEPOOL_DIR}/util/vis4mesh.version)
+
+.PHONY: vis4mesh vis4mesh-serve
+vis4mesh: ${VIS4MESH_DIR}/dist/index.bundle.js
+
+${VIS4MESH_DIR}/.git:
+	git clone ${VIS4MESH_REPO} ${VIS4MESH_DIR}
+	cd ${VIS4MESH_DIR} && git checkout ${VIS4MESH_VERSION}
+
+${VIS4MESH_DIR}/dist/index.bundle.js: ${VIS4MESH_DIR}/.git
+	cd ${VIS4MESH_DIR} && ${NPM} install && ${NPM} run build
+
+vis4mesh-serve: vis4mesh
+	cd ${VIS4MESH_DIR}/dist && ${PYTHON} -m http.server
+
+NOC_VIS_INPUT_DIR      ?= noc_profiling
+NOC_VIS_OUTPUT_PREFIX  ?= ${VIS4MESH_DIR}/visdata/$(config)
+NOC_VIS_SLICE_CYCLES   ?= 500
+NOC_VIS_CLK_FREQ       ?= 1000
+
+.PHONY: vis4mesh-data
+vis4mesh-data:
+	@for level in l1 l2; do \
+	  $(PYTHON) $(CACHEPOOL_DIR)/util/scripts/noc_profiling_to_vis4mesh.py --level $$level \
+	    --input-dir $(NOC_VIS_INPUT_DIR) --output-dir $(NOC_VIS_OUTPUT_PREFIX)-$$level \
+	    --num-groups-x $(num_groups_x) --num-groups-y $$(( $(num_groups) / $(num_groups_x) )) \
+	    --num-tiles-per-group $(num_tiles_per_group) --num-noc-ports-per-tile $(num_noc_ports_per_tile) \
+	    --slice-cycles $(NOC_VIS_SLICE_CYCLES) --clk-freq $(NOC_VIS_CLK_FREQ); \
+	done
 
 ########
 # Help #
@@ -373,6 +519,9 @@ help:
 	@echo "*generate*:       generate the Spatz package and opcodes, and the cluster config HJSON"
 	@echo "*cache-init*:     source the insitu-cache environment (requires bender checkout)"
 	@echo "*bootrom*:        compile and generate the bootrom SystemVerilog module"
+	@echo "*update-floonoc*: regenerate FlooNoC package from FLOO_CFG (run after changing group count)"
+	@echo "*install-floogen*: install the floogen Python tool (required by update-floonoc)"
+	@echo "*clean-floonoc*:  remove the generated FlooNoC package"
 	@echo ""
 	@echo "DRAMSys:"
 	@echo ""
@@ -386,7 +535,7 @@ help:
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
-	@echo "*vsim*:           build hardware and software for QuestaSim simulation"
+	@echo "*vsim*:           build hardware for QuestaSim simulation (use 'sw' to build software separately)"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
 	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
 	@echo ""
@@ -394,9 +543,30 @@ help:
 	@echo ""
 	@echo "*lint*:           run SpyGlass lint (requires bender + SpyGlass in PATH)"
 	@echo ""
+	@echo "Logs:"
+	@echo ""
+	@echo "*avg-log*:        average the per-core/per-tile/per-group monitor_*.txt logs under LOGS_DIR"
+	@echo ""
+	@echo "--------------------------------------------------------------------------------------------------------"
+	@echo "Vis4Mesh (NoC visualization):"
+	@echo ""
+	@echo "*vis4mesh*:       clone/build the Vis4Mesh frontend into util/vis4mesh (pinned, see util/vis4mesh.version)"
+	@echo "*vis4mesh-serve*: build (if needed) and serve Vis4Mesh at http://localhost:8000"
+	@echo "                  upload a directory from util/scripts/noc_profiling_to_vis4mesh.py's --output-dir"
+	@echo "*vis4mesh-data*:  convert noc_profiling/*.log (see 'noc_profiling' above) into Vis4Mesh datasets"
+	@echo "                  (l1/l2) under NOC_VIS_OUTPUT_PREFIX-<level>, using the current config's"
+	@echo "                  group/tile/port counts; one dataset per session_<N>/ kernel session if present"
+	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings:"
 	@echo "*config*:         cluster configuration name (default: $(config))"
 	@echo "*CMAKE*:          CMake binary (default: $(CMAKE)); must be >= 3.28 for DRAMSys"
 	@echo "*DEBUG*:          enable +acc for waveform visibility in vsim (default: $(DEBUG))"
+	@echo "*LOGS_DIR*:       logs directory used by avg-log (default: $(LOGS_DIR))"
+	@echo "*VIS4MESH_DIR*:   Vis4Mesh checkout directory (default: $(VIS4MESH_DIR))"
+	@echo "*VIS4MESH_REPO*:  Vis4Mesh git remote (default: $(VIS4MESH_REPO))"
+	@echo "*NOC_VIS_INPUT_DIR*:     vis4mesh-data --input-dir (default: $(NOC_VIS_INPUT_DIR))"
+	@echo "*NOC_VIS_OUTPUT_PREFIX*: vis4mesh-data output dir prefix, -<level> appended (default: $(NOC_VIS_OUTPUT_PREFIX))"
+	@echo "*NOC_VIS_SLICE_CYCLES*:  vis4mesh-data --slice-cycles (default: $(NOC_VIS_SLICE_CYCLES))"
+	@echo "*NOC_VIS_CLK_FREQ*:      vis4mesh-data --clk-freq in MHz (default: $(NOC_VIS_CLK_FREQ))"
 	@echo ""

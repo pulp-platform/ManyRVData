@@ -1,3 +1,7 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 import sys
 import os
 
@@ -18,7 +22,7 @@ def extract_uart_lines(input_file_path, output_file_path, config=None, kernel=No
 
             # Copy only lines containing '[UART]'
             for line in input_file:
-                if '[UART]' in line:
+                if '[UART]' in line or '[EOC]' in line:
                     output_file.write(line)
 
             output_file.write("\n----------------------------------------\n")

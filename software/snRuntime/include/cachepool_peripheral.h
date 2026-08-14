@@ -13,63 +13,33 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// Number of performance counters
-#define CACHEPOOL_PERIPHERAL_PARAM_NUM_PERF_COUNTERS 2
+// Number of 32-bit tile-select registers. Default 2 covers up to 64 tiles
+// (16 groups x 4 tiles).
+#define CACHEPOOL_PERIPHERAL_PARAM_NUM_TILE_SEL_REGS 2
 
 // Register width
 #define CACHEPOOL_PERIPHERAL_PARAM_REG_WIDTH 32
 
-// Select from which hart in the cluster, starting from `0`,
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_HART_SELECT_FIELD_WIDTH 10
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_HART_SELECT_FIELDS_PER_REG 3
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_MULTIREG_COUNT 2
-
-// Select from which hart in the cluster, starting from `0`,
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_0_REG_OFFSET 0x0
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_0_HART_SELECT_0_MASK 0x3ff
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_0_HART_SELECT_0_OFFSET 0
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_0_HART_SELECT_0_FIELD                 \
-  ((bitfield_field32_t){                                                       \
-      .mask = CACHEPOOL_PERIPHERAL_HART_SELECT_0_HART_SELECT_0_MASK,           \
-      .index = CACHEPOOL_PERIPHERAL_HART_SELECT_0_HART_SELECT_0_OFFSET})
-
-// Select from which hart in the cluster, starting from `0`,
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_1_REG_OFFSET 0x4
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_1_HART_SELECT_1_MASK 0x3ff
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_1_HART_SELECT_1_OFFSET 0
-#define CACHEPOOL_PERIPHERAL_HART_SELECT_1_HART_SELECT_1_FIELD                 \
-  ((bitfield_field32_t){                                                       \
-      .mask = CACHEPOOL_PERIPHERAL_HART_SELECT_1_HART_SELECT_1_MASK,           \
-      .index = CACHEPOOL_PERIPHERAL_HART_SELECT_1_HART_SELECT_1_OFFSET})
-
-// Set bits in the cluster-local CLINT. Writing a 1 at location i sets the
-// cluster-local interrupt
-#define CACHEPOOL_PERIPHERAL_CL_CLINT_SET_REG_OFFSET 0x8
-
-// Clear bits in the cluster-local CLINT. Writing a 1 at location i clears
-// the cluster-local interrupt
-#define CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_REG_OFFSET 0xc
-
 // Hardware barrier register. Loads to this register will block until all
 // cores have
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_REG_OFFSET 0x10
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_REG_OFFSET 0x0
 
 // Controls prefetching of the instruction cache.
-#define CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_REG_OFFSET 0x14
+#define CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_REG_OFFSET 0x4
 #define CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_ICACHE_PREFETCH_ENABLE_BIT 0
 
 // Sets the status of the Spatz cluster.
-#define CACHEPOOL_PERIPHERAL_SPATZ_STATUS_REG_OFFSET 0x18
+#define CACHEPOOL_PERIPHERAL_SPATZ_STATUS_REG_OFFSET 0x8
 #define CACHEPOOL_PERIPHERAL_SPATZ_STATUS_SPATZ_CLUSTER_PROBE_BIT 0
 
 // Store cycle counts of kernels
-#define CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_REG_OFFSET 0x1c
+#define CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_REG_OFFSET 0xc
 
 // Controls the cluster boot process.
-#define CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_REG_OFFSET 0x20
+#define CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_REG_OFFSET 0x10
 
 // End of computation and exit status register
-#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET 0x24
+#define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_REG_OFFSET 0x14
 #define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_MASK 0xf
 #define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_FIELD                   \
@@ -78,7 +48,7 @@ extern "C" {
       .index = CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_EOC_EXIT_OFFSET})
 
 // Controls the configurations of L1 DCache SPM size.
-#define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET 0x28
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_REG_OFFSET 0x18
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_SPM_SIZE_MASK 0x3ff
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_SPM_SIZE_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_SPM_SIZE_FIELD                        \
@@ -87,7 +57,7 @@ extern "C" {
       .index = CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_SPM_SIZE_OFFSET})
 
 // Controls the L1 DCache flushing and invalidation.
-#define CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET 0x2c
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_REG_OFFSET 0x1c
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_INSN_MASK 0x3
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_INSN_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_INSN_FIELD                           \
@@ -95,23 +65,42 @@ extern "C" {
                         .index =                                               \
                             CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_INSN_OFFSET})
 
-// Controls Tiles to be flushed
-#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_REG_OFFSET 0x30
+// One-hot tile selection mask for private-partition flush.
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_TILE_FIELD_WIDTH 32
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_TILE_FIELDS_PER_REG 1
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_MULTIREG_COUNT 2
+
+// One-hot tile selection mask for private-partition flush.
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_REG_OFFSET 0x20
+
+// One-hot tile selection mask for private-partition flush.
+#define CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_REG_OFFSET 0x24
+
+// Tile participation mask for the cluster-level hardware barrier.
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_TILE_FIELD_WIDTH 32
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_TILE_FIELDS_PER_REG 1
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_MULTIREG_COUNT 2
+
+// Tile participation mask for the cluster-level hardware barrier.
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_REG_OFFSET 0x28
+
+// Tile participation mask for the cluster-level hardware barrier.
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_1_REG_OFFSET 0x2c
 
 // Controls the L1 DCache flushing and invalidation.
-#define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET 0x34
+#define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET 0x30
 #define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_COMMIT_BIT 0
 
 // Controls the L1 DCache flushing and invalidation.
-#define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x38
+#define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x34
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_COMMIT_BIT 0
 
 // Indicate the status of flushing
-#define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x3c
+#define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x38
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_BIT 0
 
 // Number of private banks configured per tile
-#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x40
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x3c
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_MASK 0xf
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_FIELD                          \
@@ -120,10 +109,10 @@ extern "C" {
                             CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_OFFSET})
 
 // Starting address of private L1D partition
-#define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x44
+#define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x40
 
 // Cache xbar offset setting
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x48
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x44
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK 0x1f
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_FIELD                          \
@@ -132,22 +121,8 @@ extern "C" {
                             CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET})
 
 // Cache xbar offset setting
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x4c
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x48
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_COMMIT_BIT 0
-
-// Hardware barrier participation mask register. This register determines the
-// tiles that are
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_REG_OFFSET 0x50
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_MASK \
-  0xf
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_OFFSET \
-  0
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_FIELD   \
-  ((bitfield_field32_t){                                                                         \
-      .mask =                                                                                    \
-          CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_MASK, \
-      .index =                                                                                   \
-          CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_HW_BARRIER_PARTICIPATION_MASK_OFFSET})
 
 #ifdef __cplusplus
 } // extern "C"

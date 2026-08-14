@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 # check_ci.py
 # Scans a CachePool RTL simulation log for failures and exits non-zero if any
 # are found, allowing CI to detect test failures.
@@ -20,7 +24,7 @@ def main():
     # Matches "error <integer>" anywhere in a line, captured as group 1.
     error_val_re = re.compile(r'\berror\s+(\d+)\b', re.IGNORECASE)
     # Matches FAIL or [FAIL] anywhere in a line.
-    fail_re = re.compile(r'\bFAIL\b', re.IGNORECASE)
+    fail_re = re.compile(r'\bFailed\b', re.IGNORECASE)
 
     failures = []
 

@@ -22,17 +22,51 @@ endif
 
 include $(CACHEPOOL_DIR)/config/$(config).mk
 
+#####################
+##  DRAM Type       ##
+#####################
+
+# DRAM type used by DRAMSys and to auto-set refill_data_width.
+# Supported values: DDR3, DDR4, LPDDR4, HBM2
+dram_type ?= HBM2
+
+# Auto-derive default refill data width from dram_type.
+# HBM variants: 512b (3600*16/1000 = 57.6B/cyc)
+# DDR variants: 128b (1866*8/1000 = 15B/cyc)
+ifeq ($(dram_type),HBM2)
+  refill_data_width_default := 512
+else ifeq ($(dram_type),LPDDR4)
+  refill_data_width_default := 256
+else
+  refill_data_width_default := 128
+endif
+
 #########################
 ##  CachePool Cluster  ##
 #########################
 
-# Number of tiles
-num_tiles ?= 1
+# Number of groups
+num_groups ?= 1
 
-num_remote_ports_per_tile ?= 1
+# X dimension of the group mesh (Y = num_groups / num_groups_x)
+num_groups_x ?= 1
+
+# Number of tiles
+num_tiles_per_group ?= 4
+num_tiles = $(shell echo $$(( $(num_groups) * $(num_tiles_per_group))))
+
+# Intra-group remote ports per core (to other tiles in the same group)
+num_lg_ports_per_core ?= 1
 
 # Number of cores
-num_cores ?= 4
+num_cores_per_tile ?= 4
+num_cores ?= $(shell echo $$(( $(num_tiles) * $(num_cores_per_tile))))
+
+# Inter-group remote ports per core (to remote groups, via the L1 NoC)
+num_rg_ports_per_core ?= 0
+
+# NoC router channels per tile (concentrates each tile's inter-group traffic)
+num_noc_ports_per_tile ?= 1
 
 # Core datawidth
 data_width ?= 32
@@ -40,24 +74,21 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
+# Bootrom datawidth
+bootrom_data_width ?= 32
+
 
 ######################
 ##  CachePool Tile  ##
 ######################
 
-# Number of cores per CachePool tile
-num_cores_per_tile ?= 4
-
-# Refill interconnection data width
-refill_data_width ?= 128
+# Refill interconnection data width (auto-derived from dram_type; override in flavor files)
+refill_data_width ?= $(refill_data_width_default)
 
 ##### L1 Data Cache #####
 
 # L1 data cacheline width (in Bit)
 l1d_cacheline_width ?= 512
-
-# L1 data cache size (in KiB)
-l1d_size ?= 256
 
 # L1 data cache banking factor (how many banks per core?)
 l1d_bank_factor ?= 1
@@ -115,37 +146,22 @@ snitch_max_trans ?= 16
 #                 + cache_info_t + burst_req_t
 #   cache_info_t  = {for_write_pend, depth, way}   -- NOTE: NO tile_id inside.
 #
-# So refill_user_t carries TileIDWidth exactly ONCE.  The values below are
-# deliberately conservative headroom, not an exact fit: the per-tile adjustment
-# adds 2*(idx_width(NumTiles)-1) bits, and cachepool_pkg.sv:163 then adds a
-# further clog2(NumTiles) (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles)),
-# so the tile term ends up over-provisioned.  This is harmless: no RTL reads any
-# AXI user bit above $bits(refill_user_t)-1.
-# (An earlier version of this comment claimed cache_info_t held a second
-#  TileIDWidth copy and therefore doubled idx_width(NumTiles) -- it does not;
-#  the 2x factor is just slack, kept as-is for headroom.)
+# BankIDWidth depends only on cores-per-tile (constant across a tile-count
+# sweep with num_cores_per_tile fixed), not on the total tile count. So the
+# only tile-count-dependent term in refill_user_t is TileIDWidth =
+# clog2(NumTiles), and that's already added exactly once, downstream, by
+# cachepool_pkg.sv (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles) +
+# bits(l2_id_t)) -- no need to also grow axi_user_width with NumTiles here.
 #
-# Do NOT let axi_user_width drop below $bits(refill_user_t): the MSB of bank_id
-# (or higher tile_id) would be truncated on the AXI loopback and refill
-# responses would route back to the wrong slv port (e.g. bank_id=4 aliases to
-# bank_id=0, sending cb=3's refill response to the icache bypass slot, making
-# cb=3 hang).  The ASSERT_INIT above catches this at elaboration.
+# axi_user_base below is the width needed at NumTiles=1 (TileIDWidth=0),
+# i.e. bank_id + cache_info_t + burst_req_t only.
+#
+# Do NOT let axi_user_width drop below that: the MSB of bank_id would be
+# truncated on the AXI loopback and refill responses would route back to the
+# wrong slv port (e.g. bank_id=4 aliases to bank_id=0, sending cb=3's refill
+# response to the icache bypass slot, making cb=3 hang). The ASSERT_INIT
+# above catches this at elaboration.
 
-ifeq ($(num_tiles),1)
-  axi_user_tile_adj := 0
-else ifeq ($(num_tiles),2)
-  axi_user_tile_adj := 0
-else ifeq ($(num_tiles),4)
-  axi_user_tile_adj := 2
-else ifeq ($(num_tiles),8)
-  axi_user_tile_adj := 4
-else ifeq ($(num_tiles),16)
-  axi_user_tile_adj := 6
-else
-  $(error num_tiles=$(num_tiles) not handled by axi_user_width formula; add a case in config.mk)
-endif
-
-# Base widths for NumTiles=1 (= reference values, verified working).
 ifeq ($(l1d_cacheline_width),512)
   axi_user_base := 18
 else ifeq ($(l1d_cacheline_width),256)
@@ -154,11 +170,20 @@ else ifeq ($(l1d_cacheline_width),128)
   axi_user_base := 22
 endif
 
-axi_user_width := $(shell echo $$(( $(axi_user_base) + $(axi_user_tile_adj) )))
+axi_user_width := $(axi_user_base)
 
 #####################
 ##  L2 Main Memory ##
 #####################
+
+# DRAM base address and size (hex: 0x8000_0000, 0x2000_0000)
+dram_addr ?= 2147483648
+dram_len  ?= 536870912
+
+# Uncached region base address and size (hex: 0xC000_0000, 0x2000_0000)
+uncached_addr ?= 3221225472
+uncached_len  ?= 536870912
+
 # L2 number of channels
 l2_channel ?= 4
 

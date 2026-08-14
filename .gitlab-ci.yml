@@ -8,7 +8,6 @@ variables:
   GIT_SUBMODULE_STRATEGY: none
   ROOT_DIR: '$CI_PROJECT_DIR'
   APPS: "tests"
-  PATH: '$HOME/.cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/usr/local/condor/bin:/usr/sepp/bin:$CI_PROJECT_DIR/install/verilator/bin:$HOME/.local/bin'
   OBJCACHE: ''
   CC:  '/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc'
   CXX: '/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++'
@@ -16,7 +15,7 @@ variables:
   python: 'python3'
   python3: 'python3'
   # Config to build and test
-  CI_CONFIG: 'cachepool_fpu_512'
+  CI_CONFIG: 'cachepool_fpu_4g'
   SW_PREFIX: 'test-cachepool-'
 
 default:
@@ -28,30 +27,31 @@ stages:
 
 # ---------------------------------------------------------------------------
 # Build stage: compile RTL and software for CI_CONFIG.
-# Parallel jobs within the same pipeline share $HOME, so the toolchain
-# installed by make quick-tool is automatically available to all test jobs.
+# Sources iis-env.sh, which points the toolchain at the prebuilt install dir
+# (replaces `make quick-tool`'s symlink) and sets up the venv for code-gen deps;
+# test-stage jobs run prebuilt artifacts and don't need either, so iis-env.sh is
+# only sourced here.
 # ---------------------------------------------------------------------------
 build:
   stage: build
-  timeout: 4h 30m
   script:
     - echo "Using CC=$CC"
     - echo "Using CXX=$CXX"
     - test -x "$CC"
     - test -x "$CXX"
-    - make quick-tool
-    - python3 -m pip install --quiet dataclasses hjson jsonref jsonschema mako termcolor
+    - source iis-env.sh
     - make init
     - make dram-build
-    - make clean generate vsim config=$CI_CONFIG
+    - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG DEBUG=0 noc_profiling=0
   artifacts:
     when: always
-    expire_in: 1 day
+    expire_in: 2h
     paths:
       # QuestaSim compiled work library
       - sim/work/
       # vsim wrapper scripts (exclude sim/bin/logs/ — not needed by test jobs)
       - sim/bin/cachepool_cluster.vsim
+      - sim/bin/cachepool_cluster.vsim.gui
       # DPI shared library
       - sim/work-dpi/
       # Software binaries for all kernels
@@ -67,29 +67,30 @@ build:
 # ---------------------------------------------------------------------------
 test:
   stage: test
-  timeout: 1h
   needs: [build]
   parallel:
     matrix:
       - KERNEL:
           - spin-lock
-          - load-store_M16
+          - load-store
           - fdotp-32b_M32768
           - gemv_M512_N128_K32
-          - fmatmul-32b_M32_N32_K32
+          - fmatmul-32b_M64_N64_K64
           - fft-32b_M1024_N16
-          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
           - byte-enable
+          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
   script:
-    # The vsim script writes a .rtlbinary marker here; ensure the dir exists.
-    - mkdir -p sim/bin/logs
+    # The vsim script writes a .rtlbinary marker here; monitor logs need the
+    # core/noc/others subfolders. Build artifacts exclude sim/bin/logs/, so
+    # these must be recreated in the test job too.
+    - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
     - BIN="${SW_PREFIX}${KERNEL}"
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_${KERNEL}.log
     - python3 util/auto-benchmark/check-ci.py test_${KERNEL}.log
   artifacts:
     when: always
-    expire_in: 1 day
+    expire_in: 1 week
     paths:
       # Full simulation log
       - test_*.log

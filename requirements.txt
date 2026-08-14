@@ -1,0 +1,12 @@
+# Python packages required for hardware code generation (make generate).
+# dataclasses is a stdlib backport needed on Python 3.6; it is a no-op on 3.7+.
+dataclasses
+hjson
+jsonref
+jsonschema
+mako
+termcolor
+numpy
+# CPU-only torch for data generation scripts (gen_data.py in software/tests/)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch

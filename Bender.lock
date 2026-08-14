@@ -16,17 +16,34 @@ packages:
     - common_verification
     - tech_cells_generic
   axi_riscv_atomics:
-    revision: 97dcb14ef057cbe5bd70dda2060b5bb9e7e04c6d
-    version: 0.7.0
+    revision: 97a1dd2ac643c276880420a0cf8eea697f228aa9
+    version: 0.8.3
     source:
       Git: https://github.com/pulp-platform/axi_riscv_atomics.git
     dependencies:
     - axi
     - common_cells
     - common_verification
+  axi_stream:
+    revision: 54891ff40455ca94a37641b9da4604647878cc07
+    version: 0.1.1
+    source:
+      Git: https://github.com/pulp-platform/axi_stream.git
+    dependencies:
+    - common_cells
+  cluster_icache:
+    revision: ce0ed94a5b95f5c76b9fa51940303fcce53f56e5
+    version: null
+    source:
+      Git: https://github.com/pulp-platform/cluster_icache.git
+    dependencies:
+    - axi
+    - common_cells
+    - scm
+    - tech_cells_generic
   common_cells:
-    revision: 9afda9abb565971649c2aa0985639c096f351171
-    version: 1.38.0
+    revision: 9ca8a7655f741e7dd5736669a20a301325194c28
+    version: 1.39.0
     source:
       Git: https://github.com/pulp-platform/common_cells.git
     dependencies:
@@ -45,8 +62,27 @@ packages:
       Git: https://github.com/pulp-platform/dram_rtl_sim.git
     dependencies:
     - axi
+  floo_noc:
+    revision: 8413d9b044a51f958a7d4ef261e2b01e73db4544
+    version: null
+    source:
+      Git: https://github.com/pulp-platform/FlooNoC.git
+    dependencies:
+    - axi
+    - axi_riscv_atomics
+    - common_cells
+    - common_verification
+    - floo_noc_pd
+    - fpnew
+    - idma
+  floo_noc_pd:
+    revision: null
+    version: null
+    source:
+      Path: hardware/deps/floo_noc/./pd
+    dependencies: []
   fpnew:
-    revision: a8e0cba6dd50f357ece73c2c955d96efc3c6c315
+    revision: e5aa6a01b5bbe1675c3aa8872e1203413ded83d1
     version: null
     source:
       Git: https://github.com/pulp-platform/cvfpu.git
@@ -61,17 +97,19 @@ packages:
     dependencies:
     - common_cells
   idma:
-    revision: b31e8f019c657eff4126bc789f0336d403da6766
-    version: 0.4.2
+    revision: 28a36e5e07705549e59fc33db96ab681bc1ca88e
+    version: 0.6.5
     source:
       Git: https://github.com/pulp-platform/iDMA.git
     dependencies:
     - axi
+    - axi_stream
     - common_cells
     - common_verification
+    - obi
     - register_interface
   insitu-cache:
-    revision: fbabd6a06fd801c960078517ad47f7994130b944
+    revision: f1cbe54dca0989f025b0450e85c42faf2bf5cbf1
     version: null
     source:
       Git: https://github.com/pulp-platform/Insitu-Cache.git
@@ -79,6 +117,14 @@ packages:
     - axi
     - common_cells
     - register_interface
+  obi:
+    revision: 0155fc34e900c7c884e081c0a1114a247937ff69
+    version: 0.1.7
+    source:
+      Git: https://github.com/pulp-platform/obi.git
+    dependencies:
+    - common_cells
+    - common_verification
   register_interface:
     revision: 146501d80052b61475cdc333d3aab4cd769fd5dc
     version: 0.3.9
@@ -96,8 +142,15 @@ packages:
     dependencies:
     - common_cells
     - tech_cells_generic
+  scm:
+    revision: 1976c7efb4979271eee2abe262fde0f9a20e2557
+    version: 1.2.1
+    source:
+      Git: https://github.com/pulp-platform/scm.git
+    dependencies:
+    - tech_cells_generic
   spatz:
-    revision: ed25c78dd72d839db8141287f9516d78ee399b93
+    revision: f6ea19fb26c8bf992ae51a3e4acd3f2a36c6659f
     version: null
     source:
       Git: https://github.com/pulp-platform/spatz.git

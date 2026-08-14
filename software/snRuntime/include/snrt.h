@@ -45,13 +45,6 @@ typedef struct snrt_slice {
 
 /// Peripherals to the Snitch SoC
 struct snrt_peripherals {
-    volatile uint32_t *wakeup;
-    uint32_t *perf_counters;
-    /**
-     * @brief Cluster-local CLINT
-     *
-     */
-    volatile uint32_t *cl_clint;
 };
 
 /// Barrier to use with snrt_barrier
@@ -67,35 +60,47 @@ extern void snrt_cluster_sw_barrier();
 extern void snrt_global_barrier();
 extern void snrt_barrier(struct snrt_barrier *barr, uint32_t n);
 
+/// Partial hardware barrier support. snrt_cluster_hw_barrier() above is
+/// unchanged and always synchronizes every core/tile; these are additive.
+///
+/// Step 1 (cluster level): program which tiles participate in the next
+/// masked barrier round(s). Call from exactly one core, then use
+/// snrt_cluster_hw_barrier() as a resync point before relying on it, since
+/// the cluster barrier FSM samples this mask live when the first
+/// participating tile arrives.
+extern void snrt_barrier_set_tile_mask(uint32_t mask_lo, uint32_t mask_hi);
+
+/// Step 2 (tile level): compute this core's tile-local participant mask
+/// from a fixed list of global core ids (cids outside this core's own tile
+/// are ignored). Every core in `cids` must call this with the identical
+/// (cids, n) for a given round, so all of them derive the same mask
+/// independently. Intended to be called once and cached; the O(n) cost
+/// should not sit in a hot loop.
+extern uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n);
+
+/// Issue a partial hardware barrier restricted to local_mask (as returned
+/// by snrt_cluster_partial_barrier_mask()). O(1) — a single store.
+extern void snrt_cluster_partial_barrier(uint32_t local_mask);
+
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();
 extern struct snrt_peripherals *snrt_peripherals();
 extern uint32_t snrt_global_core_base_hartid();
 extern uint32_t snrt_global_core_idx();
 extern uint32_t snrt_global_core_num();
-extern uint32_t snrt_global_compute_core_idx();
-extern uint32_t snrt_global_compute_core_num();
-extern uint32_t snrt_global_dm_core_idx();
-extern uint32_t snrt_global_dm_core_num();
 extern uint32_t snrt_cluster_core_base_hartid();
 extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
 extern uint32_t snrt_cluster_tile_idx();
 extern uint32_t snrt_cluster_tile_num();
-extern uint32_t snrt_cluster_compute_core_idx();
-extern uint32_t snrt_cluster_compute_core_num();
-extern uint32_t snrt_cluster_dm_core_idx();
-extern uint32_t snrt_cluster_dm_core_num();
+extern uint32_t snrt_cluster_core_per_tile();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
-extern int snrt_is_compute_core();
-extern int snrt_is_dm_core();
-extern void snrt_wakeup(uint32_t mask);
 
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
 
-/// get pointer to participation barrier register
+/// get pointer to the tile-participation-mask register (word 0 of 2)
 extern uint32_t _snrt_barrier_participation_mask_reg_ptr();
 
 /// get start address of global memory
@@ -157,8 +162,9 @@ static inline uint32_t __attribute__((pure)) snrt_hartid() {
 //================================================================================
 extern void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off);
 extern void *snrt_l1alloc(size_t size);
-extern void *snrt_l3alloc(size_t size);
 extern void snrt_l1alloc_reset();
+extern void *snrt_malloc(size_t size);
+extern void  snrt_free(void *ptr);
 
 //================================================================================
 // Interrupt functions
@@ -220,6 +226,24 @@ extern void snrt_int_clint_set(uint32_t reg_off, uint32_t mask);
 extern void snrt_int_sw_poll(void);
 extern void snrt_int_cluster_clr(uint32_t mask);
 extern void snrt_int_cluster_set(uint32_t mask);
+
+/**
+ * @brief Memory fence: drain Snitch's scalar LSU and Spatz's outstanding
+ *        memory operations before subsequent instructions issue.
+ */
+static inline void snrt_fence() { asm volatile("fence" ::: "memory"); }
+
+/**
+ * @brief Snitch-only fence: drain Snitch's scalar LSU only.
+ *        Uses the fence.i opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_snitch() { asm volatile("fence.i" ::: "memory"); }
+
+/**
+ * @brief Spatz-only fence: drain Spatz's outstanding memory operations only.
+ *        Uses the sfence.vma opcode, repurposed on this bare-metal platform.
+ */
+static inline void snrt_fence_spatz() { asm volatile("sfence.vma" ::: "memory"); }
 
 /**
  * @brief Put the hart into wait for interrupt state
@@ -293,6 +317,14 @@ static inline void snrt_mutex_release(volatile uint32_t *pmtx) {
     eu_exit(core_idx);               \
     dm_exit();                       \
     snrt_cluster_hw_barrier();
+
+//================================================================================
+// Printf functions
+//================================================================================
+
+// Print a float value without promoting to double (avoids fcvt.d.s / fsd,
+// which are illegal on rv32imaf). All arithmetic stays in single precision.
+extern void snrt_printf_float(float val);
 
 #ifdef __cplusplus
 }

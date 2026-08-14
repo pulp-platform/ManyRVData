@@ -69,7 +69,7 @@ ${TOOLCHAIN_DIR}/riscv-isa-sim: ${TOOLCHAIN_DIR}/riscv-isa-sim.version
 
 ${TOOLCHAIN_DIR}/dtc:
 	mkdir -p ${TOOLCHAIN_DIR}/dtc
-	cd ${TOOLCHAIN_DIR}/dtc && wget -c https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.7.0.tar.gz
+	cd ${TOOLCHAIN_DIR}/dtc && curl -fLO https://git.kernel.org/pub/scm/utils/dtc/dtc.git/snapshot/dtc-1.7.0.tar.gz
 	cd ${TOOLCHAIN_DIR}/dtc && tar xf dtc-1.7.0.tar.gz
 
 # ---------- Build toolchains ----------

@@ -15,14 +15,15 @@ module cachepool_peripheral
   parameter int unsigned SPMWidth     = 0,
   // Number of tiles (used for flush controller granularity)
   parameter int unsigned NumTiles     = 1,
+  // Width actually used from the (fixed 4b) L1D_PRIVATE CSR field.
+  parameter int unsigned PrivateWidth = 4,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,
-  // Nr of course in the cluster
-  parameter logic [31:0] NrCores       = 0,
   /// Derived parameter *Do not override*
   parameter type addr_t = logic [AddrWidth-1:0],
-  parameter type spm_size_t = logic [SPMWidth-1:0]
+  parameter type spm_size_t = logic [SPMWidth-1:0],
+  parameter type private_sel_t = logic [PrivateWidth-1:0]
 ) (
   input  logic                       clk_i,
   input  logic                       rst_ni,
@@ -35,18 +36,17 @@ module cachepool_peripheral
   input  addr_t                      tcdm_end_address_i,
   output addr_t                      private_start_addr_o,
   output logic                       icache_prefetch_enable_o,
-  output logic [NrCores-1:0]         cl_clint_o,
   output logic                       cluster_probe_o,
   input  logic [9:0]                 cluster_hart_base_id_i,
   /// For cache xbar dynamic configuration
   output logic [4:0]                 dynamic_offset_o,
   output spm_size_t                  l1d_spm_size_o,
-  output logic [3:0]                 l1d_private_o,
+  output private_sel_t               l1d_private_o,
   output cache_insn_t                l1d_insn_o,
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
   output logic [NumTiles-1:0]        l1d_busy_o,
-  output logic [NumTiles-1:0]        barrier_participation_mask_o // SOCMIPO
+  output logic [NumTiles-1:0]        barrier_participation_mask_o
 );
 
   cachepool_peripheral_reg2hw_t reg2hw;
@@ -89,8 +89,6 @@ module cachepool_peripheral
 
 
   //////////// L1 DCache ////////////
-  logic [NumPerfCounters-1:0][47:0] perf_counter_d, perf_counter_q;
-  logic [31:0]          cl_clint_d, cl_clint_q;
   logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
   logic [3:0]           l1d_private_d, l1d_private_q;
   addr_t                private_start_addr_d, private_start_addr_q;
@@ -124,8 +122,28 @@ module cachepool_peripheral
   // 10b is enough for 1024 cache lines, we should not need all of them
   assign l1d_spm_size_o       = l1d_spm_size_q[SPMWidth-1:0];
 
-  assign l1d_private_o        = l1d_private_q;
+  assign l1d_private_o        = l1d_private_q[PrivateWidth-1:0];
   assign private_start_addr_o = private_start_addr_q;
+
+  // Concatenate all tile-select register words into one wide vector and slice
+  // to NumTiles.  Unused upper bits (for small configs) are optimised away.
+  localparam int unsigned NumTileSelWords = cachepool_peripheral_reg_pkg::NumTileSelRegs;
+  logic [NumTileSelWords*32-1:0] tile_sel_raw;
+  always_comb begin : tile_sel_concat
+    for (int i = 0; i < NumTileSelWords; i++) begin
+      tile_sel_raw[i*32 +: 32] = reg2hw.cfg_l1d_tile_sel[i].q;
+    end
+  end
+
+  // Concatenate all barrier-participation register words into one wide vector
+  // and slice to NumTiles. Unused upper bits (for small configs) are optimised away.
+  logic [NumTileSelWords*32-1:0] barrier_participation_mask_raw;
+  always_comb begin : barrier_participation_mask_concat
+    for (int i = 0; i < NumTileSelWords; i++) begin
+      barrier_participation_mask_raw[i*32 +: 32] = reg2hw.hw_barrier_participation_mask[i].q;
+    end
+  end
+  assign barrier_participation_mask_o = barrier_participation_mask_raw[NumTiles-1:0];
 
   // Cache Flush Controller
   // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is
@@ -152,7 +170,7 @@ module cachepool_peripheral
         // For non-private modes (shared/all/init), tile_sel is forced to '1.
         l1d_insn_o.insn     = reg2hw.cfg_l1d_insn.q;
         l1d_insn_o.tile_sel = (reg2hw.cfg_l1d_insn.q == 2'b00)
-                            ? reg2hw.cfg_l1d_tile_sel.q[NumTiles-1:0]
+                            ? tile_sel_raw[NumTiles-1:0]
                             : {NumTiles{1'b1}};
         l1d_insn_valid_o    = 1'b1;
         // Lock only the tiles that will receive the instruction.
@@ -173,24 +191,11 @@ module cachepool_peripheral
   end
 
   `FF(private_start_addr_q, private_start_addr_d, 32'hA000_0000, clk_i, rst_ni)
-  `FF(l1d_private_q, l1d_private_d, '0, clk_i, rst_ni)
+  `FF(l1d_private_q, l1d_private_d, 0, clk_i, rst_ni)
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
   // assign l1d_busy_o = (l1d_lock_q != '0);
-
-  // Wake-up logic: Bits in cl_clint_q can be set/cleared with writes to
-  // cl_clint_set/cl_clint_clear
-  always_comb begin
-    cl_clint_d = cl_clint_q;
-    if (reg2hw.cl_clint_set.qe) begin
-      cl_clint_d = cl_clint_q | reg2hw.cl_clint_set.q;
-    end else if (reg2hw.cl_clint_clear.qe) begin
-      cl_clint_d = cl_clint_q & ~reg2hw.cl_clint_clear.q;
-    end
-  end
-  `FF(cl_clint_q, cl_clint_d, '0, clk_i, rst_ni)
-  assign cl_clint_o = cl_clint_q[NrCores-1:0];
 
   // Enable icache prefetch
   assign icache_prefetch_enable_o = reg2hw.icache_prefetch_enable.q;
@@ -200,8 +205,5 @@ module cachepool_peripheral
 
   // The hardware barrier is external and always reads `0`.
   assign hw2reg.hw_barrier.d = 0;
-
-  // write from software
-  assign barrier_participation_mask_o = reg2hw.hw_barrier_participation_mask.q;
 
 endmodule

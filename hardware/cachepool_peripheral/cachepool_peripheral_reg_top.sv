@@ -68,16 +68,6 @@ module cachepool_peripheral_reg_top #(
   // Define SW related signals
   // Format: <reg>_<field>_{wd|we|qs}
   //        or <reg>_{wd|we|qs} if field == 1 or 0
-  logic [9:0] hart_select_0_qs;
-  logic [9:0] hart_select_0_wd;
-  logic hart_select_0_we;
-  logic [9:0] hart_select_1_qs;
-  logic [9:0] hart_select_1_wd;
-  logic hart_select_1_we;
-  logic [31:0] cl_clint_set_wd;
-  logic cl_clint_set_we;
-  logic [31:0] cl_clint_clear_wd;
-  logic cl_clint_clear_we;
   logic [31:0] hw_barrier_qs;
   logic hw_barrier_re;
   logic icache_prefetch_enable_wd;
@@ -99,9 +89,18 @@ module cachepool_peripheral_reg_top #(
   logic [1:0] cfg_l1d_insn_qs;
   logic [1:0] cfg_l1d_insn_wd;
   logic cfg_l1d_insn_we;
-  logic [31:0] cfg_l1d_tile_sel_qs;
-  logic [31:0] cfg_l1d_tile_sel_wd;
-  logic cfg_l1d_tile_sel_we;
+  logic [31:0] cfg_l1d_tile_sel_0_qs;
+  logic [31:0] cfg_l1d_tile_sel_0_wd;
+  logic cfg_l1d_tile_sel_0_we;
+  logic [31:0] cfg_l1d_tile_sel_1_qs;
+  logic [31:0] cfg_l1d_tile_sel_1_wd;
+  logic cfg_l1d_tile_sel_1_we;
+  logic [31:0] hw_barrier_participation_mask_0_qs;
+  logic [31:0] hw_barrier_participation_mask_0_wd;
+  logic hw_barrier_participation_mask_0_we;
+  logic [31:0] hw_barrier_participation_mask_1_qs;
+  logic [31:0] hw_barrier_participation_mask_1_wd;
+  logic hw_barrier_participation_mask_1_we;
   logic l1d_spm_commit_qs;
   logic l1d_spm_commit_wd;
   logic l1d_spm_commit_we;
@@ -122,99 +121,8 @@ module cachepool_peripheral_reg_top #(
   logic xbar_offset_commit_qs;
   logic xbar_offset_commit_wd;
   logic xbar_offset_commit_we;
-  logic [3:0] hw_barrier_participation_mask_qs;
-  logic [3:0] hw_barrier_participation_mask_wd;
-  logic hw_barrier_participation_mask_we;
 
   // Register instances
-
-  // Subregister 0 of Multireg hart_select
-  // R[hart_select_0]: V(False)
-
-  prim_subreg #(
-    .DW      (10),
-    .SWACCESS("RW"),
-    .RESVAL  (10'h0)
-  ) u_hart_select_0 (
-    .clk_i   (clk_i    ),
-    .rst_ni  (rst_ni  ),
-
-    // from register interface
-    .we     (hart_select_0_we),
-    .wd     (hart_select_0_wd),
-
-    // from internal hardware
-    .de     (1'b0),
-    .d      ('0  ),
-
-    // to internal hardware
-    .qe     (),
-    .q      (reg2hw.hart_select[0].q ),
-
-    // to register interface (read)
-    .qs     (hart_select_0_qs)
-  );
-
-  // Subregister 1 of Multireg hart_select
-  // R[hart_select_1]: V(False)
-
-  prim_subreg #(
-    .DW      (10),
-    .SWACCESS("RW"),
-    .RESVAL  (10'h0)
-  ) u_hart_select_1 (
-    .clk_i   (clk_i    ),
-    .rst_ni  (rst_ni  ),
-
-    // from register interface
-    .we     (hart_select_1_we),
-    .wd     (hart_select_1_wd),
-
-    // from internal hardware
-    .de     (1'b0),
-    .d      ('0  ),
-
-    // to internal hardware
-    .qe     (),
-    .q      (reg2hw.hart_select[1].q ),
-
-    // to register interface (read)
-    .qs     (hart_select_1_qs)
-  );
-
-
-  // R[cl_clint_set]: V(True)
-
-  prim_subreg_ext #(
-    .DW    (32)
-  ) u_cl_clint_set (
-    .re     (1'b0),
-    .we     (cl_clint_set_we),
-    .wd     (cl_clint_set_wd),
-    .d      ('0),
-    .qre    (),
-    .qe     (reg2hw.cl_clint_set.qe),
-    .q      (reg2hw.cl_clint_set.q ),
-    .qs     ()
-  );
-
-
-  // R[cl_clint_clear]: V(True)
-
-  prim_subreg_ext #(
-    .DW    (32)
-  ) u_cl_clint_clear (
-    .re     (1'b0),
-    .we     (cl_clint_clear_we),
-    .wd     (cl_clint_clear_wd),
-    .d      ('0),
-    .qre    (),
-    .qe     (reg2hw.cl_clint_clear.qe),
-    .q      (reg2hw.cl_clint_clear.q ),
-    .qs     ()
-  );
-
-
   // R[hw_barrier]: V(True)
 
   prim_subreg_ext #(
@@ -418,19 +326,21 @@ module cachepool_peripheral_reg_top #(
   );
 
 
-  // R[cfg_l1d_tile_sel]: V(False)
+
+  // Subregister 0 of Multireg cfg_l1d_tile_sel
+  // R[cfg_l1d_tile_sel_0]: V(False)
 
   prim_subreg #(
     .DW      (32),
     .SWACCESS("RW"),
     .RESVAL  (32'h0)
-  ) u_cfg_l1d_tile_sel (
+  ) u_cfg_l1d_tile_sel_0 (
     .clk_i   (clk_i    ),
     .rst_ni  (rst_ni  ),
 
     // from register interface
-    .we     (cfg_l1d_tile_sel_we),
-    .wd     (cfg_l1d_tile_sel_wd),
+    .we     (cfg_l1d_tile_sel_0_we),
+    .wd     (cfg_l1d_tile_sel_0_wd),
 
     // from internal hardware
     .de     (1'b0),
@@ -438,10 +348,93 @@ module cachepool_peripheral_reg_top #(
 
     // to internal hardware
     .qe     (),
-    .q      (reg2hw.cfg_l1d_tile_sel.q ),
+    .q      (reg2hw.cfg_l1d_tile_sel[0].q ),
 
     // to register interface (read)
-    .qs     (cfg_l1d_tile_sel_qs)
+    .qs     (cfg_l1d_tile_sel_0_qs)
+  );
+
+  // Subregister 1 of Multireg cfg_l1d_tile_sel
+  // R[cfg_l1d_tile_sel_1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'h0)
+  ) u_cfg_l1d_tile_sel_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (cfg_l1d_tile_sel_1_we),
+    .wd     (cfg_l1d_tile_sel_1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.cfg_l1d_tile_sel[1].q ),
+
+    // to register interface (read)
+    .qs     (cfg_l1d_tile_sel_1_qs)
+  );
+
+
+
+  // Subregister 0 of Multireg hw_barrier_participation_mask
+  // R[hw_barrier_participation_mask_0]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'hffffffff)
+  ) u_hw_barrier_participation_mask_0 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (hw_barrier_participation_mask_0_we),
+    .wd     (hw_barrier_participation_mask_0_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.hw_barrier_participation_mask[0].q ),
+
+    // to register interface (read)
+    .qs     (hw_barrier_participation_mask_0_qs)
+  );
+
+  // Subregister 1 of Multireg hw_barrier_participation_mask
+  // R[hw_barrier_participation_mask_1]: V(False)
+
+  prim_subreg #(
+    .DW      (32),
+    .SWACCESS("RW"),
+    .RESVAL  (32'hffffffff)
+  ) u_hw_barrier_participation_mask_1 (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (hw_barrier_participation_mask_1_we),
+    .wd     (hw_barrier_participation_mask_1_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.hw_barrier_participation_mask[1].q ),
+
+    // to register interface (read)
+    .qs     (hw_barrier_participation_mask_1_qs)
   );
 
 
@@ -623,59 +616,30 @@ module cachepool_peripheral_reg_top #(
   );
 
 
-  // R[hw_barrier_participation_mask]: V(False)
-
-  prim_subreg #(
-    .DW      (4),
-    .SWACCESS("RW"),
-    .RESVAL  (4'hf)
-  ) u_hw_barrier_participation_mask (
-    .clk_i   (clk_i    ),
-    .rst_ni  (rst_ni  ),
-
-    // from register interface
-    .we     (hw_barrier_participation_mask_we),
-    .wd     (hw_barrier_participation_mask_wd),
-
-    // from internal hardware
-    .de     (1'b0),
-    .d      ('0  ),
-
-    // to internal hardware
-    .qe     (),
-    .q      (reg2hw.hw_barrier_participation_mask.q ),
-
-    // to register interface (read)
-    .qs     (hw_barrier_participation_mask_qs)
-  );
 
 
-
-
-  logic [20:0] addr_hit;
+  logic [18:0] addr_hit;
   always_comb begin
     addr_hit = '0;
-    addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HART_SELECT_0_OFFSET);
-    addr_hit[ 1] = (reg_addr == CACHEPOOL_PERIPHERAL_HART_SELECT_1_OFFSET);
-    addr_hit[ 2] = (reg_addr == CACHEPOOL_PERIPHERAL_CL_CLINT_SET_OFFSET);
-    addr_hit[ 3] = (reg_addr == CACHEPOOL_PERIPHERAL_CL_CLINT_CLEAR_OFFSET);
-    addr_hit[ 4] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
-    addr_hit[ 5] = (reg_addr == CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
-    addr_hit[ 6] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET);
-    addr_hit[ 7] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET);
-    addr_hit[ 8] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
-    addr_hit[ 9] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
-    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET);
-    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
-    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_OFFSET);
-    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
-    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
-    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
-    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
-    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
-    addr_hit[18] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[19] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
-    addr_hit[20] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_OFFSET);
+    addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
+    addr_hit[ 1] = (reg_addr == CACHEPOOL_PERIPHERAL_ICACHE_PREFETCH_ENABLE_OFFSET);
+    addr_hit[ 2] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_STATUS_OFFSET);
+    addr_hit[ 3] = (reg_addr == CACHEPOOL_PERIPHERAL_SPATZ_CYCLE_OFFSET);
+    addr_hit[ 4] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_BOOT_CONTROL_OFFSET);
+    addr_hit[ 5] = (reg_addr == CACHEPOOL_PERIPHERAL_CLUSTER_EOC_EXIT_OFFSET);
+    addr_hit[ 6] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_SPM_OFFSET);
+    addr_hit[ 7] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_INSN_OFFSET);
+    addr_hit[ 8] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_0_OFFSET);
+    addr_hit[ 9] = (reg_addr == CACHEPOOL_PERIPHERAL_CFG_L1D_TILE_SEL_1_OFFSET);
+    addr_hit[10] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_OFFSET);
+    addr_hit[11] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_1_OFFSET);
+    addr_hit[12] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_OFFSET);
+    addr_hit[13] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_OFFSET);
+    addr_hit[14] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_OFFSET);
+    addr_hit[15] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
+    addr_hit[16] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
+    addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
+    addr_hit[18] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -701,158 +665,142 @@ module cachepool_peripheral_reg_top #(
                (addr_hit[15] & (|(CACHEPOOL_PERIPHERAL_PERMIT[15] & ~reg_be))) |
                (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be))) |
                (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be))) |
-               (addr_hit[18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[18] & ~reg_be))) |
-               (addr_hit[19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[19] & ~reg_be))) |
-               (addr_hit[20] & (|(CACHEPOOL_PERIPHERAL_PERMIT[20] & ~reg_be)))));
+               (addr_hit[18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[18] & ~reg_be)))));
   end
 
-  assign hart_select_0_we = addr_hit[0] & reg_we & !reg_error;
-  assign hart_select_0_wd = reg_wdata[9:0];
+  assign hw_barrier_re = addr_hit[0] & reg_re & !reg_error;
 
-  assign hart_select_1_we = addr_hit[1] & reg_we & !reg_error;
-  assign hart_select_1_wd = reg_wdata[9:0];
-
-  assign cl_clint_set_we = addr_hit[2] & reg_we & !reg_error;
-  assign cl_clint_set_wd = reg_wdata[31:0];
-
-  assign cl_clint_clear_we = addr_hit[3] & reg_we & !reg_error;
-  assign cl_clint_clear_wd = reg_wdata[31:0];
-
-  assign hw_barrier_re = addr_hit[4] & reg_re & !reg_error;
-
-  assign icache_prefetch_enable_we = addr_hit[5] & reg_we & !reg_error;
+  assign icache_prefetch_enable_we = addr_hit[1] & reg_we & !reg_error;
   assign icache_prefetch_enable_wd = reg_wdata[0];
 
-  assign spatz_status_we = addr_hit[6] & reg_we & !reg_error;
+  assign spatz_status_we = addr_hit[2] & reg_we & !reg_error;
   assign spatz_status_wd = reg_wdata[0];
 
-  assign spatz_cycle_we = addr_hit[7] & reg_we & !reg_error;
+  assign spatz_cycle_we = addr_hit[3] & reg_we & !reg_error;
   assign spatz_cycle_wd = reg_wdata[31:0];
 
-  assign cluster_boot_control_we = addr_hit[8] & reg_we & !reg_error;
+  assign cluster_boot_control_we = addr_hit[4] & reg_we & !reg_error;
   assign cluster_boot_control_wd = reg_wdata[31:0];
 
-  assign cluster_eoc_exit_we = addr_hit[9] & reg_we & !reg_error;
+  assign cluster_eoc_exit_we = addr_hit[5] & reg_we & !reg_error;
   assign cluster_eoc_exit_wd = reg_wdata[3:0];
 
-  assign cfg_l1d_spm_we = addr_hit[10] & reg_we & !reg_error;
+  assign cfg_l1d_spm_we = addr_hit[6] & reg_we & !reg_error;
   assign cfg_l1d_spm_wd = reg_wdata[9:0];
 
-  assign cfg_l1d_insn_we = addr_hit[11] & reg_we & !reg_error;
+  assign cfg_l1d_insn_we = addr_hit[7] & reg_we & !reg_error;
   assign cfg_l1d_insn_wd = reg_wdata[1:0];
 
-  assign cfg_l1d_tile_sel_we = addr_hit[12] & reg_we & !reg_error;
-  assign cfg_l1d_tile_sel_wd = reg_wdata[31:0];
+  assign cfg_l1d_tile_sel_0_we = addr_hit[8] & reg_we & !reg_error;
+  assign cfg_l1d_tile_sel_0_wd = reg_wdata[31:0];
 
-  assign l1d_spm_commit_we = addr_hit[13] & reg_we & !reg_error;
+  assign cfg_l1d_tile_sel_1_we = addr_hit[9] & reg_we & !reg_error;
+  assign cfg_l1d_tile_sel_1_wd = reg_wdata[31:0];
+
+  assign hw_barrier_participation_mask_0_we = addr_hit[10] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_0_wd = reg_wdata[31:0];
+
+  assign hw_barrier_participation_mask_1_we = addr_hit[11] & reg_we & !reg_error;
+  assign hw_barrier_participation_mask_1_wd = reg_wdata[31:0];
+
+  assign l1d_spm_commit_we = addr_hit[12] & reg_we & !reg_error;
   assign l1d_spm_commit_wd = reg_wdata[0];
 
-  assign l1d_insn_commit_we = addr_hit[14] & reg_we & !reg_error;
+  assign l1d_insn_commit_we = addr_hit[13] & reg_we & !reg_error;
   assign l1d_insn_commit_wd = reg_wdata[0];
 
-  assign l1d_flush_status_re = addr_hit[15] & reg_re & !reg_error;
+  assign l1d_flush_status_re = addr_hit[14] & reg_re & !reg_error;
 
-  assign l1d_private_we = addr_hit[16] & reg_we & !reg_error;
+  assign l1d_private_we = addr_hit[15] & reg_we & !reg_error;
   assign l1d_private_wd = reg_wdata[3:0];
 
-  assign l1d_addr_we = addr_hit[17] & reg_we & !reg_error;
+  assign l1d_addr_we = addr_hit[16] & reg_we & !reg_error;
   assign l1d_addr_wd = reg_wdata[31:0];
 
-  assign xbar_offset_we = addr_hit[18] & reg_we & !reg_error;
+  assign xbar_offset_we = addr_hit[17] & reg_we & !reg_error;
   assign xbar_offset_wd = reg_wdata[4:0];
 
-  assign xbar_offset_commit_we = addr_hit[19] & reg_we & !reg_error;
+  assign xbar_offset_commit_we = addr_hit[18] & reg_we & !reg_error;
   assign xbar_offset_commit_wd = reg_wdata[0];
-
-  assign hw_barrier_participation_mask_we = addr_hit[20] & reg_we & !reg_error;
-  assign hw_barrier_participation_mask_wd = reg_wdata[3:0];
 
   // Read data return
   always_comb begin
     reg_rdata_next = '0;
     unique case (1'b1)
       addr_hit[0]: begin
-        reg_rdata_next[9:0] = hart_select_0_qs;
-      end
-
-      addr_hit[1]: begin
-        reg_rdata_next[9:0] = hart_select_1_qs;
-      end
-
-      addr_hit[2]: begin
-        reg_rdata_next[31:0] = '0;
-      end
-
-      addr_hit[3]: begin
-        reg_rdata_next[31:0] = '0;
-      end
-
-      addr_hit[4]: begin
         reg_rdata_next[31:0] = hw_barrier_qs;
       end
 
-      addr_hit[5]: begin
+      addr_hit[1]: begin
         reg_rdata_next[0] = '0;
       end
 
-      addr_hit[6]: begin
+      addr_hit[2]: begin
         reg_rdata_next[0] = '0;
       end
 
-      addr_hit[7]: begin
+      addr_hit[3]: begin
         reg_rdata_next[31:0] = spatz_cycle_qs;
       end
 
-      addr_hit[8]: begin
+      addr_hit[4]: begin
         reg_rdata_next[31:0] = cluster_boot_control_qs;
       end
 
-      addr_hit[9]: begin
+      addr_hit[5]: begin
         reg_rdata_next[3:0] = cluster_eoc_exit_qs;
       end
 
-      addr_hit[10]: begin
+      addr_hit[6]: begin
         reg_rdata_next[9:0] = cfg_l1d_spm_qs;
       end
 
-      addr_hit[11]: begin
+      addr_hit[7]: begin
         reg_rdata_next[1:0] = cfg_l1d_insn_qs;
       end
 
-      addr_hit[12]: begin
-        reg_rdata_next[31:0] = cfg_l1d_tile_sel_qs;
+      addr_hit[8]: begin
+        reg_rdata_next[31:0] = cfg_l1d_tile_sel_0_qs;
       end
 
-      addr_hit[13]: begin
+      addr_hit[9]: begin
+        reg_rdata_next[31:0] = cfg_l1d_tile_sel_1_qs;
+      end
+
+      addr_hit[10]: begin
+        reg_rdata_next[31:0] = hw_barrier_participation_mask_0_qs;
+      end
+
+      addr_hit[11]: begin
+        reg_rdata_next[31:0] = hw_barrier_participation_mask_1_qs;
+      end
+
+      addr_hit[12]: begin
         reg_rdata_next[0] = l1d_spm_commit_qs;
       end
 
-      addr_hit[14]: begin
+      addr_hit[13]: begin
         reg_rdata_next[0] = l1d_insn_commit_qs;
       end
 
-      addr_hit[15]: begin
+      addr_hit[14]: begin
         reg_rdata_next[0] = l1d_flush_status_qs;
       end
 
-      addr_hit[16]: begin
+      addr_hit[15]: begin
         reg_rdata_next[3:0] = l1d_private_qs;
       end
 
-      addr_hit[17]: begin
+      addr_hit[16]: begin
         reg_rdata_next[31:0] = l1d_addr_qs;
       end
 
-      addr_hit[18]: begin
+      addr_hit[17]: begin
         reg_rdata_next[4:0] = xbar_offset_qs;
       end
 
-      addr_hit[19]: begin
+      addr_hit[18]: begin
         reg_rdata_next[0] = xbar_offset_commit_qs;
-      end
-
-      addr_hit[20]: begin
-        reg_rdata_next[3:0] = hw_barrier_participation_mask_qs;
       end
 
       default: begin
