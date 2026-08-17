@@ -91,11 +91,13 @@ module cachepool_cluster
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
     parameter int                     unsigned               NrSramCfg                          = 1,
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
-    parameter bit                                            UseFoldedDataBanks               = 1'b1,
-    parameter int                     unsigned               FoldWayGroup                     = 0,
-    parameter bit                                            UseHashWaySelect                 = 1'b1,
+    parameter bit                                            UseFoldedDataBanks                 = 1'b1,
+    parameter int                     unsigned               FoldWayGroup                       = 0,
+    parameter bit                                            UseHashWaySelect                   = 1'b1,
     /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
-    parameter bit                                            UseForwardingBuffer              = 1'b1
+    parameter bit                                            UseForwardingBuffer                = 1'b1,
+    /// First hartid of the cluster; cores get hartids HartBaseId..HartBaseId+NrCores-1.
+    parameter logic                   [9:0]                  HartBaseId                         = 10'h0
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -117,10 +119,6 @@ module cachepool_cluster
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
     input  logic                                  msip_i,
-    /// First hartid of the cluster. Cores of a cluster are monotonically
-    /// increasing without a gap, i.e., a cluster with 8 cores and a
-    /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic          [9:0]                   hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
@@ -290,7 +288,7 @@ module cachepool_cluster
         .meip_i                   ( meip_i                                          ),
         .mtip_i                   ( mtip_i                                          ),
         .msip_i                   ( msip_i                                          ),
-        .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup)              ),
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
         .private_start_addr_i     ( private_start_addr                              ),
@@ -1264,7 +1262,7 @@ module cachepool_cluster
     .tcdm_start_address_i     ( tcdm_start_address     ),
     .tcdm_end_address_i       ( tcdm_end_address       ),
     .icache_prefetch_enable_o ( icache_prefetch_enable ),
-    .cluster_hart_base_id_i   ( hart_base_id_i         ),
+    .cluster_hart_base_id_i   ( HartBaseId             ),
     .cluster_probe_o          ( cluster_probe_o        ),
     .dynamic_offset_o         ( dynamic_offset         ),
     .private_start_addr_o     ( private_start_addr     ),
