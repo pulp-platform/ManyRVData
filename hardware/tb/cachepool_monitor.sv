@@ -30,7 +30,7 @@ module cachepool_monitor
     i_cluster_wrapper.i_cluster.gen_group_y[gy].gen_group_x[gx].i_group.i_group.gen_tiles[t].gen_tile.i_tile
 
   `define CC_PATH(gy, gx, t, c) \
-    `TILE_PATH(gy, gx, t).gen_core[c].i_cachepool_cc
+    `TILE_PATH(gy, gx, t).gen_cc[c].i_cachepool_cc
 
   `define CLUSTER_PATH i_cluster_wrapper.i_cluster
 

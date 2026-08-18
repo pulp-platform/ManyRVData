@@ -32,14 +32,17 @@ module cachepool_tile
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
     /// Address to indicate start of UART
     parameter logic                            [31:0]        UartAddr                           = 32'h0,
-    /// The total amount of cores.
-    parameter int                     unsigned               NrCores                            = 8,
+    /// Number of Core Complex (CC) slots in this tile.
+    parameter int                     unsigned               NumCC                              = 8,
+    /// Number of Snitch scalar cores sharing one Spatz per CC (1 = today's
+    /// cachepool_cc, 2 = cachepool_cc_dual). Homogeneous per tile.
+    parameter int                     unsigned               NumScalarPerCC                     = 1,
     /// Data/TCDM memory depth per cut (in words).
     parameter int                     unsigned               TCDMDepth                          = 1024,
     /// Cluster peripheral address region size (in kB).
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
-    parameter int                     unsigned               NrBanks                            = 2 * NrCores,
+    parameter int                     unsigned               NrBanks                            = 2 * NumCC,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -110,7 +113,9 @@ module cachepool_tile
     parameter bit                                            UseHashWaySelect                 = 1'b0,
     /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
     parameter bit                                            UseForwardingBuffer              = 1'b1,
-    localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1
+    localparam int                    unsigned               TotRGPorts                         = (NumRemoteGroupPortCore == 0) ? 0 : NumRemoteGroupPortCore*NrTCDMPortsPerCore-1,
+    /// Derived parameter *Do not override*: true hart count (NumCC = CC-slot count).
+    localparam int                    unsigned               NrHarts                            = NumCC * NumScalarPerCC
   ) (
     /// System clock.
     input  logic                                          clk_i,
@@ -170,9 +175,9 @@ module cachepool_tile
     input  remote_group_req_t [TotRGPorts:0]              remote_group_req_i,
     output remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_o,
     /// Peripheral signals
-    output icache_l1_events_t [NrCores-1:0]               icache_events_o,
+    output icache_l1_events_t [NrHarts-1:0]               icache_events_o,
     input  logic                                          icache_prefetch_enable_i,
-    input  logic              [NrCores-1:0]               cl_interrupt_i,
+    input  logic              [NrHarts-1:0]               cl_interrupt_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_i,
     input  cache_insn_t                                   l1d_insn_i,
     input  logic              [$clog2(NumL1CtrlTile):0]   l1d_private_i,
@@ -204,7 +209,7 @@ module cachepool_tile
   assign num_private_cache = l1d_private_i  [$clog2(NumL1CtrlTile):0];
 
   /// Minimum width to hold the core number.
-  // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NrCores);
+  // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NumCC);
   localparam int unsigned TCDMMemAddrWidth  = $clog2(TCDMDepth);
 
   // Enlarge the address width for Spatz due to cache
@@ -222,7 +227,7 @@ module cachepool_tile
     return n;
   endfunction
 
-  localparam int unsigned NrTCDMPortsCores            = get_tcdm_port_offs(NrCores);
+  localparam int unsigned NrTCDMPortsCores            = get_tcdm_port_offs(NumCC);
   localparam int unsigned NumTCDMIn                   = NrTCDMPortsCores + 1;
   localparam logic        [AxiAddrWidth-1:0] TCDMMask = ~(TCDMSize-1);
 
@@ -350,13 +355,13 @@ module cachepool_tile
   tcdm_req_t [NrTCDMPortsCores-1:0] tcdm_req;
   tcdm_rsp_t [NrTCDMPortsCores-1:0] tcdm_rsp;
 
-  core_events_t [NrCores-1:0] core_events;
+  core_events_t [NumCC-1:0] core_events;
 
-  // snitch_icache_pkg::icache_events_t [NrCores-1:0] icache_events;
+  // snitch_icache_pkg::icache_events_t [NumCC-1:0] icache_events;
 
   // 4. Memory Subsystem (Core side).
-  reqrsp_req_t [NrCores-1:0] core_req, filtered_core_req;
-  reqrsp_rsp_t [NrCores-1:0] core_rsp, filtered_core_rsp;
+  reqrsp_req_t [NumCC-1:0] core_req, filtered_core_req;
+  reqrsp_rsp_t [NumCC-1:0] core_rsp, filtered_core_rsp;
 
 
   // 8. L1 D$
@@ -684,7 +689,7 @@ module cachepool_tile
 
       tcdm_cache_interco #(
         .NumTiles              (NumTiles          ),
-        .NumCores              (NrCores           ),
+        .NumCores              (NumCC             ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
         .NumLGPort         (NumLGPortCore ),
@@ -716,7 +721,7 @@ module cachepool_tile
       // No inter-group remote ports: instantiate interco without inter-group remote ports (backward-compatible).
       tcdm_cache_interco #(
         .NumTiles              (NumTiles          ),
-        .NumCores              (NrCores           ),
+        .NumCores              (NumCC             ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
         .NumLGPort             (NumLGPortCore     ),
@@ -1448,12 +1453,15 @@ module cachepool_tile
     end
   end
 
-  hive_req_t [NrCores-1:0] hive_req;
-  hive_rsp_t [NrCores-1:0] hive_rsp;
+  hive_req_t [NrHarts-1:0] hive_req;
+  hive_rsp_t [NrHarts-1:0] hive_rsp;
 
-  for (genvar i = 0; i < NrCores; i++) begin : gen_core
+  for (genvar i = 0; i < NumCC; i++) begin : gen_cc
     localparam int unsigned TcdmPorts     = get_tcdm_ports(i);
     localparam int unsigned TcdmPortsOffs = get_tcdm_port_offs(i);
+    // First hart index served by this CC slot. Only this hart is wired up
+    // for now (NumScalarPerCC>1's extra hart slots are added separately).
+    localparam int unsigned HartIdx       = i * NumScalarPerCC;
 
     interrupts_t irq;
 
@@ -1465,12 +1473,12 @@ module cachepool_tile
     i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq.mtip));
     sync #(.STAGES (2))
     i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq.msip));
-    assign irq.mcip = cl_interrupt_i[i];
+    assign irq.mcip = cl_interrupt_i[HartIdx];
 
     tcdm_req_t [TcdmPorts-1:0] tcdm_req_wo_user;
 
     logic [31:0] hart_id;
-    assign hart_id = hart_base_id_i + i;
+    assign hart_id = hart_base_id_i + HartIdx;
 
     cachepool_cc #(
       .BootAddr                (BootAddr                   ),
@@ -1523,8 +1531,8 @@ module cachepool_tile
       .rst_ni           (rst_ni                                     ),
       .testmode_i       (1'b0                                       ),
       .hart_id_i        (hart_id                                    ),
-      .hive_req_o       (hive_req[i]                                ),
-      .hive_rsp_i       (hive_rsp[i]                                ),
+      .hive_req_o       (hive_req[HartIdx]                          ),
+      .hive_rsp_i       (hive_rsp[HartIdx]                          ),
       .irq_i            (irq                                        ),
       .data_req_o       (core_req[i]                                ),
       .data_rsp_i       (core_rsp[i]                                ),
@@ -1547,16 +1555,16 @@ module cachepool_tile
   // Instruction Cache
   // ----------------
 
-  addr_t [NrCores-1:0]       inst_addr;
-  logic  [NrCores-1:0]       inst_cacheable;
-  logic  [NrCores-1:0][31:0] inst_data;
-  logic  [NrCores-1:0]       inst_valid;
-  logic  [NrCores-1:0]       inst_ready;
-  logic  [NrCores-1:0]       inst_error;
-  logic  [NrCores-1:0]       flush_valid;
-  logic  [NrCores-1:0]       flush_ready;
+  addr_t [NrHarts-1:0]       inst_addr;
+  logic  [NrHarts-1:0]       inst_cacheable;
+  logic  [NrHarts-1:0][31:0] inst_data;
+  logic  [NrHarts-1:0]       inst_valid;
+  logic  [NrHarts-1:0]       inst_ready;
+  logic  [NrHarts-1:0]       inst_error;
+  logic  [NrHarts-1:0]       flush_valid;
+  logic  [NrHarts-1:0]       flush_ready;
 
-  for (genvar i = 0; i < NrCores; i++) begin : gen_unpack_icache
+  for (genvar i = 0; i < NrHarts; i++) begin : gen_unpack_icache
     assign inst_addr[i]      = hive_req[i].inst_addr;
     assign inst_cacheable[i] = hive_req[i].inst_cacheable;
     assign inst_valid[i]     = hive_req[i].inst_valid;
@@ -1571,7 +1579,7 @@ module cachepool_tile
   end
 
   snitch_icache #(
-    .NR_FETCH_PORTS     ( NrCores                                            ),
+    .NR_FETCH_PORTS     ( NrHarts                                            ),
     .L0_LINE_COUNT      ( 8                                                  ),
     .LINE_WIDTH         ( ICacheLineWidth                                    ),
     .LINE_COUNT         ( ICacheLineCount                                    ),
@@ -1618,7 +1626,7 @@ module cachepool_tile
   // First-level barrier for CachePool system
   cachepool_tile_barrier #(
     .AddrWidth (AxiAddrWidth ),
-    .NrPorts   (NrCores      ),
+    .NrPorts   (NumCC        ),
     .dreq_t    (reqrsp_req_t ),
     .drsp_t    (reqrsp_rsp_t ),
     .user_t    (tcdm_user_t  )
@@ -1638,7 +1646,7 @@ module cachepool_tile
   reqrsp_rsp_t core_to_periph_rsp;
 
   reqrsp_mux #(
-    .NrPorts   (NrCores           ),
+    .NrPorts   (NumCC             ),
     .AddrWidth (AxiAddrWidth      ),
     .DataWidth (NarrowDataWidth   ),
     .UserWidth ($bits(tcdm_user_t)),

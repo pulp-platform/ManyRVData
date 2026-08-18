@@ -31,14 +31,14 @@ module cachepool_cluster
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
     /// Address to indicate start of UART
     parameter logic                            [31:0]        UartAddr                           = 32'h0,
-    /// The total amount of cores.
-    parameter int                     unsigned               NrCores                            = 8,
+    /// Number of Core Complex (CC) slots in this cluster.
+    parameter int                     unsigned               NumCC                              = 8,
     /// Data/TCDM memory depth per cut (in words).
     parameter int                     unsigned               TCDMDepth                          = 1024,
     /// Cluster peripheral address region size (in kB).
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
-    parameter int                     unsigned               NrBanks                            = 2 * NrCores,
+    parameter int                     unsigned               NrBanks                            = 2 * NumCC,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -96,7 +96,7 @@ module cachepool_cluster
     parameter bit                                            UseHashWaySelect                   = 1'b1,
     /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
     parameter bit                                            UseForwardingBuffer                = 1'b1,
-    /// First hartid of the cluster; cores get hartids HartBaseId..HartBaseId+NrCores-1.
+    /// First hartid of the cluster; cores get hartids HartBaseId..HartBaseId+NumCC-1.
     parameter logic                   [9:0]                  HartBaseId                         = 10'h0
   ) (
     /// System clock.
@@ -252,7 +252,7 @@ module cachepool_cluster
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoreGroup             ),
+        .NumCC                    ( NumCoreGroup             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks / NumGroups      ),
         .ICacheLineWidth          ( ICacheLineWidth          ),

@@ -30,14 +30,14 @@ module cachepool_group
     parameter logic                              [31:0] BootAddr                  = 32'h0,
     /// Address to indicate start of UART
     parameter logic                              [31:0] UartAddr                  = 32'h0,
-    /// The total amount of cores.
-    parameter int unsigned                              NrCores                   = 8,
+    /// Number of Core Complex (CC) slots in this group.
+    parameter int unsigned                              NumCC                     = 8,
     /// Data/TCDM memory depth per cut (in words).
     parameter int unsigned                              TCDMDepth                 = 1024,
     /// Cluster peripheral address region size (in kB).
     parameter int unsigned                              ClusterPeriphSize         = 64,
     /// Number of TCDM Banks.
-    parameter int unsigned                              NrBanks                   = 2 * NrCores,
+    parameter int unsigned                              NrBanks                   = 2 * NumCC,
     /// Width of a single icache line.
     parameter     unsigned                              ICacheLineWidth           = 0,
     /// Number of icache lines per set.
@@ -144,9 +144,9 @@ module cachepool_group
     input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
 
     /// Peripheral signals
-    output icache_l1_events_t             [NrCores-1:0] icache_events_o,
+    output icache_l1_events_t             [NumCC-1:0]   icache_events_o,
     input  logic                                        icache_prefetch_enable_i,
-    input  logic                          [NrCores-1:0] cl_interrupt_i,
+    input  logic                          [NumCC-1:0]   cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
     input  logic              [$clog2(NumL1CtrlTile):0] l1d_private_i,
     input  cache_insn_t                                 l1d_insn_i,
@@ -187,7 +187,7 @@ module cachepool_group
   // Constants
   // ---------
   // Per-group overrides of package-level constants that depend on NumTiles/NumCores.
-  localparam int unsigned NumL1CacheCtrlLocal  = NrCores;
+  localparam int unsigned NumL1CacheCtrlLocal  = NumCC;
 
   localparam int unsigned WideIdWidthIn   = AxiIdWidthOut;
 
@@ -562,7 +562,7 @@ module cachepool_group
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoresTile             ),
+        .NumCC                    ( NumCoresTile             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks                  ),
         .ICacheLineWidth          ( ICacheLineWidth          ),
@@ -653,7 +653,7 @@ module cachepool_group
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoresTile             ),
+        .NumCC                    ( NumCoresTile             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks                  ),
         .ICacheLineWidth          ( ICacheLineWidth          ),
