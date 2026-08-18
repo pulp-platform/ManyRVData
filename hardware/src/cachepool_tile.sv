@@ -35,8 +35,9 @@ module cachepool_tile
     /// Number of Core Complex (CC) slots in this tile.
     parameter int                     unsigned               NumCC                              = 8,
     /// Number of Snitch scalar cores sharing one Spatz per CC (1 = today's
-    /// cachepool_cc, 2 = cachepool_cc_dual). Homogeneous per tile.
-    parameter int                     unsigned               NumScalarPerCC                     = 1,
+    /// cachepool_cc, 2 = cachepool_cc_dual). Whole-build choice; defaults to
+    /// the package-level constant (single source of truth), not per-tile.
+    parameter int                     unsigned               NumScalarPerCC                     = cachepool_pkg::NumScalarPerCC,
     /// Data/TCDM memory depth per cut (in words).
     parameter int                     unsigned               TCDMDepth                          = 1024,
     /// Cluster peripheral address region size (in kB).
@@ -218,7 +219,7 @@ module cachepool_tile
   localparam int unsigned NrSuperBanks      = NrBanks / BanksPerSuperBank;
 
   function automatic int unsigned get_tcdm_ports(int unsigned core);
-    return spatz_pkg::N_FU + 1;
+    return spatz_pkg::N_FU + NumScalarPerCC;
   endfunction
 
   function automatic int unsigned get_tcdm_port_offs(int unsigned core_idx);
@@ -355,13 +356,12 @@ module cachepool_tile
   tcdm_req_t [NrTCDMPortsCores-1:0] tcdm_req;
   tcdm_rsp_t [NrTCDMPortsCores-1:0] tcdm_rsp;
 
-  core_events_t [NumCC-1:0] core_events;
-
   // snitch_icache_pkg::icache_events_t [NumCC-1:0] icache_events;
 
-  // 4. Memory Subsystem (Core side).
-  reqrsp_req_t [NumCC-1:0] core_req, filtered_core_req;
-  reqrsp_rsp_t [NumCC-1:0] core_rsp, filtered_core_rsp;
+  // 4. Memory Subsystem (Core side). Per-hart (not per-CC): each hart needs
+  // its own Periph/barrier port, one per hart sharing a CC included.
+  reqrsp_req_t [NrHarts-1:0] core_req, filtered_core_req;
+  reqrsp_rsp_t [NrHarts-1:0] core_rsp, filtered_core_rsp;
 
 
   // 8. L1 D$
@@ -377,8 +377,11 @@ module cachepool_tile
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
 
-  tcdm_req_t  [NumL1CtrlTile-1:0] cache_amo_req;
-  tcdm_rsp_t  [NumL1CtrlTile-1:0] cache_amo_rsp;
+  // One AMO-capable path per scalar port sharing this CC (indexed by the
+  // same j as cache_ctrl_req/cache_bank_rsp; only the last NumScalarPerCC
+  // planes are ever driven, see gen_cache_amo_connect).
+  tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_amo_req;
+  tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_amo_rsp;
 
 
   logic       [NumL1CtrlTile-1:0][NrTCDMPortsPerCore-1:0] cache_req_valid;
@@ -428,7 +431,7 @@ module cachepool_tile
   // Per-core response-side readiness, driven by each i_cachepool_cc instance.
   logic  [NrTCDMPortsCores-1:0] tcdm_rsp_ready;
   logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_pready, cache_xbar_pready;
-  logic  [NumL1CtrlTile-1:0] cache_amo_pready;
+  logic  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_amo_pready;
 
   always_comb begin : cache_flush_protection
     for (int j = 0; unsigned'(j) < NrTCDMPortsCores; j++) begin
@@ -755,7 +758,10 @@ module cachepool_tile
     // Ports from Spatz can bypass this module
 
     for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_amo_connect
-      if (j == NrTCDMPortsPerCore-1) begin : gen_amo
+      // One AMO-capable path per scalar port sharing this CC (the last
+      // NumScalarPerCC planes) -- each hart's own scalar port needs
+      // independent AMO capability, not just a single shared one.
+      if (j >= NrTCDMPortsPerCore - NumScalarPerCC) begin : gen_amo
         spatz_cache_amo #(
           .DataWidth        ( DataWidth        ),
           .CoreIDWidth      ( CoreIDWidth      ),
@@ -770,9 +776,9 @@ module cachepool_tile
           .core_req_i       (cache_ctrl_req   [j][cb] ),
           .core_rsp_ready_i (cache_xbar_pready[j][cb] ),
           .core_rsp_o       (cache_bank_rsp   [j][cb] ),
-          .mem_req_o        (cache_amo_req    [cb]    ),
-          .mem_rsp_ready_o  (cache_amo_pready [cb]    ),
-          .mem_rsp_i        (cache_amo_rsp    [cb]    )
+          .mem_req_o        (cache_amo_req    [j][cb] ),
+          .mem_rsp_ready_o  (cache_amo_pready [j][cb] ),
+          .mem_rsp_i        (cache_amo_rsp    [j][cb] )
         );
 
         tcdm_req_t cache_req_reg;
@@ -783,27 +789,27 @@ module cachepool_tile
           .Bypass ( 1'b0            )
         ) i_spill_reg_cache_req (
           .clk_i                                   ,
-          .rst_ni  ( rst_ni                       ),
-          .valid_i ( cache_amo_req[cb].q_valid    ),
-          .ready_o ( cache_amo_rsp[cb].q_ready    ),
-          .data_i  ( cache_amo_req[cb].q          ),
-          .valid_o ( cache_req_reg.q_valid        ),
-          .ready_i ( cache_rsp_reg.q_ready        ),
-          .data_o  ( cache_req_reg.q              )
+          .rst_ni  ( rst_ni                          ),
+          .valid_i ( cache_amo_req[j][cb].q_valid    ),
+          .ready_o ( cache_amo_rsp[j][cb].q_ready    ),
+          .data_i  ( cache_amo_req[j][cb].q          ),
+          .valid_o ( cache_req_reg.q_valid           ),
+          .ready_i ( cache_rsp_reg.q_ready           ),
+          .data_o  ( cache_req_reg.q                 )
         );
 
         spill_register #(
           .T      ( tcdm_rsp_chan_t ),
           .Bypass ( 1'b1            )
         ) i_spill_reg_cache_rsp (
-          .clk_i   ( clk_i                       ),
-          .rst_ni  ( rst_ni                      ),
-          .valid_i ( cache_rsp_reg.p_valid       ),
-          .ready_o ( cache_rsp_ready [cb][j]     ),
-          .data_i  ( cache_rsp_reg.p             ),
-          .valid_o ( cache_amo_rsp   [cb].p_valid),
-          .ready_i ( cache_amo_pready[cb]        ),
-          .data_o  ( cache_amo_rsp   [cb].p      )
+          .clk_i   ( clk_i                          ),
+          .rst_ni  ( rst_ni                         ),
+          .valid_i ( cache_rsp_reg.p_valid          ),
+          .ready_o ( cache_rsp_ready [cb][j]        ),
+          .data_i  ( cache_rsp_reg.p                ),
+          .valid_o ( cache_amo_rsp   [j][cb].p_valid),
+          .ready_i ( cache_amo_pready[j][cb]        ),
+          .data_o  ( cache_amo_rsp   [j][cb].p      )
         );
 
         assign cache_req_valid[cb][j] = cache_req_reg.q_valid;
@@ -1459,89 +1465,176 @@ module cachepool_tile
   for (genvar i = 0; i < NumCC; i++) begin : gen_cc
     localparam int unsigned TcdmPorts     = get_tcdm_ports(i);
     localparam int unsigned TcdmPortsOffs = get_tcdm_port_offs(i);
-    // First hart index served by this CC slot. Only this hart is wired up
-    // for now (NumScalarPerCC>1's extra hart slots are added separately).
+    // First hart index served by this CC slot (the only one if
+    // NumScalarPerCC==1; cachepool_cc_dual below wires up HartIdx+1 too).
     localparam int unsigned HartIdx       = i * NumScalarPerCC;
 
-    interrupts_t irq;
+    interrupts_t irq0;
 
     sync #(.STAGES (2))
-    i_sync_debug (.clk_i, .rst_ni, .serial_i (debug_req_i), .serial_o (irq.debug));
+    i_sync_debug0 (.clk_i, .rst_ni, .serial_i (debug_req_i), .serial_o (irq0.debug));
     sync #(.STAGES (2))
-    i_sync_meip (.clk_i, .rst_ni, .serial_i (meip_i), .serial_o (irq.meip));
+    i_sync_meip0 (.clk_i, .rst_ni, .serial_i (meip_i), .serial_o (irq0.meip));
     sync #(.STAGES (2))
-    i_sync_mtip (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq.mtip));
+    i_sync_mtip0 (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq0.mtip));
     sync #(.STAGES (2))
-    i_sync_msip (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq.msip));
-    assign irq.mcip = cl_interrupt_i[HartIdx];
+    i_sync_msip0 (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq0.msip));
+    assign irq0.mcip = cl_interrupt_i[HartIdx];
 
     tcdm_req_t [TcdmPorts-1:0] tcdm_req_wo_user;
 
-    logic [31:0] hart_id;
-    assign hart_id = hart_base_id_i + HartIdx;
+    logic [31:0] hart_id0;
+    assign hart_id0 = hart_base_id_i + HartIdx;
 
-    cachepool_cc #(
-      .BootAddr                (BootAddr                   ),
-      .UartAddr                (UartAddr                   ),
-      .RVE                     (1'b0                       ),
-      .RVF                     (RVF                        ),
-      .RVD                     (RVD                        ),
-      .RVV                     (RVV                        ),
-      .AddrWidth               (AxiAddrWidth               ),
-      .DataWidth               (NarrowDataWidth            ),
-      .UserWidth               (AxiUserWidth               ),
-      .SnitchPMACfg            (SnitchPMACfg               ),
-      .dreq_t                  (reqrsp_req_t               ),
-      .drsp_t                  (reqrsp_rsp_t               ),
-      .dreq_chan_t             (reqrsp_req_chan_t          ),
-      .drsp_chan_t             (reqrsp_rsp_chan_t          ),
-      .tcdm_req_t              (tcdm_req_t                 ),
-      .tcdm_user_t             (tcdm_user_t                ),
-      .tcdm_req_chan_t         (tcdm_req_chan_t            ),
-      .tcdm_rsp_t              (tcdm_rsp_t                 ),
-      .tcdm_rsp_chan_t         (tcdm_rsp_chan_t            ),
-      .axi_req_t               (axi_mst_tile_wide_req_t    ),
-      .axi_ar_chan_t           (axi_mst_tile_wide_ar_chan_t),
-      .axi_aw_chan_t           (axi_mst_tile_wide_aw_chan_t),
-      .axi_rsp_t               (axi_mst_tile_wide_resp_t   ),
-      .hive_req_t              (hive_req_t                 ),
-      .hive_rsp_t              (hive_rsp_t                 ),
-      .acc_issue_req_t         (acc_issue_req_t            ),
-      .acc_issue_rsp_t         (acc_issue_rsp_t            ),
-      .acc_rsp_t               (acc_rsp_t                  ),
-      .XDivSqrt                (1'b0                       ),
-      .XF16                    (1'b1                       ),
-      .XF16ALT                 (1'b0                       ),
-      .XF8                     (1'b1                       ),
-      .XF8ALT                  (1'b0                       ),
-      .IsoCrossing             (1'b0                       ),
-      .NumIntOutstandingLoads  (NumIntOutstandingLoads     ),
-      .NumIntOutstandingMem    (NumIntOutstandingMem       ),
-      .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads   ),
-      .FPUImplementation       (FPUImplementation          ),
-      .SpmStackDepth           (SpmStackDepth              ),
-      .RegisterOffloadRsp      (RegisterOffloadRsp         ),
-      .RegisterCoreReq         (RegisterCoreReq            ),
-      .RegisterCoreRsp         (RegisterCoreRsp            ),
-      .NumSpatzFPUs            (NumSpatzFPUs               ),
-      .NumSpatzIPUs            (NumSpatzIPUs               ),
-      .TCDMAddrWidth           (SPMAddrWidth               )
-    ) i_cachepool_cc (
-      .clk_i            (clk_i                                      ),
-      .rst_ni           (rst_ni                                     ),
-      .testmode_i       (1'b0                                       ),
-      .hart_id_i        (hart_id                                    ),
-      .hive_req_o       (hive_req[HartIdx]                          ),
-      .hive_rsp_i       (hive_rsp[HartIdx]                          ),
-      .irq_i            (irq                                        ),
-      .data_req_o       (core_req[i]                                ),
-      .data_rsp_i       (core_rsp[i]                                ),
-      .tcdm_req_o       (tcdm_req_wo_user                           ),
-      .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]       ),
-      .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
-      .core_events_o    (core_events[i]                             ),
-      .tcdm_addr_base_i (tcdm_start_address                         )
-    );
+    if (NumScalarPerCC == 1) begin : gen_single
+      cachepool_cc #(
+        .BootAddr                (BootAddr                   ),
+        .UartAddr                (UartAddr                   ),
+        .RVE                     (1'b0                       ),
+        .RVF                     (RVF                        ),
+        .RVD                     (RVD                        ),
+        .RVV                     (RVV                        ),
+        .AddrWidth               (AxiAddrWidth               ),
+        .DataWidth               (NarrowDataWidth            ),
+        .UserWidth               (AxiUserWidth               ),
+        .SnitchPMACfg            (SnitchPMACfg               ),
+        .dreq_t                  (reqrsp_req_t               ),
+        .drsp_t                  (reqrsp_rsp_t               ),
+        .dreq_chan_t             (reqrsp_req_chan_t          ),
+        .drsp_chan_t             (reqrsp_rsp_chan_t          ),
+        .tcdm_req_t              (tcdm_req_t                 ),
+        .tcdm_user_t             (tcdm_user_t                ),
+        .tcdm_req_chan_t         (tcdm_req_chan_t            ),
+        .tcdm_rsp_t              (tcdm_rsp_t                 ),
+        .tcdm_rsp_chan_t         (tcdm_rsp_chan_t            ),
+        .axi_req_t               (axi_mst_tile_wide_req_t    ),
+        .axi_ar_chan_t           (axi_mst_tile_wide_ar_chan_t),
+        .axi_aw_chan_t           (axi_mst_tile_wide_aw_chan_t),
+        .axi_rsp_t               (axi_mst_tile_wide_resp_t   ),
+        .hive_req_t              (hive_req_t                 ),
+        .hive_rsp_t              (hive_rsp_t                 ),
+        .acc_issue_req_t         (acc_issue_req_t            ),
+        .acc_issue_rsp_t         (acc_issue_rsp_t            ),
+        .acc_rsp_t               (acc_rsp_t                  ),
+        .XDivSqrt                (1'b0                       ),
+        .XF16                    (1'b1                       ),
+        .XF16ALT                 (1'b0                       ),
+        .XF8                     (1'b1                       ),
+        .XF8ALT                  (1'b0                       ),
+        .IsoCrossing             (1'b0                       ),
+        .NumIntOutstandingLoads  (NumIntOutstandingLoads     ),
+        .NumIntOutstandingMem    (NumIntOutstandingMem       ),
+        .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads   ),
+        .FPUImplementation       (FPUImplementation          ),
+        .SpmStackDepth           (SpmStackDepth              ),
+        .RegisterOffloadRsp      (RegisterOffloadRsp         ),
+        .RegisterCoreReq         (RegisterCoreReq            ),
+        .RegisterCoreRsp         (RegisterCoreRsp            ),
+        .NumSpatzFPUs            (NumSpatzFPUs               ),
+        .NumSpatzIPUs            (NumSpatzIPUs               ),
+        .TCDMAddrWidth           (SPMAddrWidth               )
+      ) i_cachepool_cc (
+        .clk_i            (clk_i                                      ),
+        .rst_ni           (rst_ni                                     ),
+        .testmode_i       (1'b0                                       ),
+        .hart_id_i        (hart_id0                                   ),
+        .hive_req_o       (hive_req[HartIdx]                          ),
+        .hive_rsp_i       (hive_rsp[HartIdx]                          ),
+        .irq_i            (irq0                                       ),
+        .data_req_o       (core_req[HartIdx]                          ),
+        .data_rsp_i       (core_rsp[HartIdx]                          ),
+        .tcdm_req_o       (tcdm_req_wo_user                           ),
+        .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]       ),
+        .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
+        .core_events_o    (/* unused */                               ),
+        .tcdm_addr_base_i (tcdm_start_address                         )
+      );
+    end else if (NumScalarPerCC == 2) begin : gen_dual
+      // Second hart's own interrupt sync + irq assembly (mirrors hart 0's above).
+      interrupts_t irq1;
+
+      sync #(.STAGES (2))
+      i_sync_debug1 (.clk_i, .rst_ni, .serial_i (debug_req_i), .serial_o (irq1.debug));
+      sync #(.STAGES (2))
+      i_sync_meip1 (.clk_i, .rst_ni, .serial_i (meip_i), .serial_o (irq1.meip));
+      sync #(.STAGES (2))
+      i_sync_mtip1 (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq1.mtip));
+      sync #(.STAGES (2))
+      i_sync_msip1 (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq1.msip));
+      assign irq1.mcip = cl_interrupt_i[HartIdx+1];
+
+      interrupts_t [1:0] irq_pair;
+      assign irq_pair[0] = irq0;
+      assign irq_pair[1] = irq1;
+
+      logic [1:0][31:0] hart_id_pair;
+      assign hart_id_pair[0] = hart_id0;
+      assign hart_id_pair[1] = hart_base_id_i + HartIdx + 1;
+
+      cachepool_cc_dual #(
+        .AddrWidth               (AxiAddrWidth               ),
+        .DataWidth               (NarrowDataWidth            ),
+        .UserWidth               (AxiUserWidth               ),
+        .SpmStackDepth           (SpmStackDepth              ),
+        .dreq_t                  (reqrsp_req_t               ),
+        .drsp_t                  (reqrsp_rsp_t               ),
+        .dreq_chan_t             (reqrsp_req_chan_t          ),
+        .drsp_chan_t             (reqrsp_rsp_chan_t          ),
+        .tcdm_req_t              (tcdm_req_t                 ),
+        .tcdm_user_t             (tcdm_user_t                ),
+        .tcdm_req_chan_t         (tcdm_req_chan_t            ),
+        .tcdm_rsp_t              (tcdm_rsp_t                 ),
+        .tcdm_rsp_chan_t         (tcdm_rsp_chan_t            ),
+        .TCDMAddrWidth           (SPMAddrWidth               ),
+        .hive_req_t              (hive_req_t                 ),
+        .hive_rsp_t              (hive_rsp_t                 ),
+        .acc_issue_req_t         (acc_issue_req_t            ),
+        .acc_issue_rsp_t         (acc_issue_rsp_t            ),
+        .acc_rsp_t               (acc_rsp_t                  ),
+        .FPUImplementation       (FPUImplementation          ),
+        .BootAddr                (BootAddr                   ),
+        .UartAddr                (UartAddr                   ),
+        .RVE                     (1'b0                       ),
+        .RVF                     (RVF                        ),
+        .RVD                     (RVD                        ),
+        .XDivSqrt                (1'b0                       ),
+        .XF8                     (1'b1                       ),
+        .XF16                    (1'b1                       ),
+        .XF16ALT                 (1'b0                       ),
+        .XF8ALT                  (1'b0                       ),
+        .NumIntOutstandingLoads  (NumIntOutstandingLoads     ),
+        .NumIntOutstandingMem    (NumIntOutstandingMem       ),
+        .NumSpatzOutstandingLoads(NumSpatzOutstandingLoads   ),
+        .RVV                     (RVV                        ),
+        .NumSpatzFPUs            (NumSpatzFPUs               ),
+        .NumSpatzIPUs            (NumSpatzIPUs               ),
+        .IsoCrossing             (1'b0                       ),
+        .RegisterOffloadRsp      (RegisterOffloadRsp         ),
+        .RegisterCoreReq         (RegisterCoreReq            ),
+        .RegisterCoreRsp         (RegisterCoreRsp            ),
+        .SnitchPMACfg            (SnitchPMACfg               )
+      ) i_cachepool_cc_dual (
+        .clk_i            (clk_i                                      ),
+        .rst_ni           (rst_ni                                     ),
+        .testmode_i       (1'b0                                       ),
+        .hart_id_i        (hart_id_pair                               ),
+        .irq_i            (irq_pair                                   ),
+        .hive_req_o       (hive_req[HartIdx +: 2]                     ),
+        .hive_rsp_i       (hive_rsp[HartIdx +: 2]                     ),
+        .data_req_o       (core_req[HartIdx +: 2]                     ),
+        .data_rsp_i       (core_rsp[HartIdx +: 2]                     ),
+        .tcdm_req_o       (tcdm_req_wo_user                           ),
+        .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]       ),
+        .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
+        .tcdm_addr_base_i (tcdm_start_address                         ),
+        .owner_id_o       (/* debug only, unused */                   ),
+        .lock_error_o     (/* debug only, unused */                   )
+      );
+    end else begin : gen_unsupported
+      `ASSERT_INIT(NumScalarPerCCSupported, 1'b0,
+        "cachepool_tile: NumScalarPerCC configuration not supported (only 1 or 2)")
+    end
+
     for (genvar j = 0; j < TcdmPorts; j++) begin : gen_tcdm_user
       always_comb begin
         tcdm_req[TcdmPortsOffs+j].q              = tcdm_req_wo_user[j].q;
@@ -1626,7 +1719,7 @@ module cachepool_tile
   // First-level barrier for CachePool system
   cachepool_tile_barrier #(
     .AddrWidth (AxiAddrWidth ),
-    .NrPorts   (NumCC        ),
+    .NrPorts   (NrHarts      ),
     .dreq_t    (reqrsp_req_t ),
     .drsp_t    (reqrsp_rsp_t ),
     .user_t    (tcdm_user_t  )
@@ -1646,7 +1739,7 @@ module cachepool_tile
   reqrsp_rsp_t core_to_periph_rsp;
 
   reqrsp_mux #(
-    .NrPorts   (NumCC             ),
+    .NrPorts   (NrHarts           ),
     .AddrWidth (AxiAddrWidth      ),
     .DataWidth (NarrowDataWidth   ),
     .UserWidth ($bits(tcdm_user_t)),

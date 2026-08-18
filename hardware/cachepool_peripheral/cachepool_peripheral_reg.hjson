@@ -32,6 +32,19 @@
         }]
     },
     {
+        name: "SPATZ_LOCK",
+        desc: '''Spatz ownership lock for dual-Snitch core complexes. Write 1 to acquire
+        (blocks until granted), write 0 to release.'''
+        swaccess: "ro",
+        hwaccess: "hrw",
+        hwext: "true",
+        fields: [{
+            bits: "31:0",
+            name: "SPATZ_LOCK",
+            desc: "Spatz ownership lock register."
+        }]
+    },
+    {
         name: "ICACHE_PREFETCH_ENABLE",
         desc: '''Controls prefetching of the instruction cache.'''
         swaccess: "wo",

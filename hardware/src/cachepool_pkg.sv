@@ -42,6 +42,10 @@ package cachepool_pkg;
   localparam int unsigned NFpu = `ifdef SPATZ_NUM_FPU `SPATZ_NUM_FPU `else 0 `endif;
   localparam int unsigned NIpu = `ifdef SPATZ_NUM_IPU `SPATZ_NUM_IPU `else 1 `endif;
 
+  // Snitch scalar cores sharing one Spatz per CC (1 = cachepool_cc, 2 = cachepool_cc_dual).
+  // Whole-build choice, not per-tile; default 1 until config.mk wires a real value through.
+  localparam int unsigned NumScalarPerCC = `ifdef NUM_SCALAR_PER_CC `NUM_SCALAR_PER_CC `else 1 `endif;
+
   localparam int unsigned NumIntOutstandingLoads   = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
   localparam int unsigned NumIntOutstandingMem     = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
   localparam int unsigned NumSpatzOutstandingLoads = `ifdef SPATZ_MAX_TRANS  `SPATZ_MAX_TRANS `else 0 `endif;
@@ -60,8 +64,9 @@ package cachepool_pkg;
   // How many cores within a tile? This is used to select the ports within a tile.
   localparam int unsigned LogNumCoresTile     = $clog2(NumCoresTile);
 
-  // 4 ports from Spatz + 1 shared port from Snitch/FPU
-  localparam int unsigned NrTCDMPortsPerCore  = 5;
+  // Spatz vector-FU ports (shared, one CC-slot's worth) + one dedicated scalar
+  // port per hart sharing that Spatz.
+  localparam int unsigned NrTCDMPortsPerCore  = (NFpu > NIpu ? NFpu : NIpu) + NumScalarPerCC;
 
   // Intra-group remote ports per tile, in total.
   localparam int unsigned NumLGPortTile   = NumLGPortCore * NrTCDMPortsPerCore;

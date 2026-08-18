@@ -29,8 +29,21 @@ module cachepool_monitor
   `define TILE_PATH(gy, gx, t) \
     i_cluster_wrapper.i_cluster.gen_group_y[gy].gen_group_x[gx].i_group.i_group.gen_tiles[t].gen_tile.i_tile
 
+  // CC_PATH/CC_SNITCH_PATH target the single-CC flavor (gen_single), the
+  // only flavor buildable today. CC_DUAL_PATH/CC_DUAL_SNITCH_PATH are the
+  // gen_dual equivalents (i_snitch nests one level deeper, under
+  // gen_snitch[h], since a dual CC has 2; i_spatz sits at the same
+  // relative depth in both flavors) for future dual-mode monitor code to
+  // opt into explicitly once that flavor is actually built and exercised.
   `define CC_PATH(gy, gx, t, c) \
-    `TILE_PATH(gy, gx, t).gen_cc[c].i_cachepool_cc
+    `TILE_PATH(gy, gx, t).gen_cc[c].gen_single.i_cachepool_cc
+  `define CC_SNITCH_PATH(gy, gx, t, c, h) \
+    `CC_PATH(gy, gx, t, c).i_snitch
+
+  `define CC_DUAL_PATH(gy, gx, t, c) \
+    `TILE_PATH(gy, gx, t).gen_cc[c].gen_dual.i_cachepool_cc_dual
+  `define CC_DUAL_SNITCH_PATH(gy, gx, t, c, h) \
+    `CC_DUAL_PATH(gy, gx, t, c).gen_snitch[h].i_snitch
 
   `define CLUSTER_PATH i_cluster_wrapper.i_cluster
 
@@ -618,21 +631,21 @@ module cachepool_monitor
             automatic logic inst_valid, inst_ready, stall;
             automatic logic is_no_instr, is_itlb, is_hazard, is_lsu, is_acc, is_fence;
 
-            inst_valid = `CC_PATH(gy, gx, t, c).i_snitch.inst_valid_o;
-            inst_ready = `CC_PATH(gy, gx, t, c).i_snitch.inst_ready_i;
-            stall      = `CC_PATH(gy, gx, t, c).i_snitch.stall;
+            inst_valid = `CC_SNITCH_PATH(gy, gx, t, c, 0).inst_valid_o;
+            inst_ready = `CC_SNITCH_PATH(gy, gx, t, c, 0).inst_ready_i;
+            stall      = `CC_SNITCH_PATH(gy, gx, t, c, 0).stall;
 
             is_no_instr = ~(inst_valid & inst_ready);
-            is_itlb     = `CC_PATH(gy, gx, t, c).i_snitch.trans_active &
-                          ~(`CC_PATH(gy, gx, t, c).i_snitch.itlb_valid &
-                            `CC_PATH(gy, gx, t, c).i_snitch.itlb_ready);
-            is_hazard   = ~(`CC_PATH(gy, gx, t, c).i_snitch.operands_ready &
-                             `CC_PATH(gy, gx, t, c).i_snitch.dst_ready);
-            is_lsu      = `CC_PATH(gy, gx, t, c).i_snitch.lsu_stall;
-            is_acc      = `CC_PATH(gy, gx, t, c).i_snitch.acc_stall;
-            is_fence    = `CC_PATH(gy, gx, t, c).i_snitch.fence_snitch_stall |
-                          `CC_PATH(gy, gx, t, c).i_snitch.fence_spatz_stall |
-                          `CC_PATH(gy, gx, t, c).i_snitch.fence_stall;
+            is_itlb     = `CC_SNITCH_PATH(gy, gx, t, c, 0).trans_active &
+                          ~(`CC_SNITCH_PATH(gy, gx, t, c, 0).itlb_valid &
+                            `CC_SNITCH_PATH(gy, gx, t, c, 0).itlb_ready);
+            is_hazard   = ~(`CC_SNITCH_PATH(gy, gx, t, c, 0).operands_ready &
+                             `CC_SNITCH_PATH(gy, gx, t, c, 0).dst_ready);
+            is_lsu      = `CC_SNITCH_PATH(gy, gx, t, c, 0).lsu_stall;
+            is_acc      = `CC_SNITCH_PATH(gy, gx, t, c, 0).acc_stall;
+            is_fence    = `CC_SNITCH_PATH(gy, gx, t, c, 0).fence_snitch_stall |
+                          `CC_SNITCH_PATH(gy, gx, t, c, 0).fence_spatz_stall |
+                          `CC_SNITCH_PATH(gy, gx, t, c, 0).fence_stall;
 
             inst_valid_cyc_d = session_edge ? '0 : inst_valid_cyc_q + (inst_valid ? 1 : 0);
             inst_accepted_d  = session_edge ? '0 :
@@ -660,13 +673,13 @@ module cachepool_monitor
           // outstanding.
           logic snitch_load_req_accept, snitch_load_resp_commit;
           assign snitch_load_req_accept =
-              `CC_PATH(gy, gx, t, c).i_snitch.data_req_o.q_valid &
-              `CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.q_ready &
-              ~`CC_PATH(gy, gx, t, c).i_snitch.data_req_o.q.write;
+              `CC_SNITCH_PATH(gy, gx, t, c, 0).data_req_o.q_valid &
+              `CC_SNITCH_PATH(gy, gx, t, c, 0).data_rsp_i.q_ready &
+              ~`CC_SNITCH_PATH(gy, gx, t, c, 0).data_req_o.q.write;
           assign snitch_load_resp_commit =
-              `CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.p_valid &
-              `CC_PATH(gy, gx, t, c).i_snitch.data_req_o.p_ready &
-              ~`CC_PATH(gy, gx, t, c).i_snitch.data_rsp_i.p.write;
+              `CC_SNITCH_PATH(gy, gx, t, c, 0).data_rsp_i.p_valid &
+              `CC_SNITCH_PATH(gy, gx, t, c, 0).data_req_o.p_ready &
+              ~`CC_SNITCH_PATH(gy, gx, t, c, 0).data_rsp_i.p.write;
 
           cnt_t load_req_ts_q[$];
           cnt_t snitch_load_lat_sum_q, snitch_load_lat_cnt_q;
@@ -866,6 +879,9 @@ module cachepool_monitor
 
   `undef TILE_PATH
   `undef CC_PATH
+  `undef CC_SNITCH_PATH
+  `undef CC_DUAL_PATH
+  `undef CC_DUAL_SNITCH_PATH
   `undef CLUSTER_PATH
 `endif
 
