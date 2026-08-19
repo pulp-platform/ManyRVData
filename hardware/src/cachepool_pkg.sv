@@ -26,7 +26,8 @@ package cachepool_pkg;
   //////////////////
   //   GLOBAL HW  //
   //////////////////
-  localparam int unsigned NumCores        = `ifdef NUM_CORES  `NUM_CORES  `else 0 `endif;
+  // Core Complex slot count (one Spatz per slot, shared by NumScalarPerCC harts).
+  localparam int unsigned NumCC           = `ifdef NUM_CORES  `NUM_CORES  `else 0 `endif;
   localparam int unsigned NumTiles        = `ifdef NUM_TILES  `NUM_TILES  `else 0 `endif;
   // TODO: not yet passed in through config, hardcode to 1
   localparam int unsigned NumGroups       = `ifdef NUM_GROUPS `NUM_GROUPS `else 1 `endif;
@@ -46,6 +47,10 @@ package cachepool_pkg;
   // Whole-build choice, not per-tile; default 1 until config.mk wires a real value through.
   localparam int unsigned NumScalarPerCC = `ifdef NUM_SCALAR_PER_CC `NUM_SCALAR_PER_CC `else 1 `endif;
 
+  // Total hart count (NumCC CC-slots x NumScalarPerCC harts each) -- use for
+  // per-hart addressing; use NumCC for CC/Spatz-slot units (tile/group size).
+  localparam int unsigned NumCores = NumCC * NumScalarPerCC;
+
   localparam int unsigned NumIntOutstandingLoads   = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
   localparam int unsigned NumIntOutstandingMem     = `ifdef SNITCH_MAX_TRANS `SNITCH_MAX_TRANS `else 0 `endif;
   localparam int unsigned NumSpatzOutstandingLoads = `ifdef SPATZ_MAX_TRANS  `SPATZ_MAX_TRANS `else 0 `endif;
@@ -56,7 +61,7 @@ package cachepool_pkg;
   //  TILE CONFIG  //
   ///////////////////
   // How many cores for each tile?
-  localparam int unsigned NumCoresTile        = NumCores / NumTiles;
+  localparam int unsigned NumCoresTile        = NumCC / NumTiles;
 
   // Intra-group remote ports per core (to other tiles in the same group).
   localparam int unsigned NumLGPortCore   = `ifdef LG_PORT_PER_CORE `LG_PORT_PER_CORE `else 0 `endif;
@@ -78,7 +83,7 @@ package cachepool_pkg;
   localparam int unsigned NumTilesPerGroup       = NumTiles / NumGroups;
 
   // How many cores for each group?
-  localparam int unsigned NumCoreGroup           = NumCores / NumGroups;
+  localparam int unsigned NumCoreGroup           = NumCC / NumGroups;
 
   // How many remote group ports for each tile?
   localparam int unsigned NumRemoteGroupPortCore = `ifdef RG_PORT_PER_CORE `RG_PORT_PER_CORE `else 0 `endif;
@@ -149,7 +154,7 @@ package cachepool_pkg;
   localparam int unsigned NumBank             = `ifdef L1D_NUM_BANKS `L1D_NUM_BANKS `else 0 `endif;
 
   // NOTE: these are used by AXI/L2 as well, keep here but ordered as "cluster-level cache topology"
-  localparam int unsigned NumL1CacheCtrl      = NumCores;
+  localparam int unsigned NumL1CacheCtrl      = NumCC;
   localparam int unsigned NumL1CtrlTile       = NumL1CacheCtrl / NumTiles;
 
   // Number of data banks assigned to each cache controller

@@ -73,7 +73,7 @@ module cachepool_cluster_wrapper
     .BootAddr                 (BootAddr                 ),
     .UartAddr                 (UartAddr                 ),
     .ClusterPeriphSize        (64                       ),
-    .NumCC                    (NumCores                 ),
+    .NumCC                    (NumCC                    ),
     .TCDMDepth                (TCDMDepth                ),
     .NrBanks                  (NumBank                  ),
     .ICacheLineWidth          (ICacheLineWidth          ),

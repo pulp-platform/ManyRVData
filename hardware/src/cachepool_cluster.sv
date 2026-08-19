@@ -288,7 +288,7 @@ module cachepool_cluster
         .meip_i                   ( meip_i                                          ),
         .mtip_i                   ( mtip_i                                          ),
         .msip_i                   ( msip_i                                          ),
-        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup)              ),
+        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup * NumScalarPerCC)             ),
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
         .private_start_addr_i     ( private_start_addr                              ),

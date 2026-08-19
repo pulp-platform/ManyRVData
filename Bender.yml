@@ -42,6 +42,9 @@ sources:
   - hardware/generated/floo_cachepool_noc_pkg.sv
   - hardware/src/cachepool_pkg.sv
   - hardware/src/cachepool_cc.sv
+  - hardware/src/cachepool_spatz_lock.sv
+  - hardware/src/acc_mux.sv
+  - hardware/src/cachepool_cc_dual.sv
   # Barrier
   - hardware/src/cachepool_tile_barrier.sv
   - hardware/src/cachepool_cluster_barrier.sv

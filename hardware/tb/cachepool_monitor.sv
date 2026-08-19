@@ -29,21 +29,25 @@ module cachepool_monitor
   `define TILE_PATH(gy, gx, t) \
     i_cluster_wrapper.i_cluster.gen_group_y[gy].gen_group_x[gx].i_group.i_group.gen_tiles[t].gen_tile.i_tile
 
-  // CC_PATH/CC_SNITCH_PATH target the single-CC flavor (gen_single), the
-  // only flavor buildable today. CC_DUAL_PATH/CC_DUAL_SNITCH_PATH are the
-  // gen_dual equivalents (i_snitch nests one level deeper, under
-  // gen_snitch[h], since a dual CC has 2; i_spatz sits at the same
-  // relative depth in both flavors) for future dual-mode monitor code to
-  // opt into explicitly once that flavor is actually built and exercised.
-  `define CC_PATH(gy, gx, t, c) \
-    `TILE_PATH(gy, gx, t).gen_cc[c].gen_single.i_cachepool_cc
-  `define CC_SNITCH_PATH(gy, gx, t, c, h) \
-    `CC_PATH(gy, gx, t, c).i_snitch
-
-  `define CC_DUAL_PATH(gy, gx, t, c) \
-    `TILE_PATH(gy, gx, t).gen_cc[c].gen_dual.i_cachepool_cc_dual
-  `define CC_DUAL_SNITCH_PATH(gy, gx, t, c, h) \
-    `CC_DUAL_PATH(gy, gx, t, c).gen_snitch[h].i_snitch
+  // CACHEPOOL_DUAL_CC (plain definedness flag, set by the Makefile iff
+  // num_scalar_per_core==2) picks which sub-instance gen_cc wraps, since
+  // the toolchain's preprocessor doesn't support `if value-comparisons.
+  // CC_SNITCH_PATH takes a hart index h; only h=0 is probed below today
+  // (the monitor's c-loop still indexes CC slots 1:1 with harts, so
+  // per-hart dual-mode stat collection is unstarted, deferred). i_spatz
+  // sits at the same relative depth in both flavors, so CC_PATH's
+  // existing `.i_spatz.*` usages need no change either way.
+  `ifdef CACHEPOOL_DUAL_CC
+    `define CC_PATH(gy, gx, t, c) \
+      `TILE_PATH(gy, gx, t).gen_cc[c].gen_dual.i_cachepool_cc_dual
+    `define CC_SNITCH_PATH(gy, gx, t, c, h) \
+      `CC_PATH(gy, gx, t, c).gen_snitch[h].i_snitch
+  `else
+    `define CC_PATH(gy, gx, t, c) \
+      `TILE_PATH(gy, gx, t).gen_cc[c].gen_single.i_cachepool_cc
+    `define CC_SNITCH_PATH(gy, gx, t, c, h) \
+      `CC_PATH(gy, gx, t, c).i_snitch
+  `endif
 
   `define CLUSTER_PATH i_cluster_wrapper.i_cluster
 
@@ -880,8 +884,6 @@ module cachepool_monitor
   `undef TILE_PATH
   `undef CC_PATH
   `undef CC_SNITCH_PATH
-  `undef CC_DUAL_PATH
-  `undef CC_DUAL_SNITCH_PATH
   `undef CLUSTER_PATH
 `endif
 

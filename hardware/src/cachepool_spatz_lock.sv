@@ -11,11 +11,11 @@
 /// Host 0 is the implicit owner while Idle; a write of 1 to the lock
 /// address acquires ownership (blocks until granted), a write of 0
 /// releases it (owner only). Pure arbiter: does not route the acc/data
-/// traffic itself (that lives in cachepool_cc_dual.sv, alongside its other
-/// owner-based muxing) -- only decides ownership and exposes owner_id_o/
-/// locked_o/waiting_o for the CC to apply, and counts owner-path acc
-/// handshakes (via req_fire_i/rsp_fire_i, fed back by the CC) to gate a
-/// switch until fully drained.
+/// traffic itself (that lives in acc_mux.sv/cachepool_cc_dual.sv) -- only
+/// decides ownership and exposes owner_id_o/locked_o/waiting_o for the CC
+/// to apply, and counts real Spatz acc handshakes (via
+/// req_fire_i/rsp_fire_i, fed back by acc_mux) to gate a switch until
+/// fully drained.
 /// Also hosts the pass-through memory-path register cuts (moved here from
 /// the per-core spill registers in cachepool_cc.sv).
 module cachepool_spatz_lock
@@ -42,8 +42,7 @@ module cachepool_spatz_lock
   output dreq_t           [NumHosts-1:0] out_req_o,
   input  drsp_t           [NumHosts-1:0] out_rsp_i,
 
-  // Owner-path acc handshake fires, fed back by the CC (which does the
-  // actual acc routing) purely for drain counting.
+  // Real Spatz acc handshake fires, fed back by acc_mux purely for drain counting.
   input  logic                           req_fire_i,
   input  logic                           rsp_fire_i,
 
@@ -65,7 +64,8 @@ module cachepool_spatz_lock
   // on the way to an actual ownership switch.
   //   Idle    -(acquire, other host)-> AcqWait -(drain_done)-> Locked (new owner)
   //   Locked  -(release, owner)     -> RelWait -(drain_done)-> Idle   (owner = host 0)
-  // Self-acquire (already owner) and read complete without a drain wait.
+  // Self-acquire completes immediately only if already drained; otherwise it
+  // waits through AcqWait too. Reads always complete immediately.
   // A non-owner acquire/release, or any lock op during a wait, is stalled
   // (never accepted) and sets the sticky error_o.
   //
@@ -86,14 +86,14 @@ module cachepool_spatz_lock
   logic        active_d, active_q;
   user_t       user_d, user_q;
 
+  // Outstanding acc handshakes on the owner's path; must reach 0 before a wait can complete.
+  logic [7:0] outstanding_d, outstanding_q;
+  logic       drain_done, waiting;
+
   assign owner_id_o = owner_q;
   assign locked_o   = (lock_q == Locked);
   assign waiting_o  = waiting;
   assign error_o    = error_q;
-
-  // Outstanding acc handshakes on the owner's path; must reach 0 before a wait can complete.
-  logic [7:0] outstanding_d, outstanding_q;
-  logic       drain_done, waiting;
 
   assign waiting    = (lock_q == AcqWait) || (lock_q == RelWait);
   assign drain_done = (outstanding_q == '0);
@@ -205,14 +205,14 @@ module cachepool_spatz_lock
     end
 
     case (lock_q)
-      // Host 0 is the implicit owner. Its own acquire/release are no-ops (immediate
-      // grant); host 1 may acquire (drains, then switches); host 1's release is
-      // meaningless (nothing to release) and stalled.
+      // Host 0 is the implicit owner. Its own release is a no-op (immediate grant);
+      // its own acquire grants immediately only if drained, else waits like host 1's;
+      // host 1's release is meaningless (nothing to release) and stalled.
       Idle: begin
         if (hit_any && !resp_pending_q) begin
           if (is_acquire[winner]) begin
-            if (winner == owner_q) begin
-              // host 0 self-acquire: immediate grant
+            if (winner == owner_q && drain_done) begin
+              // host 0 self-acquire, nothing outstanding: immediate grant
               lock_d      = Locked;
               in_rsp_o[winner].q_ready = 1'b1;
               resp_pending_d           = 1'b1;
@@ -220,7 +220,8 @@ module cachepool_spatz_lock
               resp_user_d              = in_req_i[winner].q.user;
               resp_read_d              = 1'b0;
             end else begin
-              // host 1 wants the lock -> drain, then grant
+              // host 1 wants the lock, or host 0 self-acquires while Idle-mode
+              // traffic (from either host) is still outstanding -> drain first
               active_d = winner;
               user_d   = in_req_i[winner].q.user;
               lock_d   = AcqWait;

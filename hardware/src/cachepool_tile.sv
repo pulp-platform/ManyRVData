@@ -1627,6 +1627,7 @@ module cachepool_tile
         .tcdm_rsp_i       (tcdm_rsp[TcdmPortsOffs +: TcdmPorts]       ),
         .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
         .tcdm_addr_base_i (tcdm_start_address                         ),
+        .cluster_periph_start_address_i (cluster_periph_start_address),
         .owner_id_o       (/* debug only, unused */                   ),
         .lock_error_o     (/* debug only, unused */                   )
       );

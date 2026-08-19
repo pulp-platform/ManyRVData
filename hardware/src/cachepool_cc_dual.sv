@@ -103,6 +103,7 @@ module cachepool_cc_dual
     // Response-side ready, reflecting real downstream capacity (Spatz + scalar ports).
     output logic         [TCDMPorts-1:0] tcdm_rsp_ready_o,
     input  addr_t                        tcdm_addr_base_i,
+    input  addr_t                        cluster_periph_start_address_i,
     // Spatz lock/switch status (debug)
     output logic                         owner_id_o,
     output logic                         lock_error_o
@@ -124,6 +125,11 @@ module cachepool_cc_dual
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
+  logic owner_id, locked, waiting;
+  logic req_fire, rsp_fire;
+  logic last_req_host;
+  assign owner_id_o = owner_id;
+
   // Raw per-host Snitch data port, and its acc issue/response bundle.
   dreq_t [1:0] snitch_dreq_d;
   drsp_t [1:0] snitch_drsp_d;
@@ -138,10 +144,7 @@ module cachepool_cc_dual
   fpnew_pkg::fmt_mode_t  [1:0] fpu_fmt_mode_h;
   fpnew_pkg::status_t          fpu_status;
 
-  // Spatz memory-consistency signals (single Spatz instance). Forwarded to the
-  // owner only -- the non-owner never issued anything, so its own acc_mem_cnt_q
-  // never incremented; broadcasting these finish pulses to it too would
-  // decrement past 0 and roll over. The non-owner sees "nothing pending" instead.
+  // Spatz memory-consistency signals, forwarded only to last_req_host (not owner_id, which is stale in Idle mode).
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
   logic       spatz_st_rsp_done;
@@ -151,9 +154,9 @@ module cachepool_cc_dual
   logic [1:0]      spatz_st_rsp_done_h;
 
   for (genvar h = 0; h < 2; h++) begin : gen_spatz_mem_consistency_gate
-    assign spatz_mem_finished_h[h]     = (owner_id == h[0]) ? spatz_mem_finished     : '0;
-    assign spatz_mem_str_finished_h[h] = (owner_id == h[0]) ? spatz_mem_str_finished : '0;
-    assign spatz_st_rsp_done_h[h]      = (owner_id == h[0]) ? spatz_st_rsp_done      : 1'b1;
+    assign spatz_mem_finished_h[h]     = (last_req_host == h[0]) ? spatz_mem_finished     : '0;
+    assign spatz_mem_str_finished_h[h] = (last_req_host == h[0]) ? spatz_mem_str_finished : '0;
+    assign spatz_st_rsp_done_h[h]      = (last_req_host == h[0]) ? spatz_st_rsp_done      : 1'b1;
   end
 
   for (genvar h = 0; h < 2; h++) begin : gen_snitch
@@ -239,10 +242,6 @@ module cachepool_cc_dual
   dreq_t [1:0] lock_out_req;
   drsp_t [1:0] lock_out_rsp;
 
-  logic owner_id, locked, waiting;
-  logic req_fire, rsp_fire;
-  assign owner_id_o = owner_id;
-
   cachepool_spatz_lock #(
     .AddrWidth       (AddrWidth        ),
     .NumHosts        (2                ),
@@ -267,36 +266,39 @@ module cachepool_cc_dual
     .locked_o                       (locked              ),
     .waiting_o                      (waiting             ),
     .error_o                        (lock_error_o        ),
-    .cluster_periph_start_address_i (tcdm_addr_base_i    )
+    .cluster_periph_start_address_i (cluster_periph_start_address_i)
   );
 
-  // Acc mux: owner's issue/response stream reaches Spatz. New requests (from anyone)
-  // are blocked while waiting; the owner's in-flight responses keep draining
-  // regardless. Non-owner is faked-accepted while unlocked, stalled+flagged
-  // (by the lock, via the stalled data-interface path) once locked.
-  assign req_fire = spatz_issue_valid & spatz_issue_ready;
-  assign rsp_fire = spatz_rsp_valid & spatz_rsp_ready;
-
-  always_comb begin
-    spatz_issue_req   = acc_snitch_req[owner_id];
-    spatz_issue_valid = waiting ? 1'b0 : acc_snitch_qvalid[owner_id];
-    spatz_rsp_ready   = acc_snitch_pready[owner_id];
-
-    acc_snitch_qready = '0;
-    acc_snitch_rsp    = '0;
-    acc_snitch_prsp   = '0;
-    acc_snitch_pvalid = '0;
-
-    acc_snitch_qready[owner_id] = waiting ? 1'b0 : spatz_issue_ready;
-    acc_snitch_rsp[owner_id]    = spatz_issue_rsp;
-    acc_snitch_prsp[owner_id]   = spatz_rsp;
-    acc_snitch_pvalid[owner_id] = spatz_rsp_valid;
-
-    if (!locked && !waiting) begin
-      acc_snitch_qready[1] = acc_snitch_qvalid[1];
-      acc_snitch_rsp[1]    = '{accept: 1'b1, default: '0};
-    end
-  end
+  // Acc mux: real round-robin access to Spatz for both hosts while
+  // unlocked, exclusive owner access while locked. See acc_mux.sv.
+  acc_mux #(
+    .acc_issue_req_t (acc_issue_req_t),
+    .acc_issue_rsp_t (acc_issue_rsp_t),
+    .acc_rsp_t       (acc_rsp_t      )
+  ) i_acc_mux (
+    .clk_i               (clk_i             ),
+    .rst_ni              (rst_ni            ),
+    .owner_id_i          (owner_id          ),
+    .locked_i            (locked            ),
+    .waiting_i           (waiting           ),
+    .acc_snitch_req_i    (acc_snitch_req    ),
+    .acc_snitch_rsp_o    (acc_snitch_rsp    ),
+    .acc_snitch_qvalid_i (acc_snitch_qvalid ),
+    .acc_snitch_qready_o (acc_snitch_qready ),
+    .acc_snitch_prsp_o   (acc_snitch_prsp   ),
+    .acc_snitch_pvalid_o (acc_snitch_pvalid ),
+    .acc_snitch_pready_i (acc_snitch_pready ),
+    .spatz_issue_req_o   (spatz_issue_req   ),
+    .spatz_issue_rsp_i   (spatz_issue_rsp   ),
+    .spatz_issue_valid_o (spatz_issue_valid ),
+    .spatz_issue_ready_i (spatz_issue_ready ),
+    .spatz_rsp_i         (spatz_rsp         ),
+    .spatz_rsp_valid_i   (spatz_rsp_valid   ),
+    .spatz_rsp_ready_o   (spatz_rsp_ready   ),
+    .req_fire_o          (req_fire          ),
+    .rsp_fire_o          (rsp_fire          ),
+    .last_req_host_o     (last_req_host     )
+  );
 
   // FPU rounding-mode/format CSRs: Spatz has one FPU, so it only ever sees the
   // current owner's config; its status broadcasts back to both hosts.
@@ -359,11 +361,8 @@ module cachepool_cc_dual
     .fpu_status_o            (fpu_status            )
   );
 
-  // Vector-FU TCDM ports: pinned to host 0's routing row in the tile-level
-  // cache crossbar (see note.md "Software / core-id assignment") -- there is
-  // only one physical row for this CC pair regardless of current owner; the
-  // acc mux above already re-attributes the response to the true owner once
-  // it re-enters the CC.
+  // Vector-FU TCDM ports pin to host 0's crossbar row (only one physical
+  // row per CC pair); acc_mux re-attributes responses to the true owner.
   for (genvar p = 0; p < NumMemPortsPerSpatz; p++) begin : gen_spatz_mem_ports
     assign tcdm_req_o[p] = '{
          q      : spatz_mem_req[p],
@@ -467,8 +466,11 @@ module cachepool_cc_dual
 
   for (genvar h = 0; h < 2; h++) begin : gen_host
     // FPU's request only ever contends on the crossbar matching the current owner.
-    assign fpu_req_gated[h]         = fp_lsu_mem_req;
-    assign fpu_req_gated[h].q_valid = fp_lsu_mem_req.q_valid && (owner_id == h[0]);
+    assign fpu_req_gated[h] = '{
+      q      : fp_lsu_mem_req.q,
+      q_valid: fp_lsu_mem_req.q_valid && (owner_id == h[0]),
+      p_ready: fp_lsu_mem_req.p_ready
+    };
 
     assign core_req_chan  [h][SnitchMst] = lock_out_req[h].q;
     assign core_req_valid [h][SnitchMst] = lock_out_req[h].q_valid;
@@ -536,10 +538,8 @@ module cachepool_cc_dual
       .mst_sel_i        (mem_rsp_sel    [h]  )
     );
 
-    // TotStack-range hits within the (merged) CacheMem slot get the hart-id
-    // bits patched to this host's own id -- always host h's id, regardless
-    // of which master won, since the FPU only ever wins here when it's
-    // already gating on owner_id == h.
+    // TotStack hits get patched with host h's own id regardless of which
+    // master won, since the FPU only ever wins here when already gated to owner_id==h.
     assign is_totstack[h] = (tcdm_addr_base_i <= mem_req_chan[h][CacheMem].addr)
                           && (mem_req_chan[h][CacheMem].addr < tcdm_addr_base_i + cachepool_pkg::TotStackSize);
 
