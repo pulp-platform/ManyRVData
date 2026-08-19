@@ -54,6 +54,14 @@ uint32_t snrt_cluster_tile_idx() {
 
 uint32_t snrt_cluster_core_idx() { return _snrt_core_idx; }
 
+int snrt_cluster_is_primary() {
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+    return (_snrt_core_idx % 2) == 0;
+#else
+    return 1;
+#endif
+}
+
 uint32_t snrt_cluster_core_num() {
     return _snrt_team_current->root->cluster_core_num;
 }

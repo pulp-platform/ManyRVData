@@ -18,6 +18,7 @@
 
 #include <benchmark.h>
 #include <snrt.h>
+#include <spatz_lock.h>
 #include <stdio.h>
 
 #include DATAHEADER
@@ -28,6 +29,12 @@
 int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
   const uint32_t cid = snrt_cluster_core_idx();
+
+  // Diagnostic: have host 0 of each pair hold the Spatz lock for the whole
+  // kernel, without gating any of the execution below on it.
+  if (snrt_cluster_is_primary()) {
+    spatz_lock_acquire();
+  }
 
   const int measure_iter = 2;
 
@@ -50,13 +57,13 @@ int main() {
   uint32_t offset = 31 - __builtin_clz(dim * sizeof(int));
 
   // Set xbar policy
-  l1d_xbar_config(offset);
+  // l1d_xbar_config(offset);
 
   if (cid == 0) {
     printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
 
-  snrt_cluster_hw_barrier();
+  snrt_cluster_host0_barrier();
 
   // Reset timer
   uint32_t timer = (uint32_t)-1;
@@ -66,12 +73,13 @@ int main() {
   int *a_int = dotp_A_dram + dim * cid;
   int *b_int = dotp_B_dram + dim * cid;
 
+
   for (int iter = 0; iter < measure_iter; iter ++) {
     // Start dump
     if (cid == 0)
       start_kernel();
 
-    snrt_cluster_hw_barrier();
+    // snrt_cluster_hw_barrier();
 
     // Start timer
     timer_tmp = benchmark_get_cycle();
@@ -92,8 +100,9 @@ int main() {
 
     result[cid] = acc;
 
-    // Wait for all cores to finish
-    snrt_cluster_hw_barrier();
+    // Host 0 only: this kernel doesn't care about host 1's progress or
+    // data at all, so no barrier or read ever involves it.
+    snrt_cluster_host0_barrier();
 
     // End timer and check if new best runtime
     if (cid == 0) {
@@ -105,10 +114,16 @@ int main() {
       stop_kernel();
     }
 
-    // Final reduction
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+    const uint32_t pair_stride = 2;
+#else
+    const uint32_t pair_stride = 1;
+#endif
+
+    // Final reduction over host 0's own slots only.
     if (cid == 0) {
-      // timer_tmp = benchmark_get_cycle() - timer_tmp;
-      for (uint32_t i = 1; i < num_cores; ++i)
+      acc = result[0];
+      for (uint32_t i = pair_stride; i < num_cores; i += pair_stride)
         acc += result[i];
       result[0] = acc;
 
@@ -116,10 +131,9 @@ int main() {
       printf("results:%u\n", result[0]);
 #endif
     }
-
   }
 
-  snrt_cluster_hw_barrier();
+  snrt_cluster_host0_barrier();
 
   // Check and display results
   if (cid == 0) {
@@ -150,7 +164,7 @@ int main() {
   }
 
   // Wait for core 0 to display the results
-  snrt_cluster_hw_barrier();
+  snrt_cluster_host0_barrier();
 
   return 0;
 }

@@ -49,6 +49,9 @@ if(RUNTIME_TRACE)
     add_compile_definitions(__SNRT_USE_TRACE)
 endif()
 
+set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
+add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
+
 include_directories(
     include
     vendor
@@ -65,6 +68,7 @@ set(sources
     src/alloc.c
     src/interrupt.c
     src/l1cache.c
+    src/spatz_lock.c
 )
 
 # platform specific sources
