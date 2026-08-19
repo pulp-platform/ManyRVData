@@ -204,8 +204,11 @@ Configuration names encode the number of groups and whether the FPU is enabled:
 | `cachepool_fpu_4g` | 4 | 2×2 | Yes | 4 | 4 | 64 |
 | `cachepool_fpu_16g` | 16 | 4×4 | Yes | 4 | 4 | 256 |
 | `cachepool_fpu_16g_tiny` | 16 | 4×4 | Yes | 2 | 2 | 64 |
+| `cachepool_dual_4g` | 4 | 2×2 | No (IPU only) | 4 | 4 | 64 CCs / 128 harts |
 
 `cachepool_fpu_16g_tiny` shrinks tiles/group and cores/tile for a faster-to-build, faster-to-simulate smoke test of the full 16-group mesh topology.
+
+`cachepool_dual_4g` sets `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock, so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. Software runtime support for the shared-Spatz lock is still in progress (see `note.md`).
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)

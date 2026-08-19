@@ -13,7 +13,14 @@ export INSTALL_DIR=/home/dishen/cachepool-32b/install
 
 # Python deps for hardware code generation (make generate) - venv instead of uv,
 # to match the existing local dev flow.
-python3 -m venv cachepool
+# python3.12 (not the default python3) is required: floogen needs Python >=3.10.
+PYTHON=python3.12
+export PYTHON
+$PYTHON -m venv cachepool
 source cachepool/bin/activate
 python3 -m pip install --quiet --upgrade pip
 python3 -m pip install --quiet -r requirements.txt
+
+# floogen (FlooNoC code generator) is pulled in via bender, not requirements.txt -
+# install it editable into this venv so `floogen` on PATH resolves here.
+make install-floogen PYTHON=python3 --no-print-directory

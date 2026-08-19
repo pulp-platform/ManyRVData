@@ -190,12 +190,12 @@ $(info FLOO_DIR: $(FLOO_DIR))
 # Generates the sources for FlooNoC
 .PHONY: update-floonoc install-floogen clean-floonoc
 install-floogen:
-	pip install -e $(FLOO_DIR) --quiet
+	$(PYTHON) -m pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
 $(FLOO_NOC): $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
-	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
+	floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
 
 clean-floonoc:
 	rm -f $(FLOO_NOC)
@@ -298,6 +298,10 @@ VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
+VLOG_DEFS += -DNUM_SCALAR_PER_CC=$(num_scalar_per_core)
+ifeq ($(num_scalar_per_core),2)
+VLOG_DEFS += -DCACHEPOOL_DUAL_CC
+endif
 VLOG_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
 VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
 VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
@@ -411,7 +415,8 @@ SW_CMAKE_FLAGS = \
   -DLLVM_PATH=${LLVM_INSTALL_DIR} \
   -DGCC_PATH=${GCC_INSTALL_DIR} \
   -DPYTHON=${PYTHON} \
-  -DBUILD_TESTS=ON
+  -DBUILD_TESTS=ON \
+  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core)
 
 .PHONY: sw
 sw: generate bootrom gen-data
