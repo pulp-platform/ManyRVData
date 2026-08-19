@@ -131,6 +131,9 @@ spatz_max_trans ?= 32
 # Snitch/FPU max outstanding transactions
 snitch_max_trans ?= 16
 
+# Number of Snitch scalar harts sharing one Spatz per Core Complex (1 or 2)
+num_scalar_per_core ?= 1
+
 
 #########################
 ##  AXI configuration  ##
