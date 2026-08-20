@@ -141,4 +141,6 @@ add_spatz_test_oneParam(idotp-32b idotp-32b/main.c 32768)
 
 add_spatz_test_zeroParam(load-store load-store/main.c)
 
+add_spatz_test_zeroParam(spatz-lock-handoff spatz-lock-handoff/main.c)
+
 add_spatz_test_zeroParam(bandwidth bandwidth/main.c)

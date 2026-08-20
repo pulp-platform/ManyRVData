@@ -15,7 +15,9 @@
 /// decides ownership and exposes owner_id_o/locked_o/waiting_o for the CC
 /// to apply, and counts real Spatz acc handshakes (via
 /// req_fire_i/rsp_fire_i, fed back by acc_mux) to gate a switch until
-/// fully drained.
+/// fully drained. Separately tracks outstanding vle/vse ops (invisible to
+/// req_fire_i/rsp_fire_i, since they never produce an acc_rsp_t writeback)
+/// via Spatz's own spatz_mem_finished_i/spatz_st_rsp_done_i.
 /// Also hosts the pass-through memory-path register cuts (moved here from
 /// the per-core spill registers in cachepool_cc.sv).
 module cachepool_spatz_lock
@@ -45,6 +47,13 @@ module cachepool_spatz_lock
   // Real Spatz acc handshake fires, fed back by acc_mux purely for drain counting.
   input  logic                           req_fire_i,
   input  logic                           rsp_fire_i,
+
+  // Spatz LSU drain tracking: vle/vse never produce an acc_rsp_t completion
+  // (writeback=0), so they are invisible to req_fire_i/rsp_fire_i above and
+  // need their own outstanding count, gated by Spatz's own signals.
+  input  logic                           spatz_lsu_issue_fire_i,
+  input  logic                    [1:0]  spatz_mem_finished_i,
+  input  logic                           spatz_st_rsp_done_i,
 
   // owner/lock status and error
   output logic                           owner_id_o,
@@ -88,6 +97,9 @@ module cachepool_spatz_lock
 
   // Outstanding acc handshakes on the owner's path; must reach 0 before a wait can complete.
   logic [7:0] outstanding_d, outstanding_q;
+  // Outstanding Spatz vle/vse ops; mirrors snitch.sv's own acc_mem_cnt_q so a
+  // switch can't happen while a load/store is still draining through the cache.
+  logic [7:0] lsu_outstanding_d, lsu_outstanding_q;
   logic       drain_done, waiting;
 
   assign owner_id_o = owner_q;
@@ -96,9 +108,11 @@ module cachepool_spatz_lock
   assign error_o    = error_q;
 
   assign waiting    = (lock_q == AcqWait) || (lock_q == RelWait);
-  assign drain_done = (outstanding_q == '0);
+  assign drain_done = (outstanding_q == '0) && (lsu_outstanding_q == '0) && spatz_st_rsp_done_i;
 
   `ASSERT(NoOutstandingUnderflow, rsp_fire_i |-> (outstanding_q != '0))
+  `ASSERT(NoLsuOutstandingUnderflow,
+      (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) |-> (lsu_outstanding_q != '0))
 
   always_comb begin
     outstanding_d = outstanding_q;
@@ -108,6 +122,19 @@ module cachepool_spatz_lock
     end else if (!req_fire_i && rsp_fire_i) begin
       // one insn finished
       outstanding_d = outstanding_q - 8'd1;
+    end
+  end
+
+  always_comb begin
+    lsu_outstanding_d = lsu_outstanding_q;
+    if (spatz_lsu_issue_fire_i) begin
+      lsu_outstanding_d = lsu_outstanding_d + 8'd1;
+    end
+    if (spatz_mem_finished_i[0]) begin
+      lsu_outstanding_d = lsu_outstanding_d - 8'd1;
+    end
+    if (spatz_mem_finished_i[1]) begin
+      lsu_outstanding_d = lsu_outstanding_d - 8'd1;
     end
   end
 
@@ -320,7 +347,8 @@ module cachepool_spatz_lock
   `FF(error_q,        error_d,        1'b0, clk_i, rst_ni)
   `FF(active_q,       active_d,       1'b0, clk_i, rst_ni)
   `FF(user_q,         user_d,         '0,   clk_i, rst_ni)
-  `FF(outstanding_q,  outstanding_d,  '0,   clk_i, rst_ni)
+  `FF(outstanding_q,     outstanding_d,     '0,   clk_i, rst_ni)
+  `FF(lsu_outstanding_q, lsu_outstanding_d, '0,   clk_i, rst_ni)
   `FF(resp_pending_q, resp_pending_d, 1'b0, clk_i, rst_ni)
   `FF(resp_host_q,    resp_host_d,    1'b0, clk_i, rst_ni)
   `FF(resp_user_q,    resp_user_d,    '0,   clk_i, rst_ni)

@@ -49,6 +49,9 @@ if(RUNTIME_TRACE)
     add_compile_definitions(__SNRT_USE_TRACE)
 endif()
 
+# Also set/applied in the parent software/CMakeLists.txt so sibling
+# directories (e.g. software/tests) see the same define; kept here too for
+# standalone snRuntime builds.
 set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
 add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
 

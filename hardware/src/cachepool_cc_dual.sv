@@ -237,6 +237,10 @@ module cachepool_cc_dual
   acc_rsp_t       spatz_rsp;
   logic           spatz_rsp_valid, spatz_rsp_ready;
 
+  // LSU issue handshake fire, gates the lock's LSU drain counter.
+  logic spatz_lsu_issue_fire;
+  assign spatz_lsu_issue_fire = spatz_issue_valid && spatz_issue_ready && spatz_issue_rsp.loadstore;
+
   // Lock-module pass-through data interface (accept/deliver on the module's
   // own registered output side; see cachepool_spatz_lock.sv).
   dreq_t [1:0] lock_out_req;
@@ -262,6 +266,9 @@ module cachepool_cc_dual
     .out_rsp_i                      (lock_out_rsp        ),
     .req_fire_i                     (req_fire            ),
     .rsp_fire_i                     (rsp_fire            ),
+    .spatz_lsu_issue_fire_i         (spatz_lsu_issue_fire),
+    .spatz_mem_finished_i           (spatz_mem_finished  ),
+    .spatz_st_rsp_done_i            (spatz_st_rsp_done   ),
     .owner_id_o                     (owner_id            ),
     .locked_o                       (locked              ),
     .waiting_o                      (waiting             ),

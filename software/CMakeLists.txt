@@ -15,6 +15,13 @@ project(snitch_cluster LANGUAGES C ASM)
 include(SnitchUtilities)
 
 enable_testing()
+
+# Set here (not just in snRuntime/CMakeLists.txt) so sibling directories
+# added below, e.g. software/tests, also see this define -- add_compile_definitions
+# is a directory property and does not propagate to sibling add_subdirectory trees.
+set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
+add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
+
 add_subdirectory(${SNITCH_SOFTWARE_DIR}/snRuntime snRuntime)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/riscvTests riscvTests)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/spatzBenchmarks spatzBenchmarks)
