@@ -388,22 +388,31 @@ $(BANDWIDTH_DATA): $(TESTS_DIR)/bandwidth/script/data.json \
 .PHONY: gen-data
 gen-data: $(ALL_GEN_DATA)
 
+# Clean targets, used to delete generated files
 .PHONY: clean.data
 clean.data:
 	rm -f $(ALL_GEN_DATA)
 
 .PHONY: clean.sw
-clean.sw:
+clean.sw: clean.data
 	rm -rf ${SOFTWARE_DIR}/build
 
-.PHONY: clean
-clean: clean.sw clean.vsim clean.data
+.PHONY: clean.generate
+clean.generate:
 	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \
 	                    $(BOOTROM_DIR)/bootrom.elf \
+	                    $(CACHEPOOL_DIR)/wlf* \
+	                    $(CACHEPOOL_DIR)/noc_profiling/* \
 	                    $(SNRT_BOOTINFO_H)
+
+.PHONY: clean.hw
+clean.hw: clean.vsim clean.generate
+
+.PHONY: clean
+clean: clean.hw clean.sw
 
 # Common CMake flags shared by sw and vsim targets.
 # vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
@@ -433,8 +442,11 @@ vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 ############
 
 # Just a shortcut to build everything
+.PHONY: hw
+hw: generate bootrom vsim
+
 .PHONY: all
-all: generate bootrom vsim sw
+all: hw sw
 
 ########
 # Lint #
@@ -468,9 +480,7 @@ avg-log:
 # NoC traffic visualization frontend (fork of https://github.com/ueqri/vis4mesh
 # with CachePool-specific fixes/features). Consumes the Vis4Mesh dataset
 # directories produced by util/scripts/noc_profiling_to_vis4mesh.py from
-# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs. Fetched as a
-# plain pinned clone (same pattern as toolchain.mk's riscv-gnu-toolchain/
-# llvm-project targets), not a git submodule.
+# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs.
 NPM             ?= npm
 VIS4MESH_DIR    ?= ${CACHEPOOL_DIR}/util/vis4mesh
 VIS4MESH_REPO   ?= https://github.com/DiyouS/vis4mesh.git
@@ -536,13 +546,18 @@ help:
 	@echo "SW Build:"
 	@echo ""
 	@echo "*sw*:             build software (generate + bootrom + cmake); overwrites previous build"
-	@echo "*clean.sw*:       remove the software build directory"
+	@echo "*clean.sw*:       remove the software build directory (also runs clean.data)"
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
 	@echo "*vsim*:           build hardware for QuestaSim simulation (use 'sw' to build software separately)"
+	@echo "*hw*:             shortcut for generate + bootrom + vsim"
+	@echo "*all*:            shortcut for hw + sw"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
-	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
+	@echo "*clean.data*:     remove generated data files (gen-data outputs)"
+	@echo "*clean.generate*: remove generated HJSON/bootrom/wlf/noc_profiling files [from 'generate'/'bootrom']"
+	@echo "*clean.hw*:       clean.vsim + clean.generate"
+	@echo "*clean*:          clean.hw + clean.sw (remove SW build, vsim build, and all generated HW files)"
 	@echo ""
 	@echo "Lint:"
 	@echo ""

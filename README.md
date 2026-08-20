@@ -111,6 +111,8 @@ make vsim config=cachepool_fpu_4g
 
 Set `DEBUG=0` to disable `+acc` waveform visibility and speed up simulation (used by CI); default is `DEBUG=1`.
 
+`make hw` is a shortcut for `generate bootrom vsim`; `make all` is a shortcut for `hw sw` (build everything).
+
 #### Run the Simulation
 
 The wrapper script launches the simulation (GUI or CLI) and expects a software ELF path as argument:
@@ -411,7 +413,7 @@ make lint config=cachepool_fpu_4g
 - If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
 - `make generate` regenerates the FlooNoC package automatically; only run `make update-floonoc` standalone if you're iterating on a `config/floonoc_*.yml` topology file without a full generate.
 - `make sw` and `make vsim` are decoupled (hw/sw build independently); rebuild whichever side you changed.
-- Use `make clean` when switching configs to prevent stale build artifacts.
+- Use `make clean` when switching configs to prevent stale build artifacts; `clean.sw`/`clean.hw` (or their finer-grained parts `clean.data`/`clean.generate`/`clean.vsim`) clean only one side if you don't need a full rebuild.
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
 - Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_cluster_flush()` or the appropriate cluster-wide partition flush) before reconfiguring.
 - Set `DEBUG=0` to disable `+acc` and speed up simulation (used by CI); default is `DEBUG=1` for waveform visibility.
