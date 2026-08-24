@@ -20,6 +20,7 @@
 #define LLIST_H
 
 #include <stddef.h>
+#include <stdint.h>
 #include "printf_lock.h"
 #include "mcs_lock.h"
 // #include "spin_lock.h"
@@ -30,8 +31,8 @@ typedef volatile int spinlock_t __attribute__((aligned(4)));
 
 spinlock_t tosend_llist_lock __attribute__((section(".data")));
 spinlock_t sent_llist_lock __attribute__((section(".data")));
-static _Atomic mcs_lock_t tosend_llist_lock_2 __attribute__((aligned(4))) __attribute__((section(".data")));
-static _Atomic mcs_lock_t sent_llist_lock_2 __attribute__((aligned(4))) __attribute__((section(".data")));
+/* Per-user mcs locks (tosend_llist_lock_2[NUM_USERS] / sent_llist_lock_2[NUM_USERS])
+   are declared in rlc.h, where NUM_USERS is visible. */
 
 static inline void spin_lock(spinlock_t *lock, int cycle) {
     while (__sync_lock_test_and_set(lock, 1)) { delay(cycle);}
@@ -63,6 +64,7 @@ typedef struct Node {
     void *tgt;          /* Pointer to the address to move the payload data to */
     size_t data_size;   /* Size of the payload in bytes */
     spinlock_t lock;    /* Per‑node lock (0: unlocked, 1: locked) */
+    uint32_t user_id;   /* Owning RLC entity / UE (instrumentation + multi-user routing) */
 } Node;
 
 /* Doubly‑linked list structure for storing Node pointers.
