@@ -226,21 +226,27 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
 // spread over specific tiles/groups rather than being forced into contiguous
 // ranges.  PRODUCER_CORE_NUM / CONSUMER_CORE_NUM remain as build-time knobs
 // for headers generated before the lists existed, and as the pacing divisor.
-#ifndef NUM_PRODUCER_CORES
-#define NUM_PRODUCER_CORES PRODUCER_CORE_NUM
-static const unsigned int producer_core_ids[NUM_PRODUCER_CORES] = {0, 1};
-#endif
-#ifndef NUM_CONSUMER_CORES
-#define NUM_CONSUMER_CORES CONSUMER_CORE_NUM
-static const unsigned int consumer_core_ids[NUM_CONSUMER_CORES] = {2, 3};
-#endif
+#if defined(NUM_PRODUCER_CORES) && defined(NUM_CONSUMER_CORES)
+/* The data header names the cores explicitly. */
+#define RLC_CORE_LISTS 1
 #ifndef PRODUCER_CORE_NUM
 #define PRODUCER_CORE_NUM NUM_PRODUCER_CORES
 #endif
 #ifndef CONSUMER_CORE_NUM
 #define CONSUMER_CORE_NUM NUM_CONSUMER_CORES
 #endif
+#else
+/* Header predates the core lists: fall back to contiguous ranges -- cores
+   [0, PRODUCER_CORE_NUM) produce and the next CONSUMER_CORE_NUM consume.
+   Deriving the ranges instead of declaring a fixed id array matters: the array
+   form would need a literal initializer per core count, and a short one (say
+   {0,1}) paired with a large PRODUCER_CORE_NUM would read past its
+   initializers and dispatch silently wrong. */
+#define NUM_PRODUCER_CORES PRODUCER_CORE_NUM
+#define NUM_CONSUMER_CORES CONSUMER_CORE_NUM
+#endif
 
+#if RLC_CORE_LISTS
 /* Returns 1 if core_id appears in the given id list. */
 static int core_in_list(const unsigned int core_id, const unsigned int *ids, unsigned int n) {
     for (unsigned int i = 0; i < n; i++) {
@@ -249,16 +255,52 @@ static int core_in_list(const unsigned int core_id, const unsigned int *ids, uns
     return 0;
 }
 
-/* Position of core_id within a list, or the list length if absent. Consumers
-   use their index here (not core_id - PRODUCER_CORE_NUM) to pick their share of
-   the RLC entities, so the partition follows the list rather than assuming the
-   consumer cores are contiguous. */
+/* Position of core_id within a list, or the list length if absent. */
 static unsigned int core_index_in_list(const unsigned int core_id, const unsigned int *ids,
                                        unsigned int n) {
     for (unsigned int i = 0; i < n; i++) {
         if (ids[i] == core_id) return i;
     }
     return n;
+}
+#endif
+
+/* Role of a core, and a consumer's position among the consumers. The position
+   is what selects that consumer's share of the RLC entities, so it must follow
+   the core list when there is one and the contiguous range otherwise. */
+static inline int rlc_is_consumer(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return core_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
+#else
+    return (core_id >= PRODUCER_CORE_NUM) &&
+           (core_id <  PRODUCER_CORE_NUM + CONSUMER_CORE_NUM);
+#endif
+}
+
+static inline int rlc_is_producer(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return !rlc_is_consumer(core_id) &&
+           core_in_list(core_id, producer_core_ids, NUM_PRODUCER_CORES);
+#else
+    return core_id < PRODUCER_CORE_NUM;
+#endif
+}
+
+static inline unsigned int rlc_consumer_index(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return core_index_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
+#else
+    return core_id - PRODUCER_CORE_NUM;
+#endif
+}
+
+/* The core that runs the UE status task: the first producer, whichever it is. */
+static inline unsigned int rlc_status_core(void) {
+#if RLC_CORE_LISTS
+    return producer_core_ids[0];
+#else
+    return 0;
+#endif
 }
 
 #define CPU_FREQENCY 1000000000 // 1GHz
@@ -410,8 +452,7 @@ static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestData
    Rate-limited so the aggregate consumer throughput equals OUTPUT_DATARATE
    when pacing is enabled. */
 static void consumer(const unsigned int core_id) {
-    const unsigned int c      = core_index_in_list(core_id, consumer_core_ids,
-                                                   NUM_CONSUMER_CORES);
+    const unsigned int c      = rlc_consumer_index(core_id);
     const unsigned int stride = (CONSUMER_CORE_NUM < NUM_USERS) ? CONSUMER_CORE_NUM : NUM_USERS;
     const unsigned int first  = c % stride;      /* first owned user */
     unsigned int cursor = first;
@@ -584,7 +625,7 @@ static void pkt_production_and_recycle(const unsigned int core_id)
         /* UE status report runs on exactly one core -- the first producer in
            the list, not core 0: with explicit core lists core 0 need not be a
            producer at all, and gating on it would drop the ACK task entirely. */
-        if (core_id == producer_core_ids[0]) {
+        if (core_id == rlc_status_core()) {
             ue_status_rpt(core_id);
         }
         uint32_t end_timecycle = benchmark_get_cycle();
@@ -616,9 +657,8 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    const int is_consumer = core_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
-    const int is_producer = !is_consumer && core_in_list(core_id, producer_core_ids,
-                                                         NUM_PRODUCER_CORES);
+    const int is_consumer = rlc_is_consumer(core_id);
+    const int is_producer = rlc_is_producer(core_id);
 
     if (is_producer) {
         pkt_production_and_recycle(core_id);
