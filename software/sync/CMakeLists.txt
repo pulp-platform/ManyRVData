@@ -8,3 +8,4 @@ add_spatz_test_zeroParam(partial_barrier partial_barrier/main.c)# SOCMIPO
 add_spatz_test_zeroParam(multi_barrier multi_barrier/main.c)
 add_spatz_test_zeroParam(spatz-lock-handoff spatz-lock-handoff/main.c)
 add_spatz_test_zeroParam(false-sharing false-sharing/main.c)
+add_spatz_test_zeroParam(lrsc-forward-progress lrsc-forward-progress/main.c)
