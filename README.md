@@ -144,7 +144,7 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 
        CONFIGS="cachepool_fpu_4g cachepool_fpu_16g"
        KERNELS="fdotp-32b_M32768 ffft-64b_M16384 fmatmul-64b_M2048"
-       PREFIX="test-cachepool-"
+       PREFIX="test-"
        ROOT_PATH=../..
 
 2. Run all builds and simulations:
@@ -346,7 +346,7 @@ For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_mon
 1. **Enable the profiler and run a kernel** (default `noc_profiling ?= 1`, so this is on unless you passed `noc_profiling=0`):
    ```sh
    make vsim config=<multi-group config> noc_profiling=1
-   ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-cachepool-<test>
+   ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-<test>
    ```
    L1 (inter-group cache-access mesh) logs (`router_g*.log`, `tile_g*.log`) only populate with `num_rg_ports_per_core > 0` (a multi-group config); L2 (DRAM-refill mesh) logs (`l2_router_g*.log`) and per-core PE logs (`pe_g*.log`) are always populated.
 

@@ -355,24 +355,28 @@ include sim/sim.mk
 
 TESTS_DIR := $(SOFTWARE_DIR)/tests
 
+# Test-group roots (relative to SOFTWARE_DIR) scanned for data-generated tests.
+TEST_ROOTS := cache sync kernels/fp kernels/int rlc tests
+
 # Auto-discover every test that has a script/gen_data.py.
 # Convention: script/data_<params>.json → data/data_<params>.h
 # Adding a new test or a new data variant needs no Makefile changes:
 #   - new test:    drop gen_data.py + data_<params>.json into its script/ dir
 #   - new variant: add data_<params>.json to an existing test's script/ dir
-DATA_TESTS := $(patsubst $(TESTS_DIR)/%/script/gen_data.py,%, \
-                $(wildcard $(TESTS_DIR)/*/script/gen_data.py))
+DATA_TESTS := $(patsubst $(SOFTWARE_DIR)/%/script/gen_data.py,%, \
+                $(foreach root,$(TEST_ROOTS), \
+                  $(wildcard $(SOFTWARE_DIR)/$(root)/*/script/gen_data.py)))
 
 define gen_data_rules
-$(1)_DATA    := $$(patsubst $(TESTS_DIR)/$(1)/script/data_%.json, \
-                             $(TESTS_DIR)/$(1)/data/data_%.h, \
-                             $$(wildcard $(TESTS_DIR)/$(1)/script/data_*.json))
+$(1)_DATA    := $$(patsubst $(SOFTWARE_DIR)/$(1)/script/data_%.json, \
+                             $(SOFTWARE_DIR)/$(1)/data/data_%.h, \
+                             $$(wildcard $(SOFTWARE_DIR)/$(1)/script/data_*.json))
 ALL_GEN_DATA += $$($(1)_DATA)
 
-$(TESTS_DIR)/$(1)/data/data_%.h: \
-    $(TESTS_DIR)/$(1)/script/data_%.json \
-    $(TESTS_DIR)/$(1)/script/gen_data.py
-	$$(PYTHON) $(TESTS_DIR)/$(1)/script/gen_data.py -c $$<
+$(SOFTWARE_DIR)/$(1)/data/data_%.h: \
+    $(SOFTWARE_DIR)/$(1)/script/data_%.json \
+    $(SOFTWARE_DIR)/$(1)/script/gen_data.py
+	$$(PYTHON) $(SOFTWARE_DIR)/$(1)/script/gen_data.py -c $$<
 endef
 
 $(foreach test,$(DATA_TESTS),$(eval $(call gen_data_rules,$(test))))
