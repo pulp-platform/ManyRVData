@@ -754,6 +754,7 @@ module cachepool_tile
         spatz_cache_amo #(
           .DataWidth        ( DataWidth        ),
           .CoreIDWidth      ( CoreIDWidth      ),
+          .TileIDWidth      ( TileIDWidth      ),
           .tcdm_req_t       ( tcdm_req_t       ),
           .tcdm_rsp_t       ( tcdm_rsp_t       ),
           .tcdm_req_chan_t  ( tcdm_req_chan_t  ),
