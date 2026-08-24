@@ -1,0 +1,18 @@
+{
+  "active_user_number": 48,
+  "pkg_length": 800,
+  "pdcp_header_length": 10,
+  "src_addr": "0xA0000000",
+  "src_length": 16777216,
+  "tgt_addr": "0xB0000000",
+  "tgt_length": 16777216,
+  "total_pkg_number": 1000,
+  "producer_cores": [
+    0,
+    1
+  ],
+  "consumer_cores": [
+    2,
+    3
+  ]
+}

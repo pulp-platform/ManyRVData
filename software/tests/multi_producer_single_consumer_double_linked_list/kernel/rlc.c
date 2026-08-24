@@ -36,9 +36,23 @@
 #include <l1cache.h>
 #include "printf.h"
 #include "printf_lock.h"
-#include "../data/data_1_1350_100.h"
+/* Data header comes from the build (-DDATAHEADER, see CMakeLists). main.c
+   includes it before this file; the guard below is a self-sufficiency
+   fallback for standalone compilation of rlc.c. Never hard-code a specific
+   header here: it would shadow DATAHEADER for every variant (include guard
+   PDCP_PKG_H is shared by all generated headers). */
+#ifndef PDCP_PKG_H
+#include DATAHEADER
+#endif
+
 #include <stdatomic.h>
 #include "benchmark.h"
+
+// volatile: these structs model memory traffic (status indications/reports);
+// their loaded values are intentionally unused, so without volatile the
+// compiler would optimize the loads away (PR #12 review).
+volatile DlschInd dlsch_ind __attribute__((section(".data")));
+volatile UeStateRpt ue_status_rpt_content __attribute__((section(".data")));
 
 static inline size_t memdiff32(const void *a, const void *b, size_t len_bytes) {
     const uint8_t *p = (const uint8_t *)a;
@@ -99,77 +113,59 @@ static inline void memprint32(const void *a, const void *b, size_t len_bytes) {
 }
 
 
-void self_check(pdcp_pkg_t *meta, int size) {
+/* self_check compares src vs tgt payloads after the run. Two byte ranges are
+   excluded: [0,4) holds the RLC SN written over the tgt header word, and
+   [64,128) is rewritten on the SRC side by rlc_send_pkt AFTER the payload copy
+   (traffic modeling), so tgt legitimately has the pre-rewrite content there. */
+#ifdef RLC_SELF_CHECK
+void self_check(const pdcp_pkg_t *meta, int size) {
     uint32_t core_id = snrt_cluster_core_idx();
+    int npass = 0, nfail = 0;
     for (int i = 0; i < size; i++) {
-        unsigned int  src_addr = meta[i].src_addr;
-        unsigned int  tgt_addr = meta[i].tgt_addr;
-        unsigned int  pkg_length = meta[i].pkg_length;
-
-        void *src = (const void *)(uintptr_t)src_addr;
-        void *tgt = (const void *)(uintptr_t)tgt_addr;
-
-        memprint32(src, tgt, pkg_length);
-        size_t idx = memdiff32(src, tgt, pkg_length);
-        // size_t idx = meta;
-        if (idx == pkg_length) {
-            // Exactly equal
-            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-            // DEBUG_PRINTF("[core %u][self test] pass pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
-            //     core_id,
-            //     i,
-            //     src_addr,
-            //     tgt_addr,
-            //     pkg_length
-            // );
-            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+        const uint8_t *src = (const uint8_t *)(uintptr_t)meta[i].src_addr;
+        const uint8_t *tgt = (const uint8_t *)(uintptr_t)meta[i].tgt_addr;
+        size_t len = meta[i].pkg_length;
+        size_t first_bad = len; /* len == match */
+        for (size_t off = 4; off < len && first_bad == len; off++) {
+            if (off >= 64 && off < 128) continue; /* post-copy src rewrite, see above */
+            if (src[off] != tgt[off]) first_bad = off;
+        }
+        if (first_bad == len) {
+            npass++;
         } else {
-            // Mismatch at byte offset `idx`
+            nfail++;
             DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-            DEBUG_PRINTF("[core %u][self test] fail pkg_num = %d, src_addr=0x%x, tgt_addr=0x%x, pkg_length=%d\n",
-                core_id,
-                i,
-                src_addr,
-                tgt_addr,
-                pkg_length
-            );
+            DEBUG_PRINTF("[core %u][self test] FAIL pkg_num = %d user = %d, first mismatch @%d\n",
+                core_id, i, meta[i].user_id, (int)first_bad);
             DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
         }
     }
+    DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    DEBUG_PRINTF("[core %u][self test] SUMMARY: %d/%d pass, %d fail\n", core_id, npass, size, nfail);
+    DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
+#endif
 
+/* Initialize RLC entity `rlcId` (one entity per UE). Global/shared resources
+   (pdcp_pkd_ptr, its lock, producer_done, rlc_ctx_lock) are initialized once
+   in main(), not here. */
 void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t *mm_ctx) {
-    rlc_ctx.rlcId = rlcId;
-    rlc_ctx.cellId = cellId;
-    rlc_ctx.pollPdu = 32;
-    rlc_ctx.pollByte = 25000;
-    rlc_ctx.pduWithoutPoll = 0;
-    rlc_ctx.byteWithoutPoll = 0;
-    rlc_ctx.vtNextAck = 0;
-    rlc_ctx.vtNext = 0;
+    rlc_context_t *ctx = &rlc_ctx[rlcId];
+    ctx->rlcId = rlcId;
+    ctx->cellId = cellId;
+    ctx->pollPdu = 32;
+    ctx->pollByte = 25000;
+    ctx->pduWithoutPoll = 0;
+    ctx->byteWithoutPoll = 0;
+    ctx->vtNextAck = 0;
+    ctx->vtNext = 0;
 
     // Initialize the linked lists
-    list_init(&rlc_ctx.list);
-    list_init(&rlc_ctx.sent_list);
+    list_init(&ctx->list);
+    list_init(&ctx->sent_list);
 
     // Set the memory management context
-    rlc_ctx.mm_ctx = mm_ctx;
-
-    // Initialize PDCP package pointer and lock
-    pdcp_pkd_ptr = 0;
-    // pdcp_pkd_ptr_lock = 0;
-    mcs_lock_init(&pdcp_pkd_ptr_lock);
-
-    // Initialize producer done flag
-    producer_done = 0;
-    producers_finished = 0;
-
-    rlc_ctx_lock = 0;
-
-    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-    // DEBUG_PRINTF("[core %u][rlc_init] RLC context initialized for RLC ID %u, Cell ID %u\n",
-    //        snrt_cluster_core_idx(), rlcId, cellId);
-    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+    ctx->mm_ctx = mm_ctx;
 }
 
 int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
@@ -224,86 +220,276 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
 */
 #define PACKET_SIZE (PAGE_SIZE - sizeof(Node))
 
-/* Consumer behavior (runs on cores listed in consumer_core_ids) */
-static void consumer(const unsigned int core_id) {
-    while (1) {
-        Node *node = list_pop_front(&tosend_llist_lock_2, &rlc_ctx.list);
-        if (node != 0) {
-            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-            // DEBUG_PRINTF("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x, @mcycle = %d\n",
-            //        core_id, (void *)node, node->data_size, node->data, node->tgt, benchmark_get_cycle());
-            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+// -- Producer / consumer core sets --
+// The generated data header is authoritative: producer_core_ids[] and
+// consumer_core_ids[] name the cores that run the kernel, so the roles can be
+// spread over specific tiles/groups rather than being forced into contiguous
+// ranges.  PRODUCER_CORE_NUM / CONSUMER_CORE_NUM remain as build-time knobs
+// for headers generated before the lists existed, and as the pacing divisor.
+#if defined(NUM_PRODUCER_CORES) && defined(NUM_CONSUMER_CORES)
+/* The data header names the cores explicitly. */
+#define RLC_CORE_LISTS 1
+#ifndef PRODUCER_CORE_NUM
+#define PRODUCER_CORE_NUM NUM_PRODUCER_CORES
+#endif
+#ifndef CONSUMER_CORE_NUM
+#define CONSUMER_CORE_NUM NUM_CONSUMER_CORES
+#endif
+#else
+/* Header predates the core lists: fall back to contiguous ranges -- cores
+   [0, PRODUCER_CORE_NUM) produce and the next CONSUMER_CORE_NUM consume.
+   Deriving the ranges instead of declaring a fixed id array matters: the array
+   form would need a literal initializer per core count, and a short one (say
+   {0,1}) paired with a large PRODUCER_CORE_NUM would read past its
+   initializers and dispatch silently wrong. */
+#define NUM_PRODUCER_CORES PRODUCER_CORE_NUM
+#define NUM_CONSUMER_CORES CONSUMER_CORE_NUM
+#endif
 
-            // delay(100);  /* Simulate processing delay */
+#if RLC_CORE_LISTS
+/* Returns 1 if core_id appears in the given id list. */
+static int core_in_list(const unsigned int core_id, const unsigned int *ids, unsigned int n) {
+    for (unsigned int i = 0; i < n; i++) {
+        if (ids[i] == core_id) return 1;
+    }
+    return 0;
+}
 
-            uint32_t timer_mv_0, timer_mv_1;
-            // timer_mv_0 = benchmark_get_cycle();
-            // vector_memcpy32_m4_opt(node->tgt, node->data, node->data_size);
-            // vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
-            // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
-            // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
-            // vector_memcpy32_1360B_opt(node->tgt, node->data);
-            // Atomically allocate a unique RLC sequence number for this PDU and
-            // use it as the header. fetch_add returns the pre-increment value,
-            // so each consumer gets a distinct SN (safe for multiple consumers).
-            uint32_t sn = atomic_fetch_add_explicit(&rlc_ctx.vtNext, 1, memory_order_relaxed);
-            vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, sn);
-            // timer_mv_1 = benchmark_get_cycle();
+/* Position of core_id within a list, or the list length if absent. */
+static unsigned int core_index_in_list(const unsigned int core_id, const unsigned int *ids,
+                                       unsigned int n) {
+    for (unsigned int i = 0; i < n; i++) {
+        if (ids[i] == core_id) return i;
+    }
+    return n;
+}
+#endif
 
-            // Update the RLC stats atomically (shared across multiple consumers).
-            atomic_fetch_add_explicit(&rlc_ctx.pduWithoutPoll,  1,               memory_order_relaxed);
-            atomic_fetch_add_explicit(&rlc_ctx.byteWithoutPoll, node->data_size, memory_order_relaxed);
+/* Role of a core, and a consumer's position among the consumers. The position
+   is what selects that consumer's share of the RLC entities, so it must follow
+   the core list when there is one and the contiguous range otherwise. */
+static inline int rlc_is_consumer(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return core_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
+#else
+    return (core_id >= PRODUCER_CORE_NUM) &&
+           (core_id <  PRODUCER_CORE_NUM + CONSUMER_CORE_NUM);
+#endif
+}
 
+static inline int rlc_is_producer(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return !rlc_is_consumer(core_id) &&
+           core_in_list(core_id, producer_core_ids, NUM_PRODUCER_CORES);
+#else
+    return core_id < PRODUCER_CORE_NUM;
+#endif
+}
 
-            // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-            // DEBUG_PRINTF("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
-            //        core_id, (void *)node, node->data, node->tgt, node->data_size,
-            //        (timer_mv_1 - timer_mv_0),
-            //        (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
-            // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+static inline unsigned int rlc_consumer_index(const unsigned int core_id) {
+#if RLC_CORE_LISTS
+    return core_index_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
+#else
+    return core_id - PRODUCER_CORE_NUM;
+#endif
+}
 
-             // Add the node to the sent list
-            list_push_back(&sent_llist_lock_2, &rlc_ctx.sent_list, node);
+/* The core that runs the UE status task: the first producer, whichever it is. */
+static inline unsigned int rlc_status_core(void) {
+#if RLC_CORE_LISTS
+    return producer_core_ids[0];
+#else
+    return 0;
+#endif
+}
 
-            // Simulate receiving ACK from UE after certain sent pkgs, and we assume the ACK_SN is rlc_ctx.vtNextAck+2
-            if (rlc_ctx.sent_list.sduNum >= 10000) {
-                uint32_t vtNextAck = atomic_load_explicit(&rlc_ctx.vtNextAck, memory_order_relaxed);
-                int ACK_SN = vtNextAck + 2; // Assume each time ack 2 sent pkgs
-                // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-                // DEBUG_PRINTF("[core %u][consumer] pollPdu=%d, pollByte=%d, sent_list.sduNum=%d, sent_list.sduBytes=%d\n",
-                //        core_id, rlc_ctx.pollPdu, rlc_ctx.pollByte,
-                //        rlc_ctx.sent_list.sduNum, rlc_ctx.sent_list.sduBytes);
-                // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+#define CPU_FREQENCY 1000000000 // 1GHz
+#define OUTPUT_DATARATE 7000000
+#define INPUT_DATARATE 7000000
 
-                for (int i = vtNextAck; i < ACK_SN; i++) {
-                    Node *sent_node = list_pop_front(&sent_llist_lock_2, &rlc_ctx.sent_list);
-                    if (sent_node != NULL) {
-                        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-                        // DEBUG_PRINTF("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
-                        //        core_id, ACK_SN, i, (void *)sent_node, sent_node->data_size);
-                        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
-                    } else {
-                        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-                        DEBUG_PRINTF("[core %u][consumer] ERROR: pop sent_list, ACK_SN=%d, SN=%d, but sent_node is NULL\n",
-                               core_id, ACK_SN, i);
-                        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
-                    }
-                    mm_free(sent_node); // Free the sent node memory
+/* Per-iteration pacing budget. RLC_ENABLE_PACING=1: correct 64-bit math
+   (intended INPUT/OUTPUT_DATARATE pacing). =0 (default): the legacy int32
+   expression — it overflows (e.g. 2*1360*1e9 wraps to 1285701632 -> 183 cyc),
+   which makes pacing nearly inert, but tiny delays still fire on iterations
+   shorter than the wrapped value, so keep it verbatim for TC1 parity. */
+#if RLC_ENABLE_PACING
+#define RLC_TOTAL_CYCLE(ncore, rate) ((uint32_t)(((uint64_t)(ncore) * PDU_SIZE * CPU_FREQENCY) / (rate)))
+#else
+#define RLC_TOTAL_CYCLE(ncore, rate) ((uint32_t)((ncore) * PDU_SIZE * CPU_FREQENCY / (rate)))
+#endif
+
+void ue_status_rpt(const unsigned int core_id)
+{
+    // Simulate receiving ACK from UE after certain sent pkgs, per RLC entity.
+    // ACK_SN is ctx->vtNextAck+2. Core 0 scans all users each call (single
+    // writer per entity; striping across producer cores is a future option).
+    for (unsigned int u = 0; u < NUM_USERS; u++) {
+        rlc_context_t *ctx = &rlc_ctx[u];
+        if (ctx->sent_list.sduNum >= 2) {
+            char head = ue_status_rpt_content.stateRpt[0];
+            char head1 = ue_status_rpt_content.stateRpt[1];
+            char head2 = ue_status_rpt_content.stateRpt[2];
+            uint32_t vtNextAck = atomic_load_explicit(&ctx->vtNextAck, memory_order_relaxed);
+            int ACK_SN = vtNextAck + 2; // Assume each time ack 2 sent pkgs
+
+            for (int i = vtNextAck; i < ACK_SN; i++) {
+                char ack = ue_status_rpt_content.stateRpt[16 + ACK_SN - i];
+                Node *sent_node = list_pop_front((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list);
+                if (sent_node != NULL) {
+                    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+                    // DEBUG_PRINTF("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
+                    //        core_id, ACK_SN, i, (void *)sent_node, sent_node->data_size);
+                    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+                } else {
+                    DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+                    DEBUG_PRINTF("[core %u][consumer] ERROR: pop sent_list, ACK_SN=%d, SN=%d, but sent_node is NULL\n",
+                            core_id, ACK_SN, i);
+                    DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
                 }
-                atomic_store_explicit(&rlc_ctx.vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
+                mm_free(sent_node); // Free the sent node memory
             }
-        } else {
-            if (atomic_load_explicit(&producer_done, memory_order_relaxed) == 1) {
-                // If producer is done and the list is empty, exit the loop
-                break;
+            ctx->acksn = ACK_SN;
+            ctx->nackcount = 0;
+            ctx->parseindex++;
+            atomic_store_explicit(&ctx->vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
+            for (uint32_t i = 0; i < 16; i++) {
+                ctx->dlDelayInfo[i] = 300;
             }
-            // delay(10);   /* Wait briefly if list is empty */
         }
     }
 }
 
-/* Producer behavior (runs on cores listed in producer_core_ids) */
-static void producer(const unsigned int core_id) {
+/* Pop one node from entity ctx's to-send list and assemble/send its PDU.
+   Returns 1 if a node was processed, 0 if the list was empty. */
+static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestDataStru *testData)
+{
+    const unsigned int u = (unsigned int)(ctx - rlc_ctx); // lock-free user index
+    Node *node = list_pop_front((spinlock_t *)&tosend_llist_lock_2[u], &ctx->list);
+    if (node == 0) {
+        return 0;
+    }
+#ifdef RLC_NODE_GUARD
+    if (((uintptr_t)node->data & 0xFF000000) != 0xA0000000 ||
+        ((uintptr_t)node->tgt  & 0xFF000000) != 0xB0000000 ||
+        node->data_size != PDU_SIZE || node->user_id != u) {
+        printf_lock_acquire(&printf_lock);
+        printf("[GUARD][core %u] BAD NODE u=%u node=%p user=%u data=0x%x tgt=0x%x size=%u cyc=%d\n",
+               core_id, u, (void *)node, node->user_id,
+               (unsigned int)(uintptr_t)node->data, (unsigned int)(uintptr_t)node->tgt,
+               (unsigned int)node->data_size, benchmark_get_cycle());
+        printf_lock_release(&printf_lock);
+    }
+#endif
+        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        // DEBUG_PRINTF("Consumer (core %u): processing node %p, data_size = %zu, data_src = 0x%x, data_tgt = 0x%x, @mcycle = %d\n",
+        //        core_id, (void *)node, node->data_size, node->data, node->tgt, benchmark_get_cycle());
+        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+
+        // delay(100);  /* Simulate processing delay */
+
+        uint32_t timer_mv_0, timer_mv_1;
+        // timer_mv_0 = benchmark_get_cycle();
+        // vector_memcpy32_m4_opt(node->tgt, node->data, node->data_size);
+        // vector_memcpy32_m8_opt(node->tgt, node->data, node->data_size);
+        // scalar_memcpy32_32bit_unrolled(node->tgt, node->data, node->data_size);
+        // vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
+        // vector_memcpy32_1360B_opt(node->tgt, node->data);
+        // Atomically allocate a unique RLC sequence number for this PDU from
+        // the OWNING entity (SNs are per-RLC-entity) and use it as the header.
+        uint32_t sn = atomic_fetch_add_explicit(&ctx->vtNext, 1, memory_order_relaxed);
+#if (PDU_SIZE == 1360)
+        vector_memcpy32_1360B_opt_with_header(node->tgt, node->data, sn);
+#else
+        // Generic path (e.g. 810-byte PDUs): word-vector copy (bases are
+        // 4-aligned by PDU_STRIDE; the tail switch handles the odd bytes),
+        // then the SN overwrites the first header word of the target.
+        vector_memcpy32_m8_m4_general_opt(node->tgt, node->data, node->data_size);
+        *(volatile uint32_t *)node->tgt = sn;
+#endif
+        // timer_mv_1 = benchmark_get_cycle();
+
+        // Update the RLC stats atomically (shared across multiple consumers).
+        atomic_fetch_add_explicit(&ctx->pduWithoutPoll,  1,               memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->byteWithoutPoll, node->data_size, memory_order_relaxed);
+        ctx->sendPduNum +=1;
+        ctx->sendPduBytes += node->data_size;
+        atomic_fetch_add_explicit(&ctx->tbsize, (node->data_size + 10), memory_order_relaxed);
+        /* read one cacheline from node mem */
+        RcvPktHeader tmp = *(RcvPktHeader *)node->data;
+        /* write 64B to node mem */
+        vector_memcpy32_m4_opt(((RcvPktHeader *)node->data + 1), &tmp, sizeof(RcvPktHeader));
+        ctx->pdcpcount++;
+        atomic_fetch_add_explicit(&ctx->rlcthrp, node->data_size, memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->dlPduNum, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->sduBytes, (0 - node->data_size), memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->sduNum, (-1), memory_order_relaxed);
+        testData->sduNum = ctx->sduNum;
+        testData->rlcDpbPduCnt = ctx->pdcpcount;
+        testData->sudBytes = ctx->sduBytes;
+        testData->totalPdlLen = ctx->tbsize;
+        /* write one cacheline data to rlc_entity */
+        for (uint32_t i = 0; i < 16; i++) {
+            ctx->rlcOm[i] = 20;
+        }
+        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        // DEBUG_PRINTF("Consumer (core %u): move node %p from data_src = 0x%x to data_tgt = 0x%x, data_size = %zu, cyc = %d, bw = %dB/1000cyc\n",
+        //        core_id, (void *)node, node->data, node->tgt, node->data_size,
+        //        (timer_mv_1 - timer_mv_0),
+        //        (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
+        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+
+            // Add the node to the sent list
+        list_push_back((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list, node);
+        return 1;
+}
+
+/* Consumer behavior: static user partition + round-robin scan, one node per
+   (paced) iteration. Consumer c (index within the consumer group) owns users
+   {u : u % stride == c % stride} with stride = min(CONSUMER_CORE_NUM,
+   NUM_USERS); at NUM_USERS == 1 stride is 1, so all consumers share user 0 —
+   exactly the single-user behavior. The scan always issues the pop attempt
+   (no sduNum pre-check) to keep the idle lock traffic of the baseline.
+   Rate-limited so the aggregate consumer throughput equals OUTPUT_DATARATE
+   when pacing is enabled. */
+static void consumer(const unsigned int core_id) {
+    const unsigned int c      = rlc_consumer_index(core_id);
+    const unsigned int stride = (CONSUMER_CORE_NUM < NUM_USERS) ? CONSUMER_CORE_NUM : NUM_USERS;
+    const unsigned int first  = c % stride;      /* first owned user */
+    unsigned int cursor = first;
+    uint32_t total_cycle = RLC_TOTAL_CYCLE(CONSUMER_CORE_NUM, OUTPUT_DATARATE);
+    while (1) {
+        uint32_t start_timecycle = benchmark_get_cycle();
+        TestDataStru dfx = {0};
+        dfx.dlschInd = dlsch_ind;
+        /* round-robin over owned users; send at most one PDU per iteration */
+        unsigned int u = cursor;
+        int sent = 0;
+        do {
+            sent = rlc_send_pkt(core_id, &rlc_ctx[u], &dfx);
+            if (!sent) { u += stride; if (u >= NUM_USERS) u = first; }
+        } while (!sent && u != cursor);
+        if (sent) { u += stride; if (u >= NUM_USERS) u = first; cursor = u; }
+        uint32_t end_timecycle = benchmark_get_cycle();
+        /* calculate delay interval */
+        uint32_t interval = end_timecycle - start_timecycle;
+        rlc_ctx[first].pktdelay = interval;
+        uint32_t delayCycle = (total_cycle >= interval) ? (total_cycle - interval) : 0;
+        delay(delayCycle);
+
+        /* Exit when all producers are done and every owned list is drained */
+        if (atomic_load_explicit(&producer_done, memory_order_relaxed) >= PRODUCER_CORE_NUM) {
+            int drained = 1;
+            for (unsigned int v = first; v < NUM_USERS; v += stride) {
+                if (rlc_ctx[v].list.sduNum != 0) { drained = 0; break; }
+            }
+            if (drained) break;
+        }
+    }
+}
+
+/* Producer behavior (runs on cores other than 0) */
+/* Returns 0 on success, -1 when no more packages available. */
+static int producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     // DEBUG_PRINTF("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
     //     core_id,
@@ -315,88 +501,148 @@ static void producer(const unsigned int core_id) {
     //     benchmark_get_cycle());
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
-    while (new_pdcp_pkg_ptr >= 0) {
-        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-        // DEBUG_PRINTF("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
-        //     core_id,
-        //     new_pdcp_pkg_ptr,
-        //     pdcp_pkgs[new_pdcp_pkg_ptr].user_id,
-        //     pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length,
-        //     pdcp_pkgs[new_pdcp_pkg_ptr].src_addr,
-        //     pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr);
-        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+    if (new_pdcp_pkg_ptr < 0) {
+        return -1;  // No more packages
+    }
+
+    /* Route the package to its owning RLC entity (one per UE). */
+    const unsigned int uid = (unsigned int)pdcp_pkgs[new_pdcp_pkg_ptr].user_id;
+    rlc_context_t *ctx = &rlc_ctx[uid];
+    ctx->latestSduPktRxCycle = benchmark_get_cycle();
+#ifdef RLC_NODE_GUARD
+    if (uid >= NUM_USERS ||
+        (pdcp_pkgs[new_pdcp_pkg_ptr].src_addr & 0xFF000000) != 0xA0000000 ||
+        (pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr & 0xFF000000) != 0xB0000000) {
+        printf_lock_acquire(&printf_lock);
+        printf("[GUARD][core %u] BAD DESCRIPTOR idx=%d uid=%u src=0x%x tgt=0x%x cyc=%d\n",
+               core_id, new_pdcp_pkg_ptr, uid,
+               pdcp_pkgs[new_pdcp_pkg_ptr].src_addr, pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr,
+               benchmark_get_cycle());
+        printf_lock_release(&printf_lock);
+    }
+#endif
+
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("Producer (core %u): pdcp_receive_pkg id = %d, user_id = %d, pkg_length = %d, src_addr = 0x%x, tgt_addr = 0x%x\n",
+    //     core_id,
+    //     new_pdcp_pkg_ptr,
+    //     pdcp_pkgs[new_pdcp_pkg_ptr].user_id,
+    //     pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length,
+    //     pdcp_pkgs[new_pdcp_pkg_ptr].src_addr,
+    //     pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr);
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
 
-        Node *node = (Node *)mm_alloc();
-        if (!node) {
+    Node *node = (Node *)mm_alloc();
+    if (!node) {
 
-            DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-            DEBUG_PRINTF("Producer (core %u): Out of memory\n", core_id);
-            DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+        DEBUG_PRINTF("Producer (core %u): Out of memory\n", core_id);
+        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
-            delay(200);  /* Delay before retrying */
-            continue;
-        }
+        delay(200);  /* Delay before retrying */
+        return 0;  /* Not done, just out of memory temporarily */
+    }
 
-        uint32_t timer_body_0, timer_body_1;
+    uint32_t timer_body_0, timer_body_1;
 
-        // timer_body_0 = benchmark_get_cycle();
-        /* Initialize the node header */
-        node->lock = 0;
-        node->prev = 0;
-        node->next = 0;
-        /* Set the payload pointer immediately after the Node structure */
+    // timer_body_0 = benchmark_get_cycle();
+    /* Initialize the node header */
+    node->lock = 0;
+    node->prev = 0;
+    node->next = 0;
+    node->user_id = uid;
+    /* Set the payload pointer immediately after the Node structure */
+    if (new_pdcp_pkg_ptr >= 0) {
         node->data = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].src_addr));
         node->tgt = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr));
         node->data_size = pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length;
-        // timer_body_1 = benchmark_get_cycle();
-
-        // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-        // DEBUG_PRINTF("[core %u][bd fill_node] mm_alloc: node = %p, data = 0x%x, tgt = 0x%x, data_size = %zu, bd=%d\n",
-        //     core_id,
-        //     (void *)node,
-        //     node->data,
-        //     node->tgt,
-        //     node->data_size,
-        //     (timer_body_1 - timer_body_0)
-        // );
-        // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
-
-
-        // /* Zero-initialize the payload using our custom mm_memset */
-        // mm_memset(node->data, 0, PACKET_SIZE);
-        /* Append the node to the shared linked list */
-        list_push_back(&tosend_llist_lock_2, &rlc_ctx.list, node);
-
-        DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
-        DEBUG_PRINTF("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
-            core_id,
-            (void *)node,
-            node->data_size,
-            node->data,
-            node->tgt);
-        DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
-
-        // Get the pointer to the next PDCP package
-        new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
-        // delay(200);  /* Delay between node productions */
+        /* read one cacheline from node mem */
+        RcvPktHeader tmp = *(RcvPktHeader *)node->data;
+        unsigned int pingflag = ctx->pingFlag;
+        atomic_store_explicit(&ctx->pingFlag, pingflag, memory_order_relaxed);
+        atomic_store_explicit(&ctx->recvMaxByte, node->data_size, memory_order_relaxed);
+        RcvPktHeader *pt = (RcvPktHeader *)((char *)node->data + sizeof(RcvPktHeader));
+        /* write 64B data to Node */
+        vector_memcpy32_m4_opt((pt + 1), &tmp, sizeof(RcvPktHeader));
+        atomic_fetch_add_explicit(&ctx->sduNumCong, 1, memory_order_relaxed);
+        atomic_store_explicit(&ctx->sudCongState, 1, memory_order_relaxed);
+        atomic_fetch_add_explicit(&ctx->pktdelayEnqueFlag, 1, memory_order_relaxed);
     }
+    // timer_body_1 = benchmark_get_cycle();
 
-    // Only signal producer_done once every producer core has finished --
-    // with multiple producers, the first one to finish must not make the
-    // consumer(s) exit while other producers are still enqueuing work.
-    if (atomic_fetch_add_explicit(&producers_finished, 1, memory_order_relaxed) + 1
-        == NUM_PRODUCER_CORES) {
-        atomic_store_explicit(&producer_done, 1, memory_order_relaxed);
-    }
+    // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    // DEBUG_PRINTF("[core %u][bd fill_node] mm_alloc: node = %p, data = 0x%x, tgt = 0x%x, data_size = %zu, bd=%d\n",
+    //     core_id,
+    //     (void *)node,
+    //     node->data,
+    //     node->tgt,
+    //     node->data_size,
+    //     (timer_body_1 - timer_body_0)
+    // );
+    // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+
+
+    // /* Zero-initialize the payload using our custom mm_memset */
+    // mm_memset(node->data, 0, PACKET_SIZE);
+    /* Append the node to the owning entity's to-send list */
+    list_push_back((spinlock_t *)&tosend_llist_lock_2[uid], &ctx->list, node);
+    atomic_fetch_add_explicit(&ctx->sduBytes, node->data_size, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->sduNum, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->recvPdcpPduBytes, node->data_size, memory_order_relaxed);
+    ctx->lastRcvOrSubmitDataCyc = benchmark_get_cycle() - ctx->latestSduPktRxCycle;
+
+    atomic_fetch_add_explicit(&ctx->rcvPktNum, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->rcvPktLength, node->data_size, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->enQuePktNum, 1, memory_order_relaxed);
+    atomic_fetch_add_explicit(&ctx->enQuePktLength, node->data_size, memory_order_relaxed);
+
+    DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
+    DEBUG_PRINTF("Producer (core %u): added node %p, size = %d, src_addr = 0x%x, tgt_addr = 0x%x\n", 
+        core_id,
+        (void *)node,
+        node->data_size,
+        node->data,
+        node->tgt);
+    DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+
+    // delay(200);  /* Delay between node productions */
+    return 0;
 }
 
-/* Returns 1 if core_id appears in the given id list. */
-static int core_in_list(const unsigned int core_id, const unsigned int *ids, unsigned int n) {
-    for (unsigned int i = 0; i < n; i++) {
-        if (ids[i] == core_id) return 1;
+static void pkt_production_and_recycle(const unsigned int core_id)
+{
+    uint32_t total_cycle = RLC_TOTAL_CYCLE(PRODUCER_CORE_NUM, INPUT_DATARATE);
+    int this_core_done = 0;
+    while (1) {
+        uint32_t start_timecycle = benchmark_get_cycle();
+        if (!this_core_done) {
+            if (producer(core_id) < 0) {
+                this_core_done = 1;
+                atomic_fetch_add_explicit(&producer_done, 1, memory_order_relaxed);
+            }
+        }
+        /* UE status report runs on exactly one core -- the first producer in
+           the list, not core 0: with explicit core lists core 0 need not be a
+           producer at all, and gating on it would drop the ACK task entirely. */
+        if (core_id == rlc_status_core()) {
+            ue_status_rpt(core_id);
+        }
+        uint32_t end_timecycle = benchmark_get_cycle();
+        /* calculate delay interval */
+        uint32_t interval = end_timecycle - start_timecycle;
+        uint32_t delayCycle = (total_cycle >= interval) ? (total_cycle - interval) : 0;
+        delay(delayCycle);
+
+        /* Exit only when THIS core has finished producing AND all other
+           producers are also done.  Without the `this_core_done` guard a
+           slow core would abandon its in-flight work the moment enough
+           OTHER cores happened to finish first. */
+        if (this_core_done &&
+            atomic_load_explicit(&producer_done, memory_order_relaxed) >= PRODUCER_CORE_NUM) {
+            break;
+        }
     }
-    return 0;
 }
 
 /* cluster_entry() dispatches behavior based on core_id: cores listed in
@@ -411,18 +657,23 @@ void cluster_entry(const unsigned int core_id) {
         start_kernel();
     }
 
-    const int is_consumer = core_in_list(core_id, consumer_core_ids, NUM_CONSUMER_CORES);
-    const int is_producer = !is_consumer && core_in_list(core_id, producer_core_ids, NUM_PRODUCER_CORES);
+    const int is_consumer = rlc_is_consumer(core_id);
+    const int is_producer = rlc_is_producer(core_id);
 
-    if (is_consumer) {
+    if (is_producer) {
+        pkt_production_and_recycle(core_id);
+    } else if (is_consumer) {
         consumer(core_id);
-    } else if (is_producer) {
-        producer(core_id);
-    }
-    /* else: idle core for this run -- falls straight through to the
-       shared barrier below. */
+    } /* else: idle core for this run, falls through to the barrier */
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
+
+#ifdef RLC_SELF_CHECK
+    /* All sends are complete and tgt buffers are stable here. */
+    if (core_id == 0) {
+        self_check(pdcp_pkgs, NUM_PKGS);
+    }
+#endif
 
     if(core_id == 0) {
         stop_kernel();
