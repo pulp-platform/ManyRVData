@@ -349,6 +349,16 @@ package cachepool_pkg;
     logic                   is_amo;
     reqid_t                 req_id;
     logic                   is_fpu;
+    /// Store-conditional status, carried with the transaction.
+    /// `is_sc` marks the request as an SC; `sc_fail` is its outcome, decided at
+    /// the AMO unit when the request is issued. The memory system echoes `user`
+    /// back unmodified, so the response carries its own SC status and the AMO
+    /// unit does not have to look it up. That lookup used a single-entry
+    /// register, which could not disambiguate concurrent SCs: a response that
+    /// missed the tracked entry returned raw memory data, and a zero word there
+    /// reads as "SC succeeded" (rd == 0), silently losing an update.
+    logic                   is_sc;
+    logic                   sc_fail;
   } tcdm_user_t;
 
   typedef struct packed {
