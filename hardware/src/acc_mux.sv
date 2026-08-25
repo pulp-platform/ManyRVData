@@ -9,16 +9,12 @@
 
 /// Arbitrates 2 Snitch acc interfaces onto 1 shared Spatz acc interface for
 /// cachepool_cc_dual, gated by cachepool_spatz_lock's owner/locked/waiting
-/// state. Locked: only the owner passes through, real access, no
-/// arbitration. Idle: both hosts get real round-robin access, one request
-/// outstanding at a time -- a FIFO tracks which host is owed the in-flight
-/// response (pushed on grant, popped on response), so a new request is only
-/// arbitrated once the FIFO is empty.
-/// Exclusive-owner-path response draining stays active through owner_active_i
-/// (Locked and RelWait, since owner_id_i is valid through both), decoupled
-/// from new-issue forwarding (locked_i only, steady-state Locked) -- a
-/// response already in flight when release is requested would otherwise
-/// have no drain path once locked_i drops for RelWait.
+/// state. Locked: only the owner passes through, real access, no arbitration.
+/// Idle: both hosts get real round-robin access, one request outstanding at
+/// a time -- a FIFO tracks which host is owed the in-flight response.
+/// Response draining stays active through owner_active_i (Locked and
+/// RelWait); new-issue forwarding is gated separately on locked_i alone, so
+/// a response already in flight when release is requested still has a drain path.
 module acc_mux #(
   parameter type acc_issue_req_t = logic,
   parameter type acc_issue_rsp_t = logic,
@@ -50,8 +46,7 @@ module acc_mux #(
   input  logic            spatz_rsp_valid_i,
   output logic            spatz_rsp_ready_o,
 
-  // Drain feed for the lock's outstanding counter (owner path and Idle-mode
-  // arbitrated path both count, since both represent real Spatz traffic).
+  // Drain feed for the lock's outstanding counter (owner and Idle-mode paths both count).
   output logic            req_fire_o,
   output logic            rsp_fire_o,
 
@@ -142,9 +137,7 @@ module acc_mux #(
     acc_snitch_pvalid_o = '0;
 
     if (owner_active_i) begin
-      // Exclusive owner path: response draining stays active through Locked
-      // and RelWait; new-issue forwarding only happens in steady-state
-      // Locked, never while a switch is pending.
+      // Draining runs through Locked/RelWait; new-issue forwarding is steady-state-Locked only.
       spatz_rsp_ready_o               = acc_snitch_pready_i[owner_id_i];
       acc_snitch_prsp_o[owner_id_i]   = spatz_rsp_i;
       acc_snitch_pvalid_o[owner_id_i] = spatz_rsp_valid_i;
@@ -170,5 +163,82 @@ module acc_mux #(
       end
     end
   end
+
+`ifndef TARGET_SYNTHESIS
+  // Debug-only: verbose per-event log (+acc_mux_verbose plusarg) and a
+  // stuck-transaction watchdog. Added to debug the FPU-enabled dual-CC
+  // boot hang; temporary instrumentation, safe to strip once resolved.
+  bit acc_mux_verbose = 1'b0;
+  initial begin
+    // verilog_lint: waive plusarg-assignment
+    acc_mux_verbose = $test$plusargs("acc_mux_verbose");
+  end
+
+  logic spatz_rsp_valid_q;
+  `FF(spatz_rsp_valid_q, spatz_rsp_valid_i, 1'b0, clk_i, rst_ni)
+
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && acc_mux_verbose) begin
+      if (idle_req_o && idle_gnt_i) begin
+        $display({"[ACC-MUX %0t %m] IDLE-GRANT host=%0d accept=%0b writeback=%0b ",
+                  "loadstore=%0b isfloat=%0b"},
+                 $time, idle_winner, spatz_issue_rsp_i.accept, spatz_issue_rsp_i.writeback,
+                 spatz_issue_rsp_i.loadstore, spatz_issue_rsp_i.isfloat);
+      end
+      if (route_fifo_push) begin
+        $display("[ACC-MUX %0t %m] ROUTE-FIFO PUSH host=%0d", $time, idle_winner);
+      end
+      if (route_fifo_pop) begin
+        $display("[ACC-MUX %0t %m] ROUTE-FIFO POP  host=%0d", $time, route_fifo_route_q);
+      end
+      if (req_fire_any) begin
+        $display({"[ACC-MUX %0t %m] REQ-FIRE  owner_active=%0b locked=%0b owner=%0d ",
+                  "writeback=%0b"},
+                 $time, owner_active_i, locked_i, owner_id_i, spatz_issue_rsp_i.writeback);
+      end
+      if (rsp_fire_o) begin
+        $display("[ACC-MUX %0t %m] RSP-FIRE  owner_active=%0b route_host=%0d",
+                 $time, owner_active_i, route_fifo_route_q);
+      end
+      // Edge-triggered: which side of the p-channel handshake (valid vs.
+      // ready) is actually stuck once route_fifo has something owed.
+      if (spatz_rsp_valid_i != spatz_rsp_valid_q) begin
+        $display({"[ACC-MUX %0t %m] SPATZ-RSP-VALID -> %0b route_fifo_empty=%0b ",
+                  "route_host=%0d owner_active=%0b spatz_rsp_ready=%0b"},
+                 $time, spatz_rsp_valid_i, route_fifo_empty, route_fifo_route_q,
+                 owner_active_i, spatz_rsp_ready_o);
+      end
+    end
+  end
+
+  // Watchdog: warn if a round-robin (Idle-mode) transaction has been
+  // accepted by Spatz but its response hasn't drained (route_fifo stuck
+  // non-empty) for more than AccMuxWdogPs, re-warning every AccMuxWdogPs
+  // while still stuck.
+  localparam longint unsigned AccMuxWdogPs = 5_000_000;
+  logic [63:0] acc_mux_last_progress_q, acc_mux_last_warn_q;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      acc_mux_last_progress_q <= '0;
+      acc_mux_last_warn_q     <= '0;
+    end else begin
+      if (route_fifo_empty || route_fifo_push || route_fifo_pop) begin
+        acc_mux_last_progress_q <= 64'($time);
+        acc_mux_last_warn_q     <= 64'($time);
+      end
+      if (!route_fifo_empty &&
+          (64'($time) - acc_mux_last_progress_q) > AccMuxWdogPs &&
+          (64'($time) - acc_mux_last_warn_q)     > AccMuxWdogPs) begin
+        acc_mux_last_warn_q <= 64'($time);
+        $display({"[%0t] [ACC-MUX %m] STUCK: route_fifo non-empty, owed host=%0d ",
+                  "locked=%0b waiting=%0b owner_active=%0b idle_req_i=%0b ",
+                  "spatz_rsp_valid=%0b spatz_rsp_ready=%0b"},
+                 $time, route_fifo_route_q, locked_i, waiting_i, owner_active_i,
+                 idle_req_i, spatz_rsp_valid_i, spatz_rsp_ready_o);
+      end
+    end
+  end
+`endif // TARGET_SYNTHESIS
 
 endmodule

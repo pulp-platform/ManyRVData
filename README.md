@@ -207,10 +207,11 @@ Configuration names encode the number of groups and whether the FPU is enabled:
 | `cachepool_fpu_16g` | 16 | 4×4 | Yes | 4 | 4 | 256 |
 | `cachepool_fpu_16g_tiny` | 16 | 4×4 | Yes | 2 | 2 | 64 |
 | `cachepool_dual_4g` | 4 | 2×2 | No (IPU only) | 4 | 4 | 64 CCs / 128 harts |
+| `cachepool_dual_fpu_4g` | 4 | 2×2 | Yes | 4 | 4 | 64 CCs / 128 harts |
 
 `cachepool_fpu_16g_tiny` shrinks tiles/group and cores/tile for a faster-to-build, faster-to-simulate smoke test of the full 16-group mesh topology.
 
-`cachepool_dual_4g` sets `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock (`cachepool_spatz_lock.sv`), so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. The lock never blocks a core's pipeline: every acquire/release attempt (`software/snRuntime/include/spatz_lock.h`) completes immediately with an outcome (granted / denied / granted-but-still-draining), so a hart contending for a lock it doesn't get can always retry or do something else instead of hanging. See `note.md` for the full state-machine design.
+`cachepool_dual_4g`/`cachepool_dual_fpu_4g` set `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock (`cachepool_spatz_lock.sv`), so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. `cachepool_dual_fpu_4g` is otherwise identical to `cachepool_fpu_4g` (same FPU/IPU counts), just with the shared-Spatz CC flavor — used to confirm the dual-scalar lock/mux design also works with the FPU enabled, not just IPU-only. The lock never blocks a core's pipeline: every acquire/release attempt (`software/snRuntime/include/spatz_lock.h`) completes immediately with an outcome (granted / denied / granted-but-still-draining), so a hart contending for a lock it doesn't get can always retry or do something else instead of hanging. See `note.md` for the full state-machine design.
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)

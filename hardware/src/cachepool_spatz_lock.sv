@@ -7,23 +7,14 @@
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
 
-/// Spatz ownership lock/switch for a dual-Snitch cachepool_cc_dual.
-/// Host 0 is the implicit owner while Free. Two dedicated addresses are
-/// intercepted: a load to ACQUIRE attempts to acquire, a load to RELEASE
-/// attempts to release -- both always complete immediately (q_ready is
-/// never withheld), and the loaded word encodes the outcome (fail/
-/// success/success-wait) plus current owner/locked status, so software is
-/// never blocked in hardware and can always retry or bail out on its own.
-/// Pure arbiter: does not route the acc/data traffic itself (that lives in
-/// acc_mux.sv/cachepool_cc_dual.sv) -- only decides ownership and exposes
-/// owner_id_o/locked_o/waiting_o/owner_active_o for the CC to apply, and
-/// counts real Spatz acc handshakes (via req_fire_i/rsp_fire_i, fed back
-/// by acc_mux) to gate a switch until fully drained. Separately tracks
-/// outstanding vle/vse ops (invisible to req_fire_i/rsp_fire_i, since they
-/// never produce an acc_rsp_t writeback) via Spatz's own
-/// spatz_mem_finished_i/spatz_st_rsp_done_i.
-/// Also hosts the pass-through memory-path register cuts (moved here from
-/// the per-core spill registers in cachepool_cc.sv).
+/// Spatz ownership lock/switch for a dual-Snitch cachepool_cc_dual. Two
+/// dedicated addresses (ACQUIRE/RELEASE) are intercepted as loads that
+/// always complete immediately, encoding the outcome and current
+/// owner/locked status in the returned word (see note.md). Pure arbiter:
+/// does not route acc/data traffic itself (see acc_mux.sv); only decides
+/// ownership and counts real Spatz acc handshakes to gate a switch until
+/// fully drained. Also hosts the pass-through memory-path register cuts
+/// (moved here from the per-core spill registers in cachepool_cc.sv).
 module cachepool_spatz_lock
   import cachepool_peripheral_reg_pkg::*;
 #(
@@ -52,9 +43,7 @@ module cachepool_spatz_lock
   input  logic                           req_fire_i,
   input  logic                           rsp_fire_i,
 
-  // Spatz LSU drain tracking: vle/vse never produce an acc_rsp_t completion
-  // (writeback=0), so they are invisible to req_fire_i/rsp_fire_i above and
-  // need their own outstanding count, gated by Spatz's own signals.
+  // Spatz LSU drain tracking: vle/vse have no acc_rsp_t completion, so they need their own count.
   input  logic                           spatz_lsu_issue_fire_i,
   input  logic                    [1:0]  spatz_mem_finished_i,
   input  logic                           spatz_st_rsp_done_i,
@@ -63,9 +52,7 @@ module cachepool_spatz_lock
   output logic                           owner_id_o,
   output logic                           locked_o,
   output logic                           waiting_o,
-  // True while the exclusive owner path may still have in-flight traffic to
-  // drain (Locked and RelWait); acc_mux uses this to keep response draining
-  // active through RelWait even though new-issue forwarding must stop.
+  // True during Locked/RelWait; lets acc_mux keep draining through RelWait after new issues stop.
   output logic                           owner_active_o,
 
   // peripheral base address
@@ -76,22 +63,15 @@ module cachepool_spatz_lock
   assign acquire_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_ACQUIRE_OFFSET;
   assign release_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_RELEASE_OFFSET;
 
-  // Single lock FSM. Free/Locked are the two "real" states (host 0 is the
-  // implicit owner while Free); AcqWait/RelWait are drain-wait sub-states
-  // on the way to an actual ownership switch, resolved autonomously once
-  // drain_done -- no response is owed for that internal transition, since
-  // the triggering request already got a SUCCESS-WAIT answer up front.
-  //   Free    -(acquire, other host)-> AcqWait -(drain_done)-> Locked (new owner)
-  //   Locked  -(release, owner)     -> RelWait -(drain_done)-> Free   (owner = host 0)
-  // Every hit always completes immediately (q_ready is never withheld);
-  // the response encodes an outcome (FAIL/SUCCESS/SUCCESS-WAIT) instead of
-  // stalling the requester. A hit during AcqWait/RelWait, from either host,
-  // always gets FAIL(PENDING) -- only the one already-in-flight transition
-  // is ever active at a time.
-  //
-  // Handshake timing: the q-channel is accepted (q_ready=1) exactly on the
-  // deciding cycle; the response (p_valid=1) is then held starting the
-  // following cycle until the host takes it via p_ready.
+  // Single lock FSM (host 0 is the implicit owner while Free). AcqWait/RelWait
+  // are drain-wait sub-states, resolved autonomously once drain_done -- no
+  // response is owed then, since the triggering request already got SUCCESS-WAIT.
+  //   Free   -(acquire, other host)-> AcqWait -(drain_done)-> Locked (new owner)
+  //   Locked -(release, owner)     -> RelWait -(drain_done)-> Free   (owner = host 0)
+  // Every hit completes immediately with an outcome (FAIL/SUCCESS/SUCCESS-WAIT)
+  // instead of stalling; a hit during AcqWait/RelWait always gets FAIL(PENDING).
+  // Handshake timing: q_ready fires on the deciding cycle; p_valid is held
+  // starting the next cycle until the host takes it via p_ready.
   typedef enum logic [1:0] {
     Free,
     AcqWait,
@@ -119,8 +99,7 @@ module cachepool_spatz_lock
 
   // Outstanding acc handshakes on the owner's path; must reach 0 before a wait can complete.
   logic [7:0] outstanding_d, outstanding_q;
-  // Outstanding Spatz vle/vse ops; mirrors snitch.sv's own acc_mem_cnt_q so a
-  // switch can't happen while a load/store is still draining through the cache.
+  // Outstanding Spatz vle/vse ops; mirrors snitch.sv's own acc_mem_cnt_q.
   logic [7:0] lsu_outstanding_d, lsu_outstanding_q;
   logic       drain_done;
 
@@ -169,9 +148,7 @@ module cachepool_spatz_lock
     assign lock_hit[i]    = acquire_hit[i] || release_hit[i];
   end
 
-  // The owner's hit always wins arbitration when both hosts hit the same
-  // cycle; the loser simply waits one extra cycle for resp_pending_q to
-  // clear (both eventually get answered, this is only a tie-break).
+  // Owner's hit wins on a same-cycle tie; the loser just waits one cycle for resp_pending_q to clear.
   logic hit_any, winner;
   assign hit_any = lock_hit[0] || lock_hit[1];
   assign winner  = lock_hit[owner_q] ? owner_q : ~owner_q;
@@ -279,7 +256,8 @@ module cachepool_spatz_lock
               resp_owner_d   = owner_q;
               resp_locked_d  = 1'b0;
             end
-          end else begin // release_hit[winner]
+          end else begin
+            // release_hit[winner]
             if (winner == owner_q) begin
               // host 0 "self release": nothing to release, immediate no-op grant
               resp_outcome_d = OutcomeSuccess;
@@ -296,8 +274,7 @@ module cachepool_spatz_lock
         end
       end
 
-      // Only the owner's acquire (no-op) or release is meaningful; a non-owner's
-      // acquire/release always fails outright (no queueing for a future handoff).
+      // Non-owner acquire/release always fails outright, no queueing for a future handoff.
       Locked: begin
         if (hit_any && !resp_pending_q) begin
           in_rsp_o[winner].q_ready = 1'b1;
@@ -310,7 +287,8 @@ module cachepool_spatz_lock
             resp_reason_d  = ReasonBusy;
             resp_owner_d   = owner_q;
             resp_locked_d  = 1'b1;
-          end else begin // release_hit[winner]
+          end else begin
+            // release_hit[winner]
             if (winner == owner_q) begin
               if (drain_done) begin
                 lock_d         = Free;
@@ -335,9 +313,7 @@ module cachepool_spatz_lock
         end
       end
 
-      // Drain-wait sub-states: any hit (either host, either op) always fails with
-      // PENDING -- the one already-registered transition (active_q) resolves on
-      // its own once drain_done, with no response owed for that completion.
+      // Any hit here fails with PENDING; active_q's transition resolves on its own, no response owed.
       AcqWait: begin
         if (hit_any && !resp_pending_q) begin
           in_rsp_o[winner].q_ready = 1'b1;
@@ -388,5 +364,68 @@ module cachepool_spatz_lock
   `FF(resp_reason_q,  resp_reason_d,  ReasonNotOwner,clk_i, rst_ni)
   `FF(resp_owner_q,   resp_owner_d,   1'b0,          clk_i, rst_ni)
   `FF(resp_locked_q,  resp_locked_d,  1'b0,          clk_i, rst_ni)
+
+`ifndef TARGET_SYNTHESIS
+  // Debug-only: verbose state-transition/response log (+spatz_lock_verbose
+  // plusarg) and a stuck-in-wait watchdog. Added to debug the FPU-enabled
+  // dual-CC boot hang; temporary instrumentation, safe to strip once resolved.
+  bit spatz_lock_verbose = 1'b0;
+  initial begin
+    // verilog_lint: waive plusarg-assignment
+    spatz_lock_verbose = $test$plusargs("spatz_lock_verbose");
+  end
+
+  always_ff @(posedge clk_i) begin
+    if (rst_ni && spatz_lock_verbose) begin
+      if (lock_d != lock_q) begin
+        $display({"[SPATZ-LOCK %0t %m] STATE %s -> %s owner_d=%0d active_d=%0d ",
+                  "outstanding_q=%0d lsu_outstanding_q=%0d"},
+                 $time, lock_q.name(), lock_d.name(), owner_d, active_d,
+                 outstanding_q, lsu_outstanding_q);
+      end
+      if (hit_any && !resp_pending_q) begin
+        $display({"[SPATZ-LOCK %0t %m] HIT host=%0d acquire=%0b release=%0b ",
+                  "state=%s outstanding_q=%0d lsu_outstanding_q=%0d ",
+                  "spatz_st_rsp_done=%0b"},
+                 $time, winner, acquire_hit[winner], release_hit[winner],
+                 lock_q.name(), outstanding_q, lsu_outstanding_q, spatz_st_rsp_done_i);
+      end
+      if (resp_pending_d && !resp_pending_q) begin
+        $display({"[SPATZ-LOCK %0t %m] RESP host=%0d outcome=%s reason=%s owner=%0d ",
+                  "locked=%0b"},
+                 $time, resp_host_d, resp_outcome_d.name(), resp_reason_d.name(),
+                 resp_owner_d, resp_locked_d);
+      end
+    end
+  end
+
+  // Watchdog: warn if the FSM has been stuck in AcqWait/RelWait (waiting on
+  // drain_done) for more than SpatzLockWdogPs, re-warning every
+  // SpatzLockWdogPs while still stuck.
+  localparam longint unsigned SpatzLockWdogPs = 5_000_000;
+  logic [63:0] spatz_lock_last_progress_q, spatz_lock_last_warn_q;
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      spatz_lock_last_progress_q <= '0;
+      spatz_lock_last_warn_q     <= '0;
+    end else begin
+      if (lock_q != AcqWait && lock_q != RelWait) begin
+        spatz_lock_last_progress_q <= 64'($time);
+        spatz_lock_last_warn_q     <= 64'($time);
+      end
+      if ((lock_q == AcqWait || lock_q == RelWait) &&
+          (64'($time) - spatz_lock_last_progress_q) > SpatzLockWdogPs &&
+          (64'($time) - spatz_lock_last_warn_q)     > SpatzLockWdogPs) begin
+        spatz_lock_last_warn_q <= 64'($time);
+        $display({"[%0t] [SPATZ-LOCK %m] STUCK: state=%s active_q=%0d owner_q=%0d ",
+                  "outstanding_q=%0d lsu_outstanding_q=%0d spatz_st_rsp_done=%0b ",
+                  "drain_done=%0b"},
+                 $time, lock_q.name(), active_q, owner_q, outstanding_q,
+                 lsu_outstanding_q, spatz_st_rsp_done_i, drain_done);
+      end
+    end
+  end
+`endif // TARGET_SYNTHESIS
 
 endmodule
