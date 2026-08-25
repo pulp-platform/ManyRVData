@@ -8,16 +8,20 @@
 `include "common_cells/registers.svh"
 
 /// Spatz ownership lock/switch for a dual-Snitch cachepool_cc_dual.
-/// Host 0 is the implicit owner while Idle; a write of 1 to the lock
-/// address acquires ownership (blocks until granted), a write of 0
-/// releases it (owner only). Pure arbiter: does not route the acc/data
-/// traffic itself (that lives in acc_mux.sv/cachepool_cc_dual.sv) -- only
-/// decides ownership and exposes owner_id_o/locked_o/waiting_o for the CC
-/// to apply, and counts real Spatz acc handshakes (via
-/// req_fire_i/rsp_fire_i, fed back by acc_mux) to gate a switch until
-/// fully drained. Separately tracks outstanding vle/vse ops (invisible to
-/// req_fire_i/rsp_fire_i, since they never produce an acc_rsp_t writeback)
-/// via Spatz's own spatz_mem_finished_i/spatz_st_rsp_done_i.
+/// Host 0 is the implicit owner while Free. Two dedicated addresses are
+/// intercepted: a load to ACQUIRE attempts to acquire, a load to RELEASE
+/// attempts to release -- both always complete immediately (q_ready is
+/// never withheld), and the loaded word encodes the outcome (fail/
+/// success/success-wait) plus current owner/locked status, so software is
+/// never blocked in hardware and can always retry or bail out on its own.
+/// Pure arbiter: does not route the acc/data traffic itself (that lives in
+/// acc_mux.sv/cachepool_cc_dual.sv) -- only decides ownership and exposes
+/// owner_id_o/locked_o/waiting_o/owner_active_o for the CC to apply, and
+/// counts real Spatz acc handshakes (via req_fire_i/rsp_fire_i, fed back
+/// by acc_mux) to gate a switch until fully drained. Separately tracks
+/// outstanding vle/vse ops (invisible to req_fire_i/rsp_fire_i, since they
+/// never produce an acc_rsp_t writeback) via Spatz's own
+/// spatz_mem_finished_i/spatz_st_rsp_done_i.
 /// Also hosts the pass-through memory-path register cuts (moved here from
 /// the per-core spill registers in cachepool_cc.sv).
 module cachepool_spatz_lock
@@ -38,7 +42,7 @@ module cachepool_spatz_lock
   input  logic                           clk_i,
   input  logic                           rst_ni,
 
-  // memory interface, used to set the lock
+  // memory interface, used to attempt acquire/release
   input  dreq_t           [NumHosts-1:0] in_req_i,
   output drsp_t           [NumHosts-1:0] in_rsp_o,
   output dreq_t           [NumHosts-1:0] out_req_o,
@@ -55,59 +59,76 @@ module cachepool_spatz_lock
   input  logic                    [1:0]  spatz_mem_finished_i,
   input  logic                           spatz_st_rsp_done_i,
 
-  // owner/lock status and error
+  // owner/lock status
   output logic                           owner_id_o,
   output logic                           locked_o,
   output logic                           waiting_o,
-  output logic                           error_o,
+  // True while the exclusive owner path may still have in-flight traffic to
+  // drain (Locked and RelWait); acc_mux uses this to keep response draining
+  // active through RelWait even though new-issue forwarding must stop.
+  output logic                           owner_active_o,
 
   // peripheral base address
   input  addr_t                          cluster_periph_start_address_i
 );
 
-  addr_t lock_addr;
-  assign lock_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_OFFSET;
+  addr_t acquire_addr, release_addr;
+  assign acquire_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_ACQUIRE_OFFSET;
+  assign release_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_RELEASE_OFFSET;
 
-  // Single lock FSM. Idle/Locked are the two "real" states (host 0 is the
-  // implicit owner while Idle); AcqWait/RelWait are drain-wait sub-states
-  // on the way to an actual ownership switch.
-  //   Idle    -(acquire, other host)-> AcqWait -(drain_done)-> Locked (new owner)
-  //   Locked  -(release, owner)     -> RelWait -(drain_done)-> Idle   (owner = host 0)
-  // Self-acquire completes immediately only if already drained; otherwise it
-  // waits through AcqWait too. Reads always complete immediately.
-  // A non-owner acquire/release, or any lock op during a wait, is stalled
-  // (never accepted) and sets the sticky error_o.
+  // Single lock FSM. Free/Locked are the two "real" states (host 0 is the
+  // implicit owner while Free); AcqWait/RelWait are drain-wait sub-states
+  // on the way to an actual ownership switch, resolved autonomously once
+  // drain_done -- no response is owed for that internal transition, since
+  // the triggering request already got a SUCCESS-WAIT answer up front.
+  //   Free    -(acquire, other host)-> AcqWait -(drain_done)-> Locked (new owner)
+  //   Locked  -(release, owner)     -> RelWait -(drain_done)-> Free   (owner = host 0)
+  // Every hit always completes immediately (q_ready is never withheld);
+  // the response encodes an outcome (FAIL/SUCCESS/SUCCESS-WAIT) instead of
+  // stalling the requester. A hit during AcqWait/RelWait, from either host,
+  // always gets FAIL(PENDING) -- only the one already-in-flight transition
+  // is ever active at a time.
   //
   // Handshake timing: the q-channel is accepted (q_ready=1) exactly on the
-  // deciding cycle (the last cycle of a wait, or immediately for the
-  // no-wait cases); the response (p_valid=1) is then held starting the
+  // deciding cycle; the response (p_valid=1) is then held starting the
   // following cycle until the host takes it via p_ready.
   typedef enum logic [1:0] {
-    Idle,
+    Free,
     AcqWait,
     RelWait,
     Locked
   } lock_state_e;
 
+  // Response payload bit layout (see note.md): [1:0]=outcome, [4:2]=reason
+  // (valid only on FAIL), [5]=owner, [6]=locked -- all post-decision.
+  typedef enum logic [1:0] {
+    OutcomeFail        = 2'd0,
+    OutcomeSuccess     = 2'd1,
+    OutcomeSuccessWait = 2'd2
+  } lock_outcome_e;
+
+  typedef enum logic [2:0] {
+    ReasonNotOwner = 3'd0,
+    ReasonBusy     = 3'd1,
+    ReasonPending  = 3'd2
+  } lock_fail_reason_e;
+
   lock_state_e lock_d, lock_q;
   logic        owner_d, owner_q;
-  logic        error_d, error_q;
   logic        active_d, active_q;
-  user_t       user_d, user_q;
 
   // Outstanding acc handshakes on the owner's path; must reach 0 before a wait can complete.
   logic [7:0] outstanding_d, outstanding_q;
   // Outstanding Spatz vle/vse ops; mirrors snitch.sv's own acc_mem_cnt_q so a
   // switch can't happen while a load/store is still draining through the cache.
   logic [7:0] lsu_outstanding_d, lsu_outstanding_q;
-  logic       drain_done, waiting;
+  logic       drain_done;
 
-  assign owner_id_o = owner_q;
-  assign locked_o   = (lock_q == Locked);
-  assign waiting_o  = waiting;
-  assign error_o    = error_q;
+  assign owner_id_o      = owner_q;
+  assign locked_o        = (lock_q == Locked);
+  assign waiting_o       = (lock_q == AcqWait) || (lock_q == RelWait);
+  assign owner_active_o  = (lock_q == Locked) || (lock_q == RelWait);
 
-  assign waiting    = (lock_q == AcqWait) || (lock_q == RelWait);
   assign drain_done = (outstanding_q == '0) && (lsu_outstanding_q == '0) && spatz_st_rsp_done_i;
 
   `ASSERT(NoOutstandingUnderflow, rsp_fire_i |-> (outstanding_q != '0))
@@ -138,29 +159,32 @@ module cachepool_spatz_lock
     end
   end
 
-  // write 1 for acquire, write 0 for release, read returns the lock status
-  logic [1:0] is_acquire, is_release, is_read, lock_hit;
+  // Address-based op decode: a hit on either address is serviced regardless
+  // of q.write, since only loads carry a usable result back to software.
+  logic [1:0] acquire_hit, release_hit, lock_hit;
 
   for (genvar i = 0; i < 2; i++) begin
-    assign is_acquire[i] = in_req_i[i].q.write &&  in_req_i[i].q.data[0];
-    assign is_release[i] = in_req_i[i].q.write && !in_req_i[i].q.data[0];
-    assign is_read[i]    = !in_req_i[i].q.write;
-    assign lock_hit[i]   = in_req_i[i].q_valid && (in_req_i[i].q.addr == lock_addr);
+    assign acquire_hit[i] = in_req_i[i].q_valid && (in_req_i[i].q.addr == acquire_addr);
+    assign release_hit[i] = in_req_i[i].q_valid && (in_req_i[i].q.addr == release_addr);
+    assign lock_hit[i]    = acquire_hit[i] || release_hit[i];
   end
 
-  // The owner's hit always wins arbitration, so a non-owner's (always-illegal-in-Locked)
-  // request can never starve the owner's legitimate one.
+  // The owner's hit always wins arbitration when both hosts hit the same
+  // cycle; the loser simply waits one extra cycle for resp_pending_q to
+  // clear (both eventually get answered, this is only a tie-break).
   logic hit_any, winner;
   assign hit_any = lock_hit[0] || lock_hit[1];
   assign winner  = lock_hit[owner_q] ? owner_q : ~owner_q;
 
   // Pending, not-yet-delivered completion response (one at a time; a new lock op is
   // only arbitrated once the previous one's response has been taken).
-  logic       resp_pending_d, resp_pending_q;
-  logic       resp_host_d,    resp_host_q;
-  user_t      resp_user_d,    resp_user_q;
-  logic       resp_read_d,    resp_read_q;
-  logic [1:0] resp_status_d,  resp_status_q;
+  logic              resp_pending_d, resp_pending_q;
+  logic              resp_host_d,    resp_host_q;
+  user_t             resp_user_d,    resp_user_q;
+  lock_outcome_e     resp_outcome_d, resp_outcome_q;
+  lock_fail_reason_e resp_reason_d,  resp_reason_q;
+  logic              resp_owner_d,   resp_owner_q;
+  logic              resp_locked_d,  resp_locked_q;
 
   // Register cuts on the pass-through path (moved here from cachepool_cc.sv's per-core
   // spill registers), placed at the module's output side.
@@ -202,14 +226,14 @@ module cachepool_spatz_lock
   always_comb begin
     lock_d         = lock_q;
     owner_d        = owner_q;
-    error_d        = error_q;
     active_d       = active_q;
-    user_d         = user_q;
     resp_pending_d = resp_pending_q;
     resp_host_d    = resp_host_q;
     resp_user_d    = resp_user_q;
-    resp_read_d    = resp_read_q;
-    resp_status_d  = resp_status_q;
+    resp_outcome_d = resp_outcome_q;
+    resp_reason_d  = resp_reason_q;
+    resp_owner_d   = resp_owner_q;
+    resp_locked_d  = resp_locked_q;
 
     // Default: pass through the (registered) memory path; blocked on a lock-address hit.
     for (int i = 0; i < 2; i++) begin
@@ -221,138 +245,148 @@ module cachepool_spatz_lock
 
     // Deliver a pending completion response, starting the cycle after it was accepted.
     if (resp_pending_q) begin
-      in_rsp_o[resp_host_q]         = '0;
-      in_rsp_o[resp_host_q].p_valid = 1'b1;
-      in_rsp_o[resp_host_q].p.user  = resp_user_q;
-      if (resp_read_q) begin
-        in_rsp_o[resp_host_q].p.data[0] = resp_status_q[0];
-        in_rsp_o[resp_host_q].p.data[1] = resp_status_q[1];
-      end
+      in_rsp_o[resp_host_q]             = '0;
+      in_rsp_o[resp_host_q].p_valid     = 1'b1;
+      in_rsp_o[resp_host_q].p.user      = resp_user_q;
+      in_rsp_o[resp_host_q].p.data[1:0] = resp_outcome_q;
+      in_rsp_o[resp_host_q].p.data[4:2] = resp_reason_q;
+      in_rsp_o[resp_host_q].p.data[5]   = resp_owner_q;
+      in_rsp_o[resp_host_q].p.data[6]   = resp_locked_q;
       if (in_req_i[resp_host_q].p_ready) resp_pending_d = 1'b0;
     end
 
     case (lock_q)
       // Host 0 is the implicit owner. Its own release is a no-op (immediate grant);
-      // its own acquire grants immediately only if drained, else waits like host 1's;
-      // host 1's release is meaningless (nothing to release) and stalled.
-      Idle: begin
+      // an acquire from either host grants immediately once drained, else waits.
+      Free: begin
         if (hit_any && !resp_pending_q) begin
-          if (is_acquire[winner]) begin
-            if (winner == owner_q && drain_done) begin
-              // host 0 self-acquire, nothing outstanding: immediate grant
-              lock_d      = Locked;
-              in_rsp_o[winner].q_ready = 1'b1;
-              resp_pending_d           = 1'b1;
-              resp_host_d              = winner;
-              resp_user_d              = in_req_i[winner].q.user;
-              resp_read_d              = 1'b0;
+          in_rsp_o[winner].q_ready = 1'b1;
+          resp_pending_d           = 1'b1;
+          resp_host_d              = winner;
+          resp_user_d              = in_req_i[winner].q.user;
+
+          if (acquire_hit[winner]) begin
+            if (drain_done) begin
+              lock_d         = Locked;
+              owner_d        = winner;
+              resp_outcome_d = OutcomeSuccess;
+              resp_owner_d   = winner;
+              resp_locked_d  = 1'b1;
             end else begin
-              // host 1 wants the lock, or host 0 self-acquires while Idle-mode
-              // traffic (from either host) is still outstanding -> drain first
-              active_d = winner;
-              user_d   = in_req_i[winner].q.user;
-              lock_d   = AcqWait;
+              active_d       = winner;
+              lock_d         = AcqWait;
+              resp_outcome_d = OutcomeSuccessWait;
+              resp_owner_d   = owner_q;
+              resp_locked_d  = 1'b0;
             end
-          end else if (is_release[winner]) begin
+          end else begin // release_hit[winner]
             if (winner == owner_q) begin
-              // "self release": nothing to release, immediate no-op grant
-              in_rsp_o[winner].q_ready = 1'b1;
-              resp_pending_d           = 1'b1;
-              resp_host_d              = winner;
-              resp_user_d              = in_req_i[winner].q.user;
-              resp_read_d              = 1'b0;
+              // host 0 "self release": nothing to release, immediate no-op grant
+              resp_outcome_d = OutcomeSuccess;
+              resp_owner_d   = owner_q;
+              resp_locked_d  = 1'b0;
             end else begin
-              // host 1 release: stalled, never accepted
-              error_d = 1'b1;
+              // host 1 release: never held it
+              resp_outcome_d = OutcomeFail;
+              resp_reason_d  = ReasonNotOwner;
+              resp_owner_d   = owner_q;
+              resp_locked_d  = 1'b0;
             end
-          end else if (is_read[winner]) begin
-            in_rsp_o[winner].q_ready = 1'b1;
-            resp_pending_d           = 1'b1;
-            resp_host_d              = winner;
-            resp_user_d              = in_req_i[winner].q.user;
-            resp_read_d              = 1'b1;
-            resp_status_d            = {1'b0, owner_q};
           end
         end
       end
 
-      // Only the owner's acquire (no-op) or release (drains, reverts to Idle) is ever
-      // legal; a non-owner's acquire/release is stalled and flagged.
+      // Only the owner's acquire (no-op) or release is meaningful; a non-owner's
+      // acquire/release always fails outright (no queueing for a future handoff).
       Locked: begin
         if (hit_any && !resp_pending_q) begin
-          if (is_acquire[winner]) begin
+          in_rsp_o[winner].q_ready = 1'b1;
+          resp_pending_d           = 1'b1;
+          resp_host_d              = winner;
+          resp_user_d              = in_req_i[winner].q.user;
+
+          if (acquire_hit[winner]) begin
+            resp_outcome_d = (winner == owner_q) ? OutcomeSuccess : OutcomeFail;
+            resp_reason_d  = ReasonBusy;
+            resp_owner_d   = owner_q;
+            resp_locked_d  = 1'b1;
+          end else begin // release_hit[winner]
             if (winner == owner_q) begin
-              // owner self-acquire: no-op, immediate grant
-              in_rsp_o[winner].q_ready = 1'b1;
-              resp_pending_d           = 1'b1;
-              resp_host_d              = winner;
-              resp_user_d              = in_req_i[winner].q.user;
-              resp_read_d              = 1'b0;
+              if (drain_done) begin
+                lock_d         = Free;
+                owner_d        = 1'b0;
+                resp_outcome_d = OutcomeSuccess;
+                resp_owner_d   = 1'b0;
+                resp_locked_d  = 1'b0;
+              end else begin
+                active_d       = winner;
+                lock_d         = RelWait;
+                resp_outcome_d = OutcomeSuccessWait;
+                resp_owner_d   = owner_q;
+                resp_locked_d  = 1'b1;
+              end
             end else begin
-              // non-owner acquire: stalled, never accepted
-              error_d = 1'b1;
+              resp_outcome_d = OutcomeFail;
+              resp_reason_d  = ReasonNotOwner;
+              resp_owner_d   = owner_q;
+              resp_locked_d  = 1'b1;
             end
-          end else if (is_release[winner]) begin
-            if (winner == owner_q) begin
-              // owner release -> drain, then revert to Idle
-              active_d = winner;
-              user_d   = in_req_i[winner].q.user;
-              lock_d   = RelWait;
-            end else begin
-              // non-owner release: stalled, never accepted
-              error_d = 1'b1;
-            end
-          end else if (is_read[winner]) begin
-            in_rsp_o[winner].q_ready = 1'b1;
-            resp_pending_d           = 1'b1;
-            resp_host_d              = winner;
-            resp_user_d              = in_req_i[winner].q.user;
-            resp_read_d              = 1'b1;
-            resp_status_d            = {1'b1, owner_q};
           end
         end
       end
 
-      // No lock op is accepted from anyone while waiting.
+      // Drain-wait sub-states: any hit (either host, either op) always fails with
+      // PENDING -- the one already-registered transition (active_q) resolves on
+      // its own once drain_done, with no response owed for that completion.
       AcqWait: begin
+        if (hit_any && !resp_pending_q) begin
+          in_rsp_o[winner].q_ready = 1'b1;
+          resp_pending_d           = 1'b1;
+          resp_host_d              = winner;
+          resp_user_d              = in_req_i[winner].q.user;
+          resp_outcome_d           = OutcomeFail;
+          resp_reason_d            = ReasonPending;
+          resp_owner_d             = owner_q;
+          resp_locked_d            = 1'b0;
+        end
         if (drain_done) begin
-          owner_d                    = active_q;
-          lock_d                     = Locked;
-          in_rsp_o[active_q].q_ready = 1'b1;
-          resp_pending_d             = 1'b1;
-          resp_host_d                = active_q;
-          resp_user_d                = user_q;
-          resp_read_d                = 1'b0;
+          owner_d = active_q;
+          lock_d  = Locked;
         end
       end
 
       RelWait: begin
+        if (hit_any && !resp_pending_q) begin
+          in_rsp_o[winner].q_ready = 1'b1;
+          resp_pending_d           = 1'b1;
+          resp_host_d              = winner;
+          resp_user_d              = in_req_i[winner].q.user;
+          resp_outcome_d           = OutcomeFail;
+          resp_reason_d            = ReasonPending;
+          resp_owner_d             = owner_q;
+          resp_locked_d            = 1'b1;
+        end
         if (drain_done) begin
-          owner_d                    = 1'b0;
-          lock_d                     = Idle;
-          in_rsp_o[active_q].q_ready = 1'b1;
-          resp_pending_d             = 1'b1;
-          resp_host_d                = active_q;
-          resp_user_d                = user_q;
-          resp_read_d                = 1'b0;
+          owner_d = 1'b0;
+          lock_d  = Free;
         end
       end
 
-      default: lock_d = Idle;
+      default: lock_d = Free;
     endcase
   end
 
-  `FF(lock_q,         lock_d,         Idle, clk_i, rst_ni)
-  `FF(owner_q,        owner_d,        1'b0, clk_i, rst_ni)
-  `FF(error_q,        error_d,        1'b0, clk_i, rst_ni)
-  `FF(active_q,       active_d,       1'b0, clk_i, rst_ni)
-  `FF(user_q,         user_d,         '0,   clk_i, rst_ni)
-  `FF(outstanding_q,     outstanding_d,     '0,   clk_i, rst_ni)
-  `FF(lsu_outstanding_q, lsu_outstanding_d, '0,   clk_i, rst_ni)
-  `FF(resp_pending_q, resp_pending_d, 1'b0, clk_i, rst_ni)
-  `FF(resp_host_q,    resp_host_d,    1'b0, clk_i, rst_ni)
-  `FF(resp_user_q,    resp_user_d,    '0,   clk_i, rst_ni)
-  `FF(resp_read_q,    resp_read_d,    1'b0, clk_i, rst_ni)
-  `FF(resp_status_q,  resp_status_d,  '0,   clk_i, rst_ni)
+  `FF(lock_q,         lock_d,         Free,          clk_i, rst_ni)
+  `FF(owner_q,        owner_d,        1'b0,          clk_i, rst_ni)
+  `FF(active_q,       active_d,       1'b0,          clk_i, rst_ni)
+  `FF(outstanding_q,     outstanding_d,     '0,      clk_i, rst_ni)
+  `FF(lsu_outstanding_q, lsu_outstanding_d, '0,       clk_i, rst_ni)
+  `FF(resp_pending_q, resp_pending_d, 1'b0,          clk_i, rst_ni)
+  `FF(resp_host_q,    resp_host_d,    1'b0,          clk_i, rst_ni)
+  `FF(resp_user_q,    resp_user_d,    '0,            clk_i, rst_ni)
+  `FF(resp_outcome_q, resp_outcome_d, OutcomeFail,   clk_i, rst_ni)
+  `FF(resp_reason_q,  resp_reason_d,  ReasonNotOwner,clk_i, rst_ni)
+  `FF(resp_owner_q,   resp_owner_d,   1'b0,          clk_i, rst_ni)
+  `FF(resp_locked_q,  resp_locked_d,  1'b0,          clk_i, rst_ni)
 
 endmodule

@@ -32,16 +32,31 @@
         }]
     },
     {
-        name: "SPATZ_LOCK",
-        desc: '''Spatz ownership lock for dual-Snitch core complexes. Write 1 to acquire
-        (blocks until granted), write 0 to release.'''
+        name: "SPATZ_LOCK_ACQUIRE",
+        desc: '''Spatz ownership acquire for dual-Snitch core complexes. Load
+        attempts to acquire; the loaded value encodes the outcome (fail/
+        success/success-wait) plus current owner/locked status.'''
         swaccess: "ro",
         hwaccess: "hrw",
         hwext: "true",
         fields: [{
             bits: "31:0",
-            name: "SPATZ_LOCK",
-            desc: "Spatz ownership lock register."
+            name: "SPATZ_LOCK_ACQUIRE",
+            desc: "Spatz ownership acquire register."
+        }]
+    },
+    {
+        name: "SPATZ_LOCK_RELEASE",
+        desc: '''Spatz ownership release for dual-Snitch core complexes. Load
+        attempts to release; the loaded value encodes the outcome (fail/
+        success/success-wait) plus current owner/locked status.'''
+        swaccess: "ro",
+        hwaccess: "hrw",
+        hwext: "true",
+        fields: [{
+            bits: "31:0",
+            name: "SPATZ_LOCK_RELEASE",
+            desc: "Spatz ownership release register."
         }]
     },
     {

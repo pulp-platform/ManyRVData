@@ -14,6 +14,11 @@
 /// outstanding at a time -- a FIFO tracks which host is owed the in-flight
 /// response (pushed on grant, popped on response), so a new request is only
 /// arbitrated once the FIFO is empty.
+/// Exclusive-owner-path response draining stays active through owner_active_i
+/// (Locked and RelWait, since owner_id_i is valid through both), decoupled
+/// from new-issue forwarding (locked_i only, steady-state Locked) -- a
+/// response already in flight when release is requested would otherwise
+/// have no drain path once locked_i drops for RelWait.
 module acc_mux #(
   parameter type acc_issue_req_t = logic,
   parameter type acc_issue_rsp_t = logic,
@@ -25,6 +30,7 @@ module acc_mux #(
   input  logic            owner_id_i,
   input  logic            locked_i,
   input  logic            waiting_i,
+  input  logic            owner_active_i,
 
   // Per-host Snitch acc interfaces
   input  acc_issue_req_t [1:0] acc_snitch_req_i,
@@ -95,7 +101,7 @@ module acc_mux #(
 
   // Only track requests with a real completion coming: non-writeback ops never produce a later acc_rsp_t.
   assign route_fifo_push = idle_req_o && idle_gnt_i && spatz_issue_rsp_i.writeback;
-  assign route_fifo_pop  = rsp_fire_o && !locked_i;
+  assign route_fifo_pop  = rsp_fire_o && !owner_active_i;
 
   // Depth 2 for safety margin; only 1 entry is ever pushed at a time.
   fifo_v3 #(
@@ -135,16 +141,21 @@ module acc_mux #(
     acc_snitch_prsp_o   = '0;
     acc_snitch_pvalid_o = '0;
 
-    if (locked_i) begin
-      // Exclusive owner path: real access, no arbitration needed.
-      spatz_issue_req_o   = acc_snitch_req_i[owner_id_i];
-      spatz_issue_valid_o = acc_snitch_qvalid_i[owner_id_i];
-      spatz_rsp_ready_o   = acc_snitch_pready_i[owner_id_i];
-
-      acc_snitch_qready_o[owner_id_i] = spatz_issue_ready_i;
-      acc_snitch_rsp_o[owner_id_i]    = spatz_issue_rsp_i;
+    if (owner_active_i) begin
+      // Exclusive owner path: response draining stays active through Locked
+      // and RelWait; new-issue forwarding only happens in steady-state
+      // Locked, never while a switch is pending.
+      spatz_rsp_ready_o               = acc_snitch_pready_i[owner_id_i];
       acc_snitch_prsp_o[owner_id_i]   = spatz_rsp_i;
       acc_snitch_pvalid_o[owner_id_i] = spatz_rsp_valid_i;
+
+      if (locked_i) begin
+        spatz_issue_req_o   = acc_snitch_req_i[owner_id_i];
+        spatz_issue_valid_o = acc_snitch_qvalid_i[owner_id_i];
+
+        acc_snitch_qready_o[owner_id_i] = spatz_issue_ready_i;
+        acc_snitch_rsp_o[owner_id_i]    = spatz_issue_rsp_i;
+      end
     end else begin
       // Draining is unconditional on waiting_i; only new-request arbitration is not.
       if (!route_fifo_empty) begin

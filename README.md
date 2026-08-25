@@ -210,7 +210,7 @@ Configuration names encode the number of groups and whether the FPU is enabled:
 
 `cachepool_fpu_16g_tiny` shrinks tiles/group and cores/tile for a faster-to-build, faster-to-simulate smoke test of the full 16-group mesh topology.
 
-`cachepool_dual_4g` sets `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock, so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. Software runtime support for the shared-Spatz lock is still in progress (see `note.md`).
+`cachepool_dual_4g` sets `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock (`cachepool_spatz_lock.sv`), so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. The lock never blocks a core's pipeline: every acquire/release attempt (`software/snRuntime/include/spatz_lock.h`) completes immediately with an outcome (granted / denied / granted-but-still-draining), so a hart contending for a lock it doesn't get can always retry or do something else instead of hanging. See `note.md` for the full state-machine design.
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)
@@ -374,6 +374,14 @@ For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_mon
 ## Snitch–Spatz Core Complex
 
 The default system uses a 32-bit Snitch core with a Spatz RVV accelerator. Double-precision is disabled by default for scalability; enable the FPU flavor (`cachepool_fpu.mk`) for single/half precision support.
+
+### Dual-scalar flavor (`cachepool_cc_dual.sv`)
+
+Set `num_scalar_per_core=2` (e.g. `cachepool_dual_4g`, see [Configurations](#configurations)) to build a Core Complex with **2 Snitch scalar harts sharing 1 Spatz unit**. Motivating workload: tasks where not every hart needs the vector unit at the same time, and control hands Spatz off between the pair at coarse task boundaries. The two harts get sequential hart/core IDs (e.g. cid 0/1 within a pair); `snrt_cluster_is_primary()` (`snrt.h`) tells a hart whether it's the pair's default owner (even `cid`) or its partner (odd `cid`).
+
+Ownership is arbitrated by `cachepool_spatz_lock.sv`, a small hardware FSM (`Free`/`Locked`/`AcqWait`/`RelWait`) intercepting two dedicated peripheral addresses. It never blocks a core's pipeline: every acquire/release attempt is a plain **load** that always completes immediately, returning an outcome (`FAIL`/`SUCCESS`/`SUCCESS-WAIT`) instead of stalling the hart — so a hart that doesn't get the lock can retry, back off, or do other work instead of hanging. See `software/snRuntime/README.md` for the software API and `note.md` for the full state-machine design.
+
+Two per-role partial-barrier helpers, `snrt_cluster_host0_barrier()`/`snrt_cluster_host1_barrier()` (`snrt.h`), let a kernel synchronize only the pair's default owners (or only their partners) without hand-writing a participant mask; both degrade to an ordinary full barrier on a single-scalar-per-CC build, so kernels using them don't need a config-specific `#if`.
 
 ## Stack
 

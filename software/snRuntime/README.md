@@ -9,6 +9,7 @@ snRuntime/
 ├── include/          # Public headers — include these in application code
 │   ├── snrt.h            # Master header: topology, barriers, DMA, allocation
 │   ├── l1cache.h         # CachePool L1 data cache management API
+│   ├── spatz_lock.h      # Dual-scalar Spatz ownership lock API
 │   ├── cachepool_peripheral.h  # Register offsets for the cluster peripheral
 │   ├── perf_cnt.h        # Performance counter API
 │   ├── team.h            # Team/cluster descriptor structs
@@ -23,6 +24,7 @@ snRuntime/
 │   ├── team.c            # Team/topology initialisation
 │   ├── barrier.c         # Hardware and software barrier implementations
 │   ├── l1cache.c         # CachePool L1 cache management (flush, partition, xbar)
+│   ├── spatz_lock.c      # Dual-scalar Spatz ownership lock (see spatz_lock.h)
 │   ├── alloc.c           # L1 TCDM bump allocator + DRAM linked-list allocator
 │   ├── memcpy.c          # Optimised memcpy
 │   ├── perf_cnt.c        # Performance counter helpers
@@ -101,6 +103,47 @@ void l1d_wait();
 ```c
 // Invalidate all cache banks (insn = 2'b11). Called from start_snitch.S.
 void l1d_init(uint32_t size);
+```
+
+### Dual-Scalar Spatz Lock — CachePool-specific (`spatz_lock.h`)
+
+Only meaningful on a `num_scalar_per_core=2` build (`cachepool_cc_dual`), where 2 Snitch
+harts share 1 Spatz unit. On a single-scalar-per-CC build every call below is a harmless
+no-op that always reports success.
+
+```c
+void spatz_lock_acquire();  // blocks (retries in software) until this hart owns Spatz
+void spatz_lock_release();  // must be called by the current owner only
+```
+
+Both are plain, non-blocking-in-hardware retries under the hood — see `spatz_lock_outcome_t`
+below — so a hart can never hang in hardware waiting on the other hart to release. After
+`spatz_lock_acquire()` returns, it is always safe to issue vector/FP work immediately: if the
+ownership switch is still draining, `acc_mux` (RTL) withholds Spatz access until it completes,
+so the next vector/FP instruction just blocks there instead, exactly as if the acquire itself
+had blocked.
+
+For finer control (e.g. to do other work instead of retrying), use the non-blocking primitives
+directly:
+
+```c
+typedef enum {
+  SPATZ_LOCK_FAIL = 0,         // denied; hardware made no reservation, safe to retry
+  SPATZ_LOCK_SUCCESS = 1,      // granted now
+  SPATZ_LOCK_SUCCESS_WAIT = 2, // accepted, completes on its own once drained
+} spatz_lock_outcome_t;
+
+uint32_t spatz_lock_try_acquire();  // single, always-immediate attempt
+uint32_t spatz_lock_try_release();
+spatz_lock_outcome_t spatz_lock_outcome(uint32_t raw);  // decode the above
+```
+
+Related topology/sync helpers in `snrt.h`:
+
+```c
+int  snrt_cluster_is_primary();       // true for the pair's default owner (even cid)
+void snrt_cluster_host0_barrier();    // partial barrier over default owners only
+void snrt_cluster_host1_barrier();    // partial barrier over their partners only
 ```
 
 ### Performance Counters (`perf_cnt.h`) *TODO: REMOVE*

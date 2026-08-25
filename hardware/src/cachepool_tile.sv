@@ -1628,8 +1628,7 @@ module cachepool_tile
         .tcdm_rsp_ready_o (tcdm_rsp_ready[TcdmPortsOffs +: TcdmPorts] ),
         .tcdm_addr_base_i (tcdm_start_address                         ),
         .cluster_periph_start_address_i (cluster_periph_start_address),
-        .owner_id_o       (/* debug only, unused */                   ),
-        .lock_error_o     (/* debug only, unused */                   )
+        .owner_id_o       (/* debug only, unused */                   )
       );
     end else begin : gen_unsupported
       `ASSERT_INIT(NumScalarPerCCSupported, 1'b0,

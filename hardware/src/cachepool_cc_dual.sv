@@ -105,8 +105,7 @@ module cachepool_cc_dual
     input  addr_t                        tcdm_addr_base_i,
     input  addr_t                        cluster_periph_start_address_i,
     // Spatz lock/switch status (debug)
-    output logic                         owner_id_o,
-    output logic                         lock_error_o
+    output logic                         owner_id_o
   );
 
   // FMA architecture is "merged" -> mulexp and macexp instructions are supported
@@ -125,7 +124,7 @@ module cachepool_cc_dual
 
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
-  logic owner_id, locked, waiting;
+  logic owner_id, locked, waiting, owner_active;
   logic req_fire, rsp_fire;
   logic last_req_host;
   assign owner_id_o = owner_id;
@@ -272,7 +271,7 @@ module cachepool_cc_dual
     .owner_id_o                     (owner_id            ),
     .locked_o                       (locked              ),
     .waiting_o                      (waiting             ),
-    .error_o                        (lock_error_o        ),
+    .owner_active_o                 (owner_active        ),
     .cluster_periph_start_address_i (cluster_periph_start_address_i)
   );
 
@@ -288,6 +287,7 @@ module cachepool_cc_dual
     .owner_id_i          (owner_id          ),
     .locked_i            (locked            ),
     .waiting_i           (waiting           ),
+    .owner_active_i      (owner_active      ),
     .acc_snitch_req_i    (acc_snitch_req    ),
     .acc_snitch_rsp_o    (acc_snitch_rsp    ),
     .acc_snitch_qvalid_i (acc_snitch_qvalid ),
