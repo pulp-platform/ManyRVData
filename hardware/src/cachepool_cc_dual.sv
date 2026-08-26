@@ -126,7 +126,6 @@ module cachepool_cc_dual
 
   logic owner_id, locked, waiting, owner_active;
   logic req_fire, rsp_fire;
-  logic last_req_host;
   assign owner_id_o = owner_id;
 
   // Raw per-host Snitch data port, and its acc issue/response bundle.
@@ -143,20 +142,14 @@ module cachepool_cc_dual
   fpnew_pkg::fmt_mode_t  [1:0] fpu_fmt_mode_h;
   fpnew_pkg::status_t          fpu_status;
 
-  // Spatz memory-consistency signals, forwarded only to last_req_host (not owner_id, which is stale in Idle mode).
+  // Spatz's raw LSU-consistency signals; acc_mux demuxes these to the issuing host.
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
   logic       spatz_st_rsp_done;
 
-  logic [1:0][1:0] spatz_mem_finished_h;
-  logic [1:0][1:0] spatz_mem_str_finished_h;
-  logic [1:0]      spatz_st_rsp_done_h;
-
-  for (genvar h = 0; h < 2; h++) begin : gen_spatz_mem_consistency_gate
-    assign spatz_mem_finished_h[h]     = (last_req_host == h[0]) ? spatz_mem_finished     : '0;
-    assign spatz_mem_str_finished_h[h] = (last_req_host == h[0]) ? spatz_mem_str_finished : '0;
-    assign spatz_st_rsp_done_h[h]      = (last_req_host == h[0]) ? spatz_st_rsp_done      : 1'b1;
-  end
+  logic [1:0][1:0] acc_mem_finished_h;
+  logic [1:0][1:0] acc_mem_str_finished_h;
+  logic [1:0]      acc_st_rsp_done_h;
 
   for (genvar h = 0; h < 2; h++) begin : gen_snitch
     snitch #(
@@ -206,9 +199,9 @@ module cachepool_cc_dual
       .acc_prsp_i            (acc_snitch_prsp[h]          ),
       .acc_pvalid_i          (acc_snitch_pvalid[h]        ),
       .acc_pready_o          (acc_snitch_pready[h]        ),
-      .acc_mem_finished_i    (spatz_mem_finished_h[h]     ),
-      .acc_mem_str_finished_i(spatz_mem_str_finished_h[h] ),
-      .acc_st_rsp_done_i     (spatz_st_rsp_done_h[h]      ),
+      .acc_mem_finished_i    (acc_mem_finished_h[h]       ),
+      .acc_mem_str_finished_i(acc_mem_str_finished_h[h]   ),
+      .acc_st_rsp_done_i     (acc_st_rsp_done_h[h]        ),
       .data_req_o            (snitch_dreq_d[h]            ),
       .data_rsp_i            (snitch_drsp_d[h]            ),
       .ptw_valid_o           (hive_req_o[h].ptw_valid     ),
@@ -282,29 +275,34 @@ module cachepool_cc_dual
     .acc_issue_rsp_t (acc_issue_rsp_t),
     .acc_rsp_t       (acc_rsp_t      )
   ) i_acc_mux (
-    .clk_i               (clk_i             ),
-    .rst_ni              (rst_ni            ),
-    .owner_id_i          (owner_id          ),
-    .locked_i            (locked            ),
-    .waiting_i           (waiting           ),
-    .owner_active_i      (owner_active      ),
-    .acc_snitch_req_i    (acc_snitch_req    ),
-    .acc_snitch_rsp_o    (acc_snitch_rsp    ),
-    .acc_snitch_qvalid_i (acc_snitch_qvalid ),
-    .acc_snitch_qready_o (acc_snitch_qready ),
-    .acc_snitch_prsp_o   (acc_snitch_prsp   ),
-    .acc_snitch_pvalid_o (acc_snitch_pvalid ),
-    .acc_snitch_pready_i (acc_snitch_pready ),
-    .spatz_issue_req_o   (spatz_issue_req   ),
-    .spatz_issue_rsp_i   (spatz_issue_rsp   ),
-    .spatz_issue_valid_o (spatz_issue_valid ),
-    .spatz_issue_ready_i (spatz_issue_ready ),
-    .spatz_rsp_i         (spatz_rsp         ),
-    .spatz_rsp_valid_i   (spatz_rsp_valid   ),
-    .spatz_rsp_ready_o   (spatz_rsp_ready   ),
-    .req_fire_o          (req_fire          ),
-    .rsp_fire_o          (rsp_fire          ),
-    .last_req_host_o     (last_req_host     )
+    .clk_i                   (clk_i                  ),
+    .rst_ni                  (rst_ni                 ),
+    .owner_id_i              (owner_id               ),
+    .locked_i                (locked                 ),
+    .waiting_i               (waiting                ),
+    .owner_active_i          (owner_active           ),
+    .acc_snitch_req_i        (acc_snitch_req         ),
+    .acc_snitch_rsp_o        (acc_snitch_rsp         ),
+    .acc_snitch_qvalid_i     (acc_snitch_qvalid      ),
+    .acc_snitch_qready_o     (acc_snitch_qready      ),
+    .acc_snitch_prsp_o       (acc_snitch_prsp        ),
+    .acc_snitch_pvalid_o     (acc_snitch_pvalid      ),
+    .acc_snitch_pready_i     (acc_snitch_pready      ),
+    .spatz_issue_req_o       (spatz_issue_req        ),
+    .spatz_issue_rsp_i       (spatz_issue_rsp        ),
+    .spatz_issue_valid_o     (spatz_issue_valid      ),
+    .spatz_issue_ready_i     (spatz_issue_ready      ),
+    .spatz_rsp_i             (spatz_rsp              ),
+    .spatz_rsp_valid_i       (spatz_rsp_valid        ),
+    .spatz_rsp_ready_o       (spatz_rsp_ready        ),
+    .spatz_mem_finished_i    (spatz_mem_finished     ),
+    .spatz_mem_str_finished_i(spatz_mem_str_finished ),
+    .spatz_st_rsp_done_i     (spatz_st_rsp_done      ),
+    .req_fire_o              (req_fire               ),
+    .rsp_fire_o              (rsp_fire               ),
+    .acc_mem_finished_o      (acc_mem_finished_h     ),
+    .acc_mem_str_finished_o  (acc_mem_str_finished_h ),
+    .acc_st_rsp_done_o       (acc_st_rsp_done_h      )
   );
 
   // FPU rounding-mode/format CSRs: Spatz has one FPU, so it only ever sees the

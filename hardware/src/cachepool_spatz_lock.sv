@@ -111,8 +111,11 @@ module cachepool_spatz_lock
   assign drain_done = (outstanding_q == '0) && (lsu_outstanding_q == '0) && spatz_st_rsp_done_i;
 
   `ASSERT(NoOutstandingUnderflow, rsp_fire_i |-> (outstanding_q != '0))
+  // Checked against the net balance for this cycle, not the pre-update register alone:
+  // a scalar FP store's finish can land in the same cycle as its own issue.
   `ASSERT(NoLsuOutstandingUnderflow,
-      (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) |-> (lsu_outstanding_q != '0))
+      (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) |->
+      (lsu_outstanding_q + spatz_lsu_issue_fire_i >= (spatz_mem_finished_i[0] + spatz_mem_finished_i[1])))
 
   always_comb begin
     outstanding_d = outstanding_q;

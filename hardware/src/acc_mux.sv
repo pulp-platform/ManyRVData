@@ -10,11 +10,14 @@
 /// Arbitrates 2 Snitch acc interfaces onto 1 shared Spatz acc interface for
 /// cachepool_cc_dual, gated by cachepool_spatz_lock's owner/locked/waiting
 /// state. Locked: only the owner passes through, real access, no arbitration.
-/// Idle: both hosts get real round-robin access, one request outstanding at
+/// Free: both hosts get real round-robin access, one request outstanding at
 /// a time -- a FIFO tracks which host is owed the in-flight response.
 /// Response draining stays active through owner_active_i (Locked and
 /// RelWait); new-issue forwarding is gated separately on locked_i alone, so
 /// a response already in flight when release is requested still has a drain path.
+/// Also demuxes Spatz's LSU-consistency signals (mem_finished/mem_str_finished/
+/// st_rsp_done) to the issuing host, attributed by current-cycle owner so a
+/// same-cycle issue+finish (e.g. stores) is never misrouted to a stale owner.
 module acc_mux #(
   parameter type acc_issue_req_t = logic,
   parameter type acc_issue_rsp_t = logic,
@@ -46,12 +49,20 @@ module acc_mux #(
   input  logic            spatz_rsp_valid_i,
   output logic            spatz_rsp_ready_o,
 
-  // Drain feed for the lock's outstanding counter (owner and Idle-mode paths both count).
+  // Spatz's raw LSU-consistency signals, demuxed to the per-host outputs below.
+  input  logic            [1:0] spatz_mem_finished_i,
+  input  logic            [1:0] spatz_mem_str_finished_i,
+  input  logic                  spatz_st_rsp_done_i,
+
+  // Drain feed for the lock's outstanding counter (owner and Free-mode paths both count).
   output logic            req_fire_o,
   output logic            rsp_fire_o,
 
-  // Host most recently issued to Spatz; gates spatz_mem_finished etc. in cachepool_cc_dual.sv.
-  output logic            last_req_host_o
+  // Per-host demuxed copies of the signals above, attributed to the actual current-cycle
+  // owner (not a registered value that can go stale by one cycle on same-cycle completions).
+  output logic       [1:0][1:0] acc_mem_finished_o,
+  output logic       [1:0][1:0] acc_mem_str_finished_o,
+  output logic            [1:0] acc_st_rsp_done_o
 );
 
   logic req_fire_any;
@@ -62,40 +73,52 @@ module acc_mux #(
   assign req_fire_o = req_fire_any & spatz_issue_rsp_i.writeback;
   assign rsp_fire_o = spatz_rsp_valid_i & spatz_rsp_ready_o;
 
-  // Idle-mode round-robin arbitration, offered only while nothing is already outstanding.
-  logic            idle_gnt_i, idle_req_o;
-  logic            idle_winner;
-  logic      [1:0] idle_req_i;
-  acc_issue_req_t  idle_data_o;
-  logic      [1:0] idle_gnt_o;
+  // Free-mode round-robin arbitration, offered only while nothing is already outstanding.
+  logic            free_gnt_i, free_req_o;
+  logic            free_winner;
+  logic      [1:0] free_req_i;
+  acc_issue_req_t  free_data_o;
+  logic      [1:0] free_gnt_o;
 
   logic route_fifo_empty, route_fifo_push, route_fifo_pop, route_fifo_route_q;
   logic route_fifo_full;
 
-  assign idle_req_i = (!locked_i && !waiting_i && route_fifo_empty) ? acc_snitch_qvalid_i : 2'b00;
-  assign idle_gnt_i = spatz_issue_ready_i;
+  // Holds off the next Free-mode grant until the current LSU op has actually
+  // drained (not just accepted), so last_req_host_q can't go stale mid-drain.
+  logic lsu_busy_d, lsu_busy_q;
+
+  always_comb begin
+    lsu_busy_d = lsu_busy_q;
+    if (req_fire_any && spatz_issue_rsp_i.loadstore) lsu_busy_d = 1'b1;
+    if (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) lsu_busy_d = 1'b0;
+  end
+
+  `FF(lsu_busy_q, lsu_busy_d, 1'b0, clk_i, rst_ni)
+
+  assign free_req_i = (!locked_i && !waiting_i && route_fifo_empty && !lsu_busy_q) ? acc_snitch_qvalid_i : 2'b00;
+  assign free_gnt_i = spatz_issue_ready_i;
 
   rr_arb_tree #(
     .NumIn     (2              ),
     .DataType  (acc_issue_req_t),
     .AxiVldRdy (1'b1           ),
     .LockIn    (1'b1           )
-  ) i_idle_arb (
+  ) i_free_arb (
     .clk_i,
     .rst_ni,
     .flush_i (1'b0            ),
     .rr_i    ('0              ),
-    .req_i   (idle_req_i      ),
-    .gnt_o   (idle_gnt_o      ),
+    .req_i   (free_req_i      ),
+    .gnt_o   (free_gnt_o      ),
     .data_i  (acc_snitch_req_i),
-    .req_o   (idle_req_o      ),
-    .gnt_i   (idle_gnt_i      ),
-    .data_o  (idle_data_o     ),
-    .idx_o   (idle_winner     )
+    .req_o   (free_req_o      ),
+    .gnt_i   (free_gnt_i      ),
+    .data_o  (free_data_o     ),
+    .idx_o   (free_winner     )
   );
 
   // Only track requests with a real completion coming: non-writeback ops never produce a later acc_rsp_t.
-  assign route_fifo_push = idle_req_o && idle_gnt_i && spatz_issue_rsp_i.writeback;
+  assign route_fifo_push = free_req_o && free_gnt_i && spatz_issue_rsp_i.writeback;
   assign route_fifo_pop  = rsp_fire_o && !owner_active_i;
 
   // Depth 2 for safety margin; only 1 entry is ever pushed at a time.
@@ -110,21 +133,26 @@ module acc_mux #(
     .full_o     (route_fifo_full   ),
     .empty_o    (route_fifo_empty  ),
     .usage_o    (                  ),
-    .data_i     (idle_winner       ),
+    .data_i     (free_winner       ),
     .push_i     (route_fifo_push   ),
     .data_o     (route_fifo_route_q),
     .pop_i      (route_fifo_pop    )
   );
 
-  logic last_req_host_d, last_req_host_q;
+  // Current owner for this cycle's LSU-consistency demux: the just-issued host when a
+  // grant is firing right now (covers same-cycle issue+finish, e.g. stores), else the
+  // latched host from whichever grant is still draining (covers delayed completions).
+  logic last_req_host_q;
+  logic cur_owner;
+  assign cur_owner = req_fire_any ? (locked_i ? owner_id_i : free_winner) : last_req_host_q;
 
-  always_comb begin
-    last_req_host_d = last_req_host_q;
-    if (req_fire_any) last_req_host_d = locked_i ? owner_id_i : idle_winner;
+  `FF(last_req_host_q, cur_owner, 1'b0, clk_i, rst_ni)
+
+  for (genvar h = 0; h < 2; h++) begin : gen_lsu_consistency_demux
+    assign acc_mem_finished_o[h]     = (cur_owner == h[0]) ? spatz_mem_finished_i     : '0;
+    assign acc_mem_str_finished_o[h] = (cur_owner == h[0]) ? spatz_mem_str_finished_i : '0;
+    assign acc_st_rsp_done_o[h]      = (cur_owner == h[0]) ? spatz_st_rsp_done_i      : 1'b1;
   end
-
-  `FF(last_req_host_q, last_req_host_d, 1'b0, clk_i, rst_ni)
-  assign last_req_host_o = last_req_host_q;
 
   always_comb begin
     spatz_issue_req_o   = acc_issue_req_t'('0);
@@ -156,10 +184,10 @@ module acc_mux #(
         acc_snitch_prsp_o[route_fifo_route_q]   = spatz_rsp_i;
         acc_snitch_pvalid_o[route_fifo_route_q] = spatz_rsp_valid_i;
       end else if (!waiting_i) begin
-        spatz_issue_req_o                = idle_data_o;
-        spatz_issue_valid_o              = idle_req_o;
-        acc_snitch_qready_o[idle_winner] = idle_req_o && spatz_issue_ready_i;
-        acc_snitch_rsp_o[idle_winner]    = spatz_issue_rsp_i;
+        spatz_issue_req_o                = free_data_o;
+        spatz_issue_valid_o              = free_req_o;
+        acc_snitch_qready_o[free_winner] = free_req_o && spatz_issue_ready_i;
+        acc_snitch_rsp_o[free_winner]    = spatz_issue_rsp_i;
       end
     end
   end
@@ -179,14 +207,14 @@ module acc_mux #(
 
   always_ff @(posedge clk_i) begin
     if (rst_ni && acc_mux_verbose) begin
-      if (idle_req_o && idle_gnt_i) begin
-        $display({"[ACC-MUX %0t %m] IDLE-GRANT host=%0d accept=%0b writeback=%0b ",
+      if (free_req_o && free_gnt_i) begin
+        $display({"[ACC-MUX %0t %m] FREE-GRANT host=%0d accept=%0b writeback=%0b ",
                   "loadstore=%0b isfloat=%0b"},
-                 $time, idle_winner, spatz_issue_rsp_i.accept, spatz_issue_rsp_i.writeback,
+                 $time, free_winner, spatz_issue_rsp_i.accept, spatz_issue_rsp_i.writeback,
                  spatz_issue_rsp_i.loadstore, spatz_issue_rsp_i.isfloat);
       end
       if (route_fifo_push) begin
-        $display("[ACC-MUX %0t %m] ROUTE-FIFO PUSH host=%0d", $time, idle_winner);
+        $display("[ACC-MUX %0t %m] ROUTE-FIFO PUSH host=%0d", $time, free_winner);
       end
       if (route_fifo_pop) begin
         $display("[ACC-MUX %0t %m] ROUTE-FIFO POP  host=%0d", $time, route_fifo_route_q);
@@ -200,6 +228,10 @@ module acc_mux #(
         $display("[ACC-MUX %0t %m] RSP-FIRE  owner_active=%0b route_host=%0d",
                  $time, owner_active_i, route_fifo_route_q);
       end
+      if (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) begin
+        $display("[ACC-MUX %0t %m] LSU-FINISH cur_owner=%0d mem_finished=%0b",
+                 $time, cur_owner, spatz_mem_finished_i);
+      end
       // Edge-triggered: which side of the p-channel handshake (valid vs.
       // ready) is actually stuck once route_fifo has something owed.
       if (spatz_rsp_valid_i != spatz_rsp_valid_q) begin
@@ -211,7 +243,7 @@ module acc_mux #(
     end
   end
 
-  // Watchdog: warn if a round-robin (Idle-mode) transaction has been
+  // Watchdog: warn if a round-robin (Free-mode) transaction has been
   // accepted by Spatz but its response hasn't drained (route_fifo stuck
   // non-empty) for more than AccMuxWdogPs, re-warning every AccMuxWdogPs
   // while still stuck.
@@ -232,10 +264,10 @@ module acc_mux #(
           (64'($time) - acc_mux_last_warn_q)     > AccMuxWdogPs) begin
         acc_mux_last_warn_q <= 64'($time);
         $display({"[%0t] [ACC-MUX %m] STUCK: route_fifo non-empty, owed host=%0d ",
-                  "locked=%0b waiting=%0b owner_active=%0b idle_req_i=%0b ",
+                  "locked=%0b waiting=%0b owner_active=%0b free_req_i=%0b ",
                   "spatz_rsp_valid=%0b spatz_rsp_ready=%0b"},
                  $time, route_fifo_route_q, locked_i, waiting_i, owner_active_i,
-                 idle_req_i, spatz_rsp_valid_i, spatz_rsp_ready_o);
+                 free_req_i, spatz_rsp_valid_i, spatz_rsp_ready_o);
       end
     end
   end
