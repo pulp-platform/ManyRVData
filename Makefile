@@ -213,7 +213,7 @@ dram-build: $(DRAMSYS_PATH)/README.md dram-config
 	if [ ! -d "build" ]; then \
 		mkdir build && cd build; \
 		$(CMAKE) -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_C_FLAGS=-fPIC -D DRAMSYS_WITH_DRAMPOWER=ON .. ; \
-		make -j; \
+		make -j4; \
 	fi
 
 $(DRAMSYS_PATH)/README.md: dram-init
@@ -242,7 +242,7 @@ dram-clean:
 	fi
 
 dram-init:
-	make -C ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
+	make -C ${DRAMSYS_DIR} -j4 dramsys CXX=$(CXX) CC=$(CC)
 
 ############
 # Modelsim #
