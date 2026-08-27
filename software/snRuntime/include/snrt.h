@@ -108,6 +108,12 @@ extern uint32_t snrt_cluster_num();
 /// whether this hart is host 0 of its Core Complex pair
 extern int snrt_cluster_is_primary();
 
+/// Physical vector-unit count/index/per-tile count, halved vs. the hart-based
+/// counterparts in dual-scalar configs (one Spatz per CC pair), unchanged otherwise.
+extern uint32_t snrt_cluster_vpu_num();
+extern uint32_t snrt_cluster_vpu_idx();
+extern uint32_t snrt_cluster_vpu_per_tile();
+
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
 

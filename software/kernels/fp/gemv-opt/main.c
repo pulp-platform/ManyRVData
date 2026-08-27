@@ -65,8 +65,9 @@ int main() {
   T *b;
   T *result;
 
-  const uint32_t num_cores = snrt_cluster_core_num();
-  const uint32_t cid = snrt_cluster_core_idx();
+  const uint32_t num_cores = snrt_cluster_vpu_num();
+  const uint32_t cid = snrt_cluster_vpu_idx();
+  const int is_primary = snrt_cluster_is_primary();
 
   // How many column of data each core will work on
   // This will determine the vlen of the calculation
@@ -90,7 +91,7 @@ int main() {
   } else if (lmul_max == 1) {
     lmul = 1;
   } else {
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       printf("FATAL: Problem size too small!\n");
     }
     snrt_cluster_hw_barrier();
@@ -103,7 +104,7 @@ int main() {
   // offset bits in unit of byte (address)
   uint32_t offset = 31 - __builtin_clz(m_core * elem_width/8);
 
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     result_dram = (T *)snrt_malloc(gemv_l.M * sizeof(T));
   }
 
@@ -131,7 +132,7 @@ int main() {
   // If our block size is a 4-times multiple of l2 block size
   // Then we will always visiting the same L2 channel
   if (block_elem_core < l2_block_elem) {
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       printf("FATAL: Current scheme cannot utilize all bandwidth!\n");
       printf("Core block size:%u, DRAM block size:%u\n", block_elem_core, l2_block_elem);
     }
@@ -166,7 +167,7 @@ int main() {
   uint32_t n_core   = gemv_l.N - col_shift;   // first segment length
   uint32_t comp_size = col_shift;             // second segment length
 
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     printf("lmul:%u, mcore:%u\n", lmul, m_core);
   }
 
@@ -177,26 +178,28 @@ int main() {
   for (int i = 0; i < 3; i++) {
 
     // Start dump
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       start_kernel();
       // Start timer
       timer_start = benchmark_get_cycle();
     }
 
     // Calculate gemv
-    if (lmul == 4) {
-      gemv_v32b_m4(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
-    } else if (lmul == 2) {
-      gemv_v32b_m2(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
-    } else if (lmul == 1) {
-      gemv_v32b_m1(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
+    if (is_primary) {
+      if (lmul == 4) {
+        gemv_v32b_m4(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
+      } else if (lmul == 2) {
+        gemv_v32b_m2(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
+      } else if (lmul == 1) {
+        gemv_v32b_m1(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
+      }
     }
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 
 
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       // End timer and check if new best runtime
       timer_end = benchmark_get_cycle();
       unsigned int timer_temp = timer_end - timer_start;
@@ -226,7 +229,7 @@ int main() {
   }
 
   // Check and display results
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     long unsigned int performance =
         1000 * 2 * gemv_l.M * gemv_l.N / timer;
     long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));

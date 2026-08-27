@@ -59,9 +59,10 @@ int verify_matrix(float *matrix, const float *checksum,
 }
 
 int main() {
-  const unsigned int num_cores = snrt_cluster_core_num();
-  const unsigned int num_cores_per_tile = snrt_cluster_core_per_tile();
-  const unsigned int cid = snrt_cluster_core_idx();
+  const unsigned int num_cores = snrt_cluster_vpu_num();
+  const unsigned int num_cores_per_tile = snrt_cluster_vpu_per_tile();
+  const unsigned int cid = snrt_cluster_vpu_idx();
+  const int is_primary = snrt_cluster_is_primary();
 
   #if MEAS_1ITER == 1
   const int measure_iter = 1;
@@ -83,7 +84,7 @@ int main() {
 
   // Allocate and zero the error array while the cache is still in shared mode,
   // so the pointer write and slot initialisation are visible to all cores.
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     error_arr = (int *)snrt_malloc(active_cores * sizeof(int));
     for (unsigned int i = 0; i < active_cores; i++)
       error_arr[i] = 0;
@@ -117,7 +118,7 @@ int main() {
 
   // Initialize matrices
   #ifdef DEBUG
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     printf ("a:%x\n", a);
     printf ("b:%x\n", b);
     printf ("c:%x\n", c);
@@ -134,21 +135,23 @@ int main() {
   // Calculate matmul
   for (unsigned int i = 0; i < measure_iter; ++i) {
     // Start dump
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       start_kernel();
     }
 
     // Start timer
     timer_start = benchmark_get_cycle();
 
-    if (kernel_size == 2) {
-      matmul_2xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
-    } else if (kernel_size == 4) {
-      matmul_4xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
-    } else if (kernel_size == 8) {
-      matmul_8xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
-    } else {
-      return -1;
+    if (is_primary) {
+      if (kernel_size == 2) {
+        matmul_2xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
+      } else if (kernel_size == 4) {
+        matmul_4xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
+      } else if (kernel_size == 8) {
+        matmul_8xVL(gemm_C_dram, gemm_A_dram, gemm_B_dram, m_start, m_end, gemm_l.K, gemm_l.N, p_start, p_end);
+      } else {
+        return -1;
+      }
     }
 
     // Wait for all cores to finish
@@ -157,7 +160,7 @@ int main() {
     // End timer and check if new best runtime
     timer_end = benchmark_get_cycle();
     unsigned int timer_temp = timer_end - timer_start;
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       if (timer_temp < timer) {
         timer = timer_temp;
         if (i == 0)
@@ -167,7 +170,7 @@ int main() {
     }
 
     if (i == 0) {
-      if (cid < active_cores) {
+      if (is_primary && cid < active_cores) {
         float *check_C    = gemm_C_dram + cid * (gemm_l.M / active_cores) * gemm_l.N;
         float *check_gold = (float *)gemm_checksum + cid * (gemm_l.M / active_cores);
 
@@ -177,7 +180,7 @@ int main() {
 
       snrt_cluster_hw_barrier();
 
-      if (cid == 0) {
+      if (is_primary && cid == 0) {
         if (error_arr[0] != 0)
           printf("Core 0 error %d\n", error_arr[0]);
 
@@ -196,7 +199,7 @@ int main() {
   }
 
   // Check and display results
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     long unsigned int performance =
         1000 * 2 * gemm_l.M * gemm_l.N * gemm_l.K / timer;
     long unsigned int utilization = performance / (2 * active_cores * 4);
