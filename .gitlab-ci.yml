@@ -91,14 +91,12 @@ build-dual:
 
 # ---------------------------------------------------------------------------
 # Build stage: same as `build`, for the largest available config (16 groups).
-# Manual/MR-only (see test-16g): slow, so not run on every push.
+# Manual (see test-16g): slow, so not run automatically on every push.
 # ---------------------------------------------------------------------------
 build-16g:
   stage: build
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      when: manual
-      allow_failure: true
+  when: manual
+  allow_failure: true
   timeout: 4h
   script:
     - echo "Using CC=$CC"
@@ -189,13 +187,12 @@ test-dual:
 
 # ---------------------------------------------------------------------------
 # Test stage: largest available config (16 groups), largest available size
-# per kernel. Manual/MR-only and slow -- see build-16g.
+# per kernel. Runs once build-16g (manual) is triggered and succeeds -- see
+# build-16g.
 # ---------------------------------------------------------------------------
 test-16g:
   stage: test
   needs: [build-16g]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   timeout: 4h
   parallel:
     matrix:
