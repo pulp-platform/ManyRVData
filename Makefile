@@ -413,7 +413,7 @@ clean.generate:
 	                    $(SNRT_BOOTINFO_H)
 
 .PHONY: clean.hw
-clean.hw: clean.vsim clean.generate
+clean.hw: clean.vsim clean.generate clean-floonoc
 
 .PHONY: clean
 clean: clean.hw clean.sw
