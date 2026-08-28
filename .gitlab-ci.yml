@@ -17,6 +17,7 @@ variables:
   # Config to build and test
   CI_CONFIG: 'cachepool_fpu_4g'
   CI_CONFIG_DUAL: 'cachepool_dual_fpu_4g'
+  CI_CONFIG_16G: 'cachepool_fpu_16g'
   SW_PREFIX: 'test-'
 
 default:
@@ -76,6 +77,38 @@ build-dual:
     - make init
     - make dram-build
     - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG_DUAL DEBUG=0 noc_profiling=0
+  artifacts:
+    when: always
+    expire_in: 2h
+    paths:
+      - sim/work/
+      - sim/bin/cachepool_cluster.vsim
+      - sim/bin/cachepool_cluster.vsim.gui
+      - sim/work-dpi/
+      - software/build/CachePoolTests/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/build/lib/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/configs/
+
+# ---------------------------------------------------------------------------
+# Build stage: same as `build`, for the largest available config (16 groups).
+# Manual/MR-only (see test-16g): slow, so not run on every push.
+# ---------------------------------------------------------------------------
+build-16g:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+      allow_failure: true
+  timeout: 4h
+  script:
+    - echo "Using CC=$CC"
+    - echo "Using CXX=$CXX"
+    - test -x "$CC"
+    - test -x "$CXX"
+    - source iis-env.sh
+    - make init
+    - make dram-build
+    - make clean all config=$CI_CONFIG_16G DEBUG=0 noc_profiling=0
   artifacts:
     when: always
     expire_in: 2h
@@ -152,4 +185,38 @@ test-dual:
     expire_in: 3 days
     paths:
       - test_dual_*.log
+      - sim/bin/logs/
+
+# ---------------------------------------------------------------------------
+# Test stage: largest available config (16 groups), largest available size
+# per kernel. Manual/MR-only and slow -- see build-16g.
+# ---------------------------------------------------------------------------
+test-16g:
+  stage: test
+  needs: [build-16g]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  timeout: 4h
+  parallel:
+    matrix:
+      - KERNEL:
+          - spin-lock
+          - load-store
+          - fdotp-32b_M65536
+          - gemv_M1024_N128_K32
+          - fmatmul-32b_M128_N128_K128
+          - fft-32b_M1024_N16
+          - byte-enable
+          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
+  script:
+    - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
+    - chmod +x sim/bin/cachepool_cluster.vsim
+    - BIN="${SW_PREFIX}${KERNEL}"
+    - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_16g_${KERNEL}.log
+    - python3 util/auto-benchmark/check-ci.py test_16g_${KERNEL}.log
+  artifacts:
+    when: always
+    expire_in: 3 days
+    paths:
+      - test_16g_*.log
       - sim/bin/logs/
