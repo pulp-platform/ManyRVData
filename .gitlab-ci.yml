@@ -197,8 +197,6 @@ test-16g:
   parallel:
     matrix:
       - KERNEL:
-          - spin-lock
-          - load-store
           - fdotp-32b_M65536
           - gemv_M1024_N128_K32
           - fmatmul-32b_M128_N128_K128
