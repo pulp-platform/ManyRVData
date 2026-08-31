@@ -310,7 +310,6 @@ module cachepool_cluster
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
         .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-        .cl_interrupt_i           ( '0                                              ),
         .dynamic_offset_i         ( dynamic_offset                                  ),
         .l1d_private_i            ( l1d_private                                     ),
         .l1d_insn_i               ( l1d_insn                                        ),

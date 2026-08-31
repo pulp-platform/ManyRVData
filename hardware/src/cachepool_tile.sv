@@ -178,7 +178,6 @@ module cachepool_tile
     /// Peripheral signals
     output icache_l1_events_t [NrHarts-1:0]               icache_events_o,
     input  logic                                          icache_prefetch_enable_i,
-    input  logic              [NrHarts-1:0]               cl_interrupt_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_i,
     input  cache_insn_t                                   l1d_insn_i,
     input  logic              [$clog2(NumL1CtrlTile):0]   l1d_private_i,
@@ -1479,7 +1478,7 @@ module cachepool_tile
     i_sync_mtip0 (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq0.mtip));
     sync #(.STAGES (2))
     i_sync_msip0 (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq0.msip));
-    assign irq0.mcip = cl_interrupt_i[HartIdx];
+    assign irq0.mcip = 1'b0;
 
     tcdm_req_t [TcdmPorts-1:0] tcdm_req_wo_user;
 
@@ -1561,7 +1560,7 @@ module cachepool_tile
       i_sync_mtip1 (.clk_i, .rst_ni, .serial_i (mtip_i), .serial_o (irq1.mtip));
       sync #(.STAGES (2))
       i_sync_msip1 (.clk_i, .rst_ni, .serial_i (msip_i), .serial_o (irq1.msip));
-      assign irq1.mcip = cl_interrupt_i[HartIdx+1];
+      assign irq1.mcip = 1'b0;
 
       interrupts_t [1:0] irq_pair;
       assign irq_pair[0] = irq0;

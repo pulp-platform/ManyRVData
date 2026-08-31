@@ -144,9 +144,8 @@ module cachepool_group
     input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
 
     /// Peripheral signals
-    output icache_l1_events_t             [NumCC-1:0]   icache_events_o,
+    output icache_l1_events_t               [NumCC-1:0] icache_events_o,
     input  logic                                        icache_prefetch_enable_i,
-    input  logic         [NumCC*NumScalarPerCC-1:0]   cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
     input  logic              [$clog2(NumL1CtrlTile):0] l1d_private_i,
     input  cache_insn_t                                 l1d_insn_i,
@@ -635,7 +634,6 @@ module cachepool_group
         // Peripherals
         .icache_events_o          ( /* unused */                                     ),
         .icache_prefetch_enable_i ( icache_prefetch_enable_i                         ),
-        .cl_interrupt_i           ( cl_interrupt_i  [t*NumCoresTile*NumScalarPerCC +: NumCoresTile*NumScalarPerCC]   ),
         .dynamic_offset_i         ( dynamic_offset_i                                 ),
         .l1d_insn_i               ( l1d_insn_i                                       ),
         .l1d_private_i            ( l1d_private_i                                    ),
@@ -726,7 +724,6 @@ module cachepool_group
         // Peripherals
         .icache_events_o          ( /* unused */                                                ),
         .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
-        .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile*NumScalarPerCC +: NumCoresTile*NumScalarPerCC]            ),
         .dynamic_offset_i         ( dynamic_offset_i                                            ),
         .l1d_insn_i               ( l1d_insn_i                                                  ),
         .l1d_private_i            ( l1d_private_i                                               ),
