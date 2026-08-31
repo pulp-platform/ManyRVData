@@ -44,6 +44,30 @@ void snrt_cluster_partial_barrier(uint32_t local_mask) {
     *(volatile uint32_t *)_snrt_barrier_reg_ptr() = local_mask;
 }
 
+/// Tile-local mask of every hart whose parity matches want_primary (host 0
+/// positions if 1, host 1 positions if 0), given sequential host0/host1
+/// pairing; with no pairing at all, every hart counts as host 0.
+static uint32_t snrt_cc_role_mask(int want_primary) {
+    uint32_t cpt = snrt_cluster_core_per_tile();
+    uint32_t mask = 0;
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+    for (uint32_t i = (want_primary ? 0 : 1); i < cpt; i += 2) mask |= (1u << i);
+#else
+    if (want_primary) for (uint32_t i = 0; i < cpt; i++) mask |= (1u << i);
+#endif
+    return mask;
+}
+
+void snrt_cluster_host0_barrier() {
+    if (!snrt_cluster_is_primary()) return;
+    snrt_cluster_partial_barrier(snrt_cc_role_mask(1));
+}
+
+void snrt_cluster_host1_barrier() {
+    if (snrt_cluster_is_primary()) return;
+    snrt_cluster_partial_barrier(snrt_cc_role_mask(0));
+}
+
 /// Synchronize cores in a cluster with a software barrier
 void snrt_cluster_sw_barrier() {
     // Remember previous iteration

@@ -24,8 +24,9 @@
 #include "kernel/fdotp.c"
 
 int main() {
-  const uint32_t num_cores = snrt_cluster_core_num();
-  const uint32_t cid = snrt_cluster_core_idx();
+  const uint32_t num_cores = snrt_cluster_vpu_num();
+  const uint32_t cid = snrt_cluster_vpu_idx();
+  const int is_primary = snrt_cluster_is_primary();
 
   const uint32_t measure_iter = 3;
 
@@ -54,7 +55,7 @@ int main() {
   } else if (lmul_max == 1) {
     lmul = 1;
   } else {
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       printf("FATAL: Problem size too small!\n");
       return -2;
     }
@@ -67,7 +68,7 @@ int main() {
 
 
   if ((elem_per_round * num_cores) < (l2_block_elem * l2_channel)) {
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       printf("Warning: Current scheme cannot utilize all bandwidth!\n");
     }
   }
@@ -93,14 +94,14 @@ int main() {
   float *a_int = dotp_A_dram + cid * elem_per_round;
   float *b_int = dotp_B_dram + cid * elem_per_round;
 
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     printf("lmul:%u, elem:%u, offs:%u, iter:%u\n", lmul, elem_per_round, elem_jump_per_round, rounds);
   }
 
 
   for (int iter = 0; iter < measure_iter; iter ++) {
     // Start dump
-    if (cid == 0)
+    if (is_primary && cid == 0)
       start_kernel();
 
     snrt_cluster_hw_barrier();
@@ -111,18 +112,20 @@ int main() {
     // Calculate dotp
     float acc;
 
-    if (lmul >= 8)
-      acc = fdotp_v32b_lmul8(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
-    else if (lmul >= 4)
-      acc = fdotp_v32b_lmul4(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
-    else if (lmul >= 2)
-      acc = fdotp_v32b_lmul2(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
-    else if (lmul >= 1)
-      acc = fdotp_v32b_lmul1(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
-    else
-      return -3;
+    if (is_primary) {
+      if (lmul >= 8)
+        acc = fdotp_v32b_lmul8(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
+      else if (lmul >= 4)
+        acc = fdotp_v32b_lmul4(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
+      else if (lmul >= 2)
+        acc = fdotp_v32b_lmul2(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
+      else if (lmul >= 1)
+        acc = fdotp_v32b_lmul1(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
+      else
+        return -3;
 
-    result[cid] = acc;
+      result[cid] = acc;
+    }
 
     // Make sure spatz has finished writing
     snrt_fence_spatz();
@@ -131,7 +134,7 @@ int main() {
     snrt_cluster_hw_barrier();
 
     // End timer and check if new best runtime
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       timer_tmp = benchmark_get_cycle() - timer_tmp;
       timer = (timer < timer_tmp) ? timer : timer_tmp;
       if (iter == 0)
@@ -144,7 +147,7 @@ int main() {
     const uint32_t red_group = 4;
 
     // Level 1: lead core of each group accumulates its group
-    if (cid % red_group == 0) {
+    if (is_primary && cid % red_group == 0) {
       for (uint32_t i = 1; i < red_group && (cid + i) < num_cores; ++i)
         acc += result[cid + i];
       result[cid] = acc;
@@ -153,7 +156,7 @@ int main() {
     snrt_cluster_hw_barrier();
 
     // Level 2: core 0 sums all group results
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       for (uint32_t g = red_group; g < num_cores; g += red_group)
         acc += result[g];
       result[0] = acc;
@@ -161,10 +164,8 @@ int main() {
 
   }
 
-  snrt_cluster_hw_barrier();
-
   // Check and display results
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     // The timer did not count the reduction time
     uint32_t performance = 1000 * 2 * dotp_l.M / timer;
     uint32_t perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
@@ -181,7 +182,7 @@ int main() {
            performance, utilization);
   }
 
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     if (fp_check(result[0], dotp_result*measure_iter)) {
       printf("Check Failed!\n");
       printf("Calc:");

@@ -5,7 +5,9 @@
 # Noah Huetter <huettern@iis.ee.ethz.ch>
 
 ROOTDIR=../..
-REGTOOL=`$(ROOTDIR)/install/bender/bender path register_interface`/vendor/lowrisc_opentitan/util/regtool.py
+BENDER ?= bender
+
+REGTOOL=`$(BENDER) path register_interface`/vendor/lowrisc_opentitan/util/regtool.py
 PYTHON3=$(shell which python)
 CLANG_FORMAT=$(shell which clang-format-10.0.1)
 

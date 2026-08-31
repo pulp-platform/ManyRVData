@@ -32,6 +32,34 @@
         }]
     },
     {
+        name: "SPATZ_LOCK_ACQUIRE",
+        desc: '''Spatz ownership acquire for dual-Snitch core complexes. Load
+        attempts to acquire; the loaded value encodes the outcome (fail/
+        success/success-wait) plus current owner/locked status.'''
+        swaccess: "ro",
+        hwaccess: "hrw",
+        hwext: "true",
+        fields: [{
+            bits: "31:0",
+            name: "SPATZ_LOCK_ACQUIRE",
+            desc: "Spatz ownership acquire register."
+        }]
+    },
+    {
+        name: "SPATZ_LOCK_RELEASE",
+        desc: '''Spatz ownership release for dual-Snitch core complexes. Load
+        attempts to release; the loaded value encodes the outcome (fail/
+        success/success-wait) plus current owner/locked status.'''
+        swaccess: "ro",
+        hwaccess: "hrw",
+        hwext: "true",
+        fields: [{
+            bits: "31:0",
+            name: "SPATZ_LOCK_RELEASE",
+            desc: "Spatz ownership release register."
+        }]
+    },
+    {
         name: "ICACHE_PREFETCH_ENABLE",
         desc: '''Controls prefetching of the instruction cache.'''
         swaccess: "wo",

@@ -55,8 +55,9 @@ int main() {
   T *b;
   T *result;
 
-  const unsigned int num_cores = snrt_cluster_core_num();
-  const unsigned int cid = snrt_cluster_core_idx();
+  const unsigned int num_cores = snrt_cluster_vpu_num();
+  const unsigned int cid = snrt_cluster_vpu_idx();
+  const int is_primary = snrt_cluster_is_primary();
 
   unsigned int m_core = gemv_l.M / num_cores;
 
@@ -71,7 +72,7 @@ int main() {
   a = gemv_A_dram;
   b = gemv_B_dram;
 
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     result_dram = (T *)snrt_malloc(gemv_l.M * sizeof(T));
   }
 
@@ -96,26 +97,28 @@ int main() {
   for (int i = 0; i < 3; i++) {
 
     // Start dump
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       start_kernel();
       // Start timer
       timer_start = benchmark_get_cycle();
     }
 
     // Calculate gemv
-    if (sizeof(T) == 8)
-      // does not support 64b
-      return -2;
-    else if (sizeof(T) == 4)
-      gemv_v32b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
-    else
-      gemv_v16b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
+    if (is_primary) {
+      if (sizeof(T) == 8)
+        // does not support 64b
+        return -2;
+      else if (sizeof(T) == 4)
+        gemv_v32b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
+      else
+        gemv_v16b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
+    }
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
 
 
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       // End timer and check if new best runtime
       timer_end = benchmark_get_cycle();
       unsigned int timer_temp = timer_end - timer_start;
@@ -137,7 +140,7 @@ int main() {
       l1d_cluster_flush();
     }
 
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       if (i == 0) {
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
@@ -156,7 +159,7 @@ int main() {
   }
 
   // Check and display results
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     long unsigned int performance =
         1000 * 2 * gemv_l.M * gemv_l.N / timer;
     long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));

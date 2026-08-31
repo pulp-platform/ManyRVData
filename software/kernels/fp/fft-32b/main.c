@@ -48,9 +48,10 @@ int main() {
   const int measure_iter = 3;
 
   // twiddle layout: [re_p1, im_p1, re_p2, im_p2]
-  const uint32_t num_cores = snrt_cluster_core_num();
-  const uint32_t cid = snrt_cluster_core_idx();
-  
+  const uint32_t num_cores = snrt_cluster_vpu_num();
+  const uint32_t cid = snrt_cluster_vpu_idx();
+  const int is_primary = snrt_cluster_is_primary();
+
   snrt_cluster_hw_barrier();
   const uint32_t NFFTpc = NFFT / active_cores;
   // 32-bit floating, 4 byte distance in memory
@@ -89,7 +90,7 @@ int main() {
   uint32_t ierror = 0;
 
   for (int iter = 0; iter < measure_iter; iter++) {
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       start_kernel();
     }
 
@@ -97,12 +98,12 @@ int main() {
     snrt_cluster_hw_barrier();
 
     // Start timer
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       timer_tmp = benchmark_get_cycle();
     }
 
     for (uint32_t i = 0; i < log2_nfft1; i ++) {
-      if (cid < active_cores) {
+      if (is_primary && cid < active_cores) {
         fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
         // each round will use half the twiddle than previous round
         // the first round needs re/im NFFT/2 twiddles
@@ -116,7 +117,7 @@ int main() {
       snrt_cluster_hw_barrier();
     }
 
-    if (cid < active_cores) {
+    if (is_primary && cid < active_cores) {
       // Fall back into the single-core case
       // Each core just do a FFT on (NFFT >> stage_in_P1) data
       if (p2_switch) {
@@ -131,7 +132,7 @@ int main() {
     snrt_cluster_hw_barrier();
 
     // End timer and check if new best runtime
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       timer_tmp = benchmark_get_cycle() - timer_tmp;
       timer = (timer < timer_tmp) ? timer : timer_tmp;
       if (iter == 0)
@@ -145,7 +146,7 @@ int main() {
       l1d_cluster_flush();
     }
 
-    if (cid == 0) {
+    if (is_primary && cid == 0) {
       if ((iter == 0) && CHECK) {
         // Verify the real part
         for (unsigned int i = 0; i < NFFT; i++) {
@@ -168,9 +169,9 @@ int main() {
 
     snrt_cluster_hw_barrier();
   }
-  
+
   // Display runtime
-  if (cid == 0) {
+  if (is_primary && cid == 0) {
     // Each stage requires:
     // 2 add, 2 sub, 2 mul, 2 macc/msac
     // in total 10 operations on NFFT/2 real and NFFT/2 im elements

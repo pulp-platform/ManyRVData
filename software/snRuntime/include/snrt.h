@@ -82,6 +82,14 @@ extern uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t
 /// by snrt_cluster_partial_barrier_mask()). O(1) — a single store.
 extern void snrt_cluster_partial_barrier(uint32_t local_mask);
 
+/// Barrier across only host-0 (primary) harts. Callable unconditionally
+/// from any hart; host-1 harts return immediately without participating.
+extern void snrt_cluster_host0_barrier();
+
+/// Barrier across only host-1 (secondary) harts. Callable unconditionally
+/// from any hart; host-0 harts return immediately without participating.
+extern void snrt_cluster_host1_barrier();
+
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();
 extern struct snrt_peripherals *snrt_peripherals();
@@ -96,6 +104,15 @@ extern uint32_t snrt_cluster_tile_num();
 extern uint32_t snrt_cluster_core_per_tile();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
+
+/// whether this hart is host 0 of its Core Complex pair
+extern int snrt_cluster_is_primary();
+
+/// Physical vector-unit count/index/per-tile count, halved vs. the hart-based
+/// counterparts in dual-scalar configs (one Spatz per CC pair), unchanged otherwise.
+extern uint32_t snrt_cluster_vpu_num();
+extern uint32_t snrt_cluster_vpu_idx();
+extern uint32_t snrt_cluster_vpu_per_tile();
 
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();

@@ -38,7 +38,11 @@ def main():
     # Build dynamic values that depend on others
     num_cores = int(os.environ.get("num_cores", "4"))
     num_tiles = int(os.environ.get("num_tiles", "1"))
-    cores_array = ",".join(['{ $ref: "#/compute_core_template" }'] * num_cores)
+    num_scalar_per_core = int(os.environ.get("num_scalar_per_core", "1"))
+    # cluster.cores must list one entry per hart, not per CC slot, since
+    # generate_bootdata.py derives SNRT_BOOT_CORE_COUNT from its length.
+    num_harts = num_cores * num_scalar_per_core
+    cores_array = ",".join(['{ $ref: "#/compute_core_template" }'] * num_harts)
 
     # Convert spatz_fpu_en -> spatz_fpu_bool for HJSON
     spatz_fpu_bool = bool_str(os.environ.get("spatz_fpu_en", "0"))
