@@ -481,6 +481,20 @@ package cachepool_pkg;
   // Per-group tile index used by dispatch xbar selection.
   typedef logic [idx_width(NumTilesPerGroup)-1:0] group_tile_sel_t;
 
+  // Barrier request forwarded tile -> group: which tiles must arrive, and
+  // whether the round ever needs to reach the cluster.
+  typedef struct packed {
+    logic [NumTilesPerGroup-1:0] tile_mask;
+    logic                        local_only;
+  } barrier_req_t;
+
+  // Barrier response returned group -> tile: round completion pulse, plus a
+  // debug-only mask-mismatch flag valid the same cycle. Never gates the FSM.
+  typedef struct packed {
+    logic done;
+    logic mask_status;
+  } barrier_rsp_t;
+
   // Routing header embedded in every inter-group NoC flit.
   typedef struct packed {
     logic [3:0]      collective_op;

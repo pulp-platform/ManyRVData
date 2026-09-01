@@ -47,6 +47,7 @@ sources:
   - hardware/src/cachepool_cc_dual.sv
   # Barrier
   - hardware/src/cachepool_tile_barrier.sv
+  - hardware/src/cachepool_group_barrier.sv
   - hardware/src/cachepool_cluster_barrier.sv
   # ICache
   - hardware/src/axi_hier_interco.sv

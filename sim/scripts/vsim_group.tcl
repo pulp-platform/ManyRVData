@@ -7,6 +7,10 @@ onerror {resume}
 quietly set group_path $1
 quietly set parent_grp $3
 
+# Barrier (nested under the same top-level Barrier group as the cluster
+# barrier, so cluster/group barrier state can be viewed side by side)
+add wave -noupdate -group Barrier -group ${parent_grp} ${group_path}/i_group_barrier/*
+
 # Add waves for remote xbar
 for {set p 0}  {$p < $2} {incr p} {
 	onerror {resume}

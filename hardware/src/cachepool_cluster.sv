@@ -71,6 +71,8 @@ module cachepool_cluster
     parameter bit                                            RegisterTCDMCuts                   = 1'b0,
     /// Decouple external AXI plug
     parameter bit                                            RegisterExt                        = 1'b0,
+    /// Insert a pipeline register on each group's cluster-facing barrier link
+    parameter bit                                            RegisterBarrier                    = 1'b0,
     parameter axi_pkg::xbar_latency_e                        XbarLatency                        = axi_pkg::CUT_ALL_PORTS,
     /// Outstanding transactions on the AXI network
     parameter int                     unsigned               MaxMstTrans                        = 4,
@@ -188,21 +190,22 @@ module cachepool_cluster
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
 
-  // Direct-wire barrier: one bit per tile across all groups
-  logic [NumGroups-1:0][NumTilesPerGroup-1:0] tile_barrier;
+  // Direct-wire barrier: one bit per group (group-level barrier resolves
+  // group-local rounds internally, only forwarding here when needed).
+  logic [NumGroups-1:0]                       group_barrier;
   logic                                       barrier_done;
-  // Tile participation mask for the cluster-level barrier, software-configured
-  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all tiles).
-  logic [NumTiles-1:0]                        barrier_participation_mask;
+  // Group participation mask for the cluster-level barrier, software-configured
+  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all groups).
+  logic [NumGroups-1:0]                       barrier_participation_mask;
 
   cachepool_cluster_barrier #(
-    .NrTiles ( NumTiles )
+    .NrGroups ( NumGroups )
   ) i_cluster_barrier (
-    .clk_i          ( clk_i          ),
-    .rst_ni         ( rst_ni         ),
-    .tile_barrier_i ( tile_barrier   ),
-    .barrier_done_o ( barrier_done   ),
-    .barrier_mask_i ( barrier_participation_mask )
+    .clk_i           ( clk_i          ),
+    .rst_ni          ( rst_ni         ),
+    .group_barrier_i ( group_barrier  ),
+    .barrier_done_o  ( barrier_done   ),
+    .barrier_mask_i  ( barrier_participation_mask )
   );
 
   // Inter-group NoC mesh signals (indexed by group, then direction, then port)
@@ -272,6 +275,7 @@ module cachepool_cluster
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
         .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
         .RegisterExt              ( RegisterExt              ),
+        .RegisterBarrier          ( RegisterBarrier          ),
         .XbarLatency              ( XbarLatency              ),
         .MaxMstTrans              ( MaxMstTrans              ),
         .MaxSlvTrans              ( MaxSlvTrans              ),
@@ -332,7 +336,7 @@ module cachepool_cluster
         .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
         .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   ),
         // Direct-wire barrier
-        .tile_barrier_o           ( tile_barrier     [g]                                   ),
+        .group_barrier_o          ( group_barrier    [g]                                   ),
         .barrier_done_i           ( barrier_done                                           )
       );
     end
@@ -1248,6 +1252,7 @@ module cachepool_cluster
     .AddrWidth     ( AxiAddrWidth              ),
     .SPMWidth      ( $clog2(L1NumSet)          ),
     .NumTiles      ( NumTiles                  ),
+    .NumGroups     ( NumGroups                 ),
     .PrivateWidth  ( $clog2(NumL1CtrlTile) + 1 ),
     .reg_req_t     ( reg_csr_req_t             ),
     .reg_rsp_t     ( reg_csr_rsp_t             ),

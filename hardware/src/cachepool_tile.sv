@@ -66,6 +66,9 @@ module cachepool_tile
     /// Number of tiles within a single group (passed to interco for
     /// group-id extraction from the address).
     parameter int                     unsigned               NumTilesPerGroup                   = 0,
+    /// This tile's position within its group (0..NumTilesPerGroup-1), used
+    /// by the tile barrier to detect a single-tile-only round.
+    parameter int                     unsigned               TileIdxInGroup                     = 0,
     /// # Per-core parameters
     /// Per-core integer outstanding loads
     parameter int                     unsigned               NumIntOutstandingLoads             = '0,
@@ -187,9 +190,10 @@ module cachepool_tile
 
 
 
-    // Direct-wire barrier interface (bypasses NoC)
-    output logic                                    barrier_o,
-    input  logic                                    barrier_done_i,
+    // Direct-wire barrier interface to group level (bypasses NoC)
+    output logic          barrier_o,
+    output barrier_req_t  barrier_req_o,
+    input  barrier_rsp_t  barrier_rsp_i,
 
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t          [NrSramCfg-1:0]       impl_i,
@@ -1717,11 +1721,12 @@ module cachepool_tile
 
   // First-level barrier for CachePool system
   cachepool_tile_barrier #(
-    .AddrWidth (AxiAddrWidth ),
-    .NrPorts   (NrHarts      ),
-    .dreq_t    (reqrsp_req_t ),
-    .drsp_t    (reqrsp_rsp_t ),
-    .user_t    (tcdm_user_t  )
+    .AddrWidth    (AxiAddrWidth   ),
+    .NrPorts      (NrHarts        ),
+    .LocalTileIdx (TileIdxInGroup ),
+    .dreq_t       (reqrsp_req_t   ),
+    .drsp_t       (reqrsp_rsp_t   ),
+    .user_t       (tcdm_user_t    )
   ) i_cachepool_tile_barrier (
     .clk_i                          (clk_i                       ),
     .rst_ni                         (rst_ni                      ),
@@ -1730,7 +1735,8 @@ module cachepool_tile
     .out_req_o                      (filtered_core_req           ),
     .out_rsp_i                      (filtered_core_rsp           ),
     .barrier_o                      (barrier_o                   ),
-    .barrier_done_i                 (barrier_done_i              ),
+    .barrier_req_o                  (barrier_req_o               ),
+    .barrier_rsp_i                  (barrier_rsp_i               ),
     .cluster_periph_start_address_i (cluster_periph_start_address)
   );
 

@@ -15,6 +15,8 @@ module cachepool_peripheral
   parameter int unsigned SPMWidth     = 0,
   // Number of tiles (used for flush controller granularity)
   parameter int unsigned NumTiles     = 1,
+  // Number of groups (used for the cluster-level barrier participation mask)
+  parameter int unsigned NumGroups    = 1,
   // Width actually used from the (fixed 4b) L1D_PRIVATE CSR field.
   parameter int unsigned PrivateWidth = 4,
   parameter type reg_req_t = logic,
@@ -46,7 +48,7 @@ module cachepool_peripheral
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
   output logic [NumTiles-1:0]        l1d_busy_o,
-  output logic [NumTiles-1:0]        barrier_participation_mask_o
+  output logic [NumGroups-1:0]       barrier_participation_mask_o
 );
 
   cachepool_peripheral_reg2hw_t reg2hw;
@@ -135,15 +137,8 @@ module cachepool_peripheral
     end
   end
 
-  // Concatenate all barrier-participation register words into one wide vector
-  // and slice to NumTiles. Unused upper bits (for small configs) are optimised away.
-  logic [NumTileSelWords*32-1:0] barrier_participation_mask_raw;
-  always_comb begin : barrier_participation_mask_concat
-    for (int i = 0; i < NumTileSelWords; i++) begin
-      barrier_participation_mask_raw[i*32 +: 32] = reg2hw.hw_barrier_participation_mask[i].q;
-    end
-  end
-  assign barrier_participation_mask_o = barrier_participation_mask_raw[NumTiles-1:0];
+  // Single 32-bit register is enough at group granularity (max 32 groups).
+  assign barrier_participation_mask_o = reg2hw.hw_barrier_participation_mask.q[NumGroups-1:0];
 
   // Cache Flush Controller
   // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is

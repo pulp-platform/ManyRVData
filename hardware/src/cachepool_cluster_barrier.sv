@@ -7,23 +7,23 @@
 `include "common_cells/registers.svh"
 
 /// Cluster-level barrier controller.
-/// Collects per-tile barrier signals (direct wires, no AXI/NoC) and broadcasts
-/// a done signal when all participating tiles have reached the barrier.
+/// Collects per-group barrier signals (direct wires, no AXI/NoC) and broadcasts
+/// a done signal when all participating groups have reached the barrier.
 /// Supports partial barriers via `barrier_mask_i`.
 module cachepool_cluster_barrier
 #(
-  parameter int unsigned NrTiles = 0,
-  parameter int unsigned WaitCyc = 2
+  parameter int unsigned NrGroups = 0,
+  parameter int unsigned WaitCyc  = 2
 ) (
   input  logic                   clk_i,
   input  logic                   rst_ni,
-  // Per-tile barrier request (active-high, held until barrier completes)
-  input  logic [NrTiles-1:0]     tile_barrier_i,
-  // Broadcast barrier completion to all tiles
+  // Per-group barrier request (active-high, held until barrier completes)
+  input  logic [NrGroups-1:0]    group_barrier_i,
+  // Broadcast barrier completion to all groups
   output logic                   barrier_done_o,
-  // Which tiles participate in the barrier (active-high mask).
-  // Active-low bits mark tiles that are excluded from synchronization.
-  input  logic [NrTiles-1:0]     barrier_mask_i
+  // Which groups participate in the barrier (active-high mask).
+  // Active-low bits mark groups that are excluded from synchronization.
+  input  logic [NrGroups-1:0]    barrier_mask_i
 );
 
   typedef enum logic [1:0] {
@@ -35,14 +35,14 @@ module cachepool_cluster_barrier
   barrier_state_e state_d, state_q;
 
   // Latch the mask when barrier starts, so it stays stable during the sequence
-  logic [NrTiles-1:0] mask_d, mask_q;
+  logic [NrGroups-1:0] mask_d, mask_q;
 
   // Exit counter for one iteration of barrier
   logic [1:0] cnt_d, cnt_q;
 
-  // Masked barrier: only participating tiles matter
+  // Masked barrier: only participating groups matter
   logic all_arrived;
-  assign all_arrived = (tile_barrier_i & mask_q) == mask_q;
+  assign all_arrived = (group_barrier_i & mask_q) == mask_q;
 
   always_comb begin
     state_d        = state_q;
@@ -53,11 +53,11 @@ module cachepool_cluster_barrier
     case (state_q)
       Idle: begin
         cnt_d = '0;
-        // When any participating tile asserts barrier, latch the mask and wait.
+        // When any participating group asserts barrier, latch the mask and wait.
         // Use barrier_mask_i directly here since mask_q may hold the previous mask.
-        if (|(tile_barrier_i & barrier_mask_i)) begin
+        if (|(group_barrier_i & barrier_mask_i)) begin
           mask_d  = barrier_mask_i;
-          if ((tile_barrier_i & barrier_mask_i) == barrier_mask_i) begin
+          if ((group_barrier_i & barrier_mask_i) == barrier_mask_i) begin
             state_d = Done;
           end else begin
             state_d = Wait;
@@ -66,7 +66,7 @@ module cachepool_cluster_barrier
       end
 
       Wait: begin
-        // Wait until all participating tiles have reached the barrier
+        // Wait until all participating groups have reached the barrier
         cnt_d = '0;
         if (all_arrived) begin
           state_d = Done;
@@ -75,11 +75,11 @@ module cachepool_cluster_barrier
 
       Done: begin
         // Assert barrier_done for one cycle, then return to Idle.
-        // Tiles deassert barrier_o the cycle after seeing barrier_done_i,
+        // Groups deassert group_barrier_o the cycle after seeing barrier_done_i,
         // and no new barrier can start until cores complete the Take sequence.
         if (cnt_q == '0) begin
           // We assert done flag in first cycle
-          // We need to wait all tiles receive the propogated signal
+          // We need to wait all groups receive the propogated signal
           // And it will travel back => need to wait 2 cycles
           barrier_done_o = 1'b1;
           cnt_d = cnt_q + 1;
