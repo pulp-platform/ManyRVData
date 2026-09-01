@@ -16,11 +16,9 @@ spinlock_t lock;
 
 int main()
 {
-    volatile uint32_t *participation = (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
-
-    // whoever arrives first, writes the barrier
-    // no race condition since they all write the same thing
-    *participation = 0b1111; // all tiles participate
+    // Group-local tile masks used below to let a pair of tiles barrier
+    // among themselves, resolved entirely at group level.
+    uint32_t all_cores_mask = (1u << snrt_cluster_core_per_tile()) - 1;
 
     result = 0;
     snrt_cluster_hw_barrier();
@@ -31,9 +29,6 @@ int main()
         printf("setting participation for tiles 1 and 3\n");
         spin_unlock(&lock, 1);
     }
-
-    // set participation mask
-    *participation = 0b1010; // tiles 1 and 3 only
 
     // only tiles 1 and 3
     if (snrt_cluster_tile_idx() == 1 || snrt_cluster_tile_idx() == 3)
@@ -47,8 +42,9 @@ int main()
         result += snrt_cluster_core_idx();
         spin_unlock(&lock, 1);
 
-        snrt_cluster_hw_barrier();
-        
+        // Group-local partial barrier: only tiles 1 and 3 wait here.
+        snrt_cluster_group_barrier(all_cores_mask, 0b1010, 1);
+
         if (snrt_cluster_core_idx() == 4)
         {
             spin_lock(&lock, 1);
@@ -73,9 +69,6 @@ int main()
         spin_unlock(&lock, 1);
     }
 
-    // set participation mask
-    *participation = 0b0101; // tiles 0 and 2 only
-
     // only tiles 0 and 2
     if (snrt_cluster_tile_idx() == 0 || snrt_cluster_tile_idx() == 2)
     {
@@ -88,8 +81,9 @@ int main()
         result += snrt_cluster_core_idx();
         spin_unlock(&lock, 1);
 
-        snrt_cluster_hw_barrier();
-        
+        // Group-local partial barrier: only tiles 0 and 2 wait here.
+        snrt_cluster_group_barrier(all_cores_mask, 0b0101, 1);
+
         if (snrt_cluster_core_idx() == 4)
         {
             spin_lock(&lock, 1);

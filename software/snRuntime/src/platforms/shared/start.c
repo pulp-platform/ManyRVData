@@ -63,7 +63,7 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
     team->barrier_reg_ptr = (uint32_t)spm_start + SNRT_BOOT_TCDM_SIZE +
                             CACHEPOOL_PERIPHERAL_HW_BARRIER_REG_OFFSET;
     team->barrier_participation_mask_reg_ptr = (uint32_t)spm_start + SNRT_BOOT_TCDM_SIZE +
-                            CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_REG_OFFSET;
+                            CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_REG_OFFSET;
 
     // Initialize cluster barrier
     team->cluster_barrier.barrier = 0;

@@ -9,16 +9,11 @@ extern void _snrt_cluster_barrier();
 /// Synchronize cores in a cluster with a hardware barrier
 void snrt_cluster_hw_barrier() { _snrt_cluster_barrier(); }
 
-/// Program the cluster-level tile-participation mask: mask_lo covers tiles
-/// 0-31, mask_hi covers tiles 32-63 (matching the two 32-bit
-/// HW_BARRIER_PARTICIPATION_MASK registers). Configs with <=32 tiles can
-/// pass 0 for mask_hi.
-void snrt_barrier_set_tile_mask(uint32_t mask_lo, uint32_t mask_hi) {
-    volatile uint32_t *reg_lo =
+/// Program the cluster-level group-participation mask (HW_BARRIER_PARTICIPATION_MASK).
+void snrt_barrier_set_group_mask(uint32_t mask) {
+    volatile uint32_t *reg =
         (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
-    volatile uint32_t *reg_hi = reg_lo + 1;
-    *reg_lo = mask_lo;
-    *reg_hi = mask_hi;
+    *reg = mask;
 }
 
 /// Compute the calling core's tile-local participant mask from a fixed
@@ -37,11 +32,26 @@ uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n) {
     return mask;
 }
 
-/// Issue a partial hardware barrier restricted to local_mask. A plain
-/// volatile store (unlike the read-based full barrier, a write is never
-/// elided by the compiler regardless of whether its result is used).
+/// Issue a partial hardware barrier restricted to local_mask. Tile mask and
+/// local_only are left at their safe defaults (every tile in the group,
+/// cluster-wide), matching snrt_cluster_hw_barrier()'s scope beyond the
+/// core mask. A plain volatile store (unlike the read-based full barrier, a
+/// write is never elided by the compiler regardless of whether its result
+/// is used).
 void snrt_cluster_partial_barrier(uint32_t local_mask) {
-    *(volatile uint32_t *)_snrt_barrier_reg_ptr() = local_mask;
+    uint32_t payload = local_mask
+                        | (SNRT_BARRIER_TILE_MASK_ALL << SNRT_BARRIER_TILE_MASK_LSB);
+    *(volatile uint32_t *)_snrt_barrier_reg_ptr() = payload;
+}
+
+/// Issue a barrier restricted to core_mask/tile_mask, optionally staying
+/// local to the group (see snrt.h for the full contract).
+void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask,
+                                 int local_only) {
+    uint32_t payload = core_mask
+                        | (tile_mask << SNRT_BARRIER_TILE_MASK_LSB)
+                        | ((local_only ? 1u : 0u) << SNRT_BARRIER_LOCAL_ONLY_BIT);
+    *(volatile uint32_t *)_snrt_barrier_reg_ptr() = payload;
 }
 
 /// Tile-local mask of every hart whose parity matches want_primary (host 0
