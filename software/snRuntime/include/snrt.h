@@ -153,29 +153,6 @@ extern void snrt_bcast_recv(void *data, size_t len);
 
 extern void *snrt_memcpy(void *dst, const void *src, size_t n);
 
-/// DMA runtime functions.
-/// A DMA transfer identifier.
-typedef uint32_t snrt_dma_txid_t;
-/// Initiate an asynchronous 1D DMA transfer with wide 64-bit pointers.
-extern snrt_dma_txid_t snrt_dma_start_1d_wideptr(uint64_t dst, uint64_t src,
-                                                 size_t size);
-/// Initiate an asynchronous 1D DMA transfer.
-extern snrt_dma_txid_t snrt_dma_start_1d(void *dst, const void *src,
-                                         size_t size);
-/// Initiate an asynchronous 2D DMA transfer with wide 64-bit pointers.
-extern snrt_dma_txid_t snrt_dma_start_2d_wideptr(uint64_t dst, uint64_t src,
-                                                 size_t size, size_t dst_stride,
-                                                 size_t src_stride,
-                                                 size_t repeat);
-/// Initiate an asynchronous 2D DMA transfer.
-extern snrt_dma_txid_t snrt_dma_start_2d(void *dst, const void *src,
-                                         size_t size, size_t dst_stride,
-                                         size_t src_stride, size_t repeat);
-/// Block until a transfer finishes.
-extern void snrt_dma_wait(snrt_dma_txid_t tid);
-/// Block until all operation on the DMA ceases.
-extern void snrt_dma_wait_all();
-
 /**
  * @brief Use as replacement of the stdlib exit() call
  *
@@ -200,9 +177,7 @@ static inline uint32_t __attribute__((pure)) snrt_hartid() {
 //================================================================================
 // Allocation functions
 //================================================================================
-extern void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off);
-extern void *snrt_l1alloc(size_t size);
-extern void snrt_l1alloc_reset();
+extern void snrt_alloc_init(uint32_t l3off);
 extern void *snrt_malloc(size_t size);
 extern void  snrt_free(void *ptr);
 
@@ -336,27 +311,6 @@ static inline void snrt_mutex_release(volatile uint32_t *pmtx) {
     asm volatile("amoswap.w.rl  x0,x0,(%0)   # Release lock by storing 0\n"
                  : "+r"(pmtx));
 }
-
-//================================================================================
-// Runtime functions
-//================================================================================
-
-/**
- * @brief Bootstrap macro for openmp applications
- */
-#define __snrt_omp_bootstrap(core_idx)     \
-    if (snrt_omp_bootstrap(core_idx)) do { \
-            snrt_cluster_hw_barrier();     \
-            return 0;                      \
-    } while (0)
-
-/**
- * @brief Destroy an OpenMP session so all cores exit cleanly
- */
-#define __snrt_omp_destroy(core_idx) \
-    eu_exit(core_idx);               \
-    dm_exit();                       \
-    snrt_cluster_hw_barrier();
 
 //================================================================================
 // Printf functions

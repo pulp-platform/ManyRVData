@@ -64,7 +64,6 @@ include_directories(
 # Common sources
 set(sources
     src/barrier.c
-    src/dma.c
     src/memcpy.c
     src/printf.c
     src/team.c

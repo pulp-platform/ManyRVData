@@ -8,29 +8,23 @@ It is derived from the upstream Snitch runtime and extended with CachePool-speci
 ```
 snRuntime/
 ├── include/          # Public headers — include these in application code
-│   ├── snrt.h            # Master header: topology, barriers, DMA, allocation
+│   ├── snrt.h            # Master header: topology, barriers, allocation
 │   ├── l1cache.h         # CachePool L1 data cache management API
 │   ├── spatz_lock.h      # Dual-scalar Spatz ownership lock API
 │   ├── cachepool_peripheral.h  # Register offsets for the cluster peripheral
 │   ├── perf_cnt.h        # Performance counter API
 │   ├── team.h            # Team/cluster descriptor structs
-│   ├── interface.h       # Hardware interface definitions
-│   ├── debug.h           # Debug printf helpers
-│   ├── dm.h              # Data-mover (DMA) low-level interface
-│   ├── eu.h              # Execution unit (work dispatch) interface
-│   ├── kmp.h             # OpenMP KMP interface
-│   └── omp.h             # OpenMP runtime interface
+│   └── debug.h           # Debug printf helpers
 ├── src/              # Runtime implementation
 │   ├── start.S           # Entry point (hart 0 boots, others wait for IPI)
 │   ├── team.c            # Team/topology initialisation
 │   ├── barrier.c         # Hardware and software barrier implementations
 │   ├── l1cache.c         # CachePool L1 cache management (flush, partition, xbar)
 │   ├── spatz_lock.c      # Dual-scalar Spatz ownership lock (see spatz_lock.h)
-│   ├── alloc.c           # L1 TCDM bump allocator + DRAM linked-list allocator
+│   ├── alloc.c           # DRAM linked-list allocator
 │   ├── memcpy.c          # Optimised memcpy
 │   ├── perf_cnt.c        # Performance counter helpers
 │   ├── printf.c          # Lightweight printf (wraps vendor/printf.c)
-│   ├── dm.c / dma.c      # DMA engine helpers
 │   ├── interrupt.c       # Interrupt initialisation
 │   └── platforms/        # Platform-specific startup and putchar
 ├── tests/            # Self-contained runtime unit tests
@@ -180,16 +174,8 @@ Counter types include cycles, TCDM accesses, TCDM congestion, FPU issues, retire
 
 ### Memory Allocation (`snrt.h`)
 
-Two allocators are provided for different memory regions.
-
-**L1 TCDM — bump allocator** (no free support):
-
-```c
-void *snrt_l1alloc(size_t size);   // Bump-allocate from cluster TCDM scratchpad
-void  snrt_l1alloc_reset();        // Reclaim all L1 allocations at once
-```
-
-**DRAM — linked-list allocator** (single-core, supports free + coalescing):
+CachePool has no allocatable L1 scratchpad — L1 is a cache.
+The only allocator is a DRAM linked-list allocator (single-core, supports free + coalescing):
 
 ```c
 void *snrt_malloc(size_t size);    // Allocate from DRAM; payload rounded up to 64 B
@@ -202,16 +188,6 @@ The allocator must be called by a **single core only**; it is not thread-safe by
 
 The heap begins at `_edram + l3off` (set in `snrt_alloc_init`) and grows upward.
 Block headers (64 bytes each) are stored in DRAM immediately before their payloads and are accessed through the L1 cache like any other data.
-
-### DMA (`snrt.h`) *TODO: REMOVE*
-
-```c
-snrt_dma_txid_t snrt_dma_start_1d(void *dst, const void *src, size_t size);
-snrt_dma_txid_t snrt_dma_start_2d(void *dst, const void *src, size_t size,
-                                   size_t dst_stride, size_t src_stride, size_t repeat);
-void snrt_dma_wait(snrt_dma_txid_t tid);
-void snrt_dma_wait_all();
-```
 
 ## Typical Initialisation Pattern
 

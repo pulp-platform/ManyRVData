@@ -32,7 +32,7 @@ float *a;
 float *b;
 float *c;
 
-// Pointer to per-core error slots; allocated in main by core 0 via snrt_l1alloc.
+// Pointer to per-core error slots; allocated in main by core 0 via snrt_malloc.
 // Placed in .data so the pointer word lives at a fixed shared DRAM address.
 int *error_arr __attribute__((section(".data")));
 

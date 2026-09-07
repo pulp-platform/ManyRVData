@@ -47,7 +47,6 @@ static inline void mm_lock_release(volatile int *lock) {
 
 /* mm_init: Only core 0 initializes the mm_context_t; others do nothing. */
 void mm_init() {
-    // mm_ctx.buffer = (uint8_t *)snrt_l1alloc(BUFFER_SIZE);
     mm_ctx.buffer = bulk_buffer;
     if (!bulk_buffer) {
 

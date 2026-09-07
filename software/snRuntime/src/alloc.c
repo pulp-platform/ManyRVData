@@ -6,44 +6,6 @@
 #include "team.h"
 
 #define ALIGN_UP(addr, size) (((addr) + (size)-1) & ~((size)-1))
-#define ALIGN_DOWN(addr, size) ((addr) & ~((size)-1))
-
-#define MIN_CHUNK_SIZE 8
-
-/**
- * @brief Allocate a chunk of memory in the L1 memory
- * @details This currently does not support free-ing of memory
- *
- * @param size number of bytes to allocate
- * @return pointer to the allocated memory
- */
-void *snrt_l1alloc(size_t size) {
-    struct snrt_allocator_inst *alloc = &snrt_current_team()->allocator.l1;
-
-    size = ALIGN_UP(size, MIN_CHUNK_SIZE);
-
-    if (alloc->next + size > alloc->base + alloc->size) {
-        snrt_trace(
-            SNRT_TRACE_ALLOC,
-            "Not enough memory to allocate: base %#x size %#x next %#x\n",
-            alloc->base, alloc->size, alloc->next);
-        return 0;
-    }
-
-    void *ret = (void *)alloc->next;
-    alloc->next += size;
-    return ret;
-}
-
-/**
- * @brief Free all allocated region in L1 memory
- * @details We'd better free all regions beore reconfiguring
- */
-void snrt_l1alloc_reset() {
-    struct snrt_allocator_inst *alloc = &snrt_current_team()->allocator.l1;
-    // Reset next pointer to base
-    alloc->next = alloc->base;
-}
 
 _Static_assert(sizeof(snrt_alloc_block_t) == SNRT_CACHELINE_SIZE,
                "snrt_alloc_block_t must be exactly one cacheline (64 bytes)");
@@ -133,19 +95,11 @@ void snrt_free(void *ptr) {
 }
 
 /**
- * @brief Init the allocator
- * @details
+ * @brief Init the DRAM allocator
  *
- * @param snrt_team_root pointer to the team structure
  * @param l3off Number of bytes to skip on _edram before starting allocator
  */
-void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off) {
-    // Allocator in L1 TCDM memory
-    team->allocator.l1.base =
-        ALIGN_UP((uint32_t)team->cluster_mem.start, MIN_CHUNK_SIZE);
-    team->allocator.l1.size =
-        (uint32_t)(team->cluster_mem.end - team->cluster_mem.start);
-    team->allocator.l1.next = team->allocator.l1.base;
+void snrt_alloc_init(uint32_t l3off) {
     // DRAM linked-list allocator: starts cacheline-aligned after _edram + l3off
     extern uint32_t _edram;
     heap_brk  = ALIGN_UP((uint32_t)&_edram + l3off, SNRT_CACHELINE_SIZE);

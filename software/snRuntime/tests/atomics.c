@@ -173,8 +173,8 @@ uint32_t test_atomics(volatile uint32_t* atomic_var) {
 }
 
 // Use at least two locations to test unaligned accesses
-#define NUM_SPM_LOCATIONS 2
-#define NUM_TCDM_LOCATIONS 2
+#define NUM_STACK_LOCATIONS 2
+#define NUM_DRAM_LOCATIONS 2
 
 int main() {
     uint32_t core_id = snrt_cluster_core_idx();
@@ -182,15 +182,17 @@ int main() {
     uint32_t nerrors = 0;
 
     if (core_id == 0) {
-        volatile uint32_t* l1_a =
-            snrt_l1alloc(NUM_TCDM_LOCATIONS * sizeof(uint32_t));
-        volatile uint32_t* l3_a =
-            snrt_malloc(NUM_SPM_LOCATIONS * sizeof(uint32_t));
+        // On the stack (backed by the per-CC stack SPM)
+        uint32_t stack_atomics[NUM_STACK_LOCATIONS];
+        for (int i = 0; i < NUM_STACK_LOCATIONS; ++i) {
+            nerrors += test_atomics(&stack_atomics[i]);
+        }
 
-        // In TCDM
-        uint32_t tcdm_atomics[NUM_TCDM_LOCATIONS];
-        for (int i = 0; i < NUM_TCDM_LOCATIONS; ++i) {
-            nerrors += test_atomics(&l1_a[i]);
+        // In DRAM
+        volatile uint32_t* dram_a =
+            snrt_malloc(NUM_DRAM_LOCATIONS * sizeof(uint32_t));
+        for (int i = 0; i < NUM_DRAM_LOCATIONS; ++i) {
+            nerrors += test_atomics(&dram_a[i]);
         }
     } else {
         return 0;
