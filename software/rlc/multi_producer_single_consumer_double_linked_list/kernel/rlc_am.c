@@ -146,6 +146,7 @@ static void rlc_am_verify_grant(uint32_t u);
 /* rlc_memcpy8() lives in rlc_copy.h: the uplink harness needs the same copy,
    and neither direction owns it. */
 #include "rlc_copy.h"
+#include "rlc_sync.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -520,13 +521,13 @@ void rlc_am_consumer_tti(uint32_t core_id) {
     const uint32_t tti_start = benchmark_get_cycle();
 #endif
     rlc_am_plan_phase(me);
-    snrt_cluster_partial_barrier(mask);   /* helpers BLOCK here, not polling */
+    rlc_phase_barrier(mask);  /* helpers BLOCK here; fenced -- see rlc_sync.h */
 
     rlc_am_execute_phase();
-    snrt_cluster_partial_barrier(mask);
+    rlc_phase_barrier(mask);
 
     rlc_am_commit_phase(me);
-    snrt_cluster_partial_barrier(mask);
+    rlc_phase_barrier(mask);
 
     if (me == 0u) {
       rlc_am_ttis++;
@@ -535,7 +536,7 @@ void rlc_am_consumer_tti(uint32_t core_id) {
                PRODUCER_CORE_NUM && rlc_am_idle()) ? 1u : 0u,
           memory_order_release);
     }
-    snrt_cluster_partial_barrier(mask);
+    rlc_phase_barrier(mask);
     if (atomic_load_explicit(&rlc_am_stop, memory_order_acquire)) break;
 
 #if RLC_TTI_CYCLES
