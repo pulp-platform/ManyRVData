@@ -111,9 +111,17 @@ Nothing errors. The victim's logs simply acquire another run's data, and the
 provenance of both becomes unreconstructable after the fact.
 
 **Do:** mirror the `sim/bin/logs` tree under your own directory before
-launching an isolated arm, and launch from there. (Caught and mitigated by the
-L1-timing session before running their pristine arm; recorded here because the
-next person will not think to look.)
+launching an isolated arm, and launch from there.
+
+**But the transferable part is the habit, not this instance.** It was not
+reasoned out — it was found by grepping the testbench for `$fopen` to learn
+what it would touch *before* launching into a shared tree. Generalised:
+
+> **Before running something somewhere new, grep for what it writes.**
+
+Same shape as reading the generated script instead of the config: ask the
+artefact what it will do, rather than assuming it does the obvious thing.
+(Found by the L1-timing session while preparing their pristine arm.)
 
 ## What made both catchable
 
