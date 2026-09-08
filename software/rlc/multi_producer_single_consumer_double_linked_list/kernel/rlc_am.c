@@ -641,8 +641,17 @@ static void rlc_am_verify_grant(uint32_t u) {
     RLC_VB(hd.poll != p->poll[i], RLC_VB_POLL);
     RLC_VB(hd.so != p->so[i], RLC_VB_SO);
     RLC_VB(hd.hdr_len != p->hdr_len[i], RLC_VB_HDRLEN);
-    /* Sequence numbers must be consecutive across the whole block. */
-    RLC_VB(i > 0u && hd.sn != ((p->sn[i - 1u] + 1u) & RLC_SN_MASK),
+    /* Consecutive PDUs advance the SN only when the previous one FINISHED its
+       SDU. A middle or last segment carries the same SN as the PDU before it,
+       because the SN identifies the SDU and SO distinguishes the segments
+       (TS 38.322 6.2.2.4). The original check asserted +1 unconditionally --
+       the same per-PDU assumption that was already corrected in the planners
+       and their unit test, left behind here. */
+    RLC_VB(i > 0u &&
+               hd.sn != ((p->sn[i - 1u] +
+                          ((p->si[i - 1u] == RLC_SI_FULL ||
+                            p->si[i - 1u] == RLC_SI_LAST) ? 1u : 0u)) &
+                         RLC_SN_MASK),
            RLC_VB_SN_SEQ);
 
 #if RLC_DL_EXEC == RLC_DL_EXEC_COPY
@@ -678,7 +687,14 @@ static void rlc_am_verify_grant(uint32_t u) {
     const uint32_t i = 0u;
     RLC_VB(p->sn[0] != e->verify_sn, RLC_VB_SN_CONT);
     RLC_VB(p->so[0] != e->verify_so, RLC_VB_SO_CONT);
-    e->verify_sn = (p->sn[0] + e->n) & RLC_SN_MASK;
+    /* Same correction on the cross-grant continuity expectation: a grant whose
+       last PDU is a segment leaves that SDU's SN still in use, so the next
+       grant RESUMES it rather than starting past it. Advancing by e->n made
+       the expectation exactly one too high on every grant that ended on a
+       partial -- which is nearly all of them, since grants are byte-bounded.
+       That produced exactly 1.00 spurious mismatch per grant, deterministic
+       and independent of any race. */
+    e->verify_sn = (p->sn[0] + e->n - e->partial) & RLC_SN_MASK;
     e->verify_so = e->so_next;
   }
 #undef RLC_VB
