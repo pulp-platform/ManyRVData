@@ -82,10 +82,23 @@ The consequence is stronger than defects 1 and 2, and it constrains any fix:
 > is waiting at a barrier at the same time — anywhere in the cluster, not just
 > in the same tile.**
 
-This kills the obvious workaround for defect 2 (move non-participants to other
-tiles): they would be released by the participants' first partial barrier
-round. It means the software spin in step 3 below is not a design preference,
-it is the only option the hardware leaves.
+### Refuted: "move the non-participants to another tile"
+
+This is the obvious fix for defect 2 and it does not work. Recorded here so the
+next person does not spend the same hour on it.
+
+The idea: if only consumers occupy the consumer tile, no read-barrier and
+write-barrier ever share a tile, so defect 2 disappears — and non-participants
+in other tiles are outside the cluster mask, so they cannot satisfy the arrival
+condition either.
+
+Why it fails: **they do not need to satisfy the arrival condition to be
+released.** `barrier_done_o` is broadcast, and a core in `Global` takes it
+whatever tile it is in. So the participants' first partial-barrier round frees
+every non-participant that has reached its own tile barrier, cluster-wide.
+
+It means the software spin in step 3 below is not a design preference, it is
+the only construct the hardware leaves.
 
 ## The API contradiction underneath
 
