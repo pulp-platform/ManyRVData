@@ -171,6 +171,23 @@ the other's claim against an artefact rather than against a description.** Both
 sides' errors came from the reverse: reading intent out of a name, a header, a
 config file, or a partial output.
 
+**But the asymmetry is not uniform, and the distinction changes the lesson.**
+Of six defects found across two engines in one session, none was found by the
+owner of the code — yet not all by the same route:
+
+- **Five** came from one side reading an artefact the other could not generate:
+  `[XLINE]` addresses, a 1.00-per-grant rate, a residue table, a binary run on
+  the other's platform. These argue for **exchanging raw artefacts**, not
+  summaries — a summary would have omitted the address that mattered.
+- **One** — the partial-barrier semantics — came from reading the RTL directly
+  and comparing it against a model built from an older understanding. No
+  artefact from the other side was involved. This argues for something else:
+  **periodically re-read the reference rather than trusting an old
+  transcription of it.**
+
+Both lessons are real and they are not the same lesson. (Distinction drawn by
+the GVSoC session against a claim of mine that flattened them.)
+
 Corollary worth keeping: a check that cannot fail is not a check. A guard that
 echoed the value it had just written reported healthy on a run where the write
 went to the wrong address entirely.
