@@ -127,3 +127,27 @@ manifest written after the fact looks identical to one written before.
 
 See `SYNCHRONISATION_IS_NOT_VISIBILITY.md` for the other pattern from the same
 night: a primitive whose name promises more than it delivers.
+
+## The mechanism, stated plainly
+
+Across a night of two sessions checking each other, every real finding came from
+one move and every failure from its opposite:
+
+| finding | what settled it |
+|---|---|
+| the tile mask is never programmed in UL builds | disassembly, not the source |
+| "3 call sites" for `snrt_barrier_set_tile_mask` | they were source comments; resolved `auipc`+`jalr` targets settled it |
+| which RTL tree the batch compiled | the generated `compile.vsim.tcl`, not `Bender.local` |
+| which peripheral map an ELF uses | `set_eoc`'s immediate, not the header |
+| whether a run succeeded | the `[EOC]` line, not plausible output |
+| whether a register is the mask | its `RESVAL` signature, not that the address accepts a write |
+| whether a peer's map claim held | the model's decode path, not its variables |
+
+**The useful mechanism was not either party being right. It was each checking
+the other's claim against an artefact rather than against a description.** Both
+sides' errors came from the reverse: reading intent out of a name, a header, a
+config file, or a partial output.
+
+Corollary worth keeping: a check that cannot fail is not a check. A guard that
+echoed the value it had just written reported healthy on a run where the write
+went to the wrong address entirely.
