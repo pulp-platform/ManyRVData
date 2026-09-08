@@ -9,6 +9,38 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### MULTI-ENTITY WEDGE: signature absent at 64 cores and M48 -- and the original observation was confounded
+- **Time:** 2026-09-08 ~10:30 +0200
+- **GVSoC ran the AM ladder serially on an idle machine, at both scales, with all three defects fixed.**
+
+```
+ 4 tiles / 16 cores      GRANTS  MISMATCH  CYC/GRANT      16 tiles / 64 cores    GRANTS  MISMATCH  CYC/GRANT
+ M8                          10      0.00     35,139      M16                        15      0.00     46,954
+ M16                         14      0.00     29,611      M48                        20      0.00     31,054
+ M24                         18      0.00     26,037      M48 (K=8 control)           7      0.00     44,960
+ M32                         20      0.00     21,300
+```
+- **Zero payload mismatches at every rung, at both scales, across M8->M48** -- including M16 and M48 at 64 cores, the rungs and the machine size where the wedge was reported worst.
+- **Entity-count scaling is monotonic in the GOOD direction at both scales.** 4 tiles: 35.1k -> 21.3k across M8->M32. 16 tiles: M48 (31.1k) beats M16 (47.0k). More entities = more available parallel work. **No non-monotonicity anywhere in either ladder** -- which is the wedge's actual signature.
+- **The one cost found is on a different axis.** M16 at 4 tiles 29,611 -> at 16 tiles 46,954 = **1.59x worse**: same entity count spread over 4x the cores, so more NoC hops and more contention for the same entities. That is a machine-scale effect, expected, and orthogonal to "non-monotonic failure as entities increase". The K=8 control corroborates the channel is measuring something real (44,960 vs 31,054 at equal M with a third of the work to amortise).
+
+#### The stronger conclusion: the original wedge observation was measuring an artefact stack
+Every historical M16/24/48 failure was measured on a platform and a kernel that between them had **four** defects capable of producing exactly that signature:
+| defect | effect | owner |
+|---|---|---|
+| barrier was a global counter to `nb_cores` | partial barriers released at semantically arbitrary times -> phases overlap | GVSoC |
+| VLSU sized every access at lane width | manufactured line straddles -> **5-6 payload mismatches/grant** | GVSoC |
+| tile mask armed at init, never restored | **every full barrier narrowed to tile 0** above 1 tile -- 60 of 64 cores unsynchronised | ours |
+| verifier assumed SN advances per PDU | **1.00 spurious mismatch/grant**, deterministic | ours |
+- Any one of those produces failure that worsens with core or entity count. **So "the wedge" as observed was never a measurement of the kernel.** Whether a real effect also existed underneath is unknowable from the old data -- the instrument and the subject were both broken.
+- **Correct statement:** the wedge's signature is absent in both measurable channels at both scales with the defects fixed; the historical observation is retracted as confounded rather than explained.
+
+#### What remains outside the instrument (GVSoC's framing, adopted)
+- **Completion / hang** -- a bounded window cannot distinguish slow from wedged. If the wedge is a hang phenomenon, none of the above speaks to it. Probing it needs a **progress-stall detector, not a timeout**, and GVSoC would rather scope that deliberately than approximate it. Agreed.
+- **Truncated runs** -- rates are the measurement, grant counts are not.
+
+---
+
 ### Partial-barrier fix landed and validated; AM mismatch column resolved as THREE bugs, none payload corruption
 - **Time:** 2026-09-08 ~09:00 +0200. Commits `6df0e68` (narrow fix), `145d66a` (verifier SN), `e0f505c` (progress line), `dedde97`/`246b430`/`a9c647f` (reports), `a79e83b`/`0143e71`/`171c79d`/`a750067` (notes).
 
