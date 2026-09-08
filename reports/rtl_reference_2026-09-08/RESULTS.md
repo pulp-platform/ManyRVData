@@ -30,6 +30,23 @@ and all 64 cores. Nothing anywhere in either run shifted by a cycle.
 *timing*, the L1D rewrites are excluded as a confound — the cache presents
 writes on identical cycles before and after.
 
+## Scope: this measured T3.1-T3.15, which may not be what ships
+
+The DUT here is the timing session's **full** transform set, T3.1 through T3.15.
+Their post-placement OOC ladder subsequently recommended shipping **T3.1-T3.12
+only** (WNS -0.091 vs -0.106; T3.13 alone accounts for 13 of the 15 ps).
+
+So this batch is evidence for a **superset** of the intended ship set. Whether
+cycle-identity carries to the subset follows only if each transform is
+independently cycle-neutral — which is plausible, is what they claim, and is
+**not what this batch measured**. Reverting three transforms is also a code
+change that can itself introduce error, which a re-verify would catch and an
+inference would not.
+
+**Re-verify `bandwidth` on the reduced set before anyone calls it verified.**
+That is ~10 minutes of wallclock and it is the difference between a measurement
+and an argument.
+
 ## `cache-mix-smoke` — a test bug, attributable without a pristine arm
 
 ```c
