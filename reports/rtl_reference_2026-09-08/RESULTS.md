@@ -146,3 +146,15 @@ is leaned on. Flagged by the GVSoC session, accepted here.
 I predicted `byte-enable` would cap by extrapolating linearly from
 `bandwidth`'s cycles-per-second. It took 15 minutes, not 90. **Wall time is not
 linear in EOC cycles across kernels** — different core counts and DRAM traffic.
+
+## Post-batch: the DUT has since changed (expected)
+
+At 07:43 the L1-timing session reverted T3.13-T3.15 and synced T3.1-T3.12.
+`verify_dut.sh` in this directory now reports FAILED on
+`insitu_cache_tcdm_wrapper.sv` and `sram_forwarding_buffer.sv` — **that is
+correct and expected**, not a provenance failure. Everything in this report was
+measured before the sync, under the 130 clean tripwire samples recorded in
+`dut_watch.log`.
+
+The new state is pinned separately in `reports/rtl_reference_t312_pending/`.
+Do not re-run `verify_dut.sh` here expecting a pass; this directory is closed.
