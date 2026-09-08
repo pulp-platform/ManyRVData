@@ -65,6 +65,15 @@ typedef struct Node {
     size_t data_size;   /* Size of the payload in bytes */
     spinlock_t lock;    /* Per‑node lock (0: unlocked, 1: locked) */
     uint32_t user_id;   /* Owning RLC entity / UE (instrumentation + multi-user routing) */
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+    /* AM only: SN of this SDU's final segment, stamped when the SDU is fully
+       transmitted. A STATUS PDU may only release the SDU once every segment
+       it was split into has been acknowledged, and with segmentation the SDU
+       count and the SN count diverge -- so the SN has to travel with the node.
+       Guarded so the legacy build keeps its exact Node layout, which sets
+       PAGE_SIZE and hence the whole memory-pool geometry. */
+    uint32_t last_sn;
+#endif
 } Node;
 
 /* Doubly‑linked list structure for storing Node pointers.
@@ -96,6 +105,42 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
    If the list is empty, it returns NULL.
 */
 Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list);
+
+/*
+   list_peek_n() walks up to `max` nodes from the head without removing any,
+   writing them into `out`. Returns how many were written.
+
+   The AM grant planner needs to look ahead over several queued SDUs to decide
+   where the grant boundary and the segment split fall, but it must not detach
+   them: a partially transmitted SDU has to stay at the head of the list until
+   its last segment is sent. Popping and re-inserting would need a push_front
+   and would reorder against concurrent producers.
+*/
+/* `1` is RLC_TB_MODE_AM (rlc_am.h). Spelled numerically because llist.h is
+   pulled in via mm.h before that header is seen, so the symbolic name is not
+   yet defined here; RLC_TB_MODE itself always comes from the build (-D), so
+   every translation unit agrees regardless of include order. */
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                         unsigned int max);
+
+/*
+   list_peek_budget() is list_peek_n() that stops once the walked SDUs can no
+   longer fit in `budget` bytes, counting `overhead` bytes of header per SDU.
+   It includes the first node that overflows -- that one is the segmentation
+   candidate -- and then stops.
+
+   Walking the queue is a dependent pointer chase, one cache miss per node, and
+   it is the dominant serial cost of a planning attempt (measured: it is where
+   RTL spends essentially all of its time in rlc_am_try_plan). Gathering
+   `max` nodes when the grant can only hold a handful wastes that cost
+   proportionally -- at an 8 KiB grant and 1360-byte SDUs it is 128 nodes
+   walked to plan 6.
+*/
+unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
+                              Node **out, unsigned int max, unsigned int budget,
+                              unsigned int overhead);
+#endif
 
 /*
    list_remove() removes a specific Node from anywhere in the list.
