@@ -125,6 +125,27 @@
      ONE TTI = ONE GRANT OPPORTUNITY PER ENTITY
      primary metric = bytes/cycle = (payload bytes) / (kernel cycles)
    0 keeps the original free-running loop for A/B comparison. */
+/* Per-grant progress line, printed unconditionally -- one line per grant,
+   whether or not it had mismatches.
+ 
+   Without it, a build whose payload check passes emits NOTHING per grant, so a
+   truncated run and a stuck run look identical in the log. That is not a
+   hypothetical: AM runs on the GVSoC engine have never reached their end-of-run
+   `transport-block check` line within any budget tried, so every AM measurement
+   there is a truncated run and the only per-grant signal was the mismatch line
+   -- which disappears exactly when the kernel is correct. Carries a cycle stamp
+   so progress *rate* is comparable across configurations from truncated runs.
+ 
+   Defaults on wherever the self-check is on, since those builds are diagnostic
+   already; costs one printf per grant. */
+#ifndef RLC_AM_PROGRESS
+#if defined(RLC_SELF_CHECK)
+#define RLC_AM_PROGRESS 1
+#else
+#define RLC_AM_PROGRESS 0
+#endif
+#endif
+
 #ifndef RLC_AM_TTI
 #define RLC_AM_TTI 1
 #endif
