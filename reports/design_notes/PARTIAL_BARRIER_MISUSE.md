@@ -140,3 +140,63 @@ rather than hiding it. Cheaper than RTL for the first pass; RTL confirms after.
 
 `SYNCHRONISATION_IS_NOT_VISIBILITY.md` — the barriers do not fence.
 `PROVENANCE_THE_TOOL_NOT_THE_CONFIG.md` — measure the artefact, not the config.
+
+## The fix requires masked barrier semantics — measured, and it is a feature
+
+Verified on GVSoC, same binary and config, 1 tile:
+
+```
+masked barrier    -> retval=0, 1,137,580 cycles, MASK-OK, check: PASS  (<110 s wall)
+counting barrier  -> no completion in 400 s (4x budget), no UL/MASK/EOC output
+```
+
+It is a **deadlock, not slowness**: the counting barrier is cheaper per
+operation, and the masked arm finished the identical workload in under a
+quarter of the budget.
+
+**Mechanism — defect 3 read backwards.** The fix has non-participants spin
+*outside* the barrier. A barrier that completes at `count == nb_cores` then
+waits for arrivals that will never come: at 1 tile, one consumer waiting for
+four. Deadlock by construction. The fix and a counting barrier are mutually
+incompatible.
+
+Three things follow, and the third is the one to be careful about:
+
+1. **The 1/4/16-tile pass is a joint result.** The kernel change and correct
+   masked semantics are each necessary and neither is sufficient.
+2. **The failure character changed, deliberately and for the better.** Before
+   the fix, a mask that was absent or misprogrammed produced *silent
+   corruption* — phases overlapping, short delivery, plausible output. After
+   it, the same condition produces a **hang**. A deadlock is detectable; quiet
+   wrong answers are not. This is worth stating because it looks like a
+   regression in robustness and is the opposite.
+3. **It says nothing about whether the masked implementation is correct**, only
+   that it differs and that the fix needs the difference. A deadlock on the old
+   barrier would look identical if the new one were wrong in some *other* way.
+   The RTL readings remain the only evidence for correctness.
+   (Distinction drawn by the GVSoC session against their own result.)
+
+**Portability consequence:** this kernel now requires a platform that implements
+the participation mask. That is true of the RTL and was not true of the model
+until today.
+
+## Verification, 2026-09-08
+
+Passed at 1, 4 and 16 tiles. The decisive evidence was read from the **barrier's
+own state**, not from the kernel's self-report:
+
+```
+16 tiles:  6 x 0xffff  ->  33 x 0x1  ->  3 x 0xffff
+ 4 tiles:  6 x 0xf     ->  33 x 0x1  ->  3 x 0xf
+ 1 tile:   all 0x1                       (narrowing is a no-op -- why it hid here)
+```
+
+Startup barrier full, consumers progressing narrowed, mask restored before
+release, and the shape independent of tile count.
+
+**Independent cross-check on the 33.** Derived from the traffic profile:
+488 SDUs per TC1 slot / 49 PDUs per 8192 B block = 11 slots, x 3 phase barriers
+= **33**. Measured from barrier state on the model side. Two independent paths
+to the same integer with no shared intermediate — so the narrowed region
+contains exactly the barriers the kernel should issue and no others: nothing
+leaked in from an absorbed full barrier, and none escaped.
