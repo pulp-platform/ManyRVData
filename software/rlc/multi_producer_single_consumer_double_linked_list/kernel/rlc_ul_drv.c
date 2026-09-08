@@ -152,6 +152,8 @@ static uint32_t rlc_ul_cyc_build, rlc_ul_cyc_scan, rlc_ul_cyc_deliver;
 static _Atomic uint32_t rlc_ul_barrier_armed
     __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
 static _Atomic uint32_t rlc_ul_tile_mask __attribute__((section(".data")));
+/* What the participation-mask register reads back as, after we wrote it. */
+static _Atomic uint32_t rlc_ul_mask_readback __attribute__((section(".data")));
 
 void rlc_ul_init(void) {
   /* Step 1 of the partial-barrier API: programme which tiles take part. Must
@@ -168,6 +170,18 @@ void rlc_ul_init(void) {
       if (t < 32u) tm_lo |= 1u << t; else tm_hi |= 1u << (t - 32u);
     }
     snrt_barrier_set_tile_mask(tm_lo, tm_hi);
+    /* Read the register back and keep what it actually holds, not what we
+       meant to write. An earlier version printed the software copy, which made
+       the guard unable to fail: a run whose mask write landed on an address
+       the platform decodes as something else still reported a healthy mask.
+       A check that cannot fail is worth nothing -- this one now catches a
+       wrong peripheral offset, which is exactly how it was first fooled. */
+    {
+      volatile uint32_t *reg = (volatile uint32_t *)
+          _snrt_barrier_participation_mask_reg_ptr();
+      asm volatile("fence" ::: "memory");
+      atomic_store_explicit(&rlc_ul_mask_readback, reg[0], memory_order_relaxed);
+    }
     atomic_store_explicit(&rlc_ul_tile_mask, tm_lo, memory_order_relaxed);
     /* Release, then fence: the consumers read this without holding any lock,
        and main.c's snrt_cluster_hw_barrier() right after rlc_init() does not
@@ -302,12 +316,22 @@ static void rlc_ul_report(void) {
   const rlc_ul_entity_t *e = &rlc_ul_ent[0];
   const uint32_t want = (uint32_t)RLC_UL_SDUS * RLC_UL_SDU_BYTES;
   printf_lock_acquire(&printf_lock);
-  printf("[UL] barrier tile_mask=0x%x local_mask=0x%x armed=%u\n",
-         (uint32_t)atomic_load_explicit(&rlc_ul_tile_mask, memory_order_relaxed),
-         snrt_cluster_partial_barrier_mask(consumer_core_ids,
-                                           RLC_ACTUAL_CONSUMERS),
-         (uint32_t)atomic_load_explicit(&rlc_ul_barrier_armed,
-                                        memory_order_relaxed));
+  {
+    const uint32_t wrote =
+        (uint32_t)atomic_load_explicit(&rlc_ul_tile_mask, memory_order_relaxed);
+    const uint32_t got =
+        (uint32_t)atomic_load_explicit(&rlc_ul_mask_readback, memory_order_relaxed);
+    printf("[UL] barrier tile_mask wrote=0x%x readback=0x%x local_mask=0x%x "
+           "armed=%u %s\n",
+           wrote, got,
+           snrt_cluster_partial_barrier_mask(consumer_core_ids,
+                                             RLC_ACTUAL_CONSUMERS),
+           (uint32_t)atomic_load_explicit(&rlc_ul_barrier_armed,
+                                          memory_order_relaxed),
+           (wrote == got) ? "MASK-OK" : "*** MASK MISMATCH: the participation "
+                                        "register is not where we wrote it -- "
+                                        "check the peripheral map ***");
+  }
   printf("[UL] slots=%u tb_bytes=%u segments=%u polls_ack=%u exec=%s\n",
          rlc_ul_slots, rlc_ul_tb_bytes, e->reassembled, rlc_ul_status_pdus,
          (RLC_UL_EXEC == RLC_UL_EXEC_COPY) ? "copy" : "count");
