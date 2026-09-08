@@ -9,6 +9,29 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### AM TTI loop fenced -- the same missing-fence defect the uplink proved, in the downlink
+- **Time:** 2026-09-08 ~04:08 +0200
+- **Files:** `kernel/rlc_sync.h` (new), `kernel/rlc_am.c`, `kernel/rlc_ul_drv.c`
+- **User approved the recommendation.** The downlink TTI loop separated its phases with bare `snrt_cluster_partial_barrier(mask)` -- **four sites, zero fences**.
+- **The defect:** `snrt_cluster_partial_barrier()` is one plain store to the barrier register. It synchronises *execution*, not *memory*. Every RLC phase boundary is a producer/consumer handoff of shared memory:
+  - **DL plan -> execute:** the owner writes ~7 KB of plan (header lengths, segment lengths, source pointers, `n_avail`, `tb_used`); **every helper then reads it to copy payload**. Stale lengths or offsets corrupt the transport block *silently*.
+  - **DL execute -> commit:** helpers write payload, the owner accounts it.
+  - **UL scan -> reassemble:** already fixed earlier today.
+- **This is not a theory -- the identical mechanism was proven on hardware hours earlier** in the uplink: a value core 0 stored and another core loaded, with a barrier between, disagreed, with both the store and the load provably executing in the disassembly. Same primitive, same absence of a fence.
+- **Fix:** new `rlc_sync.h` with `rlc_phase_barrier()` -- fence, barrier, fence. Applied to all four DL sites; the UL's local duplicate was removed and now uses the shared one. **Verified in the object code:** fences emitted as `fence / jalr snrt_cluster_partial_barrier / fence` at each site. (Nine full fences in the function, not eight: the ninth is pre-existing, from `rlc_am_poison`. Checked rather than assumed.)
+- **Still a hypothesis, stated as one:** this may or may not explain the multi-entity wedge (M16/24/48 failing non-monotonically). It is fixed because **a missing fence is a correctness defect regardless** -- keeping it to protect a performance baseline would mean protecting a measurement of a program that can silently corrupt. Two confident diagnoses of mine already died today; this one is not being asserted as the wedge's cause.
+- **Verification:**
+  - Fences present and correctly paired in `rlc_am_consumer_tti` disassembly.
+  - Host `test_rlc_ul` **16,109 / 0 both EXEC modes**, `test_rlc_plan` **589,728 / 0**.
+  - **Legacy loadable image bit-exact** (legacy does not use partial barriers).
+  - **UL loadable images bit-identical to the pre-refactor freeze** -- so moving the UL barrier into the shared header changed no code. My first attempt at this check compared whole ELFs and reported "differs"; that was debug-info line numbers, not codegen. Corrected to compare loadable images.
+  - No unimplemented vector ops. (AM ELFs use `vslideup/vslidedown/vadd/vsub/vand/vmv` from the vector planner -- all datapath-implemented; the known Spatz gap is integer *compares* and `vmerge`, neither present.)
+  - Frozen at `reports/handover/elf_frozen_2026-09-08_0408_am_fenced/` -- the wedge ladder M8/12/16/24/32 tbchk plus M16 entpad. Note M16 entpad and M16 tbchk now share an md5, because `RLC_AM_ENT_PADDED=1` is the default and the variant is no longer distinct.
+- **Rebuilt safely alongside the running RTL batch**, which is the hazard the timing peer identified: took a tripwire reading and `compile.vsim.tcl`'s mtime **before and after** `make sw`. Both unchanged, vsim still alive -- so `make sw` is empirically safe during a batch, which is now a known-good fact rather than an assumption.
+- **Consequence for GVSoC: their AM performance baselines must be re-taken** -- fences shift cycle counts. Told them, with the reason.
+
+---
+
 ### RTL reference batch for the timing peer: `bandwidth` reproduces pristine EXACTLY across 15 cache rewrites
 - **Time:** 2026-09-08 ~04:05 +0200 (batch continues)
 - **Report:** `reports/rtl_reference_2026-09-08/` -- `summary.tsv`, `RTL_STATE.md`, `dut_tripwire.sha256`, `verify_dut.sh`, `build_report.sh`, `insitu-cache_under_test.diff`, per-test logs.

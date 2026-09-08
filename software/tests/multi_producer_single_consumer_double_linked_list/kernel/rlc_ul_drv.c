@@ -43,6 +43,7 @@
 #define RLC_UL_DRV_C
 
 #include "rlc_copy.h"
+#include "rlc_sync.h"
 #include "rlc_ul.h"
 #include "rlc_ul_drv.h"
 #include "rlc_ul.c"
@@ -120,19 +121,6 @@ static uint32_t rlc_ul_status_pdus;
 static _Atomic uint32_t rlc_ul_stop __attribute__((aligned(CACHE_LINE_SIZE)))
     __attribute__((section(".data")));
 
-/* Phase barrier.
- 
-   snrt_cluster_partial_barrier() is documented as "a plain volatile store": it
-   is a synchronisation event, not a memory fence. Consumer 0 writes the scan
-   buffer in phase 1 and the other consumers read it in phase 2, so without an
-   explicit fence on both sides the readers may see a partially published
-   buffer even though the barrier did exactly what it promised. Fence before,
-   to publish this phase's writes; fence after, to see everyone else's. */
-static inline void rlc_ul_barrier(uint32_t mask) {
-  asm volatile("fence" ::: "memory");
-  snrt_cluster_partial_barrier(mask);
-  asm volatile("fence" ::: "memory");
-}
 
 /* Per-phase cycle accounting. build/scan/deliver run on consumer 0 only;
    reassemble is per-core, because the point of the measurement is how the
@@ -275,7 +263,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     rlc_ul_cyc_scan += t2 - t1;
     rlc_ul_slots++;
   }
-  rlc_ul_barrier(bar_mask);
+  rlc_phase_barrier(bar_mask);
 
   /* --- phase 2: reassemble (parallel, disjoint slices) --- */
   {
@@ -291,7 +279,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     }
     rlc_ul_cyc_reasm[me].cyc += benchmark_get_cycle() - t0;
   }
-  rlc_ul_barrier(bar_mask);
+  rlc_phase_barrier(bar_mask);
 
   /* --- phase 3: deliver in order + STATUS (serial by definition) --- */
   if (me == 0u) {
@@ -307,7 +295,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     if (rlc_ul_done() && rlc_ul_scan_buf.n == 0u)
       atomic_store_explicit(&rlc_ul_stop, 1u, memory_order_relaxed);
   }
-  rlc_ul_barrier(bar_mask);
+  rlc_phase_barrier(bar_mask);
 }
 
 static void rlc_ul_report(void) {
