@@ -8,7 +8,7 @@ cycle-identical. Run on their working tree; provenance pinned (see below).
 |---|---|---|---|---|---|
 | `bandwidth` | **PASS** | 33,876 | 2,058 (32/load) | 33,876 / 2,058 / 32 | **exact match** |
 | `byte-enable` | **PASS** | 303,288 | n/a | 303,288 | **exact match** |
-| `cache-mix-smoke` | **FAIL** | 69,378 | 125 mismatches | no baseline | test bug, not RTL |
+| `cache-mix-smoke` | **FAIL** | 69,378 | 125 mismatches | pristine: 69,378 / 125 | **exact match** — test bug |
 | `cache-test-scalar` | `timeout_cap` | — | `cache-basic` **PASS** | no baseline | partial |
 | `cache-test-vector` | `timeout_cap` | — | `vcache-basic` **PASS** | no baseline | partial |
 
@@ -59,11 +59,34 @@ Independent LSUs, no `fence` between them; `fences: 0` in that file. `volatile`
 constrains the compiler and says nothing about two hardware load/store units.
 Predates the rewrites and is independent of the cache datapath.
 
-**Caveat recorded at the peer's insistence:** adding a fence would fix this
-whether or not the rewrites perturbed the timing that exposes it, so the fence
-experiment alone cannot separate "always racy" from "rewrites changed the
-exposure". Their pristine arm settles it; this row is not evidence about their
-RTL either way.
+**Settled by a pristine arm (2026-09-08).** Pristine `f1cbe54` fails
+identically:
+
+| arm | RTL | EOC | UART | scoreboards |
+|---|---|---|---|---|
+| this batch | T3.1-T3.15 | 69,378 | `[FAIL] 125 mismatches` | 128 PASS / 0 FAIL |
+| pristine | f1cbe54 | 69,378 | `[FAIL] 125 mismatches` | 128 PASS / 0 FAIL |
+
+Same count, same tally, **EOC identical to the cycle**. The race predates every
+transform in the set. The caveat this row used to carry — that a fence would
+fix it either way, so the fence experiment could not separate "always racy"
+from "the rewrites changed the exposure" — is discharged by measurement rather
+than by argument.
+
+**And it upgrades the cycle-identity result.** `cache-mix-smoke` is now a
+*third* matching kernel, and the strongest of the three: RTL simulation is
+deterministic, so a program whose output depends on inter-core timing is a
+**sensitive detector** — almost any timing perturbation would move the count or
+the cycle. Neither moved. Two clean kernels show the transforms do not change
+correct programs; this one shows they do not change a program that is *already*
+sensitive to timing between cores.
+
+**Limitation, recorded before either side leans on it:** the test prints only a
+count, never the mismatching addresses. The comparison is over
+(count, EOC, scoreboard tally) and does **not** establish that the same 125
+locations mismatched on both arms. Two different races landing on the same
+count *and* the same cycle would be remarkable, but the instrument cannot rule
+it out. Closing that gap needs a test change (print addresses), not an RTL one.
 
 ## The two capped tests, and the part that is still informative
 
@@ -102,7 +125,7 @@ is leaned on. Flagged by the GVSoC session, accepted here.
 |---|---|
 | `bandwidth` | 598 s |
 | `byte-enable` | 889 s |
-| `cache-mix-smoke` | 236 s |
+| `cache-mix-smoke` | 236 s (pristine arm: 211 s) |
 | `cache-test-scalar` | capped at 3600 s |
 | `cache-test-vector` | capped at 3600 s |
 
