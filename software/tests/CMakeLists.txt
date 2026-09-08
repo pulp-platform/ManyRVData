@@ -448,43 +448,42 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # stay inside one tile because the TB arena is above the l1d_addr boundary and
 # therefore tile-private.
 # ---------------------------------------------------------------------------
-macro(add_rlc_ul name source dataheader prod cons exec tb suffix)
+macro(add_rlc_ul name source dataheader prod cons exec tc tb suffix)
   add_snitch_test(${name}_P${prod}_C${cons}_ul_${suffix} ${source})
   target_link_libraries(test-${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix}
                         benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
   target_compile_definitions(test-${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix} PUBLIC
       DATAHEADER="${dataheader}"
       PRODUCER_CORE_NUM=${prod} CONSUMER_CORE_NUM=${cons}
-      RLC_UL_MODE=1 RLC_UL_EXEC=${exec} RLC_UL_TB_BYTES=${tb} RLC_SELF_CHECK=1)
+      RLC_UL_MODE=1 RLC_UL_EXEC=${exec} RLC_UL_TC=${tc} RLC_UL_TB_BYTES=${tb}
+      RLC_SELF_CHECK=1)
 endmacro()
 
-# Consumer ladder, payload moved (RLC_UL_EXEC=0): 1, 2 and 3 reassembly cores.
+# TC1 consumer ladder at the DOCUMENTED uplink profile: 160 B PDUs, 1 Gbps,
+# 1600 slots/s -> 78,125 B and 488 SDUs per slot. Each 8 KB block carries ~49
+# PDUs and segments at the boundary, so the serial header walk is measured on
+# traffic that actually contains 5-byte SO headers.
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100_p1c1.h" 1 1 0 8192 copy)
+           "data/data_1_1350_100_p1c1.h" 1 1 0 1 8192 tc1_copy)
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100.h" 2 2 0 8192 copy)
+           "data/data_1_1350_100.h" 2 2 0 1 8192 tc1_copy)
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100_p1c3.h" 1 3 0 8192 copy)
+           "data/data_1_1350_100_p1c3.h" 1 3 0 1 8192 tc1_copy)
 
-# Header-only control (RLC_UL_EXEC=1): payload is accounted for but never read,
-# which is what a receiver handing payload to a DMA actually does. Diffing it
-# against the copy build separates header-walk cost from payload traffic.
+# Header-only control: payload accounted for but never read, which is what a
+# receiver handing payload to a DMA does. Isolates header-walk cost.
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100_p1c3.h" 1 3 1 8192 count)
+           "data/data_1_1350_100_p1c3.h" 1 3 1 1 8192 tc1_count)
 
-# Segmenting build. The 8192 B block above is an accident of arithmetic: with
-# 1360 B SDUs it holds exactly 6 whole SDUs with 2 bytes to spare, so it never
-# segments -- and segmentation is the entire reason the scan is serial (a 5-byte
-# header with SO appears only on MIDDLE/LAST). 3000 B forces a split in nearly
-# every block, so the ladder above measures the scan on the traffic that
-# actually justifies it.
+# Smaller block: more block boundaries per byte, so proportionally more
+# segmentation. Separates per-block cost from per-PDU cost.
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100_p1c3.h" 1 3 0 3000 seg)
+           "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 tc1_smallblk)
 
 # Same cases with the bitmap work queue (RLC_AM_WORKQ=1), so the scan-free path
 # can be diffed against the plain one rather than replacing it.

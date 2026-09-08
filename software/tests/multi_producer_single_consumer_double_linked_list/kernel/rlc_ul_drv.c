@@ -58,9 +58,46 @@
 #define RLC_UL_TB_BYTES 8192u
 #endif
 
-/* How many uplink SDUs the harness feeds in, per entity. */
+/* Uplink SDU size.
+ 
+   The DP Introduction doc specifies the uplink as **160 B** PDUs at 1 / 8 / 4
+   Gbps for TC1 / TC2 / TC3 (see doc/KERNEL_REVIEW_NOTES.md "Huawei test
+   cases"). The first version of this harness reused the 1360 B downlink
+   dataset, which is not the documented uplink workload and happens to be a
+   pathological choice: 1360 B SDUs in an 8192 B block pack as exactly six
+   whole SDUs with two bytes spare, so nothing ever segmented and the serial
+   header walk was measured on traffic containing none of what makes it
+   serial. At 160 B a block carries ~49 PDUs and the boundary segments. */
+#ifndef RLC_UL_SDU_BYTES
+#define RLC_UL_SDU_BYTES 160u
+#endif
+
+/* Documented UL rate per test case, bits/s (doc: TC1 1 Gbps, TC2 8 Gbps,
+   TC3 4 Gbps -- all at 160 B). RLC_UL_TC selects one. */
+#ifndef RLC_UL_TC
+#define RLC_UL_TC 1
+#endif
+#if RLC_UL_TC == 1
+#define RLC_UL_RATE_BPS 1000000000ull
+#elif RLC_UL_TC == 2
+#define RLC_UL_RATE_BPS 8000000000ull
+#elif RLC_UL_TC == 3
+#define RLC_UL_RATE_BPS 4000000000ull
+#else
+#error "RLC_UL_TC must be 1, 2 or 3"
+#endif
+
+/* Slot cadence, from the doc's "pkts/slot (1600 slots/s)" row. One UL slot's
+   aggregate byte budget is rate/8/1600; at 160 B that is the SDU count a
+   conforming receiver must absorb per slot. */
+#define RLC_UL_SLOTS_PER_SEC 1600u
+#define RLC_UL_SLOT_BYTES ((uint32_t)(RLC_UL_RATE_BPS / 8ull / RLC_UL_SLOTS_PER_SEC))
+#define RLC_UL_SLOT_SDUS (RLC_UL_SLOT_BYTES / RLC_UL_SDU_BYTES)
+
+/* How many uplink SDUs the harness feeds in, per entity. Defaults to one
+   slot's worth at the selected test case, so a run models a slot's arrival. */
 #ifndef RLC_UL_SDUS
-#define RLC_UL_SDUS 64u
+#define RLC_UL_SDUS RLC_UL_SLOT_SDUS
 #endif
 
 static rlc_ul_entity_t rlc_ul_ent[NUM_USERS]
@@ -170,9 +207,15 @@ void rlc_ul_init(void) {
 static uint32_t rlc_ul_build_tb(uint8_t *tb, uint32_t cap) {
   uint32_t len = 0u;
   while (rlc_ul_cur_sdu < RLC_UL_SDUS) {
-    const uint32_t sdu_len = PDU_SIZE;
-    const uint8_t *src = (const uint8_t *)(uintptr_t)pdcp_pkgs[rlc_ul_cur_sdu %
-                                                              NUM_PKGS].src_addr;
+    const uint32_t sdu_len = RLC_UL_SDU_BYTES;
+    /* Payload comes from the PDCP source region so the harness needs no
+       dataset of its own; UL SDUs are smaller than a DL packet, so take
+       successive slices and wrap within the packet. */
+    const uint32_t per_pkt = (uint32_t)PDU_SIZE / RLC_UL_SDU_BYTES;
+    const uint8_t *base = (const uint8_t *)(uintptr_t)
+        pdcp_pkgs[(rlc_ul_cur_sdu / (per_pkt ? per_pkt : 1u)) % NUM_PKGS].src_addr;
+    const uint8_t *src =
+        base + (per_pkt ? (rlc_ul_cur_sdu % per_pkt) : 0u) * RLC_UL_SDU_BYTES;
     const uint32_t remaining = sdu_len - rlc_ul_cur_so;
     const uint32_t si_full = (rlc_ul_cur_so == 0u) ? RLC_SI_FULL : RLC_SI_LAST;
     const uint32_t hdr = rlc_amd_hdr_len(si_full);
@@ -269,7 +312,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
 
 static void rlc_ul_report(void) {
   const rlc_ul_entity_t *e = &rlc_ul_ent[0];
-  const uint32_t want = RLC_UL_SDUS * (uint32_t)PDU_SIZE;
+  const uint32_t want = (uint32_t)RLC_UL_SDUS * RLC_UL_SDU_BYTES;
   printf_lock_acquire(&printf_lock);
   printf("[UL] barrier tile_mask=0x%x local_mask=0x%x armed=%u\n",
          (uint32_t)atomic_load_explicit(&rlc_ul_tile_mask, memory_order_relaxed),
@@ -280,6 +323,9 @@ static void rlc_ul_report(void) {
   printf("[UL] slots=%u tb_bytes=%u segments=%u polls_ack=%u exec=%s\n",
          rlc_ul_slots, rlc_ul_tb_bytes, e->reassembled, rlc_ul_status_pdus,
          (RLC_UL_EXEC == RLC_UL_EXEC_COPY) ? "copy" : "count");
+  printf("[UL] tc=%u sdu=%uB slot_bytes=%u slot_sdus=%u\n", (unsigned)RLC_UL_TC,
+         (unsigned)RLC_UL_SDU_BYTES, (unsigned)RLC_UL_SLOT_BYTES,
+         (unsigned)RLC_UL_SLOT_SDUS);
   printf("[UL] delivered=%u/%u bytes=%u/%u rx_next=%u dup=%u oow=%u\n",
          e->delivered, (unsigned)RLC_UL_SDUS, e->delivered_bytes, want,
          e->rx_next, e->dup, e->out_of_window);

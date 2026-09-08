@@ -9,6 +9,20 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### RLC UL: barrier flag was invisible cross-core; UL re-parameterised to the documented 160 B profile; committed
+- **Time:** 2026-09-08 ~03:52 +0200
+- **Commit:** `7325757` "rlc: AM transport-block assembly (DL) and reassembly (UL)" -- 40 files, 7419 insertions. Frozen ELF binaries deliberately NOT committed.
+- **The v3 fix did not take, and GVSoC's guard caught its own build.** All five v3 ELFs printed `[UL] FATAL: tile participation mask never programmed`. **My static verification metric was worthless**: I had been grepping the objdump listing for the symbol name, which counts *interleaved source-comment lines and the definition label* -- for the v3 ELFs all three "hits" were a comment, a label and a source line, and **not one was a call**. GVSoC spotted the disagreement between my metric and their runtime guard and told me to re-derive it.
+- **Second root cause, also mine:** `rlc_ul_barrier_armed` was a plain `static uint32_t` (in `.sbss`), written by core 0 in `rlc_init()` and read by the consumers after `main.c`'s `snrt_cluster_hw_barrier()`. Proven by disassembly that **the store executes** (inside main's `bnez s0` core-0 block, `sb s1, 1572(a0)`) and **the load executes** (`lbu`+`beqz`, not constant-folded) -- and they still disagreed. **The hardware barrier is a synchronisation event, not a memory fence, and a non-atomic store carries no ordering of its own.** Fixed: `_Atomic` with release/acquire, in `.data` cacheline-aligned, plus an explicit `fence`.
+- **Same class, wider blast radius:** `snrt_cluster_partial_barrier()` is documented as "a plain volatile store" -- so **the phase barriers do not order memory either**. Consumer 0 writes the scan buffer in phase 1 and the others read it in phase 2. Added `rlc_ul_barrier()` which fences on both sides. **The AM TTI loop has the same unfenced pattern (plan writes -> execute reads across `snrt_cluster_partial_barrier`) and is a live suspect for the unresolved multi-entity wedge** -- NOT changed yet, because GVSoC holds AM baselines against the current loop. Flagged.
+- **A sound static metric, replacing the bad one:** `scratchpad/callcheck.py` resolves `auipc`+`jalr` pairs (and direct `jal`) to their target address and compares against the symbol's `nm` address. Reports **exactly 1 resolved call site** for `snrt_barrier_set_tile_mask` in each UL ELF, with its address. The honest conclusion, though, is GVSoC's: **the runtime `armed=` print is the verification; a static grep is at best corroboration.**
+- **UL re-parameterised to the documented profile (user: "align to the doc").** `doc/KERNEL_REVIEW_NOTES.md` (from `DP Introduction.docx`) specifies UL as **160 B** PDUs at **1 / 8 / 4 Gbps** for TC1/TC2/TC3, 1600 slots/s. I had reused the 1360 B *downlink* dataset -- not the documented workload, and a pathological pick: 1360 B in an 8192 B block packs as exactly six whole SDUs with two bytes spare, so **nothing ever segmented** and the serial header walk was measured on traffic containing none of what makes it serial. Now `RLC_UL_SDU_BYTES=160`, `RLC_UL_TC` selects the rate, and the slot budget is derived: TC1 -> 78,125 B and **488 SDUs per slot**, ~49 PDUs per 8 KB block, segmenting at every boundary. Targets renamed `*_ul_tc1_*` so the old 1360 B numbers cannot be confused with these.
+- **Still not doc-aligned, flagged not silently skipped:** the **4:1 DL:UL slot split**. It needs the AM TTI loop refactored into a per-slot function so DL and UL slots interleave in one TTI; the doc lists it under P2 ("TTI structure ... our side, not the new kernel"). Deferred, not forgotten.
+- **Verification:** host `test_rlc_ul` **16,109 / 0 both EXEC modes**, `test_rlc_plan` **589,728 / 0**, legacy loadable image **bit-exact**, no unimplemented vector ops in any of the five TC1 ELFs. Frozen at `reports/handover/elf_frozen_2026-09-08_0351_ul_tc1/`.
+- **Also running:** the peer-requested RTL reference batch (`bandwidth`, `byte-enable`, `cache-mix-smoke`, `cache-test-scalar`, `cache-test-vector`) on `cachepool_fpu_4g` -> `reports/rtl_reference_2026-09-08/`. Checked `pgrep -a vsim` first: **19 vsim processes were running, none of them this repo** (TeraNoC and another user's jobs) -- a blanket `pkill vsim` would have destroyed all of them.
+
+---
+
 ### RLC UL ROOT CAUSE: the phase barriers were never armed -- Step 1 of a two-step API was missing
 - **Time:** 2026-09-08 ~03:31 +0200
 - **Files:** `kernel/rlc_ul_drv.h` (new), `kernel/rlc_ul_drv.c`, `kernel/rlc.c`
@@ -101,7 +115,13 @@ time, commit, files, what + why, and verification.
   - Report now emits `ttis`, `payload_bytes` and the metric definition.
 - **Verification:** build clean, zero warnings from the new files, all four barrier symbols present in the AM binary, legacy bit-exact, host planner test 589,728 / 0.
 
-### Root cause of the scalar-FP failures: toolchain promises an extension the hardware lacks
+### CORRECTION (2026-09-08, from the user): the scalar-FP conclusion below is WRONG
+- **The intended design is that Snitch OFFLOADS scalar FP and vector instructions to Spatz, and Spatz's FPU sequencer executes the scalar FP instructions.** So `-march=...f...` is correct, `misa` not advertising F is expected (Snitch does not implement F itself, it forwards), and there is no "toolchain promises an extension the hardware lacks" mismatch.
+- **Therefore the 64 illegal-instruction traps are a genuine defect, not expected behaviour.** Something in the offload path -- the accelerator interface, the FPU sequencer enable, or the config knobs reaching the tile -- is not routing scalar FP to Spatz on `cachepool_fpu_4g`. That is a real bug to find, and the CI suite failing on it is a symptom, not a configuration mistake.
+- **What survives from the entry below:** the observation (64 traps, count tracks `active_cores` exactly, `mstatus.FS` ruled out) and the corrected scalar-FP instruction filter. **What does not:** the diagnosis and the "fpu means vector only" conclusion. Re-open as an offload-path bug.
+- Told the timing/GVSoC peers the old version; **must correct that with them.**
+
+### (SUPERSEDED -- see correction above) Root cause of the scalar-FP failures: toolchain promises an extension the hardware lacks
 - **Time:** 2026-09-08 ~03:25 +0200
 - **`misa` reports no F extension.** `snRuntime/src/start.S:71` guards boot FP-register init on `csrr t0, misa; andi t0, t0, (1<<3)|(1<<5); beqz t0, 3f` -- the block is skipped, which is why booting never traps despite containing 64 `fcvt.s.w`. **So the scalar FPU is genuinely not built in `cachepool_fpu_4g`**; "fpu" in the config name denotes Spatz's *vector* FPU only.
 - **The bug is a flags/hardware mismatch:** `software/cmake/toolchain-llvm.cmake` compiles everything with `-march=rv32imafvzfh_xdma_xfquarter`, which **includes `f`**, so the compiler emits `flw`/`fsw` into a core that does not implement them. It only surfaces in kernels whose hot loop uses scalar floats -- which is every kernel in the CI list and no kernel we run ourselves.
