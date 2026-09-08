@@ -708,6 +708,16 @@ static void rlc_am_verify_grant(uint32_t u) {
            e->grants, bad, e->n, e->tb_used);
     printf_lock_release(&printf_lock);
   }
+#if RLC_AM_PROGRESS
+  else {
+    /* Exactly one line per grant, always. A clean grant used to print nothing,
+       which made "correct" and "stuck" indistinguishable in a truncated run. */
+    printf_lock_acquire(&printf_lock);
+    printf("[AM] grant %u ok n=%u tb_used=%u cyc=%u\n", e->grants, e->n,
+           e->tb_used, benchmark_get_cycle());
+    printf_lock_release(&printf_lock);
+  }
+#endif
 }
 #endif /* RLC_SELF_CHECK */
 
