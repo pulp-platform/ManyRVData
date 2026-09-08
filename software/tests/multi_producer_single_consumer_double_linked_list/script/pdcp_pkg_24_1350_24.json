@@ -1,0 +1,22 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// SPDX-License-Identifier: Apache-2.0
+// Author: Zexin Fu <zexifu@iis.ee.ethz.ch>
+
+// Multi-entity AM case sized to complete on RTL.
+//
+// TC2 (48 users, 300 packets) cannot reach EOC at the ~52 cycles/s the AM path
+// simulates at. Eight entities over 24 packets still exercises everything TC2
+// does that TC1 does not -- several entities per owner, the one-open-grant
+// rule, and the ownership partition -- at a twentieth of the work.
+{
+  "active_user_number": 24,
+  "pkg_length": 1350,
+  "pdcp_header_length": 10,
+  "src_addr": "0xA0000000",
+  "src_length": 16777216,
+  "tgt_addr": "0xB0000000",
+  "tgt_length": 16777216,
+  "total_pkg_number": 24,
+  "producer_cores": [0, 1],
+  "consumer_cores": [2, 3]
+}

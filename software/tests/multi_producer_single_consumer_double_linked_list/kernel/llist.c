@@ -109,6 +109,56 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
+/* Only built for the AM path: emitting it unconditionally would shift every
+   address in the legacy binary and perturb its cycle baseline. */
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                         unsigned int max) {
+    unsigned int n = 0;
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
+    for (Node *p = list->head; p != NULL && n < max; p = p->next) {
+        out[n++] = p;
+    }
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
+    return n;
+}
+#endif /* RLC_TB_MODE == AM */
+
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
+                              Node **out, unsigned int max, unsigned int budget,
+                              unsigned int overhead) {
+    unsigned int n = 0;
+    unsigned int acc = 0;
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
+    for (Node *p = list->head; p != NULL && n < max; p = p->next) {
+        out[n++] = p;
+        acc += overhead + (unsigned int)p->data_size;
+        /* The node that crosses the budget is kept: it is the one the planner
+           may segment. Anything past it cannot appear in this grant. */
+        if (acc >= budget) break;
+    }
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
+    return n;
+}
+#endif /* RLC_TB_MODE == AM */
+
 Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
     uint32_t core_id = snrt_cluster_core_idx();
     uint32_t timer_ac_lock_0, timer_ac_lock_1;

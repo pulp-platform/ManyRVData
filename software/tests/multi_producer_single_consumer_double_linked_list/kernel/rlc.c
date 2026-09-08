@@ -26,6 +26,11 @@
 // #define USE_MCS_LOCK_2
 
 #include "rlc.h"
+#include "rlc_am.h"   /* RLC_TB_MODE and the AM entity API (impl included below) */
+#include "rlc_ul.h"   /* RLC_UL_MODE and the uplink API (impl included below)  */
+#if RLC_UL_MODE
+#include "rlc_ul_drv.h" /* rlc_ul_init() must be reachable from rlc_init() below  */
+#endif
 #include "mm.h"
 #include "llist.c"
 #include "data_move_vec.c"
@@ -166,6 +171,17 @@ void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t 
 
     // Set the memory management context
     ctx->mm_ctx = mm_ctx;
+
+#if RLC_TB_MODE == RLC_TB_MODE_AM
+    rlc_am_init(rlcId);
+#endif
+#if RLC_UL_MODE
+    /* Uplink init must happen HERE, not lazily on entry to the consumer: it
+       programmes the cluster tile participation mask, and main.c's startup
+       snrt_cluster_hw_barrier() right after this is the resync point the
+       partial-barrier API requires before that mask can be relied on. */
+    if (rlcId == 0u) rlc_ul_init();
+#endif
 }
 
 int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volatile int *lock) {
@@ -294,6 +310,19 @@ static inline unsigned int rlc_consumer_index(const unsigned int core_id) {
 #endif
 }
 
+/* The number of consumers that actually exist.
+
+   CONSUMER_CORE_NUM is a build define and may exceed the length of the data
+   header's consumer_core_ids list, which is what dispatch really follows. Any
+   arithmetic that partitions work *across consumers* must use this, not the
+   define: sizing a partition by the define while only the listed cores exist
+   leaves the surplus shares with no core to claim them. */
+#if RLC_CORE_LISTS
+#define RLC_ACTUAL_CONSUMERS NUM_CONSUMER_CORES
+#else
+#define RLC_ACTUAL_CONSUMERS CONSUMER_CORE_NUM
+#endif
+
 /* The core that runs the UE status task: the first producer, whichever it is. */
 static inline unsigned int rlc_status_core(void) {
 #if RLC_CORE_LISTS
@@ -302,6 +331,21 @@ static inline unsigned int rlc_status_core(void) {
     return 0;
 #endif
 }
+
+/* AM transport-block assembly. Included here, after the core-role helpers, so
+   rlc_ctx[], the per-user list locks and rlc_consumer_index() are in scope. */
+#if RLC_TB_MODE == RLC_TB_MODE_AM
+#include "rlc_am.c"
+#endif
+
+/* Uplink. Needs the same helpers, plus consumer_core_ids for the partial
+   barrier -- hence the core-list requirement. */
+#if RLC_UL_MODE
+#if !RLC_CORE_LISTS
+#error "RLC_UL_MODE needs RLC_CORE_LISTS: the UL barrier set comes from consumer_core_ids"
+#endif
+#include "rlc_ul_drv.c"
+#endif
 
 #define CPU_FREQENCY 1000000000 // 1GHz
 #define OUTPUT_DATARATE 7000000
@@ -320,6 +364,15 @@ static inline unsigned int rlc_status_core(void) {
 
 void ue_status_rpt(const unsigned int core_id)
 {
+#if RLC_TB_MODE == RLC_TB_MODE_AM
+    /* AM builds and parses a real STATUS PDU and releases SDUs by SN. The
+       legacy model below acknowledges a fixed two *nodes* per pass and
+       advances vtNextAck by two, which stops meaning anything once
+       segmentation makes the SDU count and the SN count diverge. */
+    (void)core_id;
+    rlc_am_status();
+    return;
+#else
     // Simulate receiving ACK from UE after certain sent pkgs, per RLC entity.
     // ACK_SN is ctx->vtNextAck+2. Core 0 scans all users each call (single
     // writer per entity; striping across producer cores is a future option).
@@ -357,6 +410,7 @@ void ue_status_rpt(const unsigned int core_id)
             }
         }
     }
+#endif /* RLC_TB_MODE */
 }
 
 /* Pop one node from entity ctx's to-send list and assemble/send its PDU.
@@ -451,6 +505,44 @@ static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestData
    (no sduNum pre-check) to keep the idle lock traffic of the baseline.
    Rate-limited so the aggregate consumer throughput equals OUTPUT_DATARATE
    when pacing is enabled. */
+#if RLC_UL_MODE
+/* Uplink mode: the consumer set runs receive/reassemble/deliver slots instead
+   of downlink assembly. Producers still run their normal path -- they are the
+   source of the payload the uplink harness retransmits. */
+static void consumer(const unsigned int core_id) { rlc_ul_consumer(core_id); }
+#elif RLC_TB_MODE == RLC_TB_MODE_AM
+static void consumer(const unsigned int core_id) {
+    /* Grant-based assembly: plan (owner) + execute (all cores) + commit. */
+#if RLC_AM_TTI && RLC_CORE_LISTS
+    /* TTI-structured: the three phases are separated by a partial barrier over
+       the consumer set, so a helper with nothing to do blocks rather than
+       sweeping the entity list. Requires explicit core lists, which is where
+       the barrier participant set comes from. */
+#ifdef RLC_SELF_CHECK
+    printf_lock_acquire(&printf_lock);
+    printf("[AM] core %u: consumer idx=%u (TTI mode)\n", core_id,
+           rlc_consumer_index(core_id));
+    printf_lock_release(&printf_lock);
+#endif
+    rlc_am_consumer_tti(core_id);
+    return;
+#endif
+#ifdef RLC_SELF_CHECK
+    printf_lock_acquire(&printf_lock);
+    printf("[AM] core %u: consumer idx=%u\n", core_id,
+           rlc_consumer_index(core_id));
+    printf_lock_release(&printf_lock);
+#endif
+    while (1) {
+        rlc_am_step(core_id);
+        if (atomic_load_explicit(&producer_done, memory_order_relaxed) >=
+                PRODUCER_CORE_NUM &&
+            rlc_am_idle()) {
+            break;
+        }
+    }
+}
+#else
 static void consumer(const unsigned int core_id) {
     const unsigned int c      = rlc_consumer_index(core_id);
     const unsigned int stride = (CONSUMER_CORE_NUM < NUM_USERS) ? CONSUMER_CORE_NUM : NUM_USERS;
@@ -486,6 +578,7 @@ static void consumer(const unsigned int core_id) {
         }
     }
 }
+#endif /* RLC_TB_MODE */
 
 /* Producer behavior (runs on cores other than 0) */
 /* Returns 0 on success, -1 when no more packages available. */
@@ -587,6 +680,10 @@ static int producer(const unsigned int core_id) {
     // mm_memset(node->data, 0, PACKET_SIZE);
     /* Append the node to the owning entity's to-send list */
     list_push_back((spinlock_t *)&tosend_llist_lock_2[uid], &ctx->list, node);
+#if (RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_WORKQ
+    /* Announce the entity so an owner picks it up without scanning. */
+    rlc_am_mark_ready(uid);
+#endif
     atomic_fetch_add_explicit(&ctx->sduBytes, node->data_size, memory_order_relaxed);
     atomic_fetch_add_explicit(&ctx->sduNum, 1, memory_order_relaxed);
     atomic_fetch_add_explicit(&ctx->recvPdcpPduBytes, node->data_size, memory_order_relaxed);
@@ -668,7 +765,14 @@ void cluster_entry(const unsigned int core_id) {
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
-#ifdef RLC_SELF_CHECK
+#if RLC_TB_MODE == RLC_TB_MODE_AM
+    /* The legacy self_check compares the per-descriptor destinations, which
+       the AM path never writes -- it assembles transport blocks instead, and
+       those are checked at commit time by rlc_am_verify_grant(). */
+    if (core_id == 0) {
+        rlc_am_report();
+    }
+#elif defined(RLC_SELF_CHECK)
     /* All sends are complete and tgt buffers are stable here. */
     if (core_id == 0) {
         self_check(pdcp_pkgs, NUM_PKGS);
