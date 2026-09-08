@@ -31,6 +31,15 @@
 #if RLC_UL_MODE
 #include "rlc_ul_drv.h" /* rlc_ul_init() must be reachable from rlc_init() below  */
 #endif
+
+/* Set when this build narrows the cluster barrier mask for a consumer-only
+   partial-barrier region, which requires non-participants to stay out of any
+   barrier for the duration. */
+#if (RLC_UL_MODE) || ((RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_TTI)
+#define RLC_NARROWED_BARRIER 1
+#else
+#define RLC_NARROWED_BARRIER 0
+#endif
 #include "mm.h"
 #include "llist.c"
 #include "data_move_vec.c"
@@ -322,6 +331,25 @@ static inline unsigned int rlc_consumer_index(const unsigned int core_id) {
 #else
 #define RLC_ACTUAL_CONSUMERS CONSUMER_CORE_NUM
 #endif
+
+/* Cluster tile-participation mask for the consumer set: one bit per tile.
+   Used to arm the narrowed-barrier region -- see rlc_sync.h for why this is
+   done on entry to the consumer loop rather than at init. Needs the explicit
+   core lists, which is also where the barrier participant set comes from. */
+#if RLC_NARROWED_BARRIER
+#if !RLC_CORE_LISTS
+#error "a narrowed barrier needs RLC_CORE_LISTS: the participant set comes from consumer_core_ids"
+#endif
+static inline void rlc_consumer_tile_mask(uint32_t *lo, uint32_t *hi) {
+    const uint32_t cpt = snrt_cluster_core_per_tile();
+    uint32_t l = 0u, h = 0u;
+    for (uint32_t i = 0u; i < RLC_ACTUAL_CONSUMERS; i++) {
+        const uint32_t t = (uint32_t)consumer_core_ids[i] / cpt;
+        if (t < 32u) l |= 1u << t; else h |= 1u << (t - 32u);
+    }
+    *lo = l; *hi = h;
+}
+#endif /* RLC_NARROWED_BARRIER */
 
 /* The core that runs the UE status task: the first producer, whichever it is. */
 static inline unsigned int rlc_status_core(void) {
@@ -762,6 +790,15 @@ void cluster_entry(const unsigned int core_id) {
     } else if (is_consumer) {
         consumer(core_id);
     } /* else: idle core for this run, falls through to the barrier */
+
+#if RLC_NARROWED_BARRIER
+    /* Cores that are not consumers must NOT be sitting at a barrier while the
+       consumers hold the mask narrowed. Two hardware properties force this:
+       whichever request arrives first owns a tile's round, and barrier_done is
+       an unmasked cluster-wide broadcast. So they wait here, outside any
+       barrier, until the mask has been restored. See rlc_sync.h. */
+    if (!is_consumer) rlc_narrow_wait_outside();
+#endif
 
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
