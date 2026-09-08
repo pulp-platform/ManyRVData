@@ -100,6 +100,21 @@ shown it.
 manifest, *before* touching the build directory. Point collaborators at the
 frozen copy, not at `software/build/`.
 
+## Case 3 — relative paths make the working directory a shared resource
+
+The simulation monitors write to **relative** `sim/bin/logs/{core,noc,others}`
+paths. A run launched from a different working directory therefore scatters its
+writes into whatever tree happens to be cwd — including another session's, if
+two people are simulating the same repo from different copies.
+
+Nothing errors. The victim's logs simply acquire another run's data, and the
+provenance of both becomes unreconstructable after the fact.
+
+**Do:** mirror the `sim/bin/logs` tree under your own directory before
+launching an isolated arm, and launch from there. (Caught and mitigated by the
+L1-timing session before running their pristine arm; recorded here because the
+next person will not think to look.)
+
 ## What made both catchable
 
 Not reasoning — checking:
