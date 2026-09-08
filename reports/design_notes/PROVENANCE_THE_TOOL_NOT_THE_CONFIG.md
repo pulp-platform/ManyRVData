@@ -75,6 +75,13 @@ in that directory (`DIRTY_zexin_timing_f1cbe54` above) is *untracked*, so a
 `git checkout` reverts the `.sv` files and **leaves the marker standing**. The
 marker then asserts "dirty" over pristine sources: worse than no marker.
 
+**The general rule:** *an assertion that can outlive the condition it asserts
+must carry the means to falsify itself.* A marker file cannot detect a revert,
+but it can refuse to be believed without a check that would — so it should open
+by telling the reader not to trust it, name the check, and point at an
+authoritative copy outside the tree. That is weaker than a tripwire, and it is
+what is available inside a directory another tool owns.
+
 **Do:** keep the provenance record *outside* the tool-owned tree (here,
 `reports/rtl_reference_2026-09-08/dut_tripwire.sha256`), and sample it
 *during* a long run, not only at the end — detection after the fact costs a
