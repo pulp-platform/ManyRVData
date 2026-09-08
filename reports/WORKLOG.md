@@ -9,6 +9,35 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### RTL reference batch for the timing peer: `bandwidth` reproduces pristine EXACTLY across 15 cache rewrites
+- **Time:** 2026-09-08 ~04:05 +0200 (batch continues)
+- **Report:** `reports/rtl_reference_2026-09-08/` -- `summary.tsv`, `RTL_STATE.md`, `dut_tripwire.sha256`, `verify_dut.sh`, `build_report.sh`, `insitu-cache_under_test.diff`, per-test logs.
+- **Ran at the user's instruction** the batch the L1-timing session asked for, on `cachepool_fpu_4g`: `bandwidth`, `byte-enable`, `cache-mix-smoke`, `cache-test-scalar`, `cache-test-vector`.
+- **RESULT -- `bandwidth` PASS, bit-identical to the 2026-08-25 pristine reference on every figure:**
+
+  | | 08-25 pristine | 09-08 with 15 rewrites |
+  |---|---|---|
+  | kernel cycles | 2,058 | **2,058** |
+  | avg per load | 32 | **32** |
+  | performance | 1990 elems/1000cyc | **1990** |
+  | **EOC (whole sim)** | **33,876** | **33,876** |
+  | AR / R in kernel | 335 / 422 | **335 / 422** |
+  | scoreboards | 128 PASS | **128 PASS / 0 FAIL** |
+
+  Per-channel AR/R also match: CH0 159/182, CH1 8/9, CH2 4/4, CH3 164/227.
+- **The peer's analytical point, adopted: EOC is the stronger figure, not kernel cycles.** Kernel cycles show the hot loop is unchanged; **EOC covers boot, snRuntime init, barriers, teardown, all 64 cores** -- nothing anywhere in the run shifted by a cycle. And matching per-channel AR/R means refill traffic reaching the NoC is identical in count *and distribution*, so the cache is not finishing on time by luck while generating different downstream traffic.
+- **This passes the peer's own falsification test rather than merely not failing it** -- they had staked the cycle-identical claim on bandwidth returning exactly 2,058. **Consequence we can use: if the RLC multi-entity wedge depends on write-visibility *timing*, the L1D rewrites are excluded as a confound**, because the cache presents writes on identical cycles before and after. One variable removed from a problem where every hypothesis so far has died.
+- **DUT provenance, because a reference number is worthless without it:**
+  - **Corrected a real error of mine.** I wrote that `Bender.local`'s override meant the batch compiled `working_dir/insitu-cache`. **Wrong** -- `sim/work/compile.vsim.tcl` (mtime 08-24, never regenerated because RTL sources are *not* prerequisites of that make target) resolves to `hardware/deps/insitu-cache`. The peer caught it; I verified rather than accepted (`cmp` on all four files: identical; diff-vs-HEAD sha `f6657ec2ac4eda12` in both trees). DUT was right, my stated path was not. **Lesson: grep the compile script, never infer the DUT from the override file.**
+  - **Tripwire added** (`dut_tripwire.sha256`): the compile script **plus all 30 insitu sources it names**, not just the 4 the peer edited -- a silent tree switch moves everything, so checking only the edited files would miss the exact case the tripwire exists for. `verify_dut.sh` re-checks; **DUT UNCHANGED** confirmed immediately after bandwidth.
+  - The peer independently produced the same four file hashes from a marker file their own script wrote at 02:49, **before** I pinned anything -- two independent measurements agreeing, not one copied from the other.
+- **`summary.tsv` was initially wrong and is now generated properly.** The batch script's inline grep looked for `Simulation ended at N`, but the real print is `[EOC] Simulation ended at <spaces> N (retval = 0)` in **picoseconds** -- so it recorded `n/a` for a run whose number was right there. Replaced with `build_report.sh`, which parses the logs for EOC/retval/kernel cycles/per-load/scoreboard tallies/illegal-instruction counts and classifies each row.
+- **Machine-time safety:** checked `pgrep -a vsim` before touching anything -- **19 vsim processes running, none of them this repo** (the user's TeraNoC work and another user's jobs). A blanket `pkill vsim` would have destroyed all of them.
+- **Known cap risk, flagged to the peer up front:** per-test cap is 1 h; `byte-enable` was 303,288 EOC cycles on 08-25 (~9x bandwidth, which took 598 s), so ~90 min -- it will likely cap. **A `timeout_cap` there is my cap, not a regression.** The peer has explicitly released it ("bandwidth has already done the job byte-enable was there to corroborate"). If re-run, it is for **our** GVSoC calibration (the 0.87x ratio), not for them.
+- **Division of labour settled with the peer:** they run the pristine arm for `cache-test-scalar`/`cache-test-vector`, on their own tree, after my batch frees `sim/work`. Deciding reason: stashing their four files IS the freeze they committed to, and doing it mid-batch would cause exactly the DUT switch we spent three messages guarding against. They also noted they can reconstruct their changes from their own transcript and OOC runs; I cannot. **I signal when the last test exits; they do not touch the tree before that.**
+
+---
+
 ### RLC UL: barrier flag was invisible cross-core; UL re-parameterised to the documented 160 B profile; committed
 - **Time:** 2026-09-08 ~03:52 +0200
 - **Commit:** `7325757` "rlc: AM transport-block assembly (DL) and reassembly (UL)" -- 40 files, 7419 insertions. Frozen ELF binaries deliberately NOT committed.
