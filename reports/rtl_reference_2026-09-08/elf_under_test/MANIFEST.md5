@@ -1,0 +1,5 @@
+1a088459f44141767887463d19414940  test-cachepool-bandwidth
+dd7a26dfb3a6bde1a0edf6b28c625a1e  test-cachepool-byte-enable
+071bc973b2955f26ef2b4b01a7a9b4c2  test-cachepool-cache-mix-smoke
+328983909d31a0ff3407b942ac18ca6e  test-cachepool-cache-test-scalar
+a2dc159c6a1b7be8a408e4d95e2c5c0a  test-cachepool-cache-test-vector

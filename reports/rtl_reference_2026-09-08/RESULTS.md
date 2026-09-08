@@ -1,0 +1,94 @@
+# RTL reference batch — 2026-09-08
+
+Config `cachepool_fpu_4g` (4 groups x 4 tiles x 4 cores = 64), QuestaSim.
+Requested by the L1-timing session to check whether 15 cache rewrites are
+cycle-identical. Run on their working tree; provenance pinned (see below).
+
+| kernel | status | EOC (cyc) | kernel cyc | 08-25 pristine | verdict |
+|---|---|---|---|---|---|
+| `bandwidth` | **PASS** | 33,876 | 2,058 (32/load) | 33,876 / 2,058 / 32 | **exact match** |
+| `byte-enable` | **PASS** | 303,288 | n/a | 303,288 | **exact match** |
+| `cache-mix-smoke` | **FAIL** | 69,378 | 125 mismatches | no baseline | test bug, not RTL |
+| `cache-test-scalar` | `timeout_cap` | — | `cache-basic` **PASS** | no baseline | partial |
+| `cache-test-vector` | `timeout_cap` | — | `vcache-basic` **PASS** | no baseline | partial |
+
+128 scoreboards PASS / 0 FAIL on all three that reached EOC. Zero illegal
+instructions anywhere — so no scalar-FP traps in this set.
+
+## Cycle-identity: established
+
+`bandwidth` and `byte-enable` both reproduce the 2026-08-25 pristine reference
+**bit-identically**, against references taken two weeks before the rewrites
+landed. Per-channel AR/R also match (CH0 159/182, CH1 8/9, CH2 4/4, CH3 164/227),
+so refill traffic is identical in count *and* distribution.
+
+**EOC is the stronger figure than kernel cycles** (the peer's point): kernel
+cycles cover the hot loop, EOC covers boot, snRuntime init, barriers, teardown
+and all 64 cores. Nothing anywhere in either run shifted by a cycle.
+
+**Consequence:** if the RLC multi-entity wedge depends on write-visibility
+*timing*, the L1D rewrites are excluded as a confound — the cache presents
+writes on identical cycles before and after.
+
+## `cache-mix-smoke` — a test bug, attributable without a pristine arm
+
+```c
+vec_store_u32(base + part_ofst);            // vse32.v -> Spatz's LSU
+for (j...) if (*(volatile uint32_t*)(base + part_ofst + j*4) != vec_vals[j]) errs++;
+                                             // scalar load -> Snitch's LSU
+```
+
+Independent LSUs, no `fence` between them; `fences: 0` in that file. `volatile`
+constrains the compiler and says nothing about two hardware load/store units.
+Predates the rewrites and is independent of the cache datapath.
+
+**Caveat recorded at the peer's insistence:** adding a fence would fix this
+whether or not the rewrites perturbed the timing that exposes it, so the fence
+experiment alone cannot separate "always racy" from "rewrites changed the
+exposure". Their pristine arm settles it; this row is not evidence about their
+RTL either way.
+
+## The two capped tests, and the part that is still informative
+
+Both hit the 1 h per-test cap during their `*-stress` phase. Both had already
+**passed their `*-basic` phase**, which is the interesting half:
+
+> `cache-basic` and `vcache-basic` are unfenced cross-core write / barrier /
+> read tests — `fences: 0, volatile: 0, atomics: 0, 14 bare hw barriers` — and
+> **they pass on RTL**, while the same source fails on GVSoC at 48-84 % density.
+
+Same binary, passes on hardware, fails on the model. The hazard is real and in
+the source; hardware's store-visibility window is narrow enough to hide it.
+**Passing on RTL is not evidence this class of bug is absent.**
+
+Caveat added after the fact: the GVSoC arm ran under a global counting barrier
+that has since been replaced, so that comparison needs re-measuring before it
+is leaned on. Flagged by the GVSoC session, accepted here.
+
+## Provenance
+
+- DUT is `hardware/deps/insitu-cache` — **grepped from the generated
+  `compile.vsim.tcl`**, not inferred from `Bender.local`, whose override never
+  applied (see `design_notes/PROVENANCE_THE_TOOL_NOT_THE_CONFIG.md`).
+- `dut_tripwire.sha256` pins the compile script + all 30 insitu sources.
+  `dut_watch.sh` sampled it every 45 s: **130 samples, 0 changes.**
+- `elf_under_test/` holds the exact test binaries used, frozen `chmod a-w` with
+  a manifest, verified by the peer against live `software/build` *before* any
+  rebuild — which is what makes the freeze evidence rather than a claim.
+- The four modified cache sources under test:
+  `b23ed202 / 2bf77815 / 5307c217 / f0629785`, independently confirmed by the
+  peer from a marker written before this batch was pinned.
+
+## Wallclock
+
+| kernel | wall |
+|---|---|
+| `bandwidth` | 598 s |
+| `byte-enable` | 889 s |
+| `cache-mix-smoke` | 236 s |
+| `cache-test-scalar` | capped at 3600 s |
+| `cache-test-vector` | capped at 3600 s |
+
+I predicted `byte-enable` would cap by extrapolating linearly from
+`bandwidth`'s cycles-per-second. It took 15 minutes, not 90. **Wall time is not
+linear in EOC cycles across kernels** — different core counts and DRAM traffic.

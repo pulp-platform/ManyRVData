@@ -1,0 +1,6 @@
+kernel	status	eoc_cyc	retval	kernel_cyc	per_load	sb_pass	sb_fail	illegal
+bandwidth	PASS	33876	0	2058	32	128	0	0	Performance: 1990 elems/1000cyc (31%o utilizat
+byte-enable	PASS	303288	0	-	-	128	0	0	Byte-enable test PASSED
+cache-mix-smoke	eoc_nonzero_retval	69378	5	-	-	128	0	0	[FAIL] cache-mix-smoke: 125 mismatches
+cache-test-scalar	timeout_cap	-	-	-	-	0	0	0	[RUN ] cache-stress
+cache-test-vector	timeout_cap	-	-	-	-	0	0	0	[RUN ] vcache-stress
