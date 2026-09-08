@@ -437,6 +437,24 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
     PRODUCER_CORE_NUM=1 CONSUMER_CORE_NUM=1
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PLAN_VERIFY=1 RLC_SELF_CHECK=1)
 
+# Scalar-copy wedge ladder. RLC_DL_COPY_SCALAR=1 moves payload with 1-byte
+# scalar stores instead of the e8/m8 vector copy. A 1-byte store cannot straddle
+# a 64-byte cache line, so this build generates NO straddling payload writes --
+# which makes it a decisive discriminator against a platform that truncates
+# straddling accesses rather than splitting them. If payload mismatches vanish
+# here and persist in the vector build, the mismatches are the platform's, not
+# the kernel's.
+foreach(M 8 16 24 32)
+  add_snitch_test(multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy
+                  multi_producer_single_consumer_double_linked_list/main.c)
+  target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy
+                        benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+  target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy PUBLIC
+      DATAHEADER="data/data_${M}_1350_24.h"
+      PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
+      RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_DL_COPY_SCALAR=1)
+endforeach()
+
 # ---------------------------------------------------------------------------
 # Uplink (RLC_UL_MODE=1): receive -> scan -> reassemble -> deliver.
 #
