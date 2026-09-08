@@ -61,6 +61,32 @@ are idle and parked at the full barrier while core 1 runs partial barriers.
 The pattern from the other notes repeats: **a test passing is not evidence the
 mechanism works, when the platform never implemented the mechanism.**
 
+## Defect 3 — the mask restricts who must ARRIVE, not who gets RELEASED
+
+`cachepool_cluster_barrier.sv` has a single `barrier_done_o`, and every tile's
+cores release on it unconditionally:
+
+```systemverilog
+// cachepool_tile_barrier.sv
+Global: if (barrier_done_i) state_d[i] = Take;    // no mask check
+```
+
+**So any partial-barrier round's completion releases every core waiting at a
+barrier anywhere in the cluster.** `barrier_mask_i` gates the *arrival*
+condition (`all_arrived = (tile_barrier_i & mask_q) == mask_q`) and nothing
+gates the broadcast.
+
+The consequence is stronger than defects 1 and 2, and it constrains any fix:
+
+> **A partial barrier is only safe when no core outside the participating set
+> is waiting at a barrier at the same time — anywhere in the cluster, not just
+> in the same tile.**
+
+This kills the obvious workaround for defect 2 (move non-participants to other
+tiles): they would be released by the participants' first partial barrier
+round. It means the software spin in step 3 below is not a design preference,
+it is the only option the hardware leaves.
+
 ## The API contradiction underneath
 
 `snrt.h` says to program the mask and then "use `snrt_cluster_hw_barrier()` as
@@ -78,7 +104,13 @@ restructure the arm/resync sequence, not just add a restore.
    barrier — they cannot use the barrier they are about to narrow.
 3. **Keep non-participants out of the barrier entirely** while partial barriers
    are in use: idle cores and finished producers spin on a "consumers done"
-   flag instead of entering `snrt_cluster_hw_barrier()`.
+   flag instead of entering `snrt_cluster_hw_barrier()`. **Forced by defect 3**,
+   not chosen — moving them to another tile does not help, because the done
+   signal is broadcast cluster-wide. The flag needs `_Atomic` release/acquire
+   plus a fence (same treatment as `rlc_ul_barrier_armed`), and a back-off
+   between polls so it does not reintroduce the traffic the TTI loop exists to
+   remove. Note the *participants* still block on a real barrier — only cores
+   with no work spin, and they had nothing else to do.
 4. **Restore the mask to all-ones** (its `RESVAL`) after the TTI loop, before
    setting that flag, so the final full barrier is a real full barrier.
 
