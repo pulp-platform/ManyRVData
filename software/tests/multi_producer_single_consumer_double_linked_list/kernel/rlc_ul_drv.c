@@ -134,61 +134,15 @@ static rlc_ul_cyc_t rlc_ul_cyc_reasm[RLC_ACTUAL_CONSUMERS]
     __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
 static uint32_t rlc_ul_cyc_build, rlc_ul_cyc_scan, rlc_ul_cyc_deliver;
 
-/* Set once the cluster tile-participation mask has been programmed. The phase
-   barriers are meaningless until it has been, and a barrier that returns
-   immediately does not fail loudly -- it silently lets the phases overlap. So
-   the consumer checks this and says so rather than producing quiet garbage.
- 
-   **Atomic, in .data, and fenced -- not a plain static.** The first version of
-   this flag was a plain `static uint32_t`, which lands in .sbss and is written
-   by core 0 in rlc_init() then read by the consumers after
-   snrt_cluster_hw_barrier(). Nothing in that sequence makes the store visible:
-   the hardware barrier is a synchronisation event, not a memory fence, and a
-   non-atomic store carries no ordering of its own. The store executed and the
-   load executed and they still disagreed -- consumers read 0 and every build
-   tripped its own guard. Release/acquire plus an explicit fence is what
-   actually publishes it. The same reasoning applies to any startup state one
-   core computes for the others to read. */
-static _Atomic uint32_t rlc_ul_barrier_armed
-    __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
-static _Atomic uint32_t rlc_ul_tile_mask __attribute__((section(".data")));
-/* What the participation-mask register reads back as, after we wrote it. */
-static _Atomic uint32_t rlc_ul_mask_readback __attribute__((section(".data")));
+/* The arm/restore state for the narrowed-barrier region lives in rlc_sync.h,
+   shared with the downlink -- both directions face the same constraint. */
 
 void rlc_ul_init(void) {
-  /* Step 1 of the partial-barrier API: programme which tiles take part. Must
-     run from exactly one core BEFORE main.c's startup snrt_cluster_hw_barrier(),
-     which is the resync point the API requires -- the cluster barrier FSM
-     samples this mask live when the first participating tile arrives.
-     rlc_am_init() does the same thing for the downlink; the uplink needs it
-     for exactly the same reason and originally did not have it. */
-  {
-    const uint32_t cpt = snrt_cluster_core_per_tile();
-    uint32_t tm_lo = 0u, tm_hi = 0u;
-    for (uint32_t i = 0u; i < RLC_ACTUAL_CONSUMERS; i++) {
-      const uint32_t t = (uint32_t)consumer_core_ids[i] / cpt;
-      if (t < 32u) tm_lo |= 1u << t; else tm_hi |= 1u << (t - 32u);
-    }
-    snrt_barrier_set_tile_mask(tm_lo, tm_hi);
-    /* Read the register back and keep what it actually holds, not what we
-       meant to write. An earlier version printed the software copy, which made
-       the guard unable to fail: a run whose mask write landed on an address
-       the platform decodes as something else still reported a healthy mask.
-       A check that cannot fail is worth nothing -- this one now catches a
-       wrong peripheral offset, which is exactly how it was first fooled. */
-    {
-      volatile uint32_t *reg = (volatile uint32_t *)
-          _snrt_barrier_participation_mask_reg_ptr();
-      asm volatile("fence" ::: "memory");
-      atomic_store_explicit(&rlc_ul_mask_readback, reg[0], memory_order_relaxed);
-    }
-    atomic_store_explicit(&rlc_ul_tile_mask, tm_lo, memory_order_relaxed);
-    /* Release, then fence: the consumers read this without holding any lock,
-       and main.c's snrt_cluster_hw_barrier() right after rlc_init() does not
-       order memory on its own. */
-    atomic_store_explicit(&rlc_ul_barrier_armed, 1u, memory_order_release);
-    asm volatile("fence" ::: "memory");
-  }
+  /* The tile mask is NOT programmed here. Arming before main.c's startup
+     snrt_cluster_hw_barrier() narrows that barrier too -- the cluster mask is
+     persistent and gates every round, full barriers included -- so it is armed
+     on entry to the consumer loop instead and restored on exit. See
+     rlc_sync.h for the three hardware properties that force this shape. */
   atomic_store_explicit(&rlc_ul_stop, 0u, memory_order_relaxed);
   for (uint32_t u = 0u; u < NUM_USERS; u++) rlc_ul_entity_init(&rlc_ul_ent[u]);
   rlc_ul_cur_sdu = 0u;
@@ -312,51 +266,18 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
   rlc_phase_barrier(bar_mask);
 }
 
-static void rlc_ul_report(void) {
+static void rlc_ul_report(uint32_t tm_lo) {
   const rlc_ul_entity_t *e = &rlc_ul_ent[0];
   const uint32_t want = (uint32_t)RLC_UL_SDUS * RLC_UL_SDU_BYTES;
   printf_lock_acquire(&printf_lock);
-  {
-    const uint32_t wrote =
-        (uint32_t)atomic_load_explicit(&rlc_ul_tile_mask, memory_order_relaxed);
-    const uint32_t got =
-        (uint32_t)atomic_load_explicit(&rlc_ul_mask_readback, memory_order_relaxed);
-    printf("[UL] barrier tile_mask wrote=0x%x readback=0x%x local_mask=0x%x "
-           "armed=%u %s\n",
-           wrote, got,
-           snrt_cluster_partial_barrier_mask(consumer_core_ids,
-                                             RLC_ACTUAL_CONSUMERS),
-           (uint32_t)atomic_load_explicit(&rlc_ul_barrier_armed,
-                                          memory_order_relaxed),
-           (wrote == got) ? "MASK-OK" : "*** MASK MISMATCH: the participation "
-                                        "register is not where we wrote it -- "
-                                        "check the peripheral map ***");
-  }
-  printf("[UL] slots=%u tb_bytes=%u segments=%u polls_ack=%u exec=%s\n",
-         rlc_ul_slots, rlc_ul_tb_bytes, e->reassembled, rlc_ul_status_pdus,
-         (RLC_UL_EXEC == RLC_UL_EXEC_COPY) ? "copy" : "count");
-  printf("[UL] tc=%u sdu=%uB slot_bytes=%u slot_sdus=%u\n", (unsigned)RLC_UL_TC,
-         (unsigned)RLC_UL_SDU_BYTES, (unsigned)RLC_UL_SLOT_BYTES,
-         (unsigned)RLC_UL_SLOT_SDUS);
-  printf("[UL] delivered=%u/%u bytes=%u/%u rx_next=%u dup=%u oow=%u\n",
-         e->delivered, (unsigned)RLC_UL_SDUS, e->delivered_bytes, want,
-         e->rx_next, e->dup, e->out_of_window);
-  {
-    uint32_t rmax = 0u, rsum = 0u;
-    for (uint32_t i = 0u; i < RLC_ACTUAL_CONSUMERS; i++) {
-      rsum += rlc_ul_cyc_reasm[i].cyc;
-      if (rlc_ul_cyc_reasm[i].cyc > rmax) rmax = rlc_ul_cyc_reasm[i].cyc;
-    }
-    /* The scan is the uplink's Amdahl fraction: it cannot overlap the
-       reassemble that consumes its output, so serial/(serial+parallel) bounds
-       what more cores can buy. build is harness cost, reported so it can be
-       subtracted rather than silently counted as protocol work. */
-    printf("[UL] cyc build=%u scan=%u reasm_max=%u reasm_sum=%u deliver=%u\n",
-           rlc_ul_cyc_build, rlc_ul_cyc_scan, rmax, rsum, rlc_ul_cyc_deliver);
-    printf("[UL] serial=%u parallel=%u cons=%u\n",
-           rlc_ul_cyc_scan + rlc_ul_cyc_deliver, rmax,
-           (unsigned)RLC_ACTUAL_CONSUMERS);
-  }
+  printf("[UL] barrier probe=0x%x wrote=0x%x readback=0x%x local_mask=0x%x %s\n",
+         rlc_narrow_probe, tm_lo, rlc_narrow_readback,
+         snrt_cluster_partial_barrier_mask(consumer_core_ids,
+                                           RLC_ACTUAL_CONSUMERS),
+         rlc_narrow_ok(tm_lo)
+             ? "MASK-OK"
+             : "*** MASK CHECK FAILED: probe should read RESVAL 0xffffffff and "
+               "readback should equal wrote -- check the peripheral map ***");
   printf("[UL] check: %s\n",
          (e->delivered == RLC_UL_SDUS && e->out_of_window == 0u &&
           e->delivered_bytes == want)
@@ -372,23 +293,23 @@ void rlc_ul_consumer(uint32_t core_id) {
   const uint32_t me = rlc_consumer_index(core_id);
   const uint32_t mask =
       snrt_cluster_partial_barrier_mask(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
-  /* rlc_ul_init() ran in rlc_init(), before the startup hw barrier. If it did
-     not, every phase barrier below is a no-op and the phases silently overlap:
-     reassemble reads a scan buffer still being written, and deliver runs before
-     the segments it needs have been folded in. That failure mode produces
-     plausible-looking short delivery rather than an error, so say so. */
-  if (!atomic_load_explicit(&rlc_ul_barrier_armed, memory_order_acquire)) {
-    if (me == 0u) {
-      printf_lock_acquire(&printf_lock);
-      printf("[UL] FATAL: tile participation mask never programmed -- the "
-             "phase barriers are no-ops. rlc_ul_init() must run in rlc_init().\n");
-      printf_lock_release(&printf_lock);
-    }
-    return;
-  }
+  uint32_t tm_lo, tm_hi;
+  rlc_consumer_tile_mask(&tm_lo, &tm_hi);
+
+  /* Arm the narrowed region here rather than in rlc_init(): the cluster mask
+     gates every barrier round, so narrowing before main.c's startup barrier
+     breaks that barrier. Consumer 0 programs it; the others wait on a flag,
+     because they cannot resync on the barrier being narrowed. */
+  rlc_narrow_enter(tm_lo, tm_hi, me == 0u);
+
   while (!atomic_load_explicit(&rlc_ul_stop, memory_order_relaxed))
     rlc_ul_slot(me, mask);
-  if (me == 0u) rlc_ul_report();
+
+  /* Restore before anyone reaches a full barrier again, and only then release
+     the non-participants spinning outside it. */
+  rlc_narrow_exit(me == 0u);
+
+  if (me == 0u) rlc_ul_report(tm_lo);
 }
 
 #endif /* RLC_UL_DRV_C */

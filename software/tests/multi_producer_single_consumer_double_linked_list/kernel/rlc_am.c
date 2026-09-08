@@ -160,17 +160,12 @@ void rlc_am_init(uint32_t u) {
       rlc_am_open_entity[k] = RLC_AM_NO_ENTITY;
 
 #if RLC_AM_TTI
-    /* Programme which tiles take part in the consumer partial barrier. Must be
-       done from exactly one core; main.c's startup snrt_cluster_hw_barrier()
-       is the resync point the API requires before the mask is relied on. */
+    /* The tile mask is NOT programmed here any more. Doing it at init put the
+       narrowing in force before main.c's startup snrt_cluster_hw_barrier(),
+       which the cluster mask then gates -- so that barrier stopped waiting for
+       anyone outside the consumer tiles. It is armed on entry to the consumer
+       loop instead, and restored on exit. See rlc_sync.h. */
     {
-      const uint32_t cpt0 = snrt_cluster_core_per_tile();
-      uint32_t tm_lo = 0u, tm_hi = 0u;
-      for (uint32_t i = 0u; i < RLC_ACTUAL_CONSUMERS; i++) {
-        const uint32_t t = (uint32_t)consumer_core_ids[i] / cpt0;
-        if (t < 32u) tm_lo |= 1u << t; else tm_hi |= 1u << (t - 32u);
-      }
-      snrt_barrier_set_tile_mask(tm_lo, tm_hi);
       for (uint32_t k = 0u; k < RLC_AM_MAX_TRACKED_CONSUMERS; k++) rlc_am_rr[k] = 0u;
       atomic_store_explicit(&rlc_am_stop, 0u, memory_order_relaxed);
       rlc_am_ttis = 0u;
@@ -516,6 +511,22 @@ void rlc_am_consumer_tti(uint32_t core_id) {
   const uint32_t mask =
       snrt_cluster_partial_barrier_mask(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
 
+  /* Arm the narrowed region here, not at init. Consumer 0 programs the mask;
+     the others wait on a flag rather than on the barrier they are about to
+     narrow, which is the resync the API documents and which cannot work. */
+  {
+    uint32_t tm_lo, tm_hi;
+    rlc_consumer_tile_mask(&tm_lo, &tm_hi);
+    rlc_narrow_enter(tm_lo, tm_hi, me == 0u);
+    if (me == 0u && !rlc_narrow_ok(tm_lo)) {
+      printf_lock_acquire(&printf_lock);
+      printf("[AM] MASK CHECK FAILED: probe=0x%x readback=0x%x wrote=0x%x -- "
+             "the participation register is not where we wrote it; check the "
+             "peripheral map\n", rlc_narrow_probe, rlc_narrow_readback, tm_lo);
+      printf_lock_release(&printf_lock);
+    }
+  }
+
   while (1) {
 #if RLC_TTI_CYCLES
     const uint32_t tti_start = benchmark_get_cycle();
@@ -546,6 +557,12 @@ void rlc_am_consumer_tti(uint32_t core_id) {
     }
 #endif
   }
+
+  /* All consumers are past the last partial barrier here -- they exit on the
+     same iteration, having read rlc_am_stop after a common barrier. Restore
+     the mask before anyone reaches a full barrier again, then release the
+     non-participants spinning outside it. */
+  rlc_narrow_exit(me == 0u);
 }
 #endif /* RLC_AM_TTI */
 
