@@ -9,6 +9,41 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### RTL reference batch COMPLETE; and the RLC partial-barrier design found broken at 3 levels
+- **Time:** 2026-09-08 ~06:20 +0200
+- **Commits:** `136fe71` (mask read-back guard), `577ba57` / `171c79d` / `0143e71` (PARTIAL_BARRIER_MISUSE note), `d6d7439` (provenance synthesis), `f3269de` (batch results). All local, unpushed.
+
+#### Batch result -- cycle-identity established
+| kernel | status | EOC | kernel cyc | vs 08-25 pristine |
+|---|---|---|---|---|
+| `bandwidth` | PASS | 33,876 | 2,058 / 32 per load | **exact** |
+| `byte-enable` | PASS | 303,288 | n/a | **exact** |
+| `cache-mix-smoke` | FAIL | 69,378 | 125 mismatches | no baseline -- **test bug** |
+| `cache-test-scalar` | timeout_cap | — | `cache-basic` **PASS** | partial |
+| `cache-test-vector` | timeout_cap | — | `vcache-basic` **PASS** | partial |
+- 128 SB PASS / 0 FAIL on all three reaching EOC; zero illegal instructions. Per-channel AR/R identical too, so refill traffic matches in count *and* distribution.
+- **DUT tripwire: 130 samples over the whole batch, 0 changes.** Provenance held end to end.
+- `cache-mix-smoke` is a Spatz-`vse32.v` -> Snitch-scalar-load handoff with no fence (`fences: 0` in that file). Attributable **without** a pristine arm. **Caveat recorded at the peer's insistence:** a fence fixes a race regardless of what exposed it, so the fence experiment alone cannot separate "always racy" from "rewrites perturbed the exposure" -- that row is not evidence about their RTL either way.
+- **Wrong prediction of mine, recorded:** I said `byte-enable` would cap, extrapolating linearly from `bandwidth`'s cycles-per-second. It took 15 min, not 90. Wall time is not linear in EOC cycles across kernels.
+
+#### THE BIG FINDING: the RLC partial-barrier design is wrong at three levels
+Found by the GVSoC session after they implemented real participation-mask semantics. Written up in `reports/design_notes/PARTIAL_BARRIER_MISUSE.md`. **All three are mine.**
+1. **The cluster mask is programmed and never restored.** `mask_d = barrier_mask_i` is re-read every round and there is **no full-vs-partial distinction at the cluster level**. `rlc_ul_init()`/`rlc_am_init()` narrow it to tile 0 from `rlc_init()` and never undo it, so **every later `snrt_cluster_hw_barrier()` -- including main.c's startup resync -- waits only for tile 0.** At 64 cores the other 60 sail through unsynchronised.
+2. **Participants and non-participants share a tile.** `req_mask = write ? data : all-ones`, and **whichever request arrives first owns the round**. Idle cores and finished producers sit at the full barrier (a *read*) in the same tile where consumers issue partial-barrier *writes*. Two opposite symptoms from one mechanism -- absorbed into an all-cores round it **hangs**, absorbed into a consumers-only round it **releases early** -- which is how it reads as two bugs. **Not multi-tile-specific: bites at 4 cores with P1/C1.**
+3. **`barrier_done_o` is a single unmasked broadcast.** Every tile's cores take it with no mask check, so **a partial-barrier completion releases every core waiting at a barrier anywhere in the cluster.** The mask gates *arrival*, not *release*. This refutes the obvious fix for (2) -- moving non-participants to another tile -- and makes the software spin the only construct the hardware leaves.
+- **Why nothing caught it:** (1) is a no-op at one tile (mask 0x1 = the only tile); (2)+(3) have **never run on correct barrier hardware** -- GVSoC's barrier was a global counter to `nb_cores` until today, and the TTI path has not been on RTL. **Every green result for the TTI path came from a platform that did not implement the mechanism.**
+- **API contradiction underneath:** `snrt.h` says to program the mask then use `snrt_cluster_hw_barrier()` as the resync point -- but the narrowing is already in force, so that barrier is itself masked. **The documented usage cannot work at more than one tile.**
+- **Fix designed, NOT implemented -- awaiting the user.** Four parts: arm inside the consumer entry (not `rlc_init`); consumers sync on an `_Atomic` flag, not the barrier they are about to narrow; non-participants stay out of the barrier entirely (forced by defect 3) with back-off; restore the mask to `RESVAL` before the final full barrier. GVSoC will validate at 1/4/16 tiles in minutes with a `CACHEPOOL_BARRIER_COUNTING=1` arm alongside.
+
+#### Two corrections to my own earlier claims
+- **The `armed=1` guard was not a map check.** It printed a *software copy* of the intended mask, so it reported healthy on a run whose mask write went to the wrong address. I described it to GVSoC as a check, they retracted a correct objection on the strength of my description, and I had to give it back. **A check that cannot fail is not a check.** Now reads the register back, plus a pre-write `RESVAL 0xffffffff` probe (vs `CFG_L1D_TILE_SEL` resetting to 0 at the same address under the wrong map) -- GVSoC measured that it discriminates all three maps.
+- **Retracted the `cache-basic` vs GVSoC 48-84% comparison**, at their prompting: their arm ran under the old global-counting barrier, which is not a neutral backdrop for a cross-core write/barrier/read test. Needs re-measuring on the new barrier before it is leaned on.
+
+#### Process
+`reports/design_notes/PROVENANCE_THE_TOOL_NOT_THE_CONFIG.md` closes with the synthesis: **the useful mechanism was not either party being right, it was each checking the other's claim against an artefact rather than a description** -- disassembly over header, generated script over `Bender.local`, `set_eoc`'s immediate over the header, `[EOC]` over plausible output, `RESVAL` over "the address accepts a write". Every real finding today came from that; both sides' errors came from the reverse.
+
+---
+
 ### AM TTI loop fenced -- the same missing-fence defect the uplink proved, in the downlink
 - **Time:** 2026-09-08 ~04:08 +0200
 - **Files:** `kernel/rlc_sync.h` (new), `kernel/rlc_am.c`, `kernel/rlc_ul_drv.c`
