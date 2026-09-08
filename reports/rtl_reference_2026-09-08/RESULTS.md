@@ -74,12 +74,26 @@ from "the rewrites changed the exposure" — is discharged by measurement rather
 than by argument.
 
 **And it upgrades the cycle-identity result.** `cache-mix-smoke` is now a
-*third* matching kernel, and the strongest of the three: RTL simulation is
-deterministic, so a program whose output depends on inter-core timing is a
-**sensitive detector** — almost any timing perturbation would move the count or
-the cycle. Neither moved. Two clean kernels show the transforms do not change
-correct programs; this one shows they do not change a program that is *already*
-sensitive to timing between cores.
+*third* matching kernel, and the most informative of the three: RTL simulation
+is deterministic, so a program whose output depends on inter-core timing
+detects a class of perturbation a passing kernel cannot. Two clean kernels show
+the transforms do not change correct programs; this one shows they do not
+change a program that is *already* sensitive to timing between cores.
+
+**Qualification — the sensitivity argument rests on something neither arm
+measured: the width of the race window.** If the losing core loses by a handful
+of cycles, the count is a fine detector and "almost any perturbation would have
+moved it" holds. If it loses by several hundred, the count is insensitive to
+small shifts and the same 125 would return whether or not timing moved. Both
+are consistent with everything observed, because neither arm instrumented the
+window.
+
+So: **the cycle-identical EOC is the hard result. The sensitivity argument is a
+reason to weight it above a passing kernel, not an independent proof.**
+(Qualification raised by the L1-timing session against my own framing; recorded
+because "sensitive detector" reads as proof of non-perturbation to anyone who
+has not reasoned about the window — the same way "identical failure" reads as
+set-equality.)
 
 **Limitation, recorded before either side leans on it:** the test prints only a
 count, never the mismatching addresses. The comparison is over
