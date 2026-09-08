@@ -9,6 +9,40 @@ time, commit, files, what + why, and verification.
 
 ## 2026-09-08
 
+### Partial-barrier fix landed and validated; AM mismatch column resolved as THREE bugs, none payload corruption
+- **Time:** 2026-09-08 ~09:00 +0200. Commits `6df0e68` (narrow fix), `145d66a` (verifier SN), `e0f505c` (progress line), `dedde97`/`246b430`/`a9c647f` (reports), `a79e83b`/`0143e71`/`171c79d`/`a750067` (notes).
+
+#### T3.1-T3.12 re-verify: both kernels exact
+`bandwidth` 2,058 / 32 / EOC 33,876 / AR-R 335-422 and `byte-enable` EOC 303,288 -- **identical to both the 08-25 pristine reference and the T3.1-T3.15 arm.** Tripwire `DUT UNCHANGED` across both runs; ran the **frozen** `elf_under_test/` binaries so RTL was the only variable while I rebuilt `software/build` in parallel. **Designed the confound out rather than catching it** -- the earlier near-miss was the lesson. Deliverables in `reports/rtl_reference_t312_2026-09-08/`.
+
+#### The partial-barrier fix -- validated at 1, 4 and 16 tiles
+Arm on entry to the consumer loop (not `rlc_init`); consumers publish with an `_Atomic` flag, not the barrier they are narrowing; non-participants spin **outside** any barrier; restore to `RESVAL` before releasing them.
+- **GVSoC measured the tile_mask trajectory from the barrier itself**, not from my kernel's prints: `6 x 0xffff -> 33 x 0x1 -> 3 x 0xffff` at 16 tiles, same shape at 4, all-`0x1` at 1. Startup barrier full, consumers progressing narrowed, mask restored before release, **shape independent of tile count**.
+- **Independent cross-check on the 33:** derived from the traffic profile on my side (488 SDUs/slot / 49 PDUs per 8192 B = 11 slots x 3 phase barriers = 33), measured from barrier state on theirs. Two paths, no shared intermediate, neither party tuned toward it. So the narrowed region contains **exactly** the barriers the kernel should issue -- none absorbed in, none escaped.
+- **The fix requires masked semantics: it deadlocks on a counting barrier**, by construction, because it withholds the arrivals such a barrier waits for. **The failure character changed deliberately for the better** -- a misprogrammed mask now *hangs* instead of corrupting silently. Recorded because it reads as fragility and is the opposite.
+
+#### The AM payload mismatch column was THREE bugs and none was payload corruption
+| cause | rate | owner | resolution |
+|---|---|---|---|
+| VLSU sizes every unit-stride access at lane width, manufacturing straddles | 5.1/grant | GVSoC | clamp, off the calibrated FSM |
+| **verifier assumed SN advances per PDU** | 1.0/grant | **mine** | fixed |
+| cross-core visibility | — | GVSoC | **no longer implicated** |
+- **The VLSU bug came from my reading their log**: `addr=0x2c0023f size=4` is **not 4-byte aligned**, and my payload copy is `vse8.v` (byte elements) which cannot emit that. Their model was coalescing byte elements into 4-byte chunks and straddling lines no element crossed. Pointer, not diagnosis -- they found `size = std::min(width, pending_size)` with no line check.
+- **The residue came from their number**: exactly **1.00 per grant across five cells, three binaries and two grant counts**. A race does not do that. `rlc_am_verify_grant()` set `verify_sn = sn[0] + n`, one too high on every grant ending on a partial -- **the same per-PDU SN assumption the uplink caught, which I fixed in both planners and the planner test and left in the verifier**, the one place that reports it as a payload failure.
+- **Confirmed on `K4_G1024`** -- 1 KB grants against 1360 B SDUs segment in *every* grant, so the old verifier would have failed all six. Six clean, zero `[AM-SB]`.
+- **And the `tb_used` sequence closes exactly:** 5477 total - 5440 payload = 37 header bytes over 9 PDUs, which forces 4 three-byte and 5 five-byte headers -- exactly one SDU-start per SDU and five SO-carrying continuations. Three independent quantities, one consistent assignment, and it is the protocol-correct one. **Segmentation is now validated on a target for the first time** -- my own worklog records it as "the path the passing RTL payload check never exercised".
+
+#### Observability gap I created, then closed
+Fixing the spurious mismatch removed the **only** per-grant output, so a correct AM run and a stuck one became indistinguishable -- and GVSoC then found that **no AM run has ever reached `[EOC]` on their engine**, so every AM cell in their table was a truncated run ("15 grants" meant "15 grants in 110 s"). Added an unconditional `[AM] grant N ok ... cyc=` line. Their rates were unaffected, which is why the conclusions hold, but the counts were not totals.
+
+#### What the wedge ladder can still measure
+Agreed with GVSoC and worth recording as a limit: **mismatch rate per grant** and **grants-per-cycle** are comparable from truncated runs; **completion/hang is not, and is out of reach on that engine.** If the wedge is purely a hang phenomenon it cannot be seen there, and we say so rather than infer it from timeouts.
+
+#### Process
+Three confounds caught before landing on the wrong side, and in every case the finding contradicted what the code's owner expected. The mechanism was not expertise: **each side held an artefact the other could not generate** -- I cannot produce their `[XLINE]` addresses, they cannot read my verifier source. See `design_notes/PROVENANCE_THE_TOOL_NOT_THE_CONFIG.md`.
+
+---
+
 ### RTL reference batch COMPLETE; and the RLC partial-barrier design found broken at 3 levels
 - **Time:** 2026-09-08 ~06:20 +0200
 - **Commits:** `136fe71` (mask read-back guard), `577ba57` / `171c79d` / `0143e71` (PARTIAL_BARRIER_MISUSE note), `d6d7439` (provenance synthesis), `f3269de` (batch results). All local, unpushed.
