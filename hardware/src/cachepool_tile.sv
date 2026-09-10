@@ -698,7 +698,7 @@ module cachepool_tile
         .NumCores              (NumCC             ),
         .NumCache              (NumL1CtrlTile     ),
         .NumTotCache           (NumL1CacheCtrl    ),
-        .NumLGPort         (NumLGPortCore ),
+        .NumLGPort             (NumLGPortCore     ),
         .NumRemoteGroupPort    (NumRemoteGroupPortCore    ),
         .NumTilesPerGroup      (NumTilesPerGroup  ),
         .AddrWidth             (TCDMAddrWidth     ),
