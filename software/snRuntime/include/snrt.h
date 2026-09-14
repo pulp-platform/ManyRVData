@@ -13,13 +13,6 @@ extern "C" {
 #endif
 
 //================================================================================
-// Debug
-//================================================================================
-// #define OMP_DEBUG_LEVEL 100
-// #define KMP_DEBUG_LEVEL 100
-// #define EU_DEBUG_LEVEL 100
-
-//================================================================================
 // Macros
 //================================================================================
 
@@ -31,21 +24,11 @@ extern "C" {
 #define snrt_max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-inline static void *snrt_memset(void *ptr, int value, size_t num) {
-    for (uint32_t i = 0; i < num; ++i)
-        *((uint8_t *)ptr + i) = (unsigned char)value;
-    return ptr;
-}
-
 /// A slice of memory.
 typedef struct snrt_slice {
     uint64_t start;
     uint64_t end;
 } snrt_slice_t;
-
-/// Peripherals to the Snitch SoC
-struct snrt_peripherals {
-};
 
 /// Barrier to use with snrt_barrier
 struct snrt_barrier {
@@ -115,7 +98,6 @@ extern void snrt_cluster_host1_barrier();
 
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();
-extern struct snrt_peripherals *snrt_peripherals();
 extern uint32_t snrt_global_core_base_hartid();
 extern uint32_t snrt_global_core_idx();
 extern uint32_t snrt_global_core_num();
@@ -148,21 +130,7 @@ extern snrt_slice_t snrt_global_memory();
 /// get start address of the cluster's tcdm memory
 extern snrt_slice_t snrt_cluster_memory();
 
-extern void snrt_bcast_send(void *data, size_t len);
-extern void snrt_bcast_recv(void *data, size_t len);
-
 extern void *snrt_memcpy(void *dst, const void *src, size_t n);
-
-/**
- * @brief Use as replacement of the stdlib exit() call
- *
- * @param status exit code
- */
-static inline __attribute__((noreturn)) void snrt_exit(int status) {
-    (void)status;
-    while (1)
-        ;
-}
 
 //================================================================================
 // Team functions
@@ -280,25 +248,6 @@ static inline void snrt_mutex_lock(volatile uint32_t *pmtx) {
         "1:\n"
         "  amoswap.w.aq  t0,t0,(%0)   # t0 = oldlock & lock = 1\n"
         "  bnez          t0,1b      # Retry if previously set)\n"
-        : "+r"(pmtx)
-        :
-        : "t0");
-}
-
-/**
- * @brief lock a mutex, blocking
- * @details test and test-and-set (ttas) implementation of a lock.
- *          Declare mutex with `static volatile uint32_t mtx = 0;`
- */
-static inline void snrt_mutex_ttas_lock(volatile uint32_t *pmtx) {
-    asm volatile(
-        "1:\n"
-        "  lw t0, 0(%0)\n"
-        "  bnez t0, 1b\n"
-        "  li t0,1          # t0 = 1\n"
-        "2:\n"
-        "  amoswap.w.aq  t0,t0,(%0)   # t0 = oldlock & lock = 1\n"
-        "  bnez          t0,2b      # Retry if previously set)\n"
         : "+r"(pmtx)
         :
         : "t0");

@@ -12,7 +12,6 @@ snRuntime/
 │   ├── l1cache.h         # CachePool L1 data cache management API
 │   ├── spatz_lock.h      # Dual-scalar Spatz ownership lock API
 │   ├── cachepool_peripheral.h  # Register offsets for the cluster peripheral
-│   ├── perf_cnt.h        # Performance counter API
 │   ├── team.h            # Team/cluster descriptor structs
 │   └── debug.h           # Debug printf helpers
 ├── src/              # Runtime implementation
@@ -23,7 +22,6 @@ snRuntime/
 │   ├── spatz_lock.c      # Dual-scalar Spatz ownership lock (see spatz_lock.h)
 │   ├── alloc.c           # DRAM linked-list allocator
 │   ├── memcpy.c          # Optimised memcpy
-│   ├── perf_cnt.c        # Performance counter helpers
 │   ├── printf.c          # Lightweight printf (wraps vendor/printf.c)
 │   ├── interrupt.c       # Interrupt initialisation
 │   └── platforms/        # Platform-specific startup and putchar
@@ -160,17 +158,6 @@ int  snrt_cluster_is_primary();       // true for the pair's default owner (even
 void snrt_cluster_host0_barrier();    // partial barrier over default owners only
 void snrt_cluster_host1_barrier();    // partial barrier over their partners only
 ```
-
-### Performance Counters (`perf_cnt.h`) *TODO: REMOVE*
-
-```c
-void     snrt_start_perf_counter(enum snrt_perf_cnt, enum snrt_perf_cnt_type, uint32_t hart_id);
-void     snrt_stop_perf_counter(enum snrt_perf_cnt);
-void     snrt_reset_perf_counter(enum snrt_perf_cnt);
-uint32_t snrt_get_perf_counter(enum snrt_perf_cnt);
-```
-
-Counter types include cycles, TCDM accesses, TCDM congestion, FPU issues, retired instructions, DMA bandwidth events, and ICache statistics.
 
 ### Memory Allocation (`snrt.h`)
 
