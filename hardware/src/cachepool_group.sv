@@ -30,14 +30,14 @@ module cachepool_group
     parameter logic                              [31:0] BootAddr                  = 32'h0,
     /// Address to indicate start of UART
     parameter logic                              [31:0] UartAddr                  = 32'h0,
-    /// The total amount of cores.
-    parameter int unsigned                              NrCores                   = 8,
+    /// Number of Core Complex (CC) slots in this group.
+    parameter int unsigned                              NumCC                     = 8,
     /// Data/TCDM memory depth per cut (in words).
     parameter int unsigned                              TCDMDepth                 = 1024,
     /// Cluster peripheral address region size (in kB).
     parameter int unsigned                              ClusterPeriphSize         = 64,
     /// Number of TCDM Banks.
-    parameter int unsigned                              NrBanks                   = 2 * NrCores,
+    parameter int unsigned                              NrBanks                   = 2 * NumCC,
     /// Width of a single icache line.
     parameter     unsigned                              ICacheLineWidth           = 0,
     /// Number of icache lines per set.
@@ -69,6 +69,9 @@ module cachepool_group
     parameter bit                                       RegisterTCDMCuts          = 1'b0,
     /// Decouple external AXI plug
     parameter bit                                       RegisterExt               = 1'b0,
+    /// Insert a pipeline register on the group<->cluster barrier link
+    /// (separate from the group_barrier FSM's own registered state)
+    parameter bit                                       RegisterBarrier           = 1'b0,
     parameter axi_pkg::xbar_latency_e                   XbarLatency               = axi_pkg::CUT_ALL_PORTS,
     /// Outstanding transactions on the AXI network
     parameter int unsigned                              MaxMstTrans               = 4,
@@ -144,9 +147,8 @@ module cachepool_group
     input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
 
     /// Peripheral signals
-    output icache_l1_events_t             [NrCores-1:0] icache_events_o,
+    output icache_l1_events_t               [NumCC-1:0] icache_events_o,
     input  logic                                        icache_prefetch_enable_i,
-    input  logic                          [NrCores-1:0] cl_interrupt_i,
     input  logic             [$clog2(AxiAddrWidth)-1:0] dynamic_offset_i,
     input  logic              [$clog2(NumL1CtrlTile):0] l1d_private_i,
     input  cache_insn_t                                 l1d_insn_i,
@@ -167,8 +169,9 @@ module cachepool_group
     input  remote_group_req_t            [TotRGPorts:0] remote_group_req_i,
     output remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_o,
 
-    // Direct-wire barrier: one bit per tile
-    output logic                 [NumTilesPerGroup-1:0] tile_barrier_o,
+    // Direct-wire barrier to cluster level (group-level barrier resolves
+    // group-local rounds internally, only forwarding when needed)
+    output logic                                        group_barrier_o,
     input  logic                                        barrier_done_i,
 
     /// SRAM Configuration
@@ -187,7 +190,7 @@ module cachepool_group
   // Constants
   // ---------
   // Per-group overrides of package-level constants that depend on NumTiles/NumCores.
-  localparam int unsigned NumL1CacheCtrlLocal  = NrCores;
+  localparam int unsigned NumL1CacheCtrlLocal  = NumCC;
 
   localparam int unsigned WideIdWidthIn   = AxiIdWidthOut;
 
@@ -215,6 +218,38 @@ module cachepool_group
 
   logic [NumTilesPerGroup-1:0] error;
   assign error_o = |error;
+
+  // Direct-wire barrier: per-tile activate/payload/response, terminated by
+  // the group-level barrier FSM (see i_group_barrier below).
+  logic         [NumTilesPerGroup-1:0] tile_barrier;
+  barrier_req_t [NumTilesPerGroup-1:0] tile_barrier_req;
+  barrier_rsp_t [NumTilesPerGroup-1:0] tile_barrier_rsp;
+
+  // Optional one-cycle register cut on the group<->cluster barrier link,
+  // on top of the group_barrier FSM's own registered state (which does not
+  // by itself register this module's boundary). Off by default.
+  logic group_barrier_pre, barrier_done_cut;
+
+  if (RegisterBarrier) begin : gen_barrier_cut
+    logic group_barrier_q, barrier_done_q;
+    `FF(group_barrier_q, group_barrier_pre, 1'b0, clk_i, rst_ni)
+    `FF(barrier_done_q,  barrier_done_i,    1'b0, clk_i, rst_ni)
+    assign group_barrier_o  = group_barrier_q;
+    assign barrier_done_cut = barrier_done_q;
+  end else begin : gen_no_barrier_cut
+    assign group_barrier_o  = group_barrier_pre;
+    assign barrier_done_cut = barrier_done_i;
+  end
+
+  cachepool_group_barrier i_group_barrier (
+    .clk_i           ( clk_i             ),
+    .rst_ni          ( rst_ni            ),
+    .tile_barrier_i  ( tile_barrier      ),
+    .tile_req_i      ( tile_barrier_req  ),
+    .tile_rsp_o      ( tile_barrier_rsp  ),
+    .group_barrier_o ( group_barrier_pre ),
+    .barrier_done_i  ( barrier_done_cut  )
+  );
 
   // Per-tile iCache AXI (single port, BootROM moved to cluster level)
   axi_mst_cache_req_t  [NumTilesPerGroup-1:0] axi_tile_mem_req;
@@ -547,7 +582,7 @@ module cachepool_group
 
   for (genvar t = 0; t < NumTilesPerGroup; t ++) begin : gen_tiles
     logic [9:0] hart_base_id;
-    assign hart_base_id = hart_base_id_i + t * NumCoresTile;
+    assign hart_base_id = hart_base_id_i + t * NumCoresTile * NumScalarPerCC;
 
     logic [TileIDWidth-1:0] tile_id;
     assign tile_id = tile_base_id_i + TileIDWidth'(t);
@@ -562,7 +597,7 @@ module cachepool_group
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoresTile             ),
+        .NumCC                    ( NumCoresTile             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks                  ),
         .ICacheLineWidth          ( ICacheLineWidth          ),
@@ -582,6 +617,7 @@ module cachepool_group
         .TileIDWidth              ( TileIDWidth              ),
         .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
+        .TileIdxInGroup           ( t                        ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
@@ -629,13 +665,13 @@ module cachepool_group
         // iCache L2 (single wide AXI port, BootROM at cluster level)
         .axi_wide_req_o           ( axi_tile_mem_req[t]                              ),
         .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                              ),
-        // Direct-wire barrier
-        .barrier_o                ( tile_barrier_o  [t]                              ),
-        .barrier_done_i           ( barrier_done_i                                   ),
+        // Direct-wire barrier to group level
+        .barrier_o                ( tile_barrier    [t]                              ),
+        .barrier_req_o            ( tile_barrier_req[t]                              ),
+        .barrier_rsp_i            ( tile_barrier_rsp[t]                              ),
         // Peripherals
         .icache_events_o          ( /* unused */                                     ),
         .icache_prefetch_enable_i ( icache_prefetch_enable_i                         ),
-        .cl_interrupt_i           ( cl_interrupt_i  [t*NumCoresTile+:NumCoresTile]   ),
         .dynamic_offset_i         ( dynamic_offset_i                                 ),
         .l1d_insn_i               ( l1d_insn_i                                       ),
         .l1d_private_i            ( l1d_private_i                                    ),
@@ -653,7 +689,7 @@ module cachepool_group
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoresTile             ),
+        .NumCC                    ( NumCoresTile             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks                  ),
         .ICacheLineWidth          ( ICacheLineWidth          ),
@@ -673,6 +709,7 @@ module cachepool_group
         .TileIDWidth              ( TileIDWidth              ),
         .NumRemoteGroupPortCore   ( NumRemoteGroupPortCore   ),
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
+        .TileIdxInGroup           ( t                        ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
@@ -720,13 +757,13 @@ module cachepool_group
         // iCache L2 (single wide AXI port, BootROM at cluster level)
         .axi_wide_req_o           ( axi_tile_mem_req[t]                                         ),
         .axi_wide_rsp_i           ( axi_tile_mem_rsp[t]                                         ),
-        // Direct-wire barrier
-        .barrier_o                ( tile_barrier_o    [t]                                       ),
-        .barrier_done_i           ( barrier_done_i                                              ),
+        // Direct-wire barrier to group level
+        .barrier_o                ( tile_barrier    [t]                                         ),
+        .barrier_req_o            ( tile_barrier_req[t]                                         ),
+        .barrier_rsp_i            ( tile_barrier_rsp[t]                                         ),
         // Peripherals
         .icache_events_o          ( /* unused */                                                ),
         .icache_prefetch_enable_i ( icache_prefetch_enable_i                                    ),
-        .cl_interrupt_i           ( cl_interrupt_i    [t*NumCoresTile+:NumCoresTile]            ),
         .dynamic_offset_i         ( dynamic_offset_i                                            ),
         .l1d_insn_i               ( l1d_insn_i                                                  ),
         .l1d_private_i            ( l1d_private_i                                               ),

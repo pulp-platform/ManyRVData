@@ -26,23 +26,15 @@ static uint32_t v_small[64] __attribute__((section(".data")));
 
 int main()
 {
-    volatile uint32_t *participation = (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
-
-    // whoever arrives first, writes the barrier
-    // no race condition since they all write the same thing
-    *participation = 0b1111; // all tiles participate
+    // Group-local tile mask selecting tiles 0 and 2, used below to let
+    // tiles 0 and 2 barrier among themselves without waiting on 1 and 3
+    // (which are busy with the big reduction) or reaching the cluster.
+    uint32_t all_cores_mask = (1u << snrt_cluster_core_per_tile()) - 1;
+    uint32_t tile_mask_0_2  = 0b0101;
 
     result = 0;
     printed = 0;
     snrt_cluster_hw_barrier();
-
-
-
-    // set participation mask
-    #ifdef PARTIAL
-        *participation = 0b0101; // tiles 0 and 2 only
-    #endif
-    
 
     // only tiles 1 and 3
     if (snrt_cluster_tile_idx() == 1 || snrt_cluster_tile_idx() == 3)
@@ -134,8 +126,9 @@ int main()
 
             printed2=0;
 
-            // if full barrier, has to wait for big reduction to finish
-            snrt_cluster_hw_barrier();
+            // Group-local partial barrier: only tiles 0 and 2 wait here,
+            // resolved entirely at group level (never reaches the cluster).
+            snrt_cluster_group_barrier(all_cores_mask, tile_mask_0_2, 1);
 
             if (__atomic_fetch_add(&printed2, 1, __ATOMIC_RELAXED) == 0) {
                 spin_lock(&lock, 1);

@@ -190,12 +190,12 @@ $(info FLOO_DIR: $(FLOO_DIR))
 # Generates the sources for FlooNoC
 .PHONY: update-floonoc install-floogen clean-floonoc
 install-floogen:
-	pip install -e $(FLOO_DIR) --quiet
+	$(PYTHON) -m pip install -e $(FLOO_DIR) --quiet
 
 update-floonoc: $(FLOO_NOC)
 $(FLOO_NOC): $(FLOO_CFG)
 	mkdir -p $(FLOO_GEN_OUTDIR)
-	PATH="$(HOME)/.local/bin:$(PATH)" floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
+	floogen pkg -c $(FLOO_CFG) -o $(FLOO_GEN_OUTDIR) --no-format
 
 clean-floonoc:
 	rm -f $(FLOO_NOC)
@@ -213,7 +213,7 @@ dram-build: $(DRAMSYS_PATH)/README.md dram-config
 	if [ ! -d "build" ]; then \
 		mkdir build && cd build; \
 		$(CMAKE) -DCMAKE_CXX_FLAGS=-fPIC -DCMAKE_C_FLAGS=-fPIC -D DRAMSYS_WITH_DRAMPOWER=ON .. ; \
-		make -j; \
+		make -j4; \
 	fi
 
 $(DRAMSYS_PATH)/README.md: dram-init
@@ -242,7 +242,7 @@ dram-clean:
 	fi
 
 dram-init:
-	make -C ${DRAMSYS_DIR} -j8 dramsys CXX=$(CXX) CC=$(CC)
+	make -C ${DRAMSYS_DIR} -j4 dramsys CXX=$(CXX) CC=$(CC)
 
 ############
 # Modelsim #
@@ -298,6 +298,10 @@ VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
 VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
+VLOG_DEFS += -DNUM_SCALAR_PER_CC=$(num_scalar_per_core)
+ifeq ($(num_scalar_per_core),2)
+VLOG_DEFS += -DCACHEPOOL_DUAL_CC
+endif
 VLOG_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
 VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
 VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
@@ -351,24 +355,28 @@ include sim/sim.mk
 
 TESTS_DIR := $(SOFTWARE_DIR)/tests
 
+# Test-group roots (relative to SOFTWARE_DIR) scanned for data-generated tests.
+TEST_ROOTS := cache sync kernels/fp kernels/int rlc tests
+
 # Auto-discover every test that has a script/gen_data.py.
 # Convention: script/data_<params>.json → data/data_<params>.h
 # Adding a new test or a new data variant needs no Makefile changes:
 #   - new test:    drop gen_data.py + data_<params>.json into its script/ dir
 #   - new variant: add data_<params>.json to an existing test's script/ dir
-DATA_TESTS := $(patsubst $(TESTS_DIR)/%/script/gen_data.py,%, \
-                $(wildcard $(TESTS_DIR)/*/script/gen_data.py))
+DATA_TESTS := $(patsubst $(SOFTWARE_DIR)/%/script/gen_data.py,%, \
+                $(foreach root,$(TEST_ROOTS), \
+                  $(wildcard $(SOFTWARE_DIR)/$(root)/*/script/gen_data.py)))
 
 define gen_data_rules
-$(1)_DATA    := $$(patsubst $(TESTS_DIR)/$(1)/script/data_%.json, \
-                             $(TESTS_DIR)/$(1)/data/data_%.h, \
-                             $$(wildcard $(TESTS_DIR)/$(1)/script/data_*.json))
+$(1)_DATA    := $$(patsubst $(SOFTWARE_DIR)/$(1)/script/data_%.json, \
+                             $(SOFTWARE_DIR)/$(1)/data/data_%.h, \
+                             $$(wildcard $(SOFTWARE_DIR)/$(1)/script/data_*.json))
 ALL_GEN_DATA += $$($(1)_DATA)
 
-$(TESTS_DIR)/$(1)/data/data_%.h: \
-    $(TESTS_DIR)/$(1)/script/data_%.json \
-    $(TESTS_DIR)/$(1)/script/gen_data.py
-	$$(PYTHON) $(TESTS_DIR)/$(1)/script/gen_data.py -c $$<
+$(SOFTWARE_DIR)/$(1)/data/data_%.h: \
+    $(SOFTWARE_DIR)/$(1)/script/data_%.json \
+    $(SOFTWARE_DIR)/$(1)/script/gen_data.py
+	$$(PYTHON) $(SOFTWARE_DIR)/$(1)/script/gen_data.py -c $$<
 endef
 
 $(foreach test,$(DATA_TESTS),$(eval $(call gen_data_rules,$(test))))
@@ -384,22 +392,31 @@ $(BANDWIDTH_DATA): $(TESTS_DIR)/bandwidth/script/data.json \
 .PHONY: gen-data
 gen-data: $(ALL_GEN_DATA)
 
+# Clean targets, used to delete generated files
 .PHONY: clean.data
 clean.data:
 	rm -f $(ALL_GEN_DATA)
 
 .PHONY: clean.sw
-clean.sw:
+clean.sw: clean.data
 	rm -rf ${SOFTWARE_DIR}/build
 
-.PHONY: clean
-clean: clean.sw clean.vsim clean.data
+.PHONY: clean.generate
+clean.generate:
 	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \
 	                    $(BOOTROM_DIR)/bootrom.elf \
+	                    $(CACHEPOOL_DIR)/wlf* \
+	                    $(CACHEPOOL_DIR)/noc_profiling/* \
 	                    $(SNRT_BOOTINFO_H)
+
+.PHONY: clean.hw
+clean.hw: clean.vsim clean.generate clean-floonoc
+
+.PHONY: clean
+clean: clean.hw clean.sw
 
 # Common CMake flags shared by sw and vsim targets.
 # vsim appends -DSNITCH_SIMULATOR to point tests at the compiled binary.
@@ -411,7 +428,8 @@ SW_CMAKE_FLAGS = \
   -DLLVM_PATH=${LLVM_INSTALL_DIR} \
   -DGCC_PATH=${GCC_INSTALL_DIR} \
   -DPYTHON=${PYTHON} \
-  -DBUILD_TESTS=ON
+  -DBUILD_TESTS=ON \
+  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core)
 
 .PHONY: sw
 sw: generate bootrom gen-data
@@ -428,8 +446,11 @@ vsim: generate bootrom dpi ${SIMBIN_DIR}/cachepool_cluster.vsim
 ############
 
 # Just a shortcut to build everything
+.PHONY: hw
+hw: generate bootrom vsim
+
 .PHONY: all
-all: generate bootrom vsim sw
+all: hw sw
 
 ########
 # Lint #
@@ -463,9 +484,7 @@ avg-log:
 # NoC traffic visualization frontend (fork of https://github.com/ueqri/vis4mesh
 # with CachePool-specific fixes/features). Consumes the Vis4Mesh dataset
 # directories produced by util/scripts/noc_profiling_to_vis4mesh.py from
-# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs. Fetched as a
-# plain pinned clone (same pattern as toolchain.mk's riscv-gnu-toolchain/
-# llvm-project targets), not a git submodule.
+# hardware/tb/cachepool_noc_profiling.sv's per-cycle NoC logs.
 NPM             ?= npm
 VIS4MESH_DIR    ?= ${CACHEPOOL_DIR}/util/vis4mesh
 VIS4MESH_REPO   ?= https://github.com/DiyouS/vis4mesh.git
@@ -531,13 +550,18 @@ help:
 	@echo "SW Build:"
 	@echo ""
 	@echo "*sw*:             build software (generate + bootrom + cmake); overwrites previous build"
-	@echo "*clean.sw*:       remove the software build directory"
+	@echo "*clean.sw*:       remove the software build directory (also runs clean.data)"
 	@echo ""
 	@echo "Simulation:"
 	@echo ""
 	@echo "*vsim*:           build hardware for QuestaSim simulation (use 'sw' to build software separately)"
+	@echo "*hw*:             shortcut for generate + bootrom + vsim"
+	@echo "*all*:            shortcut for hw + sw"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
-	@echo "*clean*:          remove SW build, vsim build, and all generated HW files"
+	@echo "*clean.data*:     remove generated data files (gen-data outputs)"
+	@echo "*clean.generate*: remove generated HJSON/bootrom/wlf/noc_profiling files [from 'generate'/'bootrom']"
+	@echo "*clean.hw*:       clean.vsim + clean.generate"
+	@echo "*clean*:          clean.hw + clean.sw (remove SW build, vsim build, and all generated HW files)"
 	@echo ""
 	@echo "Lint:"
 	@echo ""

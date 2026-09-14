@@ -6,7 +6,6 @@
 #include "encoding.h"
 #include "cachepool_peripheral.h"
 #include "team.h"
-#include "perf_cnt.h"
 
 extern __thread struct snrt_team *_snrt_team_current;
 
@@ -15,11 +14,9 @@ void start_kernel() {
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);
   *bench = 1;
-  // snrt_start_perf_counter(SNRT_PERF_CNT0, SNRT_PERF_CNT_CYCLES, 0);
 }
 
 void stop_kernel() {
-  // snrt_stop_perf_counter(SNRT_PERF_CNT0);
   uint32_t *bench =
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_SPATZ_STATUS_REG_OFFSET);

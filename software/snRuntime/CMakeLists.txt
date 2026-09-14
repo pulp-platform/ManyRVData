@@ -49,6 +49,12 @@ if(RUNTIME_TRACE)
     add_compile_definitions(__SNRT_USE_TRACE)
 endif()
 
+# Also set/applied in the parent software/CMakeLists.txt so sibling
+# directories (e.g. software/tests) see the same define; kept here too for
+# standalone snRuntime builds.
+set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
+add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
+
 include_directories(
     include
     vendor
@@ -58,13 +64,13 @@ include_directories(
 # Common sources
 set(sources
     src/barrier.c
-    src/dma.c
     src/memcpy.c
     src/printf.c
     src/team.c
     src/alloc.c
     src/interrupt.c
     src/l1cache.c
+    src/spatz_lock.c
 )
 
 # platform specific sources

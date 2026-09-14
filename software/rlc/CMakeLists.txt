@@ -1,0 +1,16 @@
+# Copyright 2025 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+add_library(printf_lock multi_producer_single_consumer_double_linked_list/kernel/printf_lock.c)
+add_library(llist multi_producer_single_consumer_double_linked_list/kernel/llist.c)
+add_library(mm multi_producer_single_consumer_double_linked_list/kernel/mm.c)
+add_library(rlc multi_producer_single_consumer_double_linked_list/kernel/rlc.c)
+add_library(data_move_vec multi_producer_single_consumer_double_linked_list/kernel/data_move_vec.c)
+
+# add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
+# add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
+# add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 2044 100)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 300)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)

@@ -18,8 +18,16 @@ if {$argc > 5 && "${6}" != ""} {
     quietly lappend parent_grp -group ${6}
 }
 
-# The {*} syntax safely expands the list. 
+# Detect flavor at runtime (gen_single vs gen_dual) instead of relying on a
+# compile-time flag, so this script works regardless of num_scalar_per_core.
+if {[llength [find instances -nodu ${core_path}/gen_dual/i_cachepool_cc_dual]] > 0} {
+    do sim/scripts/vsim_core_dual.tcl ${1} ${2} ${3} ${4} ${5} ${6}
+    return
+}
+
+# The {*} syntax safely expands the list.
 # If $parent_grp is empty, it safely ignores it instead of passing "".
+quietly set core_path ${core_path}/gen_single
 add wave -noupdate {*}$parent_grp -group ${name} -group scalar_xbar ${core_path}/i_cachepool_cc/i_scalar_xbar/*
 
 add wave -noupdate {*}$parent_grp -group ${name} -group Params ${core_path}/i_cachepool_cc/BootAddr

@@ -27,10 +27,10 @@ module cachepool_group_noc_wrapper
     parameter int                     unsigned               AxiUserWidth                       = 1,
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
     parameter logic                            [31:0]        UartAddr                           = 32'h0,
-    parameter int                     unsigned               NrCores                            = 0,
+    parameter int                     unsigned               NumCC                              = 0,
     parameter int                     unsigned               TCDMDepth                          = 1024,
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
-    parameter int                     unsigned               NrBanks                            = 2 * NrCores,
+    parameter int                     unsigned               NrBanks                            = 2 * NumCC,
     parameter int                     unsigned               ICacheLineWidth                    = 0,
     parameter int                     unsigned               ICacheLineCount                    = 0,
     parameter int                     unsigned               ICacheSets                         = 0,
@@ -46,6 +46,7 @@ module cachepool_group_noc_wrapper
     parameter bit                                            RegisterCoreRsp                    = 0,
     parameter bit                                            RegisterTCDMCuts                   = 1'b0,
     parameter bit                                            RegisterExt                        = 1'b0,
+    parameter bit                                            RegisterBarrier                    = 1'b0,
     parameter axi_pkg::xbar_latency_e                        XbarLatency                        = axi_pkg::CUT_ALL_PORTS,
     parameter int                     unsigned               MaxMstTrans                        = 4,
     parameter int                     unsigned               MaxSlvTrans                        = 4,
@@ -90,9 +91,8 @@ module cachepool_group_noc_wrapper
     // L2 mesh: endpoint ID and source-routing table from floogen
     input  floo_cachepool_noc_pkg::id_t                                                     l2_id_i,
     input  floo_cachepool_noc_pkg::route_t [floo_cachepool_noc_pkg::RouteCfg.NumRoutes-1:0] l2_route_table_i,
-    output icache_l1_events_t [NrCores-1:0]                               icache_events_o,
+    output icache_l1_events_t [NumCC-1:0]                                 icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
-    input  logic              [NrCores-1:0]                               cl_interrupt_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]                  dynamic_offset_i,
     input  logic              [$clog2(NumL1CtrlTile):0]                   l1d_private_i,
     input  cache_insn_t                                                   l1d_insn_i,
@@ -118,8 +118,9 @@ module cachepool_group_noc_wrapper
     input  noc_group_rsp_t [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_i,
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_valid_i,
     output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o,
-    // Direct-wire barrier: one bit per tile in this group
-    output logic           [NumTilesPerGroup-1:0]                         tile_barrier_o,
+    // Direct-wire barrier to cluster level (group-level barrier resolves
+    // group-local rounds internally, only forwarding when needed)
+    output logic                                                          group_barrier_o,
     input  logic                                                          barrier_done_i
   );
 
@@ -155,10 +156,10 @@ module cachepool_group_noc_wrapper
   remote_group_rsp_t [NumRemoteGroupPortGroup-1:0] remote_group_rsp_to_group;
 
 
-  // Input cuts on some registered signals
+  // Input cuts on some registered signals. The barrier link is not cut
+  // here -- it is optionally cut inside cachepool_group itself, controlled
+  // by RegisterBarrier, on top of the group_barrier FSM's own registered state.
   logic       [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_d, dynamic_offset_q;
-  logic                                   barrier_done_d,   barrier_done_q;
-  logic       [NumTilesPerGroup-1:0]      tile_barrier_d,   tile_barrier_q;
   logic       [$clog2(NumL1CtrlTile):0]   l1d_private_d,    l1d_private_q;
   cache_insn_t                            l1d_insn_d,       l1d_insn_q;
   logic                                   l1d_insn_valid_d, l1d_insn_valid_q;
@@ -167,8 +168,6 @@ module cachepool_group_noc_wrapper
   axi_addr_t                              private_start_addr_d, private_start_addr_q;
 
   `FF(dynamic_offset_q, dynamic_offset_d, '0, clk_i, rst_ni)
-  `FF(barrier_done_q,   barrier_done_d,   '0, clk_i, rst_ni)
-  `FF(tile_barrier_q,   tile_barrier_d,   '0, clk_i, rst_ni)
   `FF(l1d_private_q,    l1d_private_d,    '0, clk_i, rst_ni)
   `FF(l1d_insn_q,       l1d_insn_d,       '0, clk_i, rst_ni)
   `FF(l1d_insn_valid_q, l1d_insn_valid_d, '0, clk_i, rst_ni)
@@ -177,8 +176,6 @@ module cachepool_group_noc_wrapper
   `FF(private_start_addr_q, private_start_addr_d, '0, clk_i, rst_ni)
 
   assign dynamic_offset_d      = dynamic_offset_i;
-  assign barrier_done_d        = barrier_done_i;
-  assign tile_barrier_o        = tile_barrier_q;
   assign l1d_private_d         = l1d_private_i;
   assign l1d_insn_d            = l1d_insn_i;
   assign l1d_insn_valid_d      = l1d_insn_valid_i;
@@ -742,7 +739,7 @@ module cachepool_group_noc_wrapper
     .BootAddr                 ( BootAddr                 ),
     .UartAddr                 ( UartAddr                 ),
     .ClusterPeriphSize        ( ClusterPeriphSize        ),
-    .NrCores                  ( NrCores                  ),
+    .NumCC                    ( NumCC                    ),
     .TCDMDepth                ( TCDMDepth                ),
     .NrBanks                  ( NrBanks                  ),
     .ICacheLineWidth          ( ICacheLineWidth          ),
@@ -762,6 +759,7 @@ module cachepool_group_noc_wrapper
     .RegisterCoreRsp          ( RegisterCoreRsp          ),
     .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
     .RegisterExt              ( RegisterExt              ),
+    .RegisterBarrier          ( RegisterBarrier          ),
     .XbarLatency              ( XbarLatency              ),
     .MaxMstTrans              ( MaxMstTrans              ),
     .MaxSlvTrans              ( MaxSlvTrans              ),
@@ -789,11 +787,10 @@ module cachepool_group_noc_wrapper
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
     .remote_group_rsp_o       ( remote_group_rsp_from_group ),
-    .tile_barrier_o           ( tile_barrier_d              ),
-    .barrier_done_i           ( barrier_done_q              ),
+    .group_barrier_o          ( group_barrier_o             ),
+    .barrier_done_i           ( barrier_done_i              ),
     .icache_events_o          ( icache_events_o             ),
     .icache_prefetch_enable_i ( icache_prefetch_enable_i    ),
-    .cl_interrupt_i           ( cl_interrupt_i              ),
     .dynamic_offset_i         ( dynamic_offset_q            ),
     .l1d_private_i            ( l1d_private_q               ),
     .l1d_insn_i               ( l1d_insn_q                  ),

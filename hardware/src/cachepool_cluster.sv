@@ -31,14 +31,14 @@ module cachepool_cluster
     parameter logic                            [31:0]        BootAddr                           = 32'h0,
     /// Address to indicate start of UART
     parameter logic                            [31:0]        UartAddr                           = 32'h0,
-    /// The total amount of cores.
-    parameter int                     unsigned               NrCores                            = 8,
+    /// Number of Core Complex (CC) slots in this cluster.
+    parameter int                     unsigned               NumCC                              = 8,
     /// Data/TCDM memory depth per cut (in words).
     parameter int                     unsigned               TCDMDepth                          = 1024,
     /// Cluster peripheral address region size (in kB).
     parameter int                     unsigned               ClusterPeriphSize                  = 64,
     /// Number of TCDM Banks.
-    parameter int                     unsigned               NrBanks                            = 2 * NrCores,
+    parameter int                     unsigned               NrBanks                            = 2 * NumCC,
     /// Width of a single icache line.
     parameter                         unsigned               ICacheLineWidth                    = 0,
     /// Number of icache lines per set.
@@ -71,6 +71,8 @@ module cachepool_cluster
     parameter bit                                            RegisterTCDMCuts                   = 1'b0,
     /// Decouple external AXI plug
     parameter bit                                            RegisterExt                        = 1'b0,
+    /// Insert a pipeline register on each group's cluster-facing barrier link
+    parameter bit                                            RegisterBarrier                    = 1'b0,
     parameter axi_pkg::xbar_latency_e                        XbarLatency                        = axi_pkg::CUT_ALL_PORTS,
     /// Outstanding transactions on the AXI network
     parameter int                     unsigned               MaxMstTrans                        = 4,
@@ -91,11 +93,13 @@ module cachepool_cluster
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
     parameter int                     unsigned               NrSramCfg                          = 1,
     /// Folded data bank configuration (0 = auto: min(4, L1AssoPerCtrl)).
-    parameter bit                                            UseFoldedDataBanks               = 1'b1,
-    parameter int                     unsigned               FoldWayGroup                     = 0,
-    parameter bit                                            UseHashWaySelect                 = 1'b1,
+    parameter bit                                            UseFoldedDataBanks                 = 1'b1,
+    parameter int                     unsigned               FoldWayGroup                       = 0,
+    parameter bit                                            UseHashWaySelect                   = 1'b1,
     /// Enable the SRAM forwarding buffer (default on; requires UseHashWaySelect).
-    parameter bit                                            UseForwardingBuffer              = 1'b1
+    parameter bit                                            UseForwardingBuffer                = 1'b1,
+    /// First hartid of the cluster; cores get hartids HartBaseId..HartBaseId+NumCC-1.
+    parameter logic                   [9:0]                  HartBaseId                         = 10'h0
   ) (
     /// System clock.
     input  logic                                  clk_i,
@@ -117,10 +121,6 @@ module cachepool_cluster
     /// another core to facilitate inter-processor-interrupts. This signal is
     /// assumed to be _async_.
     input  logic                                  msip_i,
-    /// First hartid of the cluster. Cores of a cluster are monotonically
-    /// increasing without a gap, i.e., a cluster with 8 cores and a
-    /// `hart_base_id_i` of 5 get the hartids 5 - 12.
-    input  logic          [9:0]                   hart_base_id_i,
     /// Base address of cluster. TCDM and cluster peripheral location are derived from
     /// it. This signal is pseudo-static.
     input  logic          [AxiAddrWidth-1:0]      cluster_base_addr_i,
@@ -190,21 +190,22 @@ module cachepool_cluster
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
 
-  // Direct-wire barrier: one bit per tile across all groups
-  logic [NumGroups-1:0][NumTilesPerGroup-1:0] tile_barrier;
+  // Direct-wire barrier: one bit per group (group-level barrier resolves
+  // group-local rounds internally, only forwarding here when needed).
+  logic [NumGroups-1:0]                       group_barrier;
   logic                                       barrier_done;
-  // Tile participation mask for the cluster-level barrier, software-configured
-  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all tiles).
-  logic [NumTiles-1:0]                        barrier_participation_mask;
+  // Group participation mask for the cluster-level barrier, software-configured
+  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all groups).
+  logic [NumGroups-1:0]                       barrier_participation_mask;
 
   cachepool_cluster_barrier #(
-    .NrTiles ( NumTiles )
+    .NrGroups ( NumGroups )
   ) i_cluster_barrier (
-    .clk_i          ( clk_i          ),
-    .rst_ni         ( rst_ni         ),
-    .tile_barrier_i ( tile_barrier   ),
-    .barrier_done_o ( barrier_done   ),
-    .barrier_mask_i ( barrier_participation_mask )
+    .clk_i           ( clk_i          ),
+    .rst_ni          ( rst_ni         ),
+    .group_barrier_i ( group_barrier  ),
+    .barrier_done_o  ( barrier_done   ),
+    .barrier_mask_i  ( barrier_participation_mask )
   );
 
   // Inter-group NoC mesh signals (indexed by group, then direction, then port)
@@ -254,7 +255,7 @@ module cachepool_cluster
         .BootAddr                 ( BootAddr                 ),
         .UartAddr                 ( UartAddr                 ),
         .ClusterPeriphSize        ( ClusterPeriphSize        ),
-        .NrCores                  ( NumCoreGroup             ),
+        .NumCC                    ( NumCoreGroup             ),
         .TCDMDepth                ( TCDMDepth                ),
         .NrBanks                  ( NrBanks / NumGroups      ),
         .ICacheLineWidth          ( ICacheLineWidth          ),
@@ -274,6 +275,7 @@ module cachepool_cluster
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
         .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
         .RegisterExt              ( RegisterExt              ),
+        .RegisterBarrier          ( RegisterBarrier          ),
         .XbarLatency              ( XbarLatency              ),
         .MaxMstTrans              ( MaxMstTrans              ),
         .MaxSlvTrans              ( MaxSlvTrans              ),
@@ -290,7 +292,7 @@ module cachepool_cluster
         .meip_i                   ( meip_i                                          ),
         .mtip_i                   ( mtip_i                                          ),
         .msip_i                   ( msip_i                                          ),
-        .hart_base_id_i           ( hart_base_id_i + 10'(g * NumCoreGroup)          ),
+        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup * NumScalarPerCC)             ),
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
         .private_start_addr_i     ( private_start_addr                              ),
@@ -312,7 +314,6 @@ module cachepool_cluster
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
         .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-        .cl_interrupt_i           ( '0                                              ),
         .dynamic_offset_i         ( dynamic_offset                                  ),
         .l1d_private_i            ( l1d_private                                     ),
         .l1d_insn_i               ( l1d_insn                                        ),
@@ -335,7 +336,7 @@ module cachepool_cluster
         .noc_rsp_valid_i          ( noc_rsp_in_valid [g]                                   ),
         .noc_rsp_ready_o          ( noc_rsp_in_ready [g]                                   ),
         // Direct-wire barrier
-        .tile_barrier_o           ( tile_barrier     [g]                                   ),
+        .group_barrier_o          ( group_barrier    [g]                                   ),
         .barrier_done_i           ( barrier_done                                           )
       );
     end
@@ -1251,6 +1252,7 @@ module cachepool_cluster
     .AddrWidth     ( AxiAddrWidth              ),
     .SPMWidth      ( $clog2(L1NumSet)          ),
     .NumTiles      ( NumTiles                  ),
+    .NumGroups     ( NumGroups                 ),
     .PrivateWidth  ( $clog2(NumL1CtrlTile) + 1 ),
     .reg_req_t     ( reg_csr_req_t             ),
     .reg_rsp_t     ( reg_csr_rsp_t             ),
@@ -1264,7 +1266,7 @@ module cachepool_cluster
     .tcdm_start_address_i     ( tcdm_start_address     ),
     .tcdm_end_address_i       ( tcdm_end_address       ),
     .icache_prefetch_enable_o ( icache_prefetch_enable ),
-    .cluster_hart_base_id_i   ( hart_base_id_i         ),
+    .cluster_hart_base_id_i   ( HartBaseId             ),
     .cluster_probe_o          ( cluster_probe_o        ),
     .dynamic_offset_o         ( dynamic_offset         ),
     .private_start_addr_o     ( private_start_addr     ),

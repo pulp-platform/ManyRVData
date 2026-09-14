@@ -16,7 +16,9 @@ variables:
   python3: 'python3'
   # Config to build and test
   CI_CONFIG: 'cachepool_fpu_4g'
-  SW_PREFIX: 'test-cachepool-'
+  CI_CONFIG_DUAL: 'cachepool_dual_fpu_4g'
+  CI_CONFIG_16G: 'cachepool_fpu_16g'
+  SW_PREFIX: 'test-'
 
 default:
   tags: [shared]
@@ -61,6 +63,63 @@ build:
       - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/configs/
 
 # ---------------------------------------------------------------------------
+# Build stage: same as `build`, for the dual-scalar-per-CC config. Only the
+# kernels adapted for dual-scalar (see `test-dual`) are exercised against it.
+# ---------------------------------------------------------------------------
+build-dual:
+  stage: build
+  script:
+    - echo "Using CC=$CC"
+    - echo "Using CXX=$CXX"
+    - test -x "$CC"
+    - test -x "$CXX"
+    - source iis-env.sh
+    - make init
+    - make dram-build
+    - make clean generate update-floonoc bootrom vsim sw config=$CI_CONFIG_DUAL DEBUG=0 noc_profiling=0
+  artifacts:
+    when: always
+    expire_in: 2h
+    paths:
+      - sim/work/
+      - sim/bin/cachepool_cluster.vsim
+      - sim/bin/cachepool_cluster.vsim.gui
+      - sim/work-dpi/
+      - software/build/CachePoolTests/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/build/lib/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/configs/
+
+# ---------------------------------------------------------------------------
+# Build stage: same as `build`, for the largest available config (16 groups).
+# Manual (see test-16g): slow, so not run automatically on every push.
+# ---------------------------------------------------------------------------
+build-16g:
+  stage: build
+  when: manual
+  allow_failure: true
+  timeout: 4h
+  script:
+    - echo "Using CC=$CC"
+    - echo "Using CXX=$CXX"
+    - test -x "$CC"
+    - test -x "$CXX"
+    - source iis-env.sh
+    - make init
+    - make dram-build
+    - make clean all config=$CI_CONFIG_16G DEBUG=0 noc_profiling=0
+  artifacts:
+    when: always
+    expire_in: 2h
+    paths:
+      - sim/work/
+      - sim/bin/cachepool_cluster.vsim
+      - sim/bin/cachepool_cluster.vsim.gui
+      - sim/work-dpi/
+      - software/build/CachePoolTests/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/build/lib/
+      - hardware/deps/dram_rtl_sim/dramsys_lib/DRAMSys/configs/
+
+# ---------------------------------------------------------------------------
 # Test stage: run each kernel in parallel on a separate runner.
 # Each job downloads the build artifacts, runs one simulation, and checks
 # the output log for failures.
@@ -90,9 +149,69 @@ test:
     - python3 util/auto-benchmark/check-ci.py test_${KERNEL}.log
   artifacts:
     when: always
-    expire_in: 1 week
+    expire_in: 3 days
     paths:
       # Full simulation log
       - test_*.log
       # Performance-monitor trace files written by the simulator
+      - sim/bin/logs/
+
+# ---------------------------------------------------------------------------
+# Test stage: dual-scalar-per-CC config. Limited to the kernels adapted and
+# confirmed working under this config (host0-only Spatz access via
+# snrt_cluster_vpu_*/snrt_cluster_is_primary); other tests are not yet
+# verified for dual-scalar and are left to the default-config matrix above.
+# ---------------------------------------------------------------------------
+test-dual:
+  stage: test
+  needs: [build-dual]
+  parallel:
+    matrix:
+      - KERNEL:
+          - fdotp-32b_M32768
+          - gemv_M512_N128_K32
+          - fmatmul-32b_M64_N64_K64
+          - fft-32b_M1024_N16
+  script:
+    - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
+    - chmod +x sim/bin/cachepool_cluster.vsim
+    - BIN="${SW_PREFIX}${KERNEL}"
+    - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_dual_${KERNEL}.log
+    - python3 util/auto-benchmark/check-ci.py test_dual_${KERNEL}.log
+  artifacts:
+    when: always
+    expire_in: 3 days
+    paths:
+      - test_dual_*.log
+      - sim/bin/logs/
+
+# ---------------------------------------------------------------------------
+# Test stage: largest available config (16 groups), largest available size
+# per kernel. Runs once build-16g (manual) is triggered and succeeds -- see
+# build-16g.
+# ---------------------------------------------------------------------------
+test-16g:
+  stage: test
+  needs: [build-16g]
+  timeout: 4h
+  parallel:
+    matrix:
+      - KERNEL:
+          - fdotp-32b_M65536
+          - gemv_M1024_N128_K32
+          - fmatmul-32b_M128_N128_K128
+          - fft-32b_M1024_N16
+          - byte-enable
+          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
+  script:
+    - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
+    - chmod +x sim/bin/cachepool_cluster.vsim
+    - BIN="${SW_PREFIX}${KERNEL}"
+    - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_16g_${KERNEL}.log
+    - python3 util/auto-benchmark/check-ci.py test_16g_${KERNEL}.log
+  artifacts:
+    when: always
+    expire_in: 3 days
+    paths:
+      - test_16g_*.log
       - sim/bin/logs/
