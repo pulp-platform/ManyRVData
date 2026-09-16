@@ -32,6 +32,8 @@ package cachepool_pkg;
   // TODO: not yet passed in through config, hardcode to 1
   localparam int unsigned NumGroups       = `ifdef NUM_GROUPS `NUM_GROUPS `else 1 `endif;
   localparam int unsigned NumL2Channel    = `ifdef L2_CHANNEL `L2_CHANNEL `else 0 `endif;
+  // Independent hardware barrier round trackers per tile/group/cluster.
+  localparam int unsigned NumBarrierSlots = `ifdef NUM_BARRIER_SLOTS `NUM_BARRIER_SLOTS `else 2 `endif;
 
   ///////////////////
   //  CORE CONFIG  //

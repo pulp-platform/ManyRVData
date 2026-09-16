@@ -54,29 +54,36 @@ void snrt_global_barrier();          // Cluster-to-cluster barrier
 
 The hardware barrier is three levels deep: core → tile → group → cluster.
 A round only climbs as far up the hierarchy as it needs to.
-A write to the barrier register carries a core mask, a tile mask, and a `local_only` bit, and each level stops forwarding once its own participants have arrived.
-A plain load (no write), which is what `snrt_cluster_hw_barrier()` issues, is the legacy full-cluster barrier and always synchronizes everyone regardless of these masks.
+A write to the barrier register carries a core mask, a tile mask, a `local_only` bit, and a barrier slot id, and each level stops forwarding once its own participants have arrived.
+A plain load (no write), which is what `snrt_cluster_hw_barrier()` issues, is the legacy full-cluster barrier on slot 0 and always synchronizes everyone regardless of these masks.
+
+Barrier slots are independent, concurrently-live round trackers (`NumBarrierSlots` of them, replicated at tile/group/cluster level, see `cachepool_pkg::NumBarrierSlots`), so rounds on different slots never serialize behind each other, even within the same tile or group.
+The slot id is direct-mapped and software-chosen: every core participating in a given round must supply the identical id, exactly like they must already agree on the masks and `local_only`.
+Slot 0 is reserved for the legacy `snrt_cluster_hw_barrier()` and `snrt_cluster_host0_barrier()`/`snrt_cluster_host1_barrier()`; application code should use `1..NumBarrierSlots-1`.
+`NumBarrierSlots` is a per-config Makefile knob (`num_barrier_slots`, default 2, 4 on dual-scalar configs).
 
 ```c
 void snrt_cluster_partial_barrier(uint32_t local_mask);
 uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n);
-void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask, int local_only);
-void snrt_barrier_set_group_mask(uint32_t mask);
+void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask, int local_only, uint32_t barrier_id);
+void snrt_barrier_set_group_mask(uint32_t barrier_id, uint32_t mask);
 ```
 
 `snrt_cluster_partial_barrier(local_mask)` restricts participation to `local_mask` within the calling core's tile; every tile in the group and the cluster level still participate, matching `snrt_cluster_hw_barrier()`'s scope beyond the core mask.
+It always uses slot 0.
 `local_mask` is typically built with `snrt_cluster_partial_barrier_mask(cids, n)`, which derives this core's tile-local mask from a fixed list of global core ids (ids outside this core's own tile are ignored).
 Every core in `cids` must call it with the identical `(cids, n)` for a given round, and the result is meant to be cached rather than recomputed in a hot loop.
 
-`snrt_cluster_group_barrier(core_mask, tile_mask, local_only)` additionally restricts participation to `tile_mask` within the calling core's group.
+`snrt_cluster_group_barrier(core_mask, tile_mask, local_only, barrier_id)` additionally restricts participation to `tile_mask` within the calling core's group, on the given barrier slot.
 When `local_only` is set, the round resolves entirely at group level and never reaches the cluster — use this for work that only needs to synchronize within one group.
 Every participating core must call it with identical arguments.
-Note that `tile_mask` is relative to the calling core's own group (bit *i* = tile *i* within that group); there is currently no helper for a group-relative tile index (only the cluster-wide `snrt_cluster_tile_idx()`), so this is only safe to use as-is in group 0, where the two coincide.
+`tile_mask` is relative to the calling core's own group (bit *i* = tile *i* within that group); pass `SNRT_BARRIER_TILE_MASK_SELF` for a round confined to the calling core's own tile, which hardware resolves locally so it works in any group.
+For any other tile subset there is still no group-relative tile index helper (only the cluster-wide `snrt_cluster_tile_idx()`), so an explicit `tile_mask` is only safe to use as-is in group 0, where the two coincide.
 
-`snrt_barrier_set_group_mask(mask)` programs the cluster-level group-participation mask (one bit per group), consulted only by rounds that actually reach cluster level.
+`snrt_barrier_set_group_mask(barrier_id, mask)` programs the given slot's cluster-level group-participation mask (one bit per group, one register per slot), consulted only by rounds on that slot that actually reach cluster level.
 Call it from exactly one core, then use `snrt_cluster_hw_barrier()` as a resync point before relying on it, since the cluster barrier FSM samples this mask live when the first participating group arrives.
 
-`snrt_cluster_host0_barrier()` / `snrt_cluster_host1_barrier()` (documented under the Spatz lock section below) are built on `snrt_cluster_partial_barrier()` and so always reach cluster level.
+`snrt_cluster_host0_barrier()` / `snrt_cluster_host1_barrier()` (documented under the Spatz lock section below) are built on `snrt_cluster_partial_barrier()` and so always reach cluster level on slot 0.
 
 ### L1 Data Cache — CachePool-specific (`l1cache.h`)
 

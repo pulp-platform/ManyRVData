@@ -190,22 +190,36 @@ module cachepool_cluster
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
 
-  // Direct-wire barrier: one bit per group (group-level barrier resolves
-  // group-local rounds internally, only forwarding here when needed).
-  logic [NumGroups-1:0]                       group_barrier;
-  logic                                       barrier_done;
-  // Group participation mask for the cluster-level barrier, software-configured
-  // via the HW_BARRIER_PARTICIPATION_MASK peripheral CSR (reset value: all groups).
-  logic [NumGroups-1:0]                       barrier_participation_mask;
+  // Direct-wire barrier: one bit per group per slot (group-level barrier
+  // resolves group-local rounds internally, only forwarding here when
+  // needed). Group-major layout (one slot vector per group instance);
+  // transposed to slot-major below for cachepool_cluster_barrier, which
+  // tracks one round per slot.
+  logic  [NumGroups-1:0][NumBarrierSlots-1:0] group_barrier;
+  logic  [NumBarrierSlots-1:0][NumGroups-1:0] group_barrier_slotmajor;
+  // Broadcast to every group identically, same as the pre-multi-slot design.
+  logic                 [NumBarrierSlots-1:0] barrier_done;
+  // Per-slot group participation mask for the cluster-level barrier,
+  // software-configured via the HW_BARRIER_PARTICIPATION_MASK peripheral
+  // CSR (reset value: all groups).
+  logic  [NumBarrierSlots-1:0][NumGroups-1:0] barrier_part_mask;
+
+  always_comb begin : transpose_group_barrier
+    for (int g = 0; g < NumGroups; g++) begin
+      for (int s = 0; s < NumBarrierSlots; s++) begin
+        group_barrier_slotmajor[s][g] = group_barrier[g][s];
+      end
+    end
+  end
 
   cachepool_cluster_barrier #(
     .NrGroups ( NumGroups )
   ) i_cluster_barrier (
-    .clk_i           ( clk_i          ),
-    .rst_ni          ( rst_ni         ),
-    .group_barrier_i ( group_barrier  ),
-    .barrier_done_o  ( barrier_done   ),
-    .barrier_mask_i  ( barrier_participation_mask )
+    .clk_i           ( clk_i                      ),
+    .rst_ni          ( rst_ni                     ),
+    .group_barrier_i ( group_barrier_slotmajor    ),
+    .barrier_done_o  ( barrier_done               ),
+    .barrier_mask_i  ( barrier_part_mask          )
   );
 
   // Inter-group NoC mesh signals (indexed by group, then direction, then port)
@@ -1249,14 +1263,15 @@ module cachepool_cluster
   );
 
   cachepool_peripheral #(
-    .AddrWidth     ( AxiAddrWidth              ),
-    .SPMWidth      ( $clog2(L1NumSet)          ),
-    .NumTiles      ( NumTiles                  ),
-    .NumGroups     ( NumGroups                 ),
-    .PrivateWidth  ( $clog2(NumL1CtrlTile) + 1 ),
-    .reg_req_t     ( reg_csr_req_t             ),
-    .reg_rsp_t     ( reg_csr_rsp_t             ),
-    .cache_insn_t  ( cache_insn_t              )
+    .AddrWidth       ( AxiAddrWidth              ),
+    .SPMWidth        ( $clog2(L1NumSet)          ),
+    .NumTiles        ( NumTiles                  ),
+    .NumGroups       ( NumGroups                 ),
+    .NumBarrierSlots ( NumBarrierSlots           ),
+    .PrivateWidth    ( $clog2(NumL1CtrlTile) + 1 ),
+    .reg_req_t       ( reg_csr_req_t             ),
+    .reg_rsp_t       ( reg_csr_rsp_t             ),
+    .cache_insn_t    ( cache_insn_t              )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    ( clk_i                  ),
     .rst_ni                   ( rst_ni                 ),
@@ -1276,7 +1291,7 @@ module cachepool_cluster
     .l1d_insn_valid_o         ( l1d_insn_valid         ),
     .l1d_insn_ready_i         ( l1d_insn_ready         ),
     .l1d_busy_o               ( l1d_busy               ),
-    .barrier_participation_mask_o ( barrier_participation_mask )
+    .barrier_part_mask_o      ( barrier_part_mask      )
   );
 
   // ---- Target [2]: UART → reqrsp_to_axi → axi_narrow_req_o ----

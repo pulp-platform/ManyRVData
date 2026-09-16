@@ -170,9 +170,10 @@ module cachepool_group
     output remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_o,
 
     // Direct-wire barrier to cluster level (group-level barrier resolves
-    // group-local rounds internally, only forwarding when needed)
-    output logic                                        group_barrier_o,
-    input  logic                                        barrier_done_i,
+    // group-local rounds internally, only forwarding when needed), one per
+    // barrier slot
+    output logic                      [NumBarrierSlots-1:0] group_barrier_o,
+    input  logic                      [NumBarrierSlots-1:0] barrier_done_i,
 
     /// SRAM Configuration
     input  impl_in_t                    [NrSramCfg-1:0] impl_i,
@@ -220,20 +221,36 @@ module cachepool_group
   assign error_o = |error;
 
   // Direct-wire barrier: per-tile activate/payload/response, terminated by
-  // the group-level barrier FSM (see i_group_barrier below).
-  logic         [NumTilesPerGroup-1:0] tile_barrier;
-  barrier_req_t [NumTilesPerGroup-1:0] tile_barrier_req;
-  barrier_rsp_t [NumTilesPerGroup-1:0] tile_barrier_rsp;
+  // the group-level barrier FSM (see i_group_barrier below). Tile-major
+  // layout (one slot vector per tile instance); transposed to slot-major
+  // below for the group_barrier FSM, which tracks one round per slot.
+  logic         [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier;
+  barrier_req_t [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier_req;
+  barrier_rsp_t [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier_rsp;
+
+  logic         [NumBarrierSlots-1:0][NumTilesPerGroup-1:0] tile_barrier_slotmajor;
+  barrier_req_t [NumBarrierSlots-1:0][NumTilesPerGroup-1:0] tile_barrier_req_slotmajor;
+  barrier_rsp_t [NumBarrierSlots-1:0][NumTilesPerGroup-1:0] tile_barrier_rsp_slotmajor;
+
+  always_comb begin : transpose_tile_barrier
+    for (int t = 0; t < NumTilesPerGroup; t++) begin
+      for (int s = 0; s < NumBarrierSlots; s++) begin
+        tile_barrier_slotmajor[s][t]     = tile_barrier[t][s];
+        tile_barrier_req_slotmajor[s][t] = tile_barrier_req[t][s];
+        tile_barrier_rsp[t][s]           = tile_barrier_rsp_slotmajor[s][t];
+      end
+    end
+  end
 
   // Optional one-cycle register cut on the group<->cluster barrier link,
   // on top of the group_barrier FSM's own registered state (which does not
   // by itself register this module's boundary). Off by default.
-  logic group_barrier_pre, barrier_done_cut;
+  logic [NumBarrierSlots-1:0] group_barrier_pre, barrier_done_cut;
 
   if (RegisterBarrier) begin : gen_barrier_cut
-    logic group_barrier_q, barrier_done_q;
-    `FF(group_barrier_q, group_barrier_pre, 1'b0, clk_i, rst_ni)
-    `FF(barrier_done_q,  barrier_done_i,    1'b0, clk_i, rst_ni)
+    logic [NumBarrierSlots-1:0] group_barrier_q, barrier_done_q;
+    `FF(group_barrier_q, group_barrier_pre, '0, clk_i, rst_ni)
+    `FF(barrier_done_q,  barrier_done_i,    '0, clk_i, rst_ni)
     assign group_barrier_o  = group_barrier_q;
     assign barrier_done_cut = barrier_done_q;
   end else begin : gen_no_barrier_cut
@@ -242,13 +259,13 @@ module cachepool_group
   end
 
   cachepool_group_barrier i_group_barrier (
-    .clk_i           ( clk_i             ),
-    .rst_ni          ( rst_ni            ),
-    .tile_barrier_i  ( tile_barrier      ),
-    .tile_req_i      ( tile_barrier_req  ),
-    .tile_rsp_o      ( tile_barrier_rsp  ),
-    .group_barrier_o ( group_barrier_pre ),
-    .barrier_done_i  ( barrier_done_cut  )
+    .clk_i           ( clk_i                      ),
+    .rst_ni          ( rst_ni                     ),
+    .tile_barrier_i  ( tile_barrier_slotmajor     ),
+    .tile_req_i      ( tile_barrier_req_slotmajor ),
+    .tile_rsp_o      ( tile_barrier_rsp_slotmajor ),
+    .group_barrier_o ( group_barrier_pre          ),
+    .barrier_done_i  ( barrier_done_cut           )
   );
 
   // Per-tile iCache AXI (single port, BootROM moved to cluster level)

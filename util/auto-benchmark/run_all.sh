@@ -29,7 +29,7 @@ echo
 
 for cfg in $CONFIGS; do
   echo "==== Building $cfg ===="
-  make -C "$ROOT_PATH" -s clean generate update-floonoc bootrom vsim sw config=$cfg DEBUG=0 -B
+  make -C "$ROOT_PATH" -s clean all config=$cfg DEBUG=0 -B
 
   summary_file="${LOG_DIR}/${cfg}_summary.txt"
   rm -f "$summary_file"  # start fresh for each config

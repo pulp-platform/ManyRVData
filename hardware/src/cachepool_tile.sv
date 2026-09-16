@@ -190,10 +190,10 @@ module cachepool_tile
 
 
 
-    // Direct-wire barrier interface to group level (bypasses NoC)
-    output logic          barrier_o,
-    output barrier_req_t  barrier_req_o,
-    input  barrier_rsp_t  barrier_rsp_i,
+    // Direct-wire barrier interface to group level (bypasses NoC), one per slot
+    output logic          [NumBarrierSlots-1:0] barrier_o,
+    output barrier_req_t  [NumBarrierSlots-1:0] barrier_req_o,
+    input  barrier_rsp_t  [NumBarrierSlots-1:0] barrier_rsp_i,
 
     /// SRAM Configuration Ports, usually not used.
     input  impl_in_t          [NrSramCfg-1:0]       impl_i,

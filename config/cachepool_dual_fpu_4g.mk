@@ -90,6 +90,9 @@ snitch_max_trans ?= 16
 # 2 Snitch scalar harts sharing one Spatz per Core Complex
 num_scalar_per_core ?= 2
 
+# Dual-scalar builds default to more concurrent barrier slots
+num_barrier_slots ?= 4
+
 
 #####################
 ##  L2 Main Memory ##

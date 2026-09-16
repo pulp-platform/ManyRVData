@@ -105,12 +105,22 @@ config_mk       := $(abspath $(CACHEPOOL_DIR)/config/config.mk)
 HJSON_TEMPLATE  := $(CFG_DIR)/cachepool.hjson.tmpl
 HJSON_OUT       := $(CFG_DIR)/cachepool.hjson
 
+PERIPH_DIR             := ${HARDWARE_DIR}/cachepool_peripheral
+PERIPH_HJSON_TEMPLATE  := $(PERIPH_DIR)/cachepool_peripheral_reg.hjson.tmpl
+PERIPH_HJSON_OUT       := $(CFG_DIR)/cachepool_peripheral_reg.hjson
+
 include $(config_mk)
 
 .PHONY: gen-spatz-cfg
 gen-spatz-cfg: $(config_mk) $(HJSON_TEMPLATE) ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py
 	@mkdir -p $(CFG_DIR)
 	@python3 ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py --template $(HJSON_TEMPLATE) --out $(HJSON_OUT)
+
+.PHONY: gen-peripheral-cfg
+gen-peripheral-cfg: $(config_mk) $(PERIPH_HJSON_TEMPLATE) ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py
+	@mkdir -p $(CFG_DIR)
+	@python3 ${CACHEPOOL_DIR}/util/scripts/gen_spatz_cfg.py --template $(PERIPH_HJSON_TEMPLATE) --out $(PERIPH_HJSON_OUT)
+	$(MAKE) -C $(PERIPH_DIR) all SCHEMA=$(PERIPH_HJSON_OUT)
 
 .PHONY: init
 init:
@@ -122,7 +132,7 @@ quick-tool:
 	ln -sf /home/dishen/cachepool-32b/install $(CACHEPOOL_DIR)/install
 
 .PHONY: generate
-generate: gen-spatz-cfg update_opcodes update-floonoc
+generate: gen-spatz-cfg gen-peripheral-cfg update_opcodes update-floonoc
 	$(MAKE) -C $(SPZ_CLS_DIR) generate SPATZ_CLUSTER_CFG=${CFG_DIR}/cachepool.hjson PYTHON=${PYTHON}
 
 .PHONY: cache-init
@@ -275,6 +285,7 @@ VLOG_DEFS += -DNUM_TILES=$(num_tiles)
 VLOG_DEFS += -DNUM_CORES=$(num_cores)
 VLOG_DEFS += -DDATA_WIDTH=$(data_width)
 VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
+VLOG_DEFS += -DNUM_BARRIER_SLOTS=$(num_barrier_slots)
 
 # Tile configuration
 VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
@@ -403,7 +414,7 @@ clean.sw: clean.data
 
 .PHONY: clean.generate
 clean.generate:
-	rm -rf $(HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
+	rm -rf $(HJSON_OUT) $(PERIPH_HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \

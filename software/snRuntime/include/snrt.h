@@ -43,50 +43,35 @@ extern void snrt_cluster_sw_barrier();
 extern void snrt_global_barrier();
 extern void snrt_barrier(struct snrt_barrier *barr, uint32_t n);
 
-/// Partial hardware barrier support. snrt_cluster_hw_barrier() above is
-/// unchanged and always synchronizes every core/tile/group; these are additive.
-///
-/// The barrier write-data payload packs three fields (see cachepool_pkg::
-/// barrier_req_t): [7:0] core mask (within the issuing core's tile),
-/// [15:8] tile mask (within the issuing core's group), [16] local_only
-/// (round never forwards past group level). A plain load (no write) is the
-/// legacy full-cluster barrier: everyone participates.
+/// Partial hardware barriers: independent, concurrently-live rounds keyed by
+/// a slot id (barrier_id), so rounds on different slots never serialize
+/// behind each other. Every core in a round must agree on identical
+/// (core_mask, tile_mask, local_only, barrier_id). Slot 0 is reserved for
+/// snrt_cluster_hw_barrier() and the host0/host1 barriers below; use
+/// 1..N-1 for application rounds.
 #define SNRT_BARRIER_TILE_MASK_LSB  8
 #define SNRT_BARRIER_LOCAL_ONLY_BIT 16
-// Sentinel written to the tile-mask field to mean "every tile in this
-// group" — hardware truncates it to the actual per-config tile-mask width,
-// so software does not need to know that width.
-#define SNRT_BARRIER_TILE_MASK_ALL  0xFFu
+#define SNRT_BARRIER_ID_LSB         17
+#define SNRT_BARRIER_TILE_MASK_ALL  0xFFu  // sentinel: every tile in the group
+#define SNRT_BARRIER_TILE_MASK_SELF 0x0u   // sentinel: just my own tile
 
-/// Step 1 (cluster level): program which groups participate in the next
-/// masked barrier round(s) that reach cluster level (group-local rounds,
-/// see snrt_cluster_group_barrier(), never reach this level at all). Call
-/// from exactly one core, then use snrt_cluster_hw_barrier() as a resync
-/// point before relying on it, since the cluster barrier FSM samples this
-/// mask live when the first participating group arrives.
-extern void snrt_barrier_set_group_mask(uint32_t mask);
+/// Program barrier_id's cluster-level group-participation mask. Call from
+/// one core, then resync with snrt_cluster_hw_barrier() before relying on it.
+extern void snrt_barrier_set_group_mask(uint32_t barrier_id, uint32_t mask);
 
-/// Step 2 (tile level): compute this core's tile-local participant mask
-/// from a fixed list of global core ids (cids outside this core's own tile
-/// are ignored). Every core in `cids` must call this with the identical
-/// (cids, n) for a given round, so all of them derive the same mask
-/// independently. Intended to be called once and cached; the O(n) cost
-/// should not sit in a hot loop.
+/// Derive this core's tile-local participant mask from a list of global
+/// core ids (ids outside this tile are ignored). Cache the result; O(n).
 extern uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n);
 
-/// Issue a partial hardware barrier restricted to local_mask (as returned
-/// by snrt_cluster_partial_barrier_mask()); every tile in the group and the
-/// cluster level still participate, matching snrt_cluster_hw_barrier()'s
-/// scope beyond the core mask. O(1) — a single store.
+/// Barrier restricted to local_mask within this tile; every other tile and
+/// the cluster still participate. Always slot 0.
 extern void snrt_cluster_partial_barrier(uint32_t local_mask);
 
-/// Issue a barrier restricted to core_mask (within this tile) and tile_mask
-/// (within this group). When local_only is set, the round resolves at
-/// group level and never reaches the cluster — use this for work that only
-/// needs to synchronize within one group. Every core participating in the
-/// round must call this with identical (core_mask, tile_mask, local_only).
+/// Barrier restricted to core_mask (within tile) and tile_mask (within
+/// group), on the given slot. local_only=1 resolves at group level without
+/// reaching the cluster; pass SNRT_BARRIER_TILE_MASK_SELF to stay in this tile.
 extern void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask,
-                                        int local_only);
+                                        int local_only, uint32_t barrier_id);
 
 /// Barrier across only host-0 (primary) harts. Callable unconditionally
 /// from any hart; host-1 harts return immediately without participating.

@@ -128,7 +128,7 @@ int main()
 
             // Group-local partial barrier: only tiles 0 and 2 wait here,
             // resolved entirely at group level (never reaches the cluster).
-            snrt_cluster_group_barrier(all_cores_mask, tile_mask_0_2, 1);
+            snrt_cluster_group_barrier(all_cores_mask, tile_mask_0_2, 1, 1);
 
             if (__atomic_fetch_add(&printed2, 1, __ATOMIC_RELAXED) == 0) {
                 spin_lock(&lock, 1);

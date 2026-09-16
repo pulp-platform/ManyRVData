@@ -9,10 +9,12 @@ extern void _snrt_cluster_barrier();
 /// Synchronize cores in a cluster with a hardware barrier
 void snrt_cluster_hw_barrier() { _snrt_cluster_barrier(); }
 
-/// Program the cluster-level group-participation mask (HW_BARRIER_PARTICIPATION_MASK).
-void snrt_barrier_set_group_mask(uint32_t mask) {
+/// Program the cluster-level group-participation mask for the given barrier
+/// slot (HW_BARRIER_PARTICIPATION_MASK, one 32b register per slot).
+void snrt_barrier_set_group_mask(uint32_t barrier_id, uint32_t mask) {
     volatile uint32_t *reg =
-        (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
+        (volatile uint32_t *)(_snrt_barrier_participation_mask_reg_ptr()
+                               + barrier_id * sizeof(uint32_t));
     *reg = mask;
 }
 
@@ -35,22 +37,25 @@ uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n) {
 /// Issue a partial hardware barrier restricted to local_mask. Tile mask and
 /// local_only are left at their safe defaults (every tile in the group,
 /// cluster-wide), matching snrt_cluster_hw_barrier()'s scope beyond the
-/// core mask. A plain volatile store (unlike the read-based full barrier, a
-/// write is never elided by the compiler regardless of whether its result
-/// is used).
+/// core mask. Always uses slot 0 (reserved for the legacy/host0/host1
+/// barriers, see snrt.h). A plain volatile store (unlike the read-based
+/// full barrier, a write is never elided by the compiler regardless of
+/// whether its result is used).
 void snrt_cluster_partial_barrier(uint32_t local_mask) {
     uint32_t payload = local_mask
                         | (SNRT_BARRIER_TILE_MASK_ALL << SNRT_BARRIER_TILE_MASK_LSB);
     *(volatile uint32_t *)_snrt_barrier_reg_ptr() = payload;
 }
 
-/// Issue a barrier restricted to core_mask/tile_mask, optionally staying
-/// local to the group (see snrt.h for the full contract).
+/// Issue a barrier restricted to core_mask/tile_mask on the given barrier
+/// slot, optionally staying local to the group (see snrt.h for the full
+/// contract).
 void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask,
-                                 int local_only) {
+                                 int local_only, uint32_t barrier_id) {
     uint32_t payload = core_mask
                         | (tile_mask << SNRT_BARRIER_TILE_MASK_LSB)
-                        | ((local_only ? 1u : 0u) << SNRT_BARRIER_LOCAL_ONLY_BIT);
+                        | ((local_only ? 1u : 0u) << SNRT_BARRIER_LOCAL_ONLY_BIT)
+                        | (barrier_id << SNRT_BARRIER_ID_LSB);
     *(volatile uint32_t *)_snrt_barrier_reg_ptr() = payload;
 }
 

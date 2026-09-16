@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Configs and kernel suffixes (without prefix)
-CONFIGS="cachepool_fpu_4g"
+CONFIGS="cachepool_fpu_4g cachepool_dual_fpu_4g"
 KERNELS="fdotp-32b_M65536 gemv_M1024_N128_K32 fmatmul-32b_M1024_N32_K32 fft-32b_M1024_N16 "
 PREFIX="test-"            # common prefix for all kernels
 ROOT_PATH=../..           # adjust if needed (path to repo root)

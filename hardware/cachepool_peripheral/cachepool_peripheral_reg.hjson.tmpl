@@ -9,6 +9,11 @@
         type: "int",
         default: "2"
         },
+        { name: "NumBarrierSlots",
+        desc: "Number of independent hardware barrier round trackers (must match hardware/src/cachepool_pkg.sv NumBarrierSlots).",
+        type: "int",
+        default: "${num_barrier_slots}"
+        },
     ],
     name: "cachepool_peripheral",
     clock_primary: "clk_i",
@@ -167,19 +172,25 @@
         }
     },
     {
-        name: "HW_BARRIER_PARTICIPATION_MASK",
-        desc: '''Group participation mask for the cluster-level hardware barrier.
-                 A group whose bit is clear is excluded from the next
-                 cluster-wide barrier round (group-local rounds never reach
-                 this level, see cachepool_group_barrier).'''
-        swaccess: "rw",
-        hwaccess: "hro",
-        resval: "0xFFFFFFFF",
-        fields: [{
-            bits: "31:0",
-            name: "GROUP",
-            desc: "Group participation bits."
-        }]
+        multireg: {
+            name: "HW_BARRIER_PARTICIPATION_MASK",
+            desc: '''Per-slot group participation mask for the cluster-level hardware
+                     barrier. Register N holds the mask for barrier slot N: a group
+                     whose bit is clear is excluded from that slot's next cluster-wide
+                     barrier round (group-local rounds never reach this level, see
+                     cachepool_group_barrier).'''
+            swaccess: "rw",
+            hwaccess: "hro",
+            count: "NumBarrierSlots",
+            cname: "hw_barrier_participation_mask",
+            compact: "false",
+            resval: "0xFFFFFFFF",
+            fields: [{
+                bits: "31:0",
+                name: "GROUP",
+                desc: "Group participation bits for this barrier slot."
+            }]
+        }
     },
     {
         name: "L1D_SPM_COMMIT",

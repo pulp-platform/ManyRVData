@@ -119,9 +119,9 @@ module cachepool_group_noc_wrapper
     input  logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_valid_i,
     output logic           [3:0][NumTilesPerGroup*NumNoCPortsPerTile-1:0] noc_rsp_ready_o,
     // Direct-wire barrier to cluster level (group-level barrier resolves
-    // group-local rounds internally, only forwarding when needed)
-    output logic                                                          group_barrier_o,
-    input  logic                                                          barrier_done_i
+    // group-local rounds internally, only forwarding when needed), one per slot
+    output logic                                    [NumBarrierSlots-1:0] group_barrier_o,
+    input  logic                                    [NumBarrierSlots-1:0] barrier_done_i
   );
 
 

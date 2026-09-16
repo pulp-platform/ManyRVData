@@ -43,7 +43,7 @@ int main()
         spin_unlock(&lock, 1);
 
         // Group-local partial barrier: only tiles 1 and 3 wait here.
-        snrt_cluster_group_barrier(all_cores_mask, 0b1010, 1);
+        snrt_cluster_group_barrier(all_cores_mask, 0b1010, 1, 1);
 
         if (snrt_cluster_core_idx() == 4)
         {
@@ -82,7 +82,7 @@ int main()
         spin_unlock(&lock, 1);
 
         // Group-local partial barrier: only tiles 0 and 2 wait here.
-        snrt_cluster_group_barrier(all_cores_mask, 0b0101, 1);
+        snrt_cluster_group_barrier(all_cores_mask, 0b0101, 1, 1);
 
         if (snrt_cluster_core_idx() == 4)
         {
