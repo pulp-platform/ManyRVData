@@ -251,7 +251,7 @@ test-16g:
 # Test stage: largest available config (16 groups), largest available size
 # per kernel.
 # ---------------------------------------------------------------------------
-test-16g:
+test-dual-16g:
   stage: test
   needs: [build-dual-16g]
   timeout: 4h
