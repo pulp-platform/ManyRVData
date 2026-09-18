@@ -111,7 +111,7 @@ module tcdm_cache_interco #(
   output tcdm_rsp_t               [TotInPorts-1:0] core_rsp_o,
   /// Memory side -------------------------------------------------------
   /// Which remote tile is targeted (one entry per intra-group remote output).
-  output tile_id_t             [NumLGPort-1:0] tile_sel_o,
+  output tile_id_t                 [NumLGPort-1:0] tile_sel_o,
   /// Which tile is targeted via inter-group remote (one entry per inter-group remote output).
   /// Carries the full globally-unique tile ID; the wrapper decomposes it
   /// into group XY coordinates for the router and local tile ID for the

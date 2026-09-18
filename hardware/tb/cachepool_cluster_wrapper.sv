@@ -73,7 +73,7 @@ module cachepool_cluster_wrapper
     .BootAddr                 (BootAddr                 ),
     .UartAddr                 (UartAddr                 ),
     .ClusterPeriphSize        (64                       ),
-    .NrCores                  (NumCores                 ),
+    .NumCC                    (NumCC                    ),
     .TCDMDepth                (TCDMDepth                ),
     .NrBanks                  (NumBank                  ),
     .ICacheLineWidth          (ICacheLineWidth          ),
@@ -99,7 +99,8 @@ module cachepool_cluster_wrapper
     .UseFoldedDataBanks       (UseFoldedDataBanks       ),
     .FoldWayGroup             (FoldWayGroup             ),
     .UseHashWaySelect         (UseHashWaySelect         ),
-    .UseForwardingBuffer      (UseForwardingBuffer      )
+    .UseForwardingBuffer      (UseForwardingBuffer      ),
+    .HartBaseId               (10'h0                    )
   ) i_cluster (
     .clk_i                    ,
     .rst_ni                   ,
@@ -110,7 +111,6 @@ module cachepool_cluster_wrapper
     .meip_i                   (meip_i                   ),
     .mtip_i                   (mtip_i                   ),
     .msip_i                   (msip_i                   ),
-    .hart_base_id_i           (10'h0                    ),
     .cluster_base_addr_i      (TCDMStartAddr            ),
     .cluster_probe_o          (cluster_probe_o          ),
     // REQRSP peripheral in-port: passed straight through from wrapper port.

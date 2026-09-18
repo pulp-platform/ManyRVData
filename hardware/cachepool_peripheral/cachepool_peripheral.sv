@@ -4,19 +4,24 @@
 
 /// Exposes cluster confugration and information as memory mapped information
 
+`include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
 
 module cachepool_peripheral
   import snitch_pkg::*;
   import cachepool_peripheral_reg_pkg::*;
 #(
-  parameter int unsigned AddrWidth    = 0,
-  parameter int unsigned DMADataWidth = 0,
-  parameter int unsigned SPMWidth     = 0,
+  parameter int unsigned AddrWidth       = 0,
+  parameter int unsigned DMADataWidth    = 0,
+  parameter int unsigned SPMWidth        = 0,
   // Number of tiles (used for flush controller granularity)
-  parameter int unsigned NumTiles     = 1,
+  parameter int unsigned NumTiles        = 1,
+  // Number of groups (used for the cluster-level barrier participation mask)
+  parameter int unsigned NumGroups       = 1,
+  // Independent barrier round trackers (must match cachepool_pkg::NumBarrierSlots, checked below)
+  parameter int unsigned NumBarrierSlots = 1,
   // Width actually used from the (fixed 4b) L1D_PRIVATE CSR field.
-  parameter int unsigned PrivateWidth = 4,
+  parameter int unsigned PrivateWidth    = 4,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
   parameter type cache_insn_t = logic,
@@ -46,8 +51,14 @@ module cachepool_peripheral
   output logic                       l1d_insn_valid_o,
   input  logic [NumTiles-1:0]        l1d_insn_ready_i,
   output logic [NumTiles-1:0]        l1d_busy_o,
-  output logic [NumTiles-1:0]        barrier_participation_mask_o
+  // One group-participation mask per barrier slot (see HW_BARRIER_PARTICIPATION_MASK multireg)
+  output logic [NumBarrierSlots-1:0][NumGroups-1:0] barrier_part_mask_o
 );
+
+  // These two counts are generated independently and must agree exactly.
+  `ASSERT_INIT(CheckBarrierSlotsMatchRegPkg,
+               NumBarrierSlots == cachepool_peripheral_reg_pkg::NumBarrierSlots,
+               "NumBarrierSlots does not match cachepool_peripheral_reg_pkg::NumBarrierSlots -- regenerate the peripheral register file for this config")
 
   cachepool_peripheral_reg2hw_t reg2hw;
   cachepool_peripheral_hw2reg_t hw2reg;
@@ -135,15 +146,13 @@ module cachepool_peripheral
     end
   end
 
-  // Concatenate all barrier-participation register words into one wide vector
-  // and slice to NumTiles. Unused upper bits (for small configs) are optimised away.
-  logic [NumTileSelWords*32-1:0] barrier_participation_mask_raw;
-  always_comb begin : barrier_participation_mask_concat
-    for (int i = 0; i < NumTileSelWords; i++) begin
-      barrier_participation_mask_raw[i*32 +: 32] = reg2hw.hw_barrier_participation_mask[i].q;
+  // One 32-bit register per barrier slot; single register is enough at
+  // group granularity (max 32 groups).
+  always_comb begin : barrier_mask_concat
+    for (int s = 0; s < NumBarrierSlots; s++) begin
+      barrier_part_mask_o[s] = reg2hw.hw_barrier_participation_mask[s].q[NumGroups-1:0];
     end
   end
-  assign barrier_participation_mask_o = barrier_participation_mask_raw[NumTiles-1:0];
 
   // Cache Flush Controller
   // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is
@@ -195,7 +204,6 @@ module cachepool_peripheral
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
-  // assign l1d_busy_o = (l1d_lock_q != '0);
 
   // Enable icache prefetch
   assign icache_prefetch_enable_o = reg2hw.icache_prefetch_enable.q;

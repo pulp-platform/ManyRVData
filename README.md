@@ -111,6 +111,8 @@ make vsim config=cachepool_fpu_4g
 
 Set `DEBUG=0` to disable `+acc` waveform visibility and speed up simulation (used by CI); default is `DEBUG=1`.
 
+`make hw` is a shortcut for `generate bootrom vsim`; `make all` is a shortcut for `hw sw` (build everything).
+
 #### Run the Simulation
 
 The wrapper script launches the simulation (GUI or CLI) and expects a software ELF path as argument:
@@ -142,7 +144,7 @@ A lightweight benchmarking automation flow is provided under `util/auto-benchmar
 
        CONFIGS="cachepool_fpu_4g cachepool_fpu_16g"
        KERNELS="fdotp-32b_M32768 ffft-64b_M16384 fmatmul-64b_M2048"
-       PREFIX="test-cachepool-"
+       PREFIX="test-"
        ROOT_PATH=../..
 
 2. Run all builds and simulations:
@@ -204,8 +206,12 @@ Configuration names encode the number of groups and whether the FPU is enabled:
 | `cachepool_fpu_4g` | 4 | 2×2 | Yes | 4 | 4 | 64 |
 | `cachepool_fpu_16g` | 16 | 4×4 | Yes | 4 | 4 | 256 |
 | `cachepool_fpu_16g_tiny` | 16 | 4×4 | Yes | 2 | 2 | 64 |
+| `cachepool_dual_4g` | 4 | 2×2 | No (IPU only) | 4 | 4 | 64 CCs / 128 harts |
+| `cachepool_dual_fpu_4g` | 4 | 2×2 | Yes | 4 | 4 | 64 CCs / 128 harts |
 
 `cachepool_fpu_16g_tiny` shrinks tiles/group and cores/tile for a faster-to-build, faster-to-simulate smoke test of the full 16-group mesh topology.
+
+`cachepool_dual_4g`/`cachepool_dual_fpu_4g` set `num_scalar_per_core=2`: each Core Complex holds 2 Snitch scalar harts sharing 1 Spatz unit via a hardware ownership lock (`cachepool_spatz_lock.sv`), so "Cores" (Core Complex slots) and hart count diverge — 64 CCs, 128 harts total. `cachepool_dual_fpu_4g` is otherwise identical to `cachepool_fpu_4g` (same FPU/IPU counts), just with the shared-Spatz CC flavor — used to confirm the dual-scalar lock/mux design also works with the FPU enabled, not just IPU-only. The lock never blocks a core's pipeline: every acquire/release attempt (`software/snRuntime/include/spatz_lock.h`) completes immediately with an outcome (granted / denied / granted-but-still-draining), so a hart contending for a lock it doesn't get can always retry or do something else instead of hanging. See `note.md` for the full state-machine design.
 
 The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** from:
 - `config/cachepool.hjson.tmpl` (skeleton with comments)
@@ -341,7 +347,7 @@ For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_mon
 1. **Enable the profiler and run a kernel** (default `noc_profiling ?= 1`, so this is on unless you passed `noc_profiling=0`):
    ```sh
    make vsim config=<multi-group config> noc_profiling=1
-   ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-cachepool-<test>
+   ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-<test>
    ```
    L1 (inter-group cache-access mesh) logs (`router_g*.log`, `tile_g*.log`) only populate with `num_rg_ports_per_core > 0` (a multi-group config); L2 (DRAM-refill mesh) logs (`l2_router_g*.log`) and per-core PE logs (`pe_g*.log`) are always populated.
 
@@ -369,6 +375,16 @@ For a spatial, time-scrubbable view of NoC traffic (as opposed to `cachepool_mon
 ## Snitch–Spatz Core Complex
 
 The default system uses a 32-bit Snitch core with a Spatz RVV accelerator. Double-precision is disabled by default for scalability; enable the FPU flavor (`cachepool_fpu.mk`) for single/half precision support.
+
+### Dual-scalar flavor (`cachepool_cc_dual.sv`)
+
+Set `num_scalar_per_core=2` (e.g. `cachepool_dual_4g`, see [Configurations](#configurations)) to build a Core Complex with **2 Snitch scalar harts sharing 1 Spatz unit**. Motivating workload: tasks where not every hart needs the vector unit at the same time, and control hands Spatz off between the pair at coarse task boundaries. The two harts get sequential hart/core IDs (e.g. cid 0/1 within a pair); `snrt_cluster_is_primary()` (`snrt.h`) tells a hart whether it's the pair's default owner (even `cid`) or its partner (odd `cid`).
+
+Ownership is arbitrated by `cachepool_spatz_lock.sv`, a small hardware FSM (`Free`/`Locked`/`AcqWait`/`RelWait`) intercepting two dedicated peripheral addresses. It never blocks a core's pipeline: every acquire/release attempt is a plain **load** that always completes immediately, returning an outcome (`FAIL`/`SUCCESS`/`SUCCESS-WAIT`) instead of stalling the hart — so a hart that doesn't get the lock can retry, back off, or do other work instead of hanging. See `software/snRuntime/README.md` for the software API and `note.md` for the full state-machine design.
+
+**Free vs. Locked performance**: while unlocked (`Free` state), `acc_mux.sv` shares Spatz between both harts via real round-robin arbitration, but every loadstore op must fully drain (real memory completion, not just issue-accept) before the next grant is offered — this holds even for a single hart with no contention from its partner, since the mux has no way to know a sequence of ops belongs to an uncontended hart until it tries to arbitrate again. Loadstore-heavy code therefore runs serialized on real memory latency in `Free` mode. Acquiring the lock (`Locked` state) removes this: the owner's issue path bypasses round-robin arbitration entirely and pipelines back-to-back LSU ops at full throughput. A kernel that does sustained vector/FP loadstore work should hold the lock around that section even if its partner hart never contends for Spatz at all.
+
+Two per-role partial-barrier helpers, `snrt_cluster_host0_barrier()`/`snrt_cluster_host1_barrier()` (`snrt.h`), let a kernel synchronize only the pair's default owners (or only their partners) without hand-writing a participant mask; both degrade to an ordinary full barrier on a single-scalar-per-CC build, so kernels using them don't need a config-specific `#if`.
 
 ## Stack
 
@@ -408,7 +424,7 @@ make lint config=cachepool_fpu_4g
 - If you change cacheline width, `AXI_USER_WIDTH` is derived (supported widths: 128→19, 256→18, 512→17). Unsupported widths error out at generation time.
 - `make generate` regenerates the FlooNoC package automatically; only run `make update-floonoc` standalone if you're iterating on a `config/floonoc_*.yml` topology file without a full generate.
 - `make sw` and `make vsim` are decoupled (hw/sw build independently); rebuild whichever side you changed.
-- Use `make clean` when switching configs to prevent stale build artifacts.
+- Use `make clean` when switching configs to prevent stale build artifacts; `clean.sw`/`clean.hw` (or their finer-grained parts `clean.data`/`clean.generate`/`clean.vsim`) clean only one side if you don't need a full rebuild.
 - Runtime functions `snrt_tile_id()` and `snrt_num_tiles()` are available to query tile topology from software.
 - Changing the partition mode or boundary address while the cache holds valid data requires a flush (`l1d_cluster_flush()` or the appropriate cluster-wide partition flush) before reconfiguring.
 - Set `DEBUG=0` to disable `+acc` and speed up simulation (used by CI); default is `DEBUG=1` for waveform visibility.

@@ -13,13 +13,6 @@ extern "C" {
 #endif
 
 //================================================================================
-// Debug
-//================================================================================
-// #define OMP_DEBUG_LEVEL 100
-// #define KMP_DEBUG_LEVEL 100
-// #define EU_DEBUG_LEVEL 100
-
-//================================================================================
 // Macros
 //================================================================================
 
@@ -31,21 +24,11 @@ extern "C" {
 #define snrt_max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
-inline static void *snrt_memset(void *ptr, int value, size_t num) {
-    for (uint32_t i = 0; i < num; ++i)
-        *((uint8_t *)ptr + i) = (unsigned char)value;
-    return ptr;
-}
-
 /// A slice of memory.
 typedef struct snrt_slice {
     uint64_t start;
     uint64_t end;
 } snrt_slice_t;
-
-/// Peripherals to the Snitch SoC
-struct snrt_peripherals {
-};
 
 /// Barrier to use with snrt_barrier
 struct snrt_barrier {
@@ -60,31 +43,61 @@ extern void snrt_cluster_sw_barrier();
 extern void snrt_global_barrier();
 extern void snrt_barrier(struct snrt_barrier *barr, uint32_t n);
 
-/// Partial hardware barrier support. snrt_cluster_hw_barrier() above is
-/// unchanged and always synchronizes every core/tile; these are additive.
-///
-/// Step 1 (cluster level): program which tiles participate in the next
-/// masked barrier round(s). Call from exactly one core, then use
-/// snrt_cluster_hw_barrier() as a resync point before relying on it, since
-/// the cluster barrier FSM samples this mask live when the first
-/// participating tile arrives.
-extern void snrt_barrier_set_tile_mask(uint32_t mask_lo, uint32_t mask_hi);
+/// Partial hardware barriers: independent, concurrently-live rounds keyed by
+/// a slot id (barrier_id), so rounds on different slots never serialize
+/// behind each other. Every core in a round must agree on identical
+/// (core_mask, tile_mask, local_only, barrier_id). Slot 0 is reserved for
+/// full-participation rounds only (core_mask=ALL, e.g. snrt_cluster_hw_barrier());
+/// any round with a narrower core_mask must use a different slot, since a
+/// late-arriving full-participation request on the same slot gets absorbed
+/// into whatever narrower round is still in flight instead of starting its
+/// own. Sequential full-participation rounds may freely share slot 0.
+#define SNRT_BARRIER_TILE_MASK_LSB  8
+#define SNRT_BARRIER_LOCAL_ONLY_BIT 16
+#define SNRT_BARRIER_ID_LSB         17
+#define SNRT_BARRIER_TILE_MASK_ALL  0xFFu  // sentinel: every tile in the group
+#define SNRT_BARRIER_TILE_MASK_SELF 0x0u   // sentinel: just my own tile
 
-/// Step 2 (tile level): compute this core's tile-local participant mask
-/// from a fixed list of global core ids (cids outside this core's own tile
-/// are ignored). Every core in `cids` must call this with the identical
-/// (cids, n) for a given round, so all of them derive the same mask
-/// independently. Intended to be called once and cached; the O(n) cost
-/// should not sit in a hot loop.
+/// Program barrier_id's cluster-level group-participation mask. Call from
+/// one core, then resync with snrt_cluster_hw_barrier() before relying on it.
+extern void snrt_barrier_set_group_mask(uint32_t barrier_id, uint32_t mask);
+
+/// Derive this core's tile-local participant mask from a list of global
+/// core ids (ids outside this tile are ignored). Cache the result; O(n).
 extern uint32_t snrt_cluster_partial_barrier_mask(const uint32_t *cids, uint32_t n);
 
-/// Issue a partial hardware barrier restricted to local_mask (as returned
-/// by snrt_cluster_partial_barrier_mask()). O(1) — a single store.
+/// Barrier restricted to local_mask within this tile; every other tile and
+/// the cluster still participate. Always slot 0.
 extern void snrt_cluster_partial_barrier(uint32_t local_mask);
+
+/// Barrier restricted to core_mask (within tile) and tile_mask (within
+/// group), on the given slot. local_only=1 resolves at group level without
+/// reaching the cluster; pass SNRT_BARRIER_TILE_MASK_SELF to stay in this tile.
+extern void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask,
+                                        int local_only, uint32_t barrier_id);
+
+// On dual-scalar builds host0's core_mask is a real subset (needs its own
+// slot, isolated from snrt_cluster_hw_barrier()'s slot 0); on single-scalar
+// builds every hart is host 0, so its core_mask is always ALL and sharing
+// slot 0 is provably safe -- use it there to leave every other slot free.
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+#define SNRT_HOST_BARRIER_SLOT 1
+#else
+#define SNRT_HOST_BARRIER_SLOT 0
+#endif
+
+/// Barrier across only host-0 (primary) harts, on the given slot. Callable
+/// unconditionally from any hart; host-1 harts return immediately without
+/// participating.
+extern void snrt_cluster_host0_barrier(uint32_t barrier_id);
+
+/// Barrier across only host-1 (secondary) harts, on the given slot. Callable
+/// unconditionally from any hart; host-0 harts return immediately without
+/// participating.
+extern void snrt_cluster_host1_barrier(uint32_t barrier_id);
 
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();
-extern struct snrt_peripherals *snrt_peripherals();
 extern uint32_t snrt_global_core_base_hartid();
 extern uint32_t snrt_global_core_idx();
 extern uint32_t snrt_global_core_num();
@@ -97,10 +110,19 @@ extern uint32_t snrt_cluster_core_per_tile();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();
 
+/// whether this hart is host 0 of its Core Complex pair
+extern int snrt_cluster_is_primary();
+
+/// Physical vector-unit count/index/per-tile count, halved vs. the hart-based
+/// counterparts in dual-scalar configs (one Spatz per CC pair), unchanged otherwise.
+extern uint32_t snrt_cluster_vpu_num();
+extern uint32_t snrt_cluster_vpu_idx();
+extern uint32_t snrt_cluster_vpu_per_tile();
+
 /// get pointer to barrier register
 extern uint32_t _snrt_barrier_reg_ptr();
 
-/// get pointer to the tile-participation-mask register (word 0 of 2)
+/// get pointer to the group-participation-mask register
 extern uint32_t _snrt_barrier_participation_mask_reg_ptr();
 
 /// get start address of global memory
@@ -108,44 +130,7 @@ extern snrt_slice_t snrt_global_memory();
 /// get start address of the cluster's tcdm memory
 extern snrt_slice_t snrt_cluster_memory();
 
-extern void snrt_bcast_send(void *data, size_t len);
-extern void snrt_bcast_recv(void *data, size_t len);
-
 extern void *snrt_memcpy(void *dst, const void *src, size_t n);
-
-/// DMA runtime functions.
-/// A DMA transfer identifier.
-typedef uint32_t snrt_dma_txid_t;
-/// Initiate an asynchronous 1D DMA transfer with wide 64-bit pointers.
-extern snrt_dma_txid_t snrt_dma_start_1d_wideptr(uint64_t dst, uint64_t src,
-                                                 size_t size);
-/// Initiate an asynchronous 1D DMA transfer.
-extern snrt_dma_txid_t snrt_dma_start_1d(void *dst, const void *src,
-                                         size_t size);
-/// Initiate an asynchronous 2D DMA transfer with wide 64-bit pointers.
-extern snrt_dma_txid_t snrt_dma_start_2d_wideptr(uint64_t dst, uint64_t src,
-                                                 size_t size, size_t dst_stride,
-                                                 size_t src_stride,
-                                                 size_t repeat);
-/// Initiate an asynchronous 2D DMA transfer.
-extern snrt_dma_txid_t snrt_dma_start_2d(void *dst, const void *src,
-                                         size_t size, size_t dst_stride,
-                                         size_t src_stride, size_t repeat);
-/// Block until a transfer finishes.
-extern void snrt_dma_wait(snrt_dma_txid_t tid);
-/// Block until all operation on the DMA ceases.
-extern void snrt_dma_wait_all();
-
-/**
- * @brief Use as replacement of the stdlib exit() call
- *
- * @param status exit code
- */
-static inline __attribute__((noreturn)) void snrt_exit(int status) {
-    (void)status;
-    while (1)
-        ;
-}
 
 //================================================================================
 // Team functions
@@ -160,9 +145,7 @@ static inline uint32_t __attribute__((pure)) snrt_hartid() {
 //================================================================================
 // Allocation functions
 //================================================================================
-extern void snrt_alloc_init(struct snrt_team_root *team, uint32_t l3off);
-extern void *snrt_l1alloc(size_t size);
-extern void snrt_l1alloc_reset();
+extern void snrt_alloc_init(uint32_t l3off);
 extern void *snrt_malloc(size_t size);
 extern void  snrt_free(void *ptr);
 
@@ -271,52 +254,12 @@ static inline void snrt_mutex_lock(volatile uint32_t *pmtx) {
 }
 
 /**
- * @brief lock a mutex, blocking
- * @details test and test-and-set (ttas) implementation of a lock.
- *          Declare mutex with `static volatile uint32_t mtx = 0;`
- */
-static inline void snrt_mutex_ttas_lock(volatile uint32_t *pmtx) {
-    asm volatile(
-        "1:\n"
-        "  lw t0, 0(%0)\n"
-        "  bnez t0, 1b\n"
-        "  li t0,1          # t0 = 1\n"
-        "2:\n"
-        "  amoswap.w.aq  t0,t0,(%0)   # t0 = oldlock & lock = 1\n"
-        "  bnez          t0,2b      # Retry if previously set)\n"
-        : "+r"(pmtx)
-        :
-        : "t0");
-}
-
-/**
  * @brief Release the mutex
  */
 static inline void snrt_mutex_release(volatile uint32_t *pmtx) {
     asm volatile("amoswap.w.rl  x0,x0,(%0)   # Release lock by storing 0\n"
                  : "+r"(pmtx));
 }
-
-//================================================================================
-// Runtime functions
-//================================================================================
-
-/**
- * @brief Bootstrap macro for openmp applications
- */
-#define __snrt_omp_bootstrap(core_idx)     \
-    if (snrt_omp_bootstrap(core_idx)) do { \
-            snrt_cluster_hw_barrier();     \
-            return 0;                      \
-    } while (0)
-
-/**
- * @brief Destroy an OpenMP session so all cores exit cleanly
- */
-#define __snrt_omp_destroy(core_idx) \
-    eu_exit(core_idx);               \
-    dm_exit();                       \
-    snrt_cluster_hw_barrier();
 
 //================================================================================
 // Printf functions

@@ -15,6 +15,13 @@ project(snitch_cluster LANGUAGES C ASM)
 include(SnitchUtilities)
 
 enable_testing()
+
+# Set here (not just in snRuntime/CMakeLists.txt) so sibling directories
+# added below, e.g. software/tests, also see this define -- add_compile_definitions
+# is a directory property and does not propagate to sibling add_subdirectory trees.
+set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
+add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
+
 add_subdirectory(${SNITCH_SOFTWARE_DIR}/snRuntime snRuntime)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/riscvTests riscvTests)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/spatzBenchmarks spatzBenchmarks)
@@ -22,5 +29,15 @@ add_subdirectory(${SNITCH_SOFTWARE_DIR}/snRuntime snRuntime)
 option(ENABLE_CACHEPOOL_TESTS "Enable CachePool tests for spatz" OFF)
 if (ENABLE_CACHEPOOL_TESTS)
     message(STATUS "Adding CachePool tests")
+    # Shared macros (add_spatz_test_*) and common libraries (benchmark,
+    # spin_lock, mcs_lock); must be included before the group subdirectories
+    # below, since they use these macros/libraries in their own CMakeLists.
+    include(${CACHEPOOL_DIR}/software/cmake/CachePoolTests.cmake)
+
+    add_subdirectory(${CACHEPOOL_DIR}/software/cache cache)
+    add_subdirectory(${CACHEPOOL_DIR}/software/sync sync)
+    add_subdirectory(${CACHEPOOL_DIR}/software/kernels/fp kernels_fp)
+    add_subdirectory(${CACHEPOOL_DIR}/software/kernels/int kernels_int)
+    add_subdirectory(${CACHEPOOL_DIR}/software/rlc rlc)
     add_subdirectory(${CACHEPOOL_DIR}/software/tests CachePoolTests)
 endif()

@@ -61,7 +61,7 @@ for {set g 0} {$g < $NUM_GROUPS} {incr g} {
 
             # 4. Plot all cores grouped under their tile
             for {set core 0} {$core < $NUM_CORES} {incr core} {
-                quietly set core_path ${tile_path}/i_tile/gen_core[${core}]
+                quietly set core_path ${tile_path}/i_tile/gen_cc[${core}]
                 do sim/scripts/vsim_core.tcl $g $tile $core ${core_path} "${gwp_name}" "tile[${tile}]"
             }
         }

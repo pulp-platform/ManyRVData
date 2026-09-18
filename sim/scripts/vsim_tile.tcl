@@ -28,7 +28,8 @@ for {set c 0}  {$c < 4} {incr c} {
 
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group amo ${tile_path}/i_tile/gen_cache_connect[$c]/gen_cache_amo_connect[${SNITCH_IDX}]/gen_amo/i_cache_amo/*
 
-	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group coalescer  ${cache_path}/i_par_coalescer_for_spatz/gen_extend_window/i_par_coalescer_extend_window/i_par_coalescer/*
+	# Parent instance: which generate branch (extend/equal window) elaborates is config-dependent.
+	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group coalescer  ${cache_path}/i_par_coalescer_for_spatz/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group core			  ${cache_path}/i_insitu_cache_tcdm_wrapper/i_insitu_cache_core/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group meta_ctrl0	${cache_path}/i_insitu_cache_tcdm_wrapper/gen_cache_banks[0]/i_access_ctrl_for_meta/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group meta_ctrl1	${cache_path}/i_insitu_cache_tcdm_wrapper/gen_cache_banks[1]/i_access_ctrl_for_meta/*

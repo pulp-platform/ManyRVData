@@ -13,18 +13,6 @@ struct snrt_team {
     struct snrt_team_root *root;
 };
 
-struct snrt_allocator_inst {
-    // Base address from where allocation starts
-    uint32_t base;
-    // Number of bytes alloctable
-    uint32_t size;
-    // Address of the next allocated block
-    uint32_t next;
-};
-struct snrt_allocator {
-    struct snrt_allocator_inst l1;
-};
-
 // DRAM heap block header — padded to exactly one cacheline (64 bytes) so that
 // every header and every payload starts on a cacheline boundary.
 #define SNRT_CACHELINE_SIZE 64
@@ -46,9 +34,7 @@ struct snrt_team_root {
     uint32_t cluster_core_num;
     snrt_slice_t global_mem;
     snrt_slice_t cluster_mem;
-    struct snrt_allocator allocator;
     struct snrt_barrier cluster_barrier;
     uint32_t barrier_reg_ptr;
     uint32_t barrier_participation_mask_reg_ptr;
-    struct snrt_peripherals peripherals;
 };

@@ -62,6 +62,8 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
     team->cluster_mem.end = (uint64_t)spm_start + SNRT_BOOT_TCDM_SIZE;
     team->barrier_reg_ptr = (uint32_t)spm_start + SNRT_BOOT_TCDM_SIZE +
                             CACHEPOOL_PERIPHERAL_HW_BARRIER_REG_OFFSET;
+    // Base of the per-slot HW_BARRIER_PARTICIPATION_MASK multireg (slot 0);
+    // snrt_barrier_set_group_mask() indexes off this by barrier_id * 4.
     team->barrier_participation_mask_reg_ptr = (uint32_t)spm_start + SNRT_BOOT_TCDM_SIZE +
                             CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_REG_OFFSET;
 
@@ -82,6 +84,6 @@ void _snrt_init_team(uint32_t cluster_core_id, uint32_t cluster_core_num,
 
 
     // Init allocator
-    snrt_alloc_init(team, sizeof(struct putc_buffer));
+    snrt_alloc_init(sizeof(struct putc_buffer));
     snrt_int_init(team);
 }
