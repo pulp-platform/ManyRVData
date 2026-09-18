@@ -200,4 +200,3 @@ add wave -noupdate {*}$parent_grp -group ${name} -group Spatz -group RSP_FIFO ${
 add wave -noupdate {*}$parent_grp -group ${name} -group Spatz -group RSP_FIFO ${core_path}/i_cachepool_cc/spatz_mem_rsp_empty
 add wave -noupdate {*}$parent_grp -group ${name} -group Spatz -group RSP_FIFO ${core_path}/i_cachepool_cc/spatz_mem_rsp_pop
 add wave -noupdate {*}$parent_grp -group ${name} -group Spatz -group RSP_FIFO ${core_path}/i_cachepool_cc/spatz_mem_rsp_push
-add wave -noupdate {*}$parent_grp -group ${name} -group Spatz -group RSP_FIFO ${core_path}/i_cachepool_cc/spatz_mem_fifo_bypass
