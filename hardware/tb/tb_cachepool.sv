@@ -179,8 +179,14 @@ module tb_cachepool;
     $display("Loading entry point: %0x", entry_point);
 
     // Wait for a while, so that all cores are in wfi mode
-    repeat (1000)
-      @(posedge clk);
+    if (NumCores < 256) begin
+      repeat (1000)
+        @(posedge clk);
+    end else begin
+      localparam WaitCyc = (NumCores/128) * 1000;
+      repeat (WaitCyc)
+        @(posedge clk);
+    end
 
     // Store the entry point in the Spatz cluster
     to_cluster_req = '{
