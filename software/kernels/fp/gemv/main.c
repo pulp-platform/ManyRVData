@@ -18,6 +18,7 @@
 
 #include <benchmark.h>
 #include <snrt.h>
+#include <spatz_lock.h>
 #include <stdio.h>
 #include <l1cache.h>
 
@@ -66,9 +67,6 @@ int main() {
   // Reset timer
   unsigned int timer_start, timer_end, timer, timer_iter1;
 
-  // Unroll in M direction?
-  int unroll_m = 0;
-
   a = gemv_A_dram;
   b = gemv_B_dram;
 
@@ -93,49 +91,54 @@ int main() {
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
+  // LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
+  // round-robin-arbitrate with host 1 even though it never issues here.
+  // Held across the whole loop -- l1d_cluster_flush() below doesn't touch
+  // Spatz, so it's harmless for host 0 to keep the lock while host 1 reaches it.
+  if (is_primary) {
+    spatz_lock_acquire();
+  }
 
+  // The loop stays unconditional so host 1 reaches l1d_cluster_flush() below
+  // (must be called by every core); only host 0's own compute and barrier
+  // are gated.
   for (int i = 0; i < 3; i++) {
-
-    // Start dump
-    if (is_primary && cid == 0) {
-      start_kernel();
-      // Start timer
-      timer_start = benchmark_get_cycle();
-    }
-
-    // Calculate gemv
     if (is_primary) {
-      if (sizeof(T) == 8)
+      if (cid == 0) {
+        start_kernel();
+        timer_start = benchmark_get_cycle();
+      }
+
+      if (sizeof(T) == 8) {
         // does not support 64b
+        spatz_lock_release();
         return -2;
-      else if (sizeof(T) == 4)
+      } else if (sizeof(T) == 4) {
         gemv_v32b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
-      else
+      } else {
         gemv_v16b_m4(a_core, b, result_core, gemv_l.M, m_core, gemv_l.N);
-    }
-
-    // Wait for all cores to finish
-    snrt_cluster_hw_barrier();
-
-
-    if (is_primary && cid == 0) {
-      // End timer and check if new best runtime
-      timer_end = benchmark_get_cycle();
-      unsigned int timer_temp = timer_end - timer_start;
-
-      if (timer_temp < timer) {
-        timer = timer_temp;
       }
 
-      stop_kernel();
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
-      if (i == 0) {
-        timer = timer_temp;
-        timer_iter1 = timer;
+      if (cid == 0) {
+        timer_end = benchmark_get_cycle();
+        unsigned int timer_temp = timer_end - timer_start;
+
+        if (timer_temp < timer) {
+          timer = timer_temp;
+        }
+
+        stop_kernel();
+
+        if (i == 0) {
+          timer = timer_temp;
+          timer_iter1 = timer;
+        }
       }
     }
 
-    // All cores flush before first-iteration verification
+    // All cores flush before first-iteration verification.
     if (i == 0) {
       l1d_cluster_flush();
     }
@@ -155,7 +158,6 @@ int main() {
     }
 
     snrt_cluster_hw_barrier();
-
   }
 
   // Check and display results
@@ -176,6 +178,11 @@ int main() {
     printf("The execution took %u cycles.\n", timer);
     printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
            performance, utilization);
+  }
+
+  // main()'s epilogue restores callee-saved FP registers unconditionally, even for host 1.
+  if (is_primary) {
+    spatz_lock_release();
   }
 
   // Wait for core 0 to finish displaying results

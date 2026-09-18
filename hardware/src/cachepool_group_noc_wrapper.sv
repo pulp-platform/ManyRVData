@@ -136,7 +136,8 @@ module cachepool_group_noc_wrapper
   localparam int unsigned MstXbarSelW             = (NumNoCPortsGroup > 1) ? $clog2(NumNoCPortsGroup) : 1;
 
   // -- Struct / xbar field widths (always >= 1 to avoid zero-width ports) ------
-  localparam int unsigned NocCacheBankBits  = $clog2(NrBanks);
+  // Must match tcdm_cache_interco.sv's CacheBankBits: slices the same untouched address field.
+  localparam int unsigned NocCacheBankBits  = $clog2(NumL1CtrlTile);
   localparam int unsigned NocAddrTileWidth  = (NumTilesPerGroup > 1) ? $clog2(NumTilesPerGroup) : 1;
   // -- Actual bit counts inside dst_tile_id (can be 0 when that dimension = 1) -
   // Flat group_id = gy * NumGroupsX + gx  (row-major, set in cachepool_cluster.sv).

@@ -73,14 +73,16 @@ static uint32_t snrt_cc_role_mask(int want_primary) {
     return mask;
 }
 
-void snrt_cluster_host0_barrier() {
+void snrt_cluster_host0_barrier(uint32_t barrier_id) {
     if (!snrt_cluster_is_primary()) return;
-    snrt_cluster_partial_barrier(snrt_cc_role_mask(1));
+    snrt_cluster_group_barrier(snrt_cc_role_mask(1), SNRT_BARRIER_TILE_MASK_ALL,
+                                0, barrier_id);
 }
 
-void snrt_cluster_host1_barrier() {
+void snrt_cluster_host1_barrier(uint32_t barrier_id) {
     if (snrt_cluster_is_primary()) return;
-    snrt_cluster_partial_barrier(snrt_cc_role_mask(0));
+    snrt_cluster_group_barrier(snrt_cc_role_mask(0), SNRT_BARRIER_TILE_MASK_ALL,
+                                0, barrier_id);
 }
 
 /// Synchronize cores in a cluster with a software barrier

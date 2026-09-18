@@ -18,6 +18,7 @@
 
 #include <benchmark.h>
 #include <snrt.h>
+#include <spatz_lock.h>
 #include <stdio.h>
 
 #include DATAHEADER
@@ -33,9 +34,7 @@ int main() {
   /*** DRAM Parameters for Optimization ***/
   const uint32_t l2_interleave = 16;
   const uint32_t l2_channel    = 4;
-  // in bits
   const uint32_t l2_lanewidth  = 512;
-  // This is the continuous address block (bits) in DRAM
   const uint32_t l2_block_size = l2_lanewidth * l2_interleave;
   const uint32_t l2_block_elem = l2_block_size / 32;
 
@@ -62,57 +61,48 @@ int main() {
   }
 
   uint32_t elem_per_round = lmul * lmul_m1_elem;
-  // We need to reduce scrambling size while keeping all channels busy
-  // This is needed to reduce the loop control overhead
   uint32_t rounds         = dotp_l.M / elem_per_round / num_cores;
-
 
   if ((elem_per_round * num_cores) < (l2_block_elem * l2_channel)) {
     if (is_primary && cid == 0) {
       printf("Warning: Current scheme cannot utilize all bandwidth!\n");
     }
   }
-  
-  // We want to map one block for one core to access
-  // This will make the cores visiting different DRAM channel
-  // Therefore, we need to scramble the L1 xbar at the same size
-  // Notice scrambling here is in bytes
+
   const uint32_t l1_scramble_bits = 31 - __builtin_clz(elem_per_round*32/8);
 
-  // Set xbar policy
+  // Must be called by all cores, so it stays above the is_primary guard below.
   l1d_xbar_config(l1_scramble_bits);
 
-  // Now for all cores, it will execute #elem_per_round# data each round
-  // And then jump #elem_per_round*num_cores# elements in address for next round
-  uint32_t elem_jump_per_round = elem_per_round * num_cores;
+  // Host 1 never touches Spatz or the shared result/timer state in this
+  // kernel, so the rest of main() is gated by one check instead of many.
+  if (is_primary) {
+    uint32_t elem_jump_per_round = elem_per_round * num_cores;
 
-  // Reset timer
-  uint32_t timer = (uint32_t)-1;
-  uint32_t timer_tmp, timer_iter1;
+    uint32_t timer = (uint32_t)-1;
+    uint32_t timer_tmp, timer_iter1;
 
-  // Calculate the starting points for each core
-  float *a_int = dotp_A_dram + cid * elem_per_round;
-  float *b_int = dotp_B_dram + cid * elem_per_round;
+    float *a_int = dotp_A_dram + cid * elem_per_round;
+    float *b_int = dotp_B_dram + cid * elem_per_round;
 
-  if (is_primary && cid == 0) {
-    printf("lmul:%u, elem:%u, offs:%u, iter:%u\n", lmul, elem_per_round, elem_jump_per_round, rounds);
-  }
+    if (cid == 0) {
+      printf("lmul:%u, elem:%u, offs:%u, iter:%u\n", lmul, elem_per_round, elem_jump_per_round, rounds);
+    }
 
+    // LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
+    // round-robin-arbitrate with host 1 even though it never issues here.
+    spatz_lock_acquire();
 
-  for (int iter = 0; iter < measure_iter; iter ++) {
-    // Start dump
-    if (is_primary && cid == 0)
-      start_kernel();
+    for (int iter = 0; iter < measure_iter; iter ++) {
+      if (cid == 0)
+        start_kernel();
 
-    snrt_cluster_hw_barrier();
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
-    // Start timer
-    timer_tmp = benchmark_get_cycle();
+      timer_tmp = benchmark_get_cycle();
 
-    // Calculate dotp
-    float acc;
+      float acc;
 
-    if (is_primary) {
       if (lmul >= 8)
         acc = fdotp_v32b_lmul8(a_int, b_int, elem_jump_per_round, elem_per_round, rounds);
       else if (lmul >= 4)
@@ -125,76 +115,73 @@ int main() {
         return -3;
 
       result[cid] = acc;
+
+      snrt_fence_spatz();
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
+
+      if (cid == 0) {
+        timer_tmp = benchmark_get_cycle() - timer_tmp;
+        timer = (timer < timer_tmp) ? timer : timer_tmp;
+        if (iter == 0)
+          timer_iter1 = timer;
+
+        stop_kernel();
+      }
+
+      // Two-level reduction tree, group size 4.
+      const uint32_t red_group = 4;
+
+      if (cid % red_group == 0) {
+        for (uint32_t i = 1; i < red_group && (cid + i) < num_cores; ++i)
+          acc += result[cid + i];
+        result[cid] = acc;
+      }
+
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
+
+      if (cid == 0) {
+        for (uint32_t g = red_group; g < num_cores; g += red_group)
+          acc += result[g];
+        result[0] = acc;
+      }
     }
 
-    // Make sure spatz has finished writing
-    snrt_fence_spatz();
+    if (cid == 0) {
+      // timer excludes the reduction above.
+      uint32_t performance = 1000 * 2 * dotp_l.M / timer;
+      uint32_t perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
+      uint32_t utilization = performance / (2 * num_cores * 4);
+      uint32_t util_iter1  = perf_iter1  / (2 * num_cores * 4);
+      write_cyc(timer);
 
-    // Wait for all cores to finish
-    snrt_cluster_hw_barrier();
-
-    // End timer and check if new best runtime
-    if (is_primary && cid == 0) {
-      timer_tmp = benchmark_get_cycle() - timer_tmp;
-      timer = (timer < timer_tmp) ? timer : timer_tmp;
-      if (iter == 0)
-        timer_iter1 = timer;
-
-      stop_kernel();
+      printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
+      printf("The 1st execution took %u cycles.\n", timer_iter1);
+      printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
+             perf_iter1 , util_iter1);
+      printf("The execution took %u cycles.\n", timer);
+      printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
+             performance, utilization);
     }
 
-    // Final reduction: two-level tree with group size 4
-    const uint32_t red_group = 4;
-
-    // Level 1: lead core of each group accumulates its group
-    if (is_primary && cid % red_group == 0) {
-      for (uint32_t i = 1; i < red_group && (cid + i) < num_cores; ++i)
-        acc += result[cid + i];
-      result[cid] = acc;
+    if (cid == 0) {
+      if (fp_check(result[0], dotp_result*measure_iter)) {
+        printf("Check Failed!\n");
+        printf("Calc:");
+        snrt_printf_float(result[0]);
+        printf(", Exp:");
+        snrt_printf_float((float)(dotp_result * measure_iter));
+        printf("\n");
+        return -1;
+      }
     }
 
-    snrt_cluster_hw_barrier();
+    snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
-    // Level 2: core 0 sums all group results
-    if (is_primary && cid == 0) {
-      for (uint32_t g = red_group; g < num_cores; g += red_group)
-        acc += result[g];
-      result[0] = acc;
-    }
-
+    // main()'s epilogue restores fs0 unconditionally, even for host 1.
+    spatz_lock_release();
   }
 
-  // Check and display results
-  if (is_primary && cid == 0) {
-    // The timer did not count the reduction time
-    uint32_t performance = 1000 * 2 * dotp_l.M / timer;
-    uint32_t perf_iter1  = 1000 * 2 * dotp_l.M / timer_iter1;
-    uint32_t utilization = performance / (2 * num_cores * 4);
-    uint32_t util_iter1  = perf_iter1  / (2 * num_cores * 4);
-    write_cyc(timer);
-
-    printf("\n----- (%d) sp fdotp -----\n", dotp_l.M);
-    printf("The 1st execution took %u cycles.\n", timer_iter1);
-    printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
-           perf_iter1 , util_iter1);
-    printf("The execution took %u cycles.\n", timer);
-    printf("The performance is %u OP/1000cycle (%u%%o utilization).\n",
-           performance, utilization);
-  }
-
-  if (is_primary && cid == 0) {
-    if (fp_check(result[0], dotp_result*measure_iter)) {
-      printf("Check Failed!\n");
-      printf("Calc:");
-      snrt_printf_float(result[0]);
-      printf(", Exp:");
-      snrt_printf_float((float)(dotp_result * measure_iter));
-      printf("\n");
-      return -1;
-    }
-  }
-
-  // Wait for core 0 to display the results
+  // Explicit closing barrier instead of relying on the implicit post-main() one.
   snrt_cluster_hw_barrier();
 
   return 0;

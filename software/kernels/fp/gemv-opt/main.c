@@ -18,6 +18,7 @@
 
 #include <benchmark.h>
 #include <snrt.h>
+#include <spatz_lock.h>
 #include <stdio.h>
 #include <l1cache.h>
 
@@ -47,10 +48,6 @@ static inline int fp_check(const T *a, const T *b) {
 
   return comp > threshold;
 }
-
-// static float result __attribute__((section(".data")));
-// spinlock_t lock;
-
 
 // Notice that A matrix might be transposed for easier access (not necessary)
 // But the comments/algorithm will not assume it is transposed
@@ -124,13 +121,7 @@ int main() {
   const uint32_t l2_block_size = l2_lanewidth * l2_interleave;
   const uint32_t l2_block_elem = l2_block_size / elem_width;
 
-  // In general, the data block should be much larger than DRAM block (1 KiB)
-  // To fully utilize the BW, we will add offset of starting points
-  // Warn if the data block is too small
-
   // Are we fully utilizing the off-chip bandwidth?
-  // If our block size is a 4-times multiple of l2 block size
-  // Then we will always visiting the same L2 channel
   if (block_elem_core < l2_block_elem) {
     if (is_primary && cid == 0) {
       printf("FATAL: Current scheme cannot utilize all bandwidth!\n");
@@ -139,9 +130,6 @@ int main() {
     snrt_cluster_hw_barrier();
     return -1;
   }
-
-  // Reset timer
-  unsigned int timer_start, timer_end, timer, timer_iter1;
 
   // Calculate the starting points for each core
   // Notice it might be differnt if the matrix is transposed
@@ -174,18 +162,22 @@ int main() {
   // Wait for all cores to finish
   snrt_cluster_hw_barrier();
 
+  // Host 1 never touches Spatz or the shared result/timer state in this
+  // kernel, so the rest of main() is gated by one check instead of many.
+  if (is_primary) {
+    // Reset timer
+    unsigned int timer_start, timer_end, timer, timer_iter1;
 
-  for (int i = 0; i < 3; i++) {
+    // LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
+    // round-robin-arbitrate with host 1 even though it never issues here.
+    spatz_lock_acquire();
 
-    // Start dump
-    if (is_primary && cid == 0) {
-      start_kernel();
-      // Start timer
-      timer_start = benchmark_get_cycle();
-    }
+    for (int i = 0; i < 3; i++) {
+      if (cid == 0) {
+        start_kernel();
+        timer_start = benchmark_get_cycle();
+      }
 
-    // Calculate gemv
-    if (is_primary) {
       if (lmul == 4) {
         gemv_v32b_m4(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
       } else if (lmul == 2) {
@@ -193,62 +185,64 @@ int main() {
       } else if (lmul == 1) {
         gemv_v32b_m1(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
       }
-    }
 
-    // Wait for all cores to finish
-    snrt_cluster_hw_barrier();
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
+      if (cid == 0) {
+        timer_end = benchmark_get_cycle();
+        unsigned int timer_temp = timer_end - timer_start;
 
-    if (is_primary && cid == 0) {
-      // End timer and check if new best runtime
-      timer_end = benchmark_get_cycle();
-      unsigned int timer_temp = timer_end - timer_start;
+        if (timer_temp < timer) {
+          timer = timer_temp;
+        }
 
-      if (timer_temp < timer) {
-        timer = timer_temp;
-      }
+        stop_kernel();
 
-      stop_kernel();
+        if (i == 0) {
+          timer = timer_temp;
+          timer_iter1 = timer;
 
-      if (i == 0) {
-        timer = timer_temp;
-        timer_iter1 = timer;
-
-        for (uint32_t j = 0; j < gemv_l.M; j++) {
-          if (fp_check(&result[j], &gemv_result[j])) {
-            printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[j], gemv_result[j]);
+          for (uint32_t j = 0; j < gemv_l.M; j++) {
+            if (fp_check(&result[j], &gemv_result[j])) {
+              printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[j], gemv_result[j]);
+            }
           }
         }
+      } else {
+        cachepool_wait(10);
       }
-    } else {
-      cachepool_wait(10);
+
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
     }
 
-    snrt_cluster_hw_barrier();
+    // Check and display results
+    if (cid == 0) {
+      long unsigned int performance =
+          1000 * 2 * gemv_l.M * gemv_l.N / timer;
+      long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));
 
+      long unsigned int performance_iter1 =
+          1000 * 2 * gemv_l.M * gemv_l.N / timer_iter1;
+      long unsigned int utilization_iter1 = performance_iter1 / (2 * num_cores * 4 * (4 / sizeof(T)));
+
+      write_cyc(timer);
+      printf("\n----- (%d x %d) x (%d x 1) gemv -----\n", gemv_l.M, gemv_l.N, gemv_l.N);
+      printf("First iteration execution took %u cycles.\n", timer_iter1);
+      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+             performance_iter1, utilization_iter1);
+      printf("The execution took %u cycles.\n", timer);
+      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+             performance, utilization);
+    }
+
+    snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
+
+    // main()'s epilogue restores callee-saved FP registers unconditionally, even for host 1.
+    spatz_lock_release();
   }
 
-  // Check and display results
-  if (is_primary && cid == 0) {
-    long unsigned int performance =
-        1000 * 2 * gemv_l.M * gemv_l.N / timer;
-    long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));
-
-    long unsigned int performance_iter1 =
-        1000 * 2 * gemv_l.M * gemv_l.N / timer_iter1;
-    long unsigned int utilization_iter1 = performance_iter1 / (2 * num_cores * 4 * (4 / sizeof(T)));
-
-    write_cyc(timer);
-    printf("\n----- (%d x %d) x (%d x 1) gemv -----\n", gemv_l.M, gemv_l.N, gemv_l.N);
-    printf("First iteration execution took %u cycles.\n", timer_iter1);
-    printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
-           performance_iter1, utilization_iter1);
-    printf("The execution took %u cycles.\n", timer);
-    printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
-           performance, utilization);
-  }
-
-  // Wait for core 0 to finish displaying results
+  // Explicit closing barrier instead of relying on the implicit post-main() one.
   snrt_cluster_hw_barrier();
+
   return 0;
 }

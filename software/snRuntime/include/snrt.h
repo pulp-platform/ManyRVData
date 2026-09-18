@@ -47,8 +47,11 @@ extern void snrt_barrier(struct snrt_barrier *barr, uint32_t n);
 /// a slot id (barrier_id), so rounds on different slots never serialize
 /// behind each other. Every core in a round must agree on identical
 /// (core_mask, tile_mask, local_only, barrier_id). Slot 0 is reserved for
-/// snrt_cluster_hw_barrier() and the host0/host1 barriers below; use
-/// 1..N-1 for application rounds.
+/// full-participation rounds only (core_mask=ALL, e.g. snrt_cluster_hw_barrier());
+/// any round with a narrower core_mask must use a different slot, since a
+/// late-arriving full-participation request on the same slot gets absorbed
+/// into whatever narrower round is still in flight instead of starting its
+/// own. Sequential full-participation rounds may freely share slot 0.
 #define SNRT_BARRIER_TILE_MASK_LSB  8
 #define SNRT_BARRIER_LOCAL_ONLY_BIT 16
 #define SNRT_BARRIER_ID_LSB         17
@@ -73,13 +76,25 @@ extern void snrt_cluster_partial_barrier(uint32_t local_mask);
 extern void snrt_cluster_group_barrier(uint32_t core_mask, uint32_t tile_mask,
                                         int local_only, uint32_t barrier_id);
 
-/// Barrier across only host-0 (primary) harts. Callable unconditionally
-/// from any hart; host-1 harts return immediately without participating.
-extern void snrt_cluster_host0_barrier();
+// On dual-scalar builds host0's core_mask is a real subset (needs its own
+// slot, isolated from snrt_cluster_hw_barrier()'s slot 0); on single-scalar
+// builds every hart is host 0, so its core_mask is always ALL and sharing
+// slot 0 is provably safe -- use it there to leave every other slot free.
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+#define SNRT_HOST_BARRIER_SLOT 1
+#else
+#define SNRT_HOST_BARRIER_SLOT 0
+#endif
 
-/// Barrier across only host-1 (secondary) harts. Callable unconditionally
-/// from any hart; host-0 harts return immediately without participating.
-extern void snrt_cluster_host1_barrier();
+/// Barrier across only host-0 (primary) harts, on the given slot. Callable
+/// unconditionally from any hart; host-1 harts return immediately without
+/// participating.
+extern void snrt_cluster_host0_barrier(uint32_t barrier_id);
+
+/// Barrier across only host-1 (secondary) harts, on the given slot. Callable
+/// unconditionally from any hart; host-0 harts return immediately without
+/// participating.
+extern void snrt_cluster_host1_barrier(uint32_t barrier_id);
 
 static inline uint32_t __attribute__((pure)) snrt_hartid();
 struct snrt_team_root *snrt_current_team();

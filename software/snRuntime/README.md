@@ -59,7 +59,7 @@ A plain load (no write), which is what `snrt_cluster_hw_barrier()` issues, is th
 
 Barrier slots are independent, concurrently-live round trackers (`NumBarrierSlots` of them, replicated at tile/group/cluster level, see `cachepool_pkg::NumBarrierSlots`), so rounds on different slots never serialize behind each other, even within the same tile or group.
 The slot id is direct-mapped and software-chosen: every core participating in a given round must supply the identical id, exactly like they must already agree on the masks and `local_only`.
-Slot 0 is reserved for the legacy `snrt_cluster_hw_barrier()` and `snrt_cluster_host0_barrier()`/`snrt_cluster_host1_barrier()`; application code should use `1..NumBarrierSlots-1`.
+Slot 0 is reserved for the legacy `snrt_cluster_hw_barrier()`, which is always full-participation (`core_mask=ALL`); sharing it with any narrower-`core_mask` round risks corrupting that round's tile-level tracker if the two are ever concurrently in flight, so every other round — including `snrt_cluster_host0_barrier()`/`snrt_cluster_host1_barrier()` — must use its own distinct slot from `1..NumBarrierSlots-1`.
 `NumBarrierSlots` is a per-config Makefile knob (`num_barrier_slots`, default 2, 4 on dual-scalar configs).
 
 ```c
@@ -83,7 +83,8 @@ For any other tile subset there is still no group-relative tile index helper (on
 `snrt_barrier_set_group_mask(barrier_id, mask)` programs the given slot's cluster-level group-participation mask (one bit per group, one register per slot), consulted only by rounds on that slot that actually reach cluster level.
 Call it from exactly one core, then use `snrt_cluster_hw_barrier()` as a resync point before relying on it, since the cluster barrier FSM samples this mask live when the first participating group arrives.
 
-`snrt_cluster_host0_barrier()` / `snrt_cluster_host1_barrier()` (documented under the Spatz lock section below) are built on `snrt_cluster_partial_barrier()` and so always reach cluster level on slot 0.
+`snrt_cluster_host0_barrier(barrier_id)` / `snrt_cluster_host1_barrier(barrier_id)` (documented under the Spatz lock section below) are built on `snrt_cluster_group_barrier()` and so always reach cluster level, on the given slot.
+`SNRT_HOST_BARRIER_SLOT` is the usual choice: slot 1 on dual-scalar builds (host 0's `core_mask` is a real subset there, so it needs isolation from slot 0), or slot 0 on single-scalar builds (every hart is host 0, so its `core_mask` is always `ALL` — provably identical in scope to `snrt_cluster_hw_barrier()`, so sharing slot 0 is safe and leaves every other slot free for application use).
 
 ### L1 Data Cache — CachePool-specific (`l1cache.h`)
 
@@ -161,9 +162,9 @@ spatz_lock_outcome_t spatz_lock_outcome(uint32_t raw);  // decode the above
 Related topology/sync helpers in `snrt.h`:
 
 ```c
-int  snrt_cluster_is_primary();       // true for the pair's default owner (even cid)
-void snrt_cluster_host0_barrier();    // partial barrier over default owners only
-void snrt_cluster_host1_barrier();    // partial barrier over their partners only
+int  snrt_cluster_is_primary();                       // true for the pair's default owner (even cid)
+void snrt_cluster_host0_barrier(uint32_t barrier_id);  // partial barrier over default owners only
+void snrt_cluster_host1_barrier(uint32_t barrier_id);  // partial barrier over their partners only
 ```
 
 ### Memory Allocation (`snrt.h`)

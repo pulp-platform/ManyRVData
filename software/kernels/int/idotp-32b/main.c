@@ -30,8 +30,10 @@ int main() {
   const uint32_t num_cores = snrt_cluster_core_num();
   const uint32_t cid = snrt_cluster_core_idx();
 
-  // Diagnostic: have host 0 of each pair hold the Spatz lock for the whole
-  // kernel, without gating any of the execution below on it.
+  // Host 0 holds the Spatz lock for the whole kernel: LOCKED mode gives it
+  // unarbitrated access (vs. FREE mode's round-robin arbitration with host
+  // 1, which never touches Spatz here). No release needed; host 1 stays
+  // idle for the whole kernel and nothing else needs Spatz afterward.
   if (snrt_cluster_is_primary()) {
     spatz_lock_acquire();
   }
@@ -63,7 +65,7 @@ int main() {
     printf ("round:%u, lmul:%u, dim:%u\n", rounds, lmul, dim);
   }
 
-  snrt_cluster_host0_barrier();
+  snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
   // Reset timer
   uint32_t timer = (uint32_t)-1;
@@ -102,7 +104,7 @@ int main() {
 
     // Host 0 only: this kernel doesn't care about host 1's progress or
     // data at all, so no barrier or read ever involves it.
-    snrt_cluster_host0_barrier();
+    snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
     // End timer and check if new best runtime
     if (cid == 0) {
@@ -133,7 +135,7 @@ int main() {
     }
   }
 
-  snrt_cluster_host0_barrier();
+  snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
   // Check and display results
   if (cid == 0) {
@@ -164,7 +166,7 @@ int main() {
   }
 
   // Wait for core 0 to display the results
-  snrt_cluster_host0_barrier();
+  snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
   return 0;
 }
