@@ -211,6 +211,37 @@ RLC_LINE_VAR(spinlock_t, pdcp_pkd_ptr);
 RLC_LINE_VAR(mcs_lock_t, pdcp_pkd_ptr_lock);
 
 RLC_LINE_VAR(_Atomic(uint32_t), producer_done);
+/* Per-group packet streams (RLC_GROUP_STREAMS=1).
+
+   The default producer path takes one global descriptor lock and one global node-pool lock per
+   packet. On the 4x4 mesh that caps the whole cluster at ~4 M pkt/s with 16 producers and ~0.9 M
+   with 64 (the handoff crosses the mesh), whatever the entity count.
+
+   With streams, every group that hosts producers owns one stream: stream s takes descriptors
+   s, s+n, s+2n, ... (n = number of streams) with a single atomic fetch-add -- no lock -- and
+   allocates nodes from its own slice of the pool under its own lock. A node goes back to the slice
+   it came from (found from its address), so the STATUS core can free any node. Every stream sits
+   on its own cache line. Needs the data header's producer list. */
+#if RLC_GROUP_STREAMS
+#ifndef RLC_TILES_PER_GROUP
+#define RLC_TILES_PER_GROUP 4
+#endif
+typedef struct {
+    _Atomic uint32_t next;       /* descriptors taken from this stream so far */
+    spinlock_t pool_lock;
+    uint32_t pool_used;          /* pages handed out from this stream's slice */
+    MM_FreePage *free_list;
+} __attribute__((aligned(RLC_SYNC_LINE_BYTES))) rlc_stream_t;
+static rlc_stream_t rlc_stream[RLC_MAX_STREAMS] __attribute__((section(".data")));
+RLC_LINE_VAR(uint32_t, rlc_nstreams);        /* set once by core 0 before the start barrier */
+RLC_LINE_VAR(uint32_t, rlc_stream_pages);    /* pool pages per stream */
+#if RLC_PAD_SYNC
+#define rlc_nstreams     (rlc_nstreams_line.v)
+#define rlc_stream_pages (rlc_stream_pages_line.v)
+#endif
+void rlc_streams_init(void);
+#endif
+
 #if RLC_ARRIVAL_PPS
 RLC_LINE_VAR(uint32_t, rlc_arrival_t0);
 #if RLC_PAD_SYNC

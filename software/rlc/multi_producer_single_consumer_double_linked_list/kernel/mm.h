@@ -28,7 +28,12 @@
 #ifndef MM_POOL_PAGES
 #define MM_POOL_PAGES 1024                /* live nodes are bounded by min(NUM_PKGS, MM_POOL_PAGES) */
 #endif
+#if RLC_GROUP_STREAMS
+/* One partition per stream, each rounded up to a whole page count. */
+#define BUFFER_SIZE (PAGE_SIZE * (MM_POOL_PAGES + RLC_MAX_STREAMS))
+#else
 #define BUFFER_SIZE (PAGE_SIZE * MM_POOL_PAGES)      /* memory pool size in byte */
+#endif
 
 static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))

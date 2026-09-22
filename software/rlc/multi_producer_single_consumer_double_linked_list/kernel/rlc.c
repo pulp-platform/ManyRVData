@@ -377,6 +377,146 @@ static inline unsigned int rlc_status_core(void) {
 #endif
 }
 
+#if RLC_GROUP_STREAMS
+#if !RLC_CORE_LISTS
+#error "RLC_GROUP_STREAMS needs the data header's producer_core_ids"
+#endif
+/* Lead between stream setup and the first paced arrival: covers the start barrier and dispatch. */
+#define RLC_ARRIVAL_LEAD 5000u
+
+static inline uint32_t rlc_group_of(uint32_t core) {
+    return core / (snrt_cluster_core_per_tile() * RLC_TILES_PER_GROUP);
+}
+
+/* The STATUS core (first producer) takes no packets in stream mode when there are other producers:
+   it sweeps every entity between two packets, so a stream it owned would lag the others by that
+   much, and with paced arrival nobody steals from a stream that is late but not empty (TC3 16P:
+   1/16 of the packets up to 5 ms late). */
+#define RLC_STATUS_PRODUCES (NUM_PRODUCER_CORES == 1)
+
+/* Stream of a core = position of its group among the distinct groups of the packet-taking
+   producers, in list order. Also returns the number of streams. */
+static uint32_t rlc_stream_index(uint32_t core, uint32_t *nstreams) {
+    uint32_t groups[RLC_MAX_STREAMS];
+    uint32_t n = 0u, mine = 0u;
+    const uint32_t g_me = rlc_group_of(core);
+    for (uint32_t i = RLC_STATUS_PRODUCES ? 0u : 1u; i < NUM_PRODUCER_CORES; i++) {
+        const uint32_t g = rlc_group_of(producer_core_ids[i]);
+        uint32_t j = 0u;
+        while (j < n && groups[j] != g) j++;
+        if (j == n && n < RLC_MAX_STREAMS) groups[n++] = g;
+        if (g == g_me) mine = j;
+    }
+    *nstreams = n;
+    return mine;
+}
+
+void rlc_streams_init(void) {
+    uint32_t n;
+    (void)rlc_stream_index(producer_core_ids[NUM_PRODUCER_CORES - 1], &n);
+    rlc_nstreams = n;
+    rlc_stream_pages = (MM_POOL_PAGES + n - 1u) / n;
+    for (uint32_t s = 0u; s < RLC_MAX_STREAMS; s++) {
+        rlc_stream[s].next = 0u;
+        rlc_stream[s].pool_lock = 0;
+        rlc_stream[s].pool_used = 0u;
+        rlc_stream[s].free_list = NULL;
+    }
+#if RLC_ARRIVAL_PPS
+    rlc_arrival_t0 = benchmark_get_cycle() + RLC_ARRIVAL_LEAD;
+#endif
+}
+
+/* This core's stream, set once on entry to the producer loop, and the stream it currently takes
+   from (its own until that runs dry, then the others in turn). */
+static __thread uint32_t rlc_my_stream;
+static __thread uint32_t rlc_take_stream;
+
+/* Next descriptor, or -1 when every stream is exhausted.
+
+   A producer drains its own stream first and then steals from the others. Without stealing a
+   stream is only as fast as its own producers: the STATUS core is also a producer and sweeps
+   every entity between two packets, so on TC3 (4800 entities) its stream trickled out for
+   ~170 ms after all the others were done. */
+#if RLC_ARRIVAL_PPS
+#define CPU_FREQENCY 1000000000 /* same definition as below, needed earlier here */
+#define RLC_PERIOD_Q8 (((uint64_t)CPU_FREQENCY << 8) / RLC_ARRIVAL_PPS)
+static inline uint32_t rlc_due(uint32_t idx) {
+    return rlc_arrival_t0 + (uint32_t)(((uint64_t)idx * RLC_PERIOD_Q8) >> 8);
+}
+/* Streams are fed by different numbers of producers (the STATUS core's group has one fewer), so
+   under paced arrival one stream can fall behind while the others are merely early -- and
+   stealing on exhaustion never triggers. A producer whose own next packet has not arrived yet
+   serves the first stream that is more than RLC_STEAL_SLACK cycles behind instead of waiting. */
+#define RLC_STEAL_SLACK 2000u
+static int rlc_stream_take_late(void) {
+    const uint32_t now = benchmark_get_cycle();
+    const uint32_t own = rlc_take_stream;
+    const uint32_t k_own = atomic_load_explicit(&rlc_stream[own].next, memory_order_relaxed);
+    const uint32_t i_own = k_own * rlc_nstreams + own;
+    if (i_own >= NUM_PKGS || (int32_t)(rlc_due(i_own) - now) <= 0) return -1;
+    for (uint32_t d = 1u; d < rlc_nstreams; d++) {
+        const uint32_t s = (own + d) % rlc_nstreams;
+        const uint32_t k = atomic_load_explicit(&rlc_stream[s].next, memory_order_relaxed);
+        const uint32_t i = k * rlc_nstreams + s;
+        if (i < NUM_PKGS && (int32_t)(now - rlc_due(i)) > (int32_t)RLC_STEAL_SLACK) {
+            const uint32_t k2 = atomic_fetch_add_explicit(&rlc_stream[s].next, 1u, memory_order_relaxed);
+            const uint32_t i2 = k2 * rlc_nstreams + s;
+            if (i2 < NUM_PKGS) return (int)i2;
+        }
+    }
+    return -1;
+}
+#endif
+
+static int rlc_stream_take(void) {
+#if RLC_ARRIVAL_PPS
+    const int late = rlc_stream_take_late();
+    if (late >= 0) return late;
+#endif
+    for (uint32_t tries = 0u; tries < rlc_nstreams; tries++) {
+        const uint32_t s = rlc_take_stream;
+        const uint32_t k = atomic_fetch_add_explicit(&rlc_stream[s].next, 1u, memory_order_relaxed);
+        const uint32_t idx = k * rlc_nstreams + s;
+        if (idx < NUM_PKGS) return (int)idx;
+        rlc_take_stream = (s + 1u == rlc_nstreams) ? 0u : s + 1u;
+    }
+    return -1;
+}
+
+/* Nodes come from the slice of the stream the packet belongs to, not the producer's: a stealing
+   producer would otherwise run its own slice dry, and an allocation failure drops the packet. */
+static void *rlc_node_alloc(uint32_t s) {
+    rlc_stream_t *st = &rlc_stream[s];
+    void *page = NULL;
+    mm_lock_acquire(&st->pool_lock);
+    if (st->pool_used < rlc_stream_pages) {
+        page = (uint8_t *)bulk_buffer + (s * rlc_stream_pages + st->pool_used) * PAGE_SIZE;
+        st->pool_used++;
+    } else if (st->free_list != NULL) {
+        page = (void *)st->free_list;
+        st->free_list = st->free_list->next;
+    }
+    mm_lock_release(&st->pool_lock);
+    return page;
+}
+
+static void rlc_node_free(void *p) {
+    if (!p) return;
+    const uint32_t s = (uint32_t)(((uint8_t *)p - (uint8_t *)bulk_buffer) / PAGE_SIZE) / rlc_stream_pages;
+    rlc_stream_t *st = &rlc_stream[s];
+    mm_lock_acquire(&st->pool_lock);
+    ((MM_FreePage *)p)->next = st->free_list;
+    st->free_list = (MM_FreePage *)p;
+    mm_lock_release(&st->pool_lock);
+}
+#define RLC_NODE_ALLOC(idx) rlc_node_alloc((uint32_t)(idx) % rlc_nstreams)
+#define RLC_NODE_FREE(p) rlc_node_free(p)
+#else
+#define RLC_NODE_ALLOC(idx) mm_alloc()
+#define RLC_NODE_FREE(p) mm_free(p)
+#endif
+
 /* AM transport-block assembly. Included here, after the core-role helpers, so
    rlc_ctx[], the per-user list locks and rlc_consumer_index() are in scope. */
 #if RLC_TB_MODE == RLC_TB_MODE_AM
@@ -444,7 +584,7 @@ void ue_status_rpt(const unsigned int core_id)
                             core_id, ACK_SN, i);
                     DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
                 }
-                mm_free(sent_node); // Free the sent node memory
+                RLC_NODE_FREE(sent_node); // Free the sent node memory
             }
             ctx->acksn = ACK_SN;
             ctx->nackcount = 0;
@@ -657,7 +797,11 @@ static int producer(const unsigned int core_id) {
     //     pdcp_src_data[NUM_SRC_SLOTS-1][PDU_SIZE-1],
     //     benchmark_get_cycle());
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
+#if RLC_GROUP_STREAMS
+    int new_pdcp_pkg_ptr = rlc_stream_take();
+#else
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
+#endif
     if (new_pdcp_pkg_ptr < 0) {
         return -1;  // No more packages
     }
@@ -702,7 +846,7 @@ static int producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
 
-    Node *node = (Node *)mm_alloc();
+    Node *node = (Node *)RLC_NODE_ALLOC(new_pdcp_pkg_ptr);
     if (!node) {
 
         DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -791,6 +935,17 @@ static void pkt_production_and_recycle(const unsigned int core_id)
 {
     uint32_t total_cycle = RLC_TOTAL_CYCLE(PRODUCER_CORE_NUM, INPUT_DATARATE);
     int this_core_done = 0;
+#if RLC_GROUP_STREAMS
+    uint32_t nstreams_unused;
+    rlc_my_stream = rlc_stream_index(core_id, &nstreams_unused);
+    rlc_take_stream = rlc_my_stream;
+    (void)nstreams_unused;
+    if (!RLC_STATUS_PRODUCES && core_id == rlc_status_core()) {
+        /* STATUS only: counts as a finished producer from the start. */
+        this_core_done = 1;
+        atomic_fetch_add_explicit(&producer_done, 1, memory_order_relaxed);
+    }
+#endif
 #if RLC_PROBE
     uint32_t probe_ph = 0xffffffffu;
 #endif

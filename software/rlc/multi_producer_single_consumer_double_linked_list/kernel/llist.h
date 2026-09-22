@@ -40,6 +40,13 @@ typedef volatile int spinlock_t __attribute__((aligned(4)));
 #define RLC_PAD_SYNC 0
 #endif
 #define RLC_SYNC_LINE_BYTES 64
+
+/* RLC_GROUP_STREAMS=1: per-group packet streams and node pools instead of one descriptor lock and
+   one pool lock for the whole cluster (see rlc.h). Default 0. */
+#ifndef RLC_GROUP_STREAMS
+#define RLC_GROUP_STREAMS 0
+#endif
+#define RLC_MAX_STREAMS 64
 /* Declares `name` in .data; with RLC_PAD_SYNC it is the only thing on its cache line (the name
    then refers to `name##_line.v` through a #define placed next to the declaration). */
 #if RLC_PAD_SYNC

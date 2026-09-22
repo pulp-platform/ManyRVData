@@ -837,7 +837,7 @@ void rlc_am_status(void) {
       Node *node = list_pop_front((spinlock_t *)RLC_SENT_LOCK(u),
                                   &ctx->sent_list);
       if (node == NULL) break;
-      mm_free(node);
+      RLC_NODE_FREE(node);
       freed++;
     }
 
