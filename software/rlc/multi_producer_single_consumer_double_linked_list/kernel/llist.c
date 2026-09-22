@@ -135,21 +135,27 @@ unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
 #if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
 unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
                               Node **out, unsigned int max, unsigned int budget,
-                              unsigned int overhead) {
+                              unsigned int overhead, unsigned int *reached_end) {
     unsigned int n = 0;
     unsigned int acc = 0;
+    Node *p;
 #ifdef USE_MCS_LOCK
     mcs_lock_acquire(llist_lock, 10);
 #else
     spin_lock(llist_lock, 10);
 #endif
-    for (Node *p = list->head; p != NULL && n < max; p = p->next) {
+    for (p = list->head; p != NULL && n < max; p = p->next) {
         out[n++] = p;
         acc += overhead + (unsigned int)p->data_size;
         /* The node that crosses the budget is kept: it is the one the planner
            may segment. Anything past it cannot appear in this grant. */
-        if (acc >= budget) break;
+        if (acc >= budget) { p = p->next; break; }
     }
+    /* Whether the walk saw the end of the queue. The planner's "transmission
+       buffer empty" poll (TS 38.322 5.3.3.2) depends on this, and it must be
+       decided under the lock: a count below `max` does not mean the queue is
+       drained when the walk stopped on the byte budget instead. */
+    if (reached_end) *reached_end = (p == NULL);
 #ifdef USE_MCS_LOCK
     mcs_lock_release(llist_lock, 10);
 #else
