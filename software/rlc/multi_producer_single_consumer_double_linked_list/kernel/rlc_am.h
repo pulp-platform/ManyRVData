@@ -209,6 +209,46 @@
 #define RLC_AM_CLAIM_CHUNK 4u
 #endif
 
+/* --- descriptor ring to-send queue (RLC_AM_RING) --------------------------- */
+
+/* RLC_AM_RING=1 replaces an entity's linked to-send / sent lists with one array ring of SDU
+   descriptors. Built for TC1 (one entity served by many cores), where the owner core walking a
+   linked list across the mesh -- a dependent remote load per node -- and 15 producers contending
+   for its lock made the owner the serial bottleneck (plan 53% + commit 31% of its time).
+
+     tail  producers claim slot `tail++` (one atomic add), fill it, then publish seq = idx + 1
+     head  the owner: first SDU not fully sent. Plan reads a batch of published slots with
+           independent loads; commit stamps last_sn and advances head -- no lock, no node
+     ack   the STATUS core: first SDU not acknowledged. STATUS advances it; nothing to free
+
+   Slots between ack and head are the "sent, awaiting ACK" SDUs, [head, tail) the to-send queue.
+   A producer waits if the ring is full (tail - ack == size). */
+#ifndef RLC_AM_RING
+#define RLC_AM_RING 0
+#endif
+/* RLC_AM_PRIV_PLAN=1 (cross-tile AM): plan in the owner tile's private partition, publish the
+   executor fields to the shared plan. The shared plan is ~7 KB spread over ~28 home tiles; the
+   vector planner reading and writing it across the mesh was most of the owner's time. */
+#ifndef RLC_AM_PRIV_PLAN
+#define RLC_AM_PRIV_PLAN 0
+#endif
+#define RLC_AM_PRIV_PLAN_BASE 0xB8000000u   /* above the partition boundary: tile-private */
+#ifndef RLC_AM_RING_SIZE
+#define RLC_AM_RING_SIZE 16384u   /* power of two */
+#endif
+typedef struct {
+  volatile uint32_t seq;     /* idx + 1 once published */
+  uint32_t data;             /* payload source */
+  uint32_t len;
+  uint32_t last_sn;          /* SN of the SDU's final segment, set at commit */
+} rlc_ring_slot_t;
+typedef struct {
+  _Atomic uint32_t tail  __attribute__((aligned(64)));
+  _Atomic uint32_t head  __attribute__((aligned(64)));
+  _Atomic uint32_t ack   __attribute__((aligned(64)));
+  rlc_ring_slot_t slot[RLC_AM_RING_SIZE] __attribute__((aligned(64)));
+} rlc_ring_t;
+
 /* --- scatter-gather output (RLC_DL_EXEC_SGL) ----------------------------- */
 
 typedef struct {
@@ -229,6 +269,11 @@ typedef struct {
   /* Published grant. `gen` is odd while a grant is open; plan/tb/n are
      written before it is bumped and stay stable until the grant closes. */
   rlc_plan_t      *plan;
+#if RLC_AM_PRIV_PLAN
+  /* The owner's working copy, in its tile's private partition: the planner and commit run on it
+     locally; only the fields the executors read are published to `plan` (shared). */
+  rlc_plan_t      *plan_priv;
+#endif
   uint8_t         *tb;
   uint32_t         n;
   uint32_t         tb_used;

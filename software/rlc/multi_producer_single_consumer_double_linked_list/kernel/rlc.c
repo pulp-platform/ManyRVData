@@ -955,6 +955,11 @@ static void consumer(const unsigned int core_id) {
 
 /* Producer behavior (runs on cores other than 0) */
 /* Returns 0 on success, -1 when no more packages available. */
+#if RLC_AM_RING
+/* Per-core shard of the entity receive statistics (ring mode). */
+static __thread uint32_t rlc_rx_shard_pkts, rlc_rx_shard_bytes;
+#endif
+
 /* The descriptor of the packet being produced: the tile's local copy in tile mode. */
 #if RLC_TILE_AFFINITY
 #define RLC_PKG(i) (rlc_cur->pkg)
@@ -1001,6 +1006,32 @@ static int producer(const unsigned int core_id) {
 
     /* Route the package to its owning RLC entity (one per UE). */
     const unsigned int uid = (unsigned int)RLC_PKG(new_pdcp_pkg_ptr).user_id;
+#if RLC_AM_RING
+    {
+        /* Ring mode: claim a slot with one atomic add, fill it, publish it. No node, no pool, no
+           list lock. The per-packet entity statistics go to a per-core shard instead of ~10
+           atomics on the entity's lines that every producer contends for. */
+        rlc_ring_t *rg = &rlc_ring[uid];
+        const uint32_t idx = atomic_fetch_add_explicit(&rg->tail, 1u, memory_order_relaxed);
+        while ((uint32_t)(idx - atomic_load_explicit(&rg->ack, memory_order_acquire)) >= RLC_AM_RING_SIZE) { }
+        rlc_ring_slot_t *sl = &rg->slot[idx & RLC_RING_MASK];
+        const uint32_t src = RLC_PKG(new_pdcp_pkg_ptr).src_addr;
+        const uint32_t len = RLC_PKG(new_pdcp_pkg_ptr).pkg_length;
+        sl->data = src;
+        sl->len = len;
+        /* The PDCP header work every producer does: read the header line, write 64 B back. */
+        RcvPktHeader tmp = *(RcvPktHeader *)(uintptr_t)src;
+        RcvPktHeader *pt = (RcvPktHeader *)((char *)(uintptr_t)src + sizeof(RcvPktHeader));
+        vector_memcpy32_m4_opt((pt + 1), &tmp, sizeof(RcvPktHeader));
+        rlc_rx_shard_pkts++;
+        rlc_rx_shard_bytes += len;
+        perf_probe_entity(PROBE_EVT_SDU_RX, uid, len);
+        perf_probe(PROBE_EVT_PKT_IN, RLC_RING_TAG(uid, idx));
+        asm volatile("fence w, w" ::: "memory");     /* slot contents before seq */
+        sl->seq = idx + 1u;
+        return 0;
+    }
+#endif
     rlc_context_t *ctx = &rlc_ctx[uid];
     ctx->latestSduPktRxCycle = benchmark_get_cycle();
 #ifdef RLC_NODE_GUARD
