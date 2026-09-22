@@ -88,10 +88,13 @@
 #error "RLC_UL_TC must be 1, 2 or 3"
 #endif
 
-/* Slot cadence, from the doc's "pkts/slot (1600 slots/s)" row. One UL slot's
-   aggregate byte budget is rate/8/1600; at 160 B that is the SDU count a
-   conforming receiver must absorb per slot. */
-#define RLC_UL_SLOTS_PER_SEC 1600u
+/* Slot cadence. The DP Introduction test-case tables give "UL slot numbers per
+   second = 400" for every test case -- it is NOT the 1600 of the downlink,
+   which is what an earlier version of this file used, under-loading the
+   uplink by 4x. At 400 slots/s the doc's own figure follows: TC1 has
+   781,250 pps / 400 = 1953 "disassembling packets per slot", and rate/8/400
+   at 160 B reproduces that. */
+#define RLC_UL_SLOTS_PER_SEC 400u
 #define RLC_UL_SLOT_BYTES ((uint32_t)(RLC_UL_RATE_BPS / 8ull / RLC_UL_SLOTS_PER_SEC))
 #define RLC_UL_SLOT_SDUS (RLC_UL_SLOT_BYTES / RLC_UL_SDU_BYTES)
 

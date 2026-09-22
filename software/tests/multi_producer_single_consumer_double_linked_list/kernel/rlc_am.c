@@ -254,9 +254,11 @@ static int rlc_am_try_plan(uint32_t u) {
      that cost for nothing. Charging the minimum header per SDU keeps the
      bound conservative -- a segmented lead SDU carries a larger header, so
      the walk can only ever stop later than strictly necessary, never early. */
+  unsigned int reached_end = 0u;
   const uint32_t avail = list_peek_budget(
       (spinlock_t *)&tosend_llist_lock_2[u], &ctx->list, peek,
-      RLC_MAX_PDUS_PER_GRANT, RLC_GRANT_BYTES + e->so_next, RLC_AMD_HDR_MIN);
+      RLC_MAX_PDUS_PER_GRANT, RLC_GRANT_BYTES + e->so_next, RLC_AMD_HDR_MIN,
+      &reached_end);
   e->peek_done++; /* distinguishes "blocked in the peek" from "peek was empty" */
   if (avail > e->peek_max) e->peek_max = avail;
   if (avail == 0u) { e->peek_empty++; return 0; }
@@ -277,8 +279,13 @@ static int rlc_am_try_plan(uint32_t u) {
           atomic_load_explicit(&ctx->pduWithoutPoll, memory_order_relaxed),
       .byte_without_poll =
           atomic_load_explicit(&ctx->byteWithoutPoll, memory_order_relaxed),
-      /* the peek saw the whole queue only if it did not hit the cap */
-      .queue_drained = (avail < RLC_MAX_PDUS_PER_GRANT),
+      /* "Transmission buffer empty" is decided by the peek, under the lock.
+         It used to be inferred from avail < RLC_MAX_PDUS_PER_GRANT, which is
+         wrong since the peek stops on the BYTE budget: avail was ~6 on every
+         grant, so every non-segmenting grant set P on its last PDU whether or
+         not anything was still queued. That over-polls and makes the poll
+         count meaningless. */
+      .queue_drained = reached_end,
   };
   rlc_plan_out_t out;
 #if RLC_PLAN_VERIFY
@@ -469,12 +476,34 @@ static void rlc_am_plan_phase(uint32_t me) {
   for (uint32_t k = 0u; k < n; k++) {
     const uint32_t idx = (rlc_am_rr[trk] + k) % n;
     const uint32_t u = rlc_am_owned_at(me, idx);
-    if (atomic_load_explicit(&rlc_am_ent[u].gen, memory_order_acquire) & 1u) continue;
+    rlc_am_entity_t *e = &rlc_am_ent[u];
+    if (atomic_load_explicit(&e->gen, memory_order_acquire) & 1u) continue;
+#if RLC_AM_WORKQ
+    /* Consume the entity's ready announcement BEFORE looking at its queue.
+       This phase never did, so a bit set by a producer stayed set for the rest
+       of the run, rlc_am_idle() could never go true and the TTI loop never
+       terminated -- which is why no AM run reached [EOC] on the model. Clearing
+       first is what makes it safe: a producer that enqueues in between sets
+       the bit again, so a notification is repeated, never lost. */
+    rlc_am_bm_clr(rlc_am_bm_ready, u);
+#endif
+    /* Cheap pre-check before the locked queue walk. Both fields can be read
+       stale here without harm: a producer that enqueues after this read also
+       re-arms the entity, and round-robin visits it again next TTI anyway.
+       What it avoids is a lock acquire and a pointer chase per idle entity per
+       TTI, which is what dominates at TC3's 4800 mostly-idle entities. */
+    if (rlc_ctx[u].list.sduNum == 0 && e->so_next == 0u) continue;
     if (rlc_am_try_plan(u)) {
       rlc_am_open_entity[trk] = u;
       rlc_am_rr[trk] = (idx + 1u) % n; /* next TTI starts at the following one */
       return;
     }
+#if RLC_AM_WORKQ
+    /* Nothing planned but work remains (e.g. the grant cannot hold even a
+       header): re-arm, or the entity would drop out of the idle check. */
+    if (rlc_ctx[u].list.sduNum != 0 || e->so_next != 0u)
+      rlc_am_bm_set(rlc_am_bm_ready, u);
+#endif
   }
   rlc_am_rr[trk] = (rlc_am_rr[trk] + 1u) % n; /* nothing to plan; still advance */
 }
@@ -486,7 +515,24 @@ static uint32_t rlc_am_execute_phase(void) {
   uint32_t total = 0u, worked;
   do {
     worked = 0u;
+#if RLC_AM_WORKQ
+    /* Walk only the entities with a grant open. The active bitmap is settled
+       for the whole phase -- it changes only in plan and commit, which sit on
+       the other side of the barriers -- so this is O(open grants) rather than
+       O(NUM_USERS) per pass, which is the difference between TC1 and TC3. */
+    for (uint32_t w = 0u; w < RLC_AM_BM_WORDS; w++) {
+      uint32_t bits = atomic_load_explicit(&rlc_am_bm_active[w],
+                                           memory_order_acquire);
+      while (bits) {
+        const uint32_t b = (uint32_t)__builtin_ctz(bits);
+        bits &= bits - 1u;
+        const uint32_t u = (w << 5) + b;
+        if (u < NUM_USERS) worked += rlc_am_help(u);
+      }
+    }
+#else
     for (uint32_t u = 0u; u < NUM_USERS; u++) worked += rlc_am_help(u);
+#endif
     total += worked;
   } while (worked != 0u);
   return total;

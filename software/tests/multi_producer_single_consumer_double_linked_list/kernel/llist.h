@@ -139,7 +139,7 @@ unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
 */
 unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
                               Node **out, unsigned int max, unsigned int budget,
-                              unsigned int overhead);
+                              unsigned int overhead, unsigned int *reached_end);
 #endif
 
 /*
