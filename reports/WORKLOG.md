@@ -7,6 +7,21 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-22
+
+### Full kernel review against the DP Introduction and ETH RLC docs; four fixes
+- **Time:** 2026-09-22
+- **Read both source docs directly** (docx/pptx text extracted), not the KERNEL_REVIEW_NOTES summary. Then reviewed all 14 kernel files.
+- **Verdict on completeness:** protocol layer complete (AMD/STATUS formats, SN-per-SDU, poll 32/25000, segmentation, RX reassembly + in-order delivery, ACK-only, no timers). Benchmark layer incomplete: no 4:1 DL:UL slot structure, UL is single-entity, TC2/TC3 not exercised (no 4800-user dataset), no control/scheduling task, no 128/256/512-thread linearity + PMU report, SDU 1353 vs our 1360.
+- **Fix 1 -- TTI loop never terminated with RLC_AM_WORKQ=1 (the default).** `rlc_am_plan_phase` never cleared `rlc_am_bm_ready`; only the non-TTI `rlc_am_step` did. Producers set it, so `rlc_am_idle()` was never true and `rlc_am_stop` never set. **This is why no AM run ever reached `[EOC]` on GVSoC** -- every AM number they hold was from a truncated run of a non-terminating loop. Now clears on visit, re-arms if work remains.
+- **Fix 2 -- spurious "buffer empty" polls.** `queue_drained = (avail < 128)`, but `list_peek_budget` stops on the byte budget so avail was ~6 always -> every non-segmenting grant set P on its last PDU. `list_peek_budget` now returns `reached_end`, decided under the lock.
+- **Fix 3 -- UL slot rate 4x wrong.** I had used 1600 slots/s (the DL figure); the doc's tables say **UL slot numbers per second = 400** for all three test cases. TC1 UL is now 1953 SDUs/slot, matching the doc's own "disassembling packets per slot". **Invalidates the UL scaling numbers GVSoC measured** -- they were at a quarter of the specified load.
+- **Fix 4 -- TTI phase cost.** Execute phase walked all NUM_USERS per pass even with the work queue; now walks the active bitmap. Plan phase took the list lock on idle entities; now pre-checks `sduNum`/`so_next`. Both matter for TC3's 4800 entities.
+- **Reviewed and left alone (noted):** `rlc_am_help` n/claim ordering is only safe under TTI barriers (non-TTI mode has an ABA window; TTI is default); UL `complete[]` is effectively dead since deliver clears it immediately (dups of delivered SDUs land in `out_of_window`); `rlc_am_status` is O(NUM_USERS) per producer iteration.
+- **Verification:** host `test_rlc_ul` 16,109/0 both EXEC modes, `test_rlc_plan` 589,728/0; **legacy loadable image bit-exact vs the previous commit** (rebuilt with HEAD's llist.{c,h}, md5 `e0e3ae62`); no unimplemented vector ops. Frozen 11 ELFs for the user's perf sim.
+
+---
+
 ## 2026-09-08
 
 ### MULTI-ENTITY WEDGE: signature absent at 64 cores and M48 -- and the original observation was confounded
