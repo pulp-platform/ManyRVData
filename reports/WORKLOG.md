@@ -7,6 +7,21 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-23 (morning)
+
+### AM tile: STATUS only for entities that transmitted; up to G grants per owner per TTI
+- **Files:** `kernel/rlc.h` (arena: dirty bitmap at +0x1C00, barrier/grant table at +0x1E00, plan/TB
+  slots per (owner, grant)), `kernel/rlc.c` (setup), `kernel/rlc_am.c` (tile loop with
+  `RLC_AM_TILE_GRANTS`; STATUS walks a dirty bitmap set at commit; no per-entity report lines in tile
+  mode), `software/tests/CMakeLists.txt` (`_am_tile_g8` targets).
+- **Why:** TC3 AM producers spent 67% sweeping all ~100 tile entities for STATUS after every packet.
+- **Results (GVSoC 4x4):** TC3 AM tile 2.3 -> 10.6 M/s burst, paced at 3.125 sustained with p99
+  24-32 us after slot 0; TC2 AM tile 11.4 -> 12.5 burst. 8 grants per TTI: no gain on TC3.
+- The g8 runs exposed a second GVSoC Spatz deadlock (chained instruction counting its own writes),
+  fixed in the GVSoC repo. Handover: GVSoC `prompt/HANDOVER_2026-09-23_rlc_scaling.md`.
+
+---
+
 ## 2026-09-23 (night)
 
 ### Tile affinity on a half-private L1, AM in-tile and cross-tile, batched AM commit

@@ -285,6 +285,13 @@ foreach(rlc_layout P16_C48_L64 P64_C192_L64)
     add_spatz_test_rlc_full(${rlc_layout} "_am_x_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_ARRIVAL_PPS=1851851)
 endforeach()
 
+# `_am_tile_g8`: TC3 with up to 8 grants per owner per TTI (a TC3 UE holds 1-3 SDUs, so one grant
+# per owner per TTI moved a handful of packets per 4 barriers); 4 KB grants, 16 PDUs max.
+foreach(rlc_layout P64_C192_L64 P48_C144_L64)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_tile_g8" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_TB_MODE=1 RLC_GRANT_BYTES=4096 RLC_MAX_PDUS_PER_GRANT=16 RLC_AM_TILE_GRANTS=8 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_tile_g8_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_TB_MODE=1 RLC_GRANT_BYTES=4096 RLC_MAX_PDUS_PER_GRANT=16 RLC_AM_TILE_GRANTS=8 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1 RLC_ARRIVAL_PPS=3125000)
+endforeach()
+
 # Scalar-planner control: same scan algorithm, RVV primitives swapped for their
 # plain-C twins (RLC_PLAN_VECTOR=0). Executes no vector instruction in the
 # planner at all, so it separates "my algorithm is wrong" from "my RVV is wrong"

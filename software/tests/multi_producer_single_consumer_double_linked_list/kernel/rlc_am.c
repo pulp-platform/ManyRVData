@@ -518,19 +518,26 @@ void rlc_am_consumer_tile(uint32_t core_id) {
   const uint32_t n = th->n_ues, nc = rlc_my_ncons, rank = rlc_my_crank;
   const uint32_t stride = (nc < n) ? nc : n;
   const uint32_t owned = (stride && rank < stride) ? (n - rank + stride - 1u) / stride : 0u;
-  uint32_t open = RLC_AM_NO_ENTITY, rr = 0u;
+  const uint32_t G = RLC_AM_TILE_GRANTS;
+  uint32_t open[RLC_AM_TILE_GRANTS];
+  uint32_t rr = 0u;
   rlc_am_t_sense = 0u;
 
   while (1) {
-    /* plan: at most one open grant per owner */
+    /* plan: up to G grants per owner, each for a different entity, each in its own plan slot */
     perf_probe_phase(PERF_PROBE_PHASE_PLAN);
-    for (uint32_t k = 0u; k < owned && open == RLC_AM_NO_ENTITY; k++) {
+    uint32_t g = 0u, k = 0u;
+    for (; k < owned && g < G; k++) {
       const uint32_t idx = (rr + k) % owned;
       const uint32_t u = ues[rank + idx * stride];
       if (rlc_ctx[u].list.sduNum == 0 && rlc_am_ent[u].so_next == 0u) continue;
-      if (rlc_am_try_plan(u)) { open = u; rr = (idx + 1u) % owned; }
+      const uint32_t slot = RLC_TILE_SLOT(rank, g);
+      rlc_am_ent[u].plan = RLC_TILE_SLOT_PLAN(th, slot);
+      rlc_am_ent[u].tb = RLC_TILE_SLOT_TB(th, slot);
+      if (rlc_am_try_plan(u)) open[g++] = u;
     }
-    bar->open[rank] = open;
+    if (owned) rr = (rr + k) % owned;       /* next TTI continues after the last entity looked at */
+    for (uint32_t j = 0u; j < G; j++) bar->open[RLC_TILE_SLOT(rank, j)] = (j < g) ? open[j] : RLC_AM_NO_ENTITY;
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_tile_barrier(bar, nc);
 
@@ -539,32 +546,36 @@ void rlc_am_consumer_tile(uint32_t core_id) {
     uint32_t worked;
     do {
       worked = 0u;
-      for (uint32_t r = 0u; r < nc; r++) {
-        const uint32_t u = bar->open[r];
+      for (uint32_t s = 0u; s < nc * G; s++) {
+        const uint32_t u = bar->open[s];
         if (u != RLC_AM_NO_ENTITY) worked += rlc_am_help(u);
       }
     } while (worked);
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_tile_barrier(bar, nc);
 
-    /* commit */
+    /* commit, and mark the entities STATUS has to look at */
     perf_probe_phase(PERF_PROBE_PHASE_COMMIT);
-    if (open != RLC_AM_NO_ENTITY) { rlc_am_commit(open); open = RLC_AM_NO_ENTITY; }
+    for (uint32_t j = 0u; j < g; j++) {
+      rlc_am_commit(open[j]);
+      const uint32_t li = open[j] / rlc_n_workers_cached;      /* local index of the entity */
+      atomic_fetch_or_explicit(&RLC_TILE_DIRTY(th)[li >> 5], 1u << (li & 31u), memory_order_relaxed);
+    }
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_tile_barrier(bar, nc);
 
     if (rank == 0u) {
       uint32_t idle = th->tile_done;
-      for (uint32_t k = 0u; k < n && idle; k++)
-        if (rlc_ctx[ues[k]].list.sduNum != 0 || rlc_am_ent[ues[k]].so_next != 0u) idle = 0u;
+      for (uint32_t q = 0u; q < n && idle; q++)
+        if (rlc_ctx[ues[q]].list.sduNum != 0 || rlc_am_ent[ues[q]].so_next != 0u) idle = 0u;
       bar->stop = idle;
     }
     rlc_tile_barrier(bar, nc);
     if (bar->stop) break;
   }
 
-  for (uint32_t k = 0u; k < owned; k++) {
-    const uint32_t u = ues[rank + k * stride];
+  for (uint32_t q = 0u; q < owned; q++) {
+    const uint32_t u = ues[rank + q * stride];
     atomic_fetch_add_explicit(&rlc_am_tot[0], rlc_am_ent[u].grants, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_am_tot[1], rlc_am_ent[u].pdus, memory_order_relaxed);
     atomic_fetch_add_explicit(&rlc_am_tot[2], rlc_am_ent[u].segments, memory_order_relaxed);
@@ -930,9 +941,20 @@ void rlc_am_status(void) {
 #if RLC_TILE_AFFINITY
   /* This tile's UEs only; the STATUS PDU is built in a stack buffer (private) rather than the
      shared per-entity array. */
+  /* Only entities that transmitted since the last pass (commit sets their bit): a full sweep of
+     the tile's ~100 TC3 entities after every packet was 67% of the producer's time. An entity
+     still waiting for acknowledgements is re-marked below. */
   const rlc_tile_hdr_t *th_st = rlc_my_arena;
   uint8_t st_buf[RLC_STATUS_HDR_LEN + 4u] __attribute__((aligned(4)));
-  for (uint32_t k = 0u; k < th_st->n_ues; k++) {
+  _Atomic uint32_t *dirty = RLC_TILE_DIRTY(th_st);
+  const uint32_t nwords = (th_st->n_ues + 31u) / 32u;
+  for (uint32_t wd = 0u; wd < nwords; wd++) {
+   uint32_t bits = atomic_load_explicit(&dirty[wd], memory_order_relaxed);
+   if (bits == 0u) continue;
+   bits = atomic_exchange_explicit(&dirty[wd], 0u, memory_order_relaxed);
+   while (bits) {
+    const uint32_t k = (wd << 5) + (uint32_t)__builtin_ctz(bits);
+    bits &= bits - 1u;
     const uint32_t u = RLC_TILE_UES(th_st)[k];
 #else
   for (uint32_t u = 0u; u < NUM_USERS; u++) {
@@ -996,6 +1018,9 @@ void rlc_am_status(void) {
     if (freed) perf_probe_entity(PROBE_EVT_STATUS_ACK, u, freed);
 #endif
   }
+#if RLC_TILE_AFFINITY
+  }   /* while (bits) and for (wd): see the tile-mode loop head */
+#endif
 }
 
 void rlc_am_report(void) {
@@ -1053,7 +1078,9 @@ void rlc_am_report(void) {
          (unsigned)PRODUCER_CORE_NUM, (unsigned)NUM_PRODUCER_CORES,
          (unsigned)CONSUMER_CORE_NUM, (unsigned)NUM_CONSUMER_CORES,
          (unsigned)RLC_AM_WORKQ);
-  for (uint32_t u = 0u; u < NUM_USERS; u++) {
+  /* Per-entity dump: not in tile mode, where the entities sit in other tiles' private partitions
+     (and 4800 of them took ~90 M cycles of printf after the kernel). */
+  for (uint32_t u = 0u; u < (RLC_TILE_AFFINITY ? 0u : NUM_USERS); u++) {
     const rlc_am_entity_t *e = &rlc_am_ent[u];
     printf("[AM] u%u: plan_calls=%u peek_empty=%u peek_max=%u plan_zero=%u "
            "peek_done=%u plan_ok=%u poison=%u published=%u grants=%u | tosend=%d sent=%d "

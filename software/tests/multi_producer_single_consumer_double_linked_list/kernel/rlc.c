@@ -583,16 +583,14 @@ void rlc_tile_setup(const unsigned int core_id) {
     /* Owner of the tile's k-th UE = tile consumer k % stride (the global rule, applied inside the
        tile); each owner has one plan buffer and one transport block in the arena. */
     {
-        const uint32_t stride = (rlc_my_ncons < n_ues) ? rlc_my_ncons : n_ues;
-        for (uint32_t k = 0u; k < n_ues && stride; k++) {
-            const uint32_t r = k % stride;
-            rlc_am_ent[ues[k]].plan = (rlc_plan_t *)((uint8_t *)th + RLC_TILE_PLAN_OFF + r * sizeof(rlc_plan_t));
-            rlc_am_ent[ues[k]].tb   = (uint8_t *)th + RLC_TILE_TB_OFF + r * RLC_TILE_TB_BYTES;
-        }
+        /* Plan buffers and transport blocks are per (owner rank, grant slot) and are bound to an
+           entity when its grant is opened (rlc_am_consumer_tile). */
         rlc_tile_bar_t *bar = RLC_TILE_BAR(th);
         rlc_zero_lines(bar, sizeof(*bar));
-        if (rlc_my_ncons > RLC_TILE_MAX_CONS || RLC_TILE_PLAN_OFF + RLC_TILE_MAX_CONS * sizeof(rlc_plan_t) > RLC_TILE_TB_OFF ||
-            RLC_TILE_TB_OFF + RLC_TILE_MAX_CONS * RLC_TILE_TB_BYTES > RLC_TILE_ARENA_BYTES)
+        rlc_zero_lines(RLC_TILE_DIRTY(th), (RLC_TILE_MAX_UES + 31u) / 32u * 4u);
+        const uint32_t nslots = RLC_TILE_MAX_CONS * RLC_AM_TILE_GRANTS;
+        if (rlc_my_ncons > RLC_TILE_MAX_CONS || RLC_TILE_PLAN_OFF + nslots * sizeof(rlc_plan_t) > RLC_TILE_TB_OFF ||
+            RLC_TILE_TB_OFF + nslots * RLC_TILE_TB_BYTES > RLC_TILE_ARENA_BYTES)
             printf("[TILE][FATAL] AM arena layout does not fit (grant %u B)\n", (unsigned)RLC_GRANT_BYTES);
     }
 #endif
