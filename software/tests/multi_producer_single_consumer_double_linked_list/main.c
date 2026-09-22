@@ -76,6 +76,11 @@ int main(void) {
             mcs_lock_init(RLC_TOSEND_LOCK(u));
             mcs_lock_init(RLC_SENT_LOCK(u));
         }
+
+#if RLC_GROUP_STREAMS
+        /* Last, right before the start barrier: it also starts the paced-arrival clock. */
+        rlc_streams_init();
+#endif
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);

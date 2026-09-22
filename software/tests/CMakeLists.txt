@@ -242,6 +242,17 @@ foreach(rlc_layout P2_C2 P16_C48 P64_C192)
     add_spatz_test_rlc_full(${rlc_layout} "_pad_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_ARRIVAL_PPS=3125000)
 endforeach()
 
+# `_grp`: RLC_GROUP_STREAMS -- per-group descriptor streams and node pools (no cluster-wide lock
+# on the producer path).
+foreach(rlc_layout P16_C48 P64_C192)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1 RLC_ARRIVAL_PPS=1851851)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp_paced" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1 RLC_ARRIVAL_PPS=7812500)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_grp_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1 RLC_ARRIVAL_PPS=3125000)
+endforeach()
+
 # Scalar-planner control: same scan algorithm, RVV primitives swapped for their
 # plain-C twins (RLC_PLAN_VECTOR=0). Executes no vector instruction in the
 # planner at all, so it separates "my algorithm is wrong" from "my RVV is wrong"

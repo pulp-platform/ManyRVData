@@ -7,6 +7,44 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-23
+
+### Per-group packet streams (RLC_GROUP_STREAMS): TC2 and TC3 sustained at their DP targets
+- **Time:** 2026-09-23 ~00:30 +0200
+- **Files:** `kernel/llist.h`, `kernel/mm.h` (pool sized for per-stream slices), `kernel/rlc.h`
+  (`rlc_stream_t`), `kernel/rlc.c` (streams, stealing, node alloc/free per slice), `kernel/rlc_am.c`,
+  `main.c` (`rlc_streams_init()` last before the start barrier), `software/tests/CMakeLists.txt`
+  (`_pad_grp`, `_pad_grp_paced` targets on 16P+48C and 64P+192C).
+- **What:** every group hosting producers owns a stream on its own cache line. Descriptors of stream
+  s are s, s+n, s+2n... taken with one atomic fetch-add (no lock); nodes come from the stream's
+  own pool slice under its own lock and return to it by address. Default 0 -> `M1_N1350_K100`
+  loaded sections unchanged (md5).
+- **Three follow-ups found by the runs, all fixed:**
+  1. A producer steals from other streams once its own is empty -- otherwise the slowest stream
+     sets the finish time (TC3 16P: 1/16 of packets ~170 ms late).
+  2. Nodes are allocated from the slice of the packet's stream, not the producer's: a stealing
+     producer ran its slice dry, and the kernel's out-of-memory path **drops the packet silently**
+     (64P runs delivered 13.5k of 15.7k). That drop path is pre-existing and still there in the
+     default build.
+  3. The STATUS core takes no packets when other producers exist (it sweeps all entities between
+     two packets), and under paced arrival a producer whose next packet is not due yet serves a
+     stream that is > 2 us behind (groups have unequal producer counts).
+- **GVSoC 4x4, 8 slots TC1/TC3, 4 slots TC2, all EOC 0, every packet delivered:**
+
+| paced at the DP rate | delivered | target | p50 / p99 | within 350 us |
+|---|---|---|---|---|
+| TC2 64P+192C | **7.82 M/s** | 7.81 | 14 / 102 us | 100% |
+| TC3 16P+48C | **3.13 M/s** | 3.13 | 11 / 33 us | 100% |
+| TC3 64P+192C | **3.13 M/s** | 3.13 | 13 / 79 us | 100% |
+| TC2 16P+48C | 4.12 M/s | 7.81 | backlog, p99 2.3 ms | 15% |
+| TC1 16P+48C | 0.21 M/s | 1.85 | backlog | 1% |
+
+  Burst capacity (steady): TC2 9.6 M/s and TC3 10.1 M/s on 64P+192C, 4.3 M/s on 16P+48C.
+- **TC1 unchanged (0.21 at 16P, ~0.01-0.02 at 64P, 0.41 best at 2P+2C):** one entity, ~15-20
+  atomics per packet on the same `rlc_ctx[0]` lines. Needs an owner-core design, not more cores.
+
+---
+
 ## 2026-09-22 (late)
 
 ### Scaling fixes (RLC_PAD_SYNC), paced arrival, 8-slot sustained-load sweep on 4 / 64 / 256 cores
