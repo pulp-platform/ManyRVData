@@ -61,6 +61,18 @@
 
 #include <stdatomic.h>
 #include "benchmark.h"
+/* Software performance probes (gvsoc prompt/perf_probe_design.md). Every call below compiles to
+   nothing unless the build defines RLC_PROBE=1, so default ELFs are unchanged. */
+#include "perf_probe.h"
+#if RLC_PROBE
+/* PHASE is a state: store only on transitions, never once per loop iteration. */
+static inline void rlc_probe_phase_to(uint32_t *cur, uint32_t ph) {
+    if (*cur != ph) { *cur = ph; perf_probe_phase(ph); }
+}
+#define RLC_PROBE_PHASE_TO(cur, ph) rlc_probe_phase_to(&(cur), (ph))
+#else
+#define RLC_PROBE_PHASE_TO(cur, ph) ((void)0)
+#endif
 
 // volatile: these structs model memory traffic (status indications/reports);
 // their loaded values are intentionally unused, so without volatile the
@@ -433,6 +445,7 @@ void ue_status_rpt(const unsigned int core_id)
             ctx->nackcount = 0;
             ctx->parseindex++;
             atomic_store_explicit(&ctx->vtNextAck, ACK_SN, memory_order_relaxed); // Update the next ACK sequence number
+            perf_probe_entity(PROBE_EVT_STATUS_ACK, u, 2u);
             for (uint32_t i = 0; i < 16; i++) {
                 ctx->dlDelayInfo[i] = 300;
             }
@@ -450,6 +463,10 @@ static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestData
     if (node == 0) {
         return 0;
     }
+    /* No queue-depth gauges here: reading list.sduNum means a load on the line every core
+       contends for, and it measurably slowed the kernel it was measuring. Depth is rebuilt from
+       the SDU_RX / PDU_TX / STATUS_ACK counts instead. */
+    perf_probe_phase(PERF_PROBE_PHASE_EXECUTE);
 #ifdef RLC_NODE_GUARD
     if (((uintptr_t)node->data & 0xFF000000) != 0xA0000000 ||
         ((uintptr_t)node->tgt  & 0xFF000000) != 0xB0000000 ||
@@ -520,6 +537,8 @@ static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestData
         //        (node->data_size * 1000 / (timer_mv_1 - timer_mv_0)));
         // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
+        perf_probe_entity(PROBE_EVT_PDU_TX, u, (uint32_t)node->data_size);
+        perf_probe(PROBE_EVT_PKT_OUT, (uint32_t)(uintptr_t)node);
             // Add the node to the sent list
         list_push_back((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list, node);
         return 1;
@@ -577,6 +596,9 @@ static void consumer(const unsigned int core_id) {
     const unsigned int first  = c % stride;      /* first owned user */
     unsigned int cursor = first;
     uint32_t total_cycle = RLC_TOTAL_CYCLE(CONSUMER_CORE_NUM, OUTPUT_DATARATE);
+#if RLC_PROBE
+    uint32_t probe_ph = 0xffffffffu;
+#endif
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
         TestDataStru dfx = {0};
@@ -589,6 +611,10 @@ static void consumer(const unsigned int core_id) {
             if (!sent) { u += stride; if (u >= NUM_USERS) u = first; }
         } while (!sent && u != cursor);
         if (sent) { u += stride; if (u >= NUM_USERS) u = first; cursor = u; }
+#if RLC_PROBE
+        if (sent) probe_ph = PERF_PROBE_PHASE_EXECUTE;   /* rlc_send_pkt stored it */
+        else RLC_PROBE_PHASE_TO(probe_ph, PERF_PROBE_PHASE_IDLE);
+#endif
         uint32_t end_timecycle = benchmark_get_cycle();
         /* calculate delay interval */
         uint32_t interval = end_timecycle - start_timecycle;
@@ -707,6 +733,10 @@ static int producer(const unsigned int core_id) {
     // /* Zero-initialize the payload using our custom mm_memset */
     // mm_memset(node->data, 0, PACKET_SIZE);
     /* Append the node to the owning entity's to-send list */
+#if RLC_TB_MODE != RLC_TB_MODE_AM
+    perf_probe(PROBE_EVT_PKT_IN, (uint32_t)(uintptr_t)node);
+#endif
+    perf_probe_entity(PROBE_EVT_SDU_RX, uid, (uint32_t)node->data_size);
     list_push_back((spinlock_t *)&tosend_llist_lock_2[uid], &ctx->list, node);
 #if (RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_WORKQ
     /* Announce the entity so an owner picks it up without scanning. */
@@ -739,8 +769,14 @@ static void pkt_production_and_recycle(const unsigned int core_id)
 {
     uint32_t total_cycle = RLC_TOTAL_CYCLE(PRODUCER_CORE_NUM, INPUT_DATARATE);
     int this_core_done = 0;
+#if RLC_PROBE
+    uint32_t probe_ph = 0xffffffffu;
+#endif
     while (1) {
         uint32_t start_timecycle = benchmark_get_cycle();
+#if RLC_PROBE
+        RLC_PROBE_PHASE_TO(probe_ph, this_core_done ? PERF_PROBE_PHASE_DONE : PERF_PROBE_PHASE_RECEIVE);
+#endif
         if (!this_core_done) {
             if (producer(core_id) < 0) {
                 this_core_done = 1;
@@ -751,8 +787,14 @@ static void pkt_production_and_recycle(const unsigned int core_id)
            the list, not core 0: with explicit core lists core 0 need not be a
            producer at all, and gating on it would drop the ACK task entirely. */
         if (core_id == rlc_status_core()) {
+#if RLC_PROBE
+            if (!this_core_done) RLC_PROBE_PHASE_TO(probe_ph, PERF_PROBE_PHASE_STATUS);
+#endif
             ue_status_rpt(core_id);
         }
+#if RLC_PROBE
+        RLC_PROBE_PHASE_TO(probe_ph, this_core_done ? PERF_PROBE_PHASE_DONE : PERF_PROBE_PHASE_IDLE);
+#endif
         uint32_t end_timecycle = benchmark_get_cycle();
         /* calculate delay interval */
         uint32_t interval = end_timecycle - start_timecycle;
@@ -776,14 +818,21 @@ static void pkt_production_and_recycle(const unsigned int core_id)
    the shared barrier below. */
 void cluster_entry(const unsigned int core_id) {
     uint32_t timer_0, timer_1;
+    perf_probe_init();
     timer_0 = benchmark_get_cycle();
 
     if(core_id == 0) {
         start_kernel();
+        perf_probe(PROBE_EVT_KERNEL_START, 0u);
     }
 
     const int is_consumer = rlc_is_consumer(core_id);
     const int is_producer = rlc_is_producer(core_id);
+#if RLC_PROBE
+    perf_probe_role(is_producer ? PERF_PROBE_ROLE_PRODUCER :
+                    is_consumer ? PERF_PROBE_ROLE_CONSUMER : PERF_PROBE_ROLE_IDLE);
+    if (!is_producer && !is_consumer) perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
+#endif
 
     if (is_producer) {
         pkt_production_and_recycle(core_id);
@@ -797,9 +846,15 @@ void cluster_entry(const unsigned int core_id) {
        whichever request arrives first owns a tile's round, and barrier_done is
        an unmasked cluster-wide broadcast. So they wait here, outside any
        barrier, until the mask has been restored. See rlc_sync.h. */
+#if RLC_PROBE
+    if (!is_consumer) perf_probe_phase(PERF_PROBE_PHASE_DONE);
+#endif
     if (!is_consumer) rlc_narrow_wait_outside();
 #endif
 
+#if RLC_PROBE
+    if (is_producer || is_consumer) perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
+#endif
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
 #if RLC_TB_MODE == RLC_TB_MODE_AM
@@ -817,6 +872,7 @@ void cluster_entry(const unsigned int core_id) {
 #endif
 
     if(core_id == 0) {
+        perf_probe(PROBE_EVT_KERNEL_END, 0u);
         stop_kernel();
     }
 
