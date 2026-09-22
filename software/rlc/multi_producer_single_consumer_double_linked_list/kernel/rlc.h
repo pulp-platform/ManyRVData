@@ -91,8 +91,12 @@
 #define RLC_TILE_DLSCH_OFF   64u          /* the tile's copy of the DL scheduling indication */
 #define RLC_TILE_UES_OFF     128u         /* owned-UE ids, u32 each, up to RLC_TILE_PKTS_OFF */
 #define RLC_TILE_PKTS_OFF    0x2000u      /* rlc_tile_pkt_t each */
-#define RLC_TILE_BAR_OFF     (RLC_TILE_PKTS_OFF - 64u)   /* tile barrier + AM grant table line */
-#define RLC_TILE_MAX_UES     ((RLC_TILE_BAR_OFF - RLC_TILE_UES_OFF) / 4u)
+#ifndef RLC_AM_TILE_GRANTS
+#define RLC_AM_TILE_GRANTS   1u           /* AM: grants an owner may open per TTI (plan slots) */
+#endif
+#define RLC_TILE_BAR_OFF     0x1E00u      /* tile barrier + AM grant table (up to 512 B) */
+#define RLC_TILE_DIRTY_OFF   0x1C00u      /* AM: bit per local UE with unacknowledged PDUs */
+#define RLC_TILE_MAX_UES     ((RLC_TILE_DIRTY_OFF - RLC_TILE_UES_OFF) / 4u)
 #define RLC_TILE_PLAN_OFF    0xC0000u     /* AM: one plan buffer per tile consumer (owner) */
 #define RLC_TILE_TB_OFF      0xD0000u     /* AM: one transport block per tile consumer */
 #define RLC_TILE_MAX_CONS    4u
@@ -129,10 +133,17 @@ typedef struct {
     _Atomic uint32_t count;
     _Atomic uint32_t sense;
     volatile uint32_t stop;
-    volatile uint32_t open[RLC_TILE_MAX_CONS];   /* AM: entity with rank r's open grant */
-    uint32_t pad[16 - 3 - RLC_TILE_MAX_CONS];
+    uint32_t pad[13];
+    /* AM: entity of owner rank r's j-th open grant at [r * RLC_AM_TILE_GRANTS + j] */
+    volatile uint32_t open[RLC_TILE_MAX_CONS * RLC_AM_TILE_GRANTS];
 } rlc_tile_bar_t;
+_Static_assert(sizeof(rlc_tile_bar_t) <= RLC_TILE_PKTS_OFF - RLC_TILE_BAR_OFF, "tile barrier area");
 #define RLC_TILE_BAR(th)   ((rlc_tile_bar_t *)((uint8_t *)(th) + RLC_TILE_BAR_OFF))
+#define RLC_TILE_DIRTY(th) ((_Atomic uint32_t *)((uint8_t *)(th) + RLC_TILE_DIRTY_OFF))
+/* Owner rank r's grant slot j: plan buffer and transport block. */
+#define RLC_TILE_SLOT(r, j) ((r) * RLC_AM_TILE_GRANTS + (j))
+#define RLC_TILE_SLOT_PLAN(th, s) ((rlc_plan_t *)((uint8_t *)(th) + RLC_TILE_PLAN_OFF + (s) * sizeof(rlc_plan_t)))
+#define RLC_TILE_SLOT_TB(th, s)   ((uint8_t *)(th) + RLC_TILE_TB_OFF + (s) * RLC_TILE_TB_BYTES)
 #define RLC_TILE_PKTS(th)  ((rlc_tile_pkt_t *)((uint8_t *)(th) + RLC_TILE_PKTS_OFF))
 #elif RLC_PAD_SYNC
 typedef struct {
