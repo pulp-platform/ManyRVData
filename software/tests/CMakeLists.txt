@@ -197,7 +197,8 @@ add_spatz_test_rlc_probe("_P2_C2_am_G8192" multi_producer_single_consumer_double
 # The data header is generated from script/pdcp_pkg_<M>_<N>_<K>_<layout>.json at build time (it is
 # 10-200 MB, too large to keep in git).
 set(RLC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/multi_producer_single_consumer_double_linked_list)
-macro(add_spatz_test_rlc_full layout name file param1 param2 param3)
+# `variant` is appended to the target name and says which extra defines (ARGN) it carries.
+macro(add_spatz_test_rlc_full layout variant name file param1 param2 param3)
     string(TOLOWER ${layout} layout_lc)
     set(rlc_cfg ${param1}_${param2}_${param3}_${layout_lc})
     if(NOT TARGET rlc_data_${rlc_cfg})
@@ -211,9 +212,9 @@ macro(add_spatz_test_rlc_full layout name file param1 param2 param3)
     endif()
     foreach(probe 0 1)
         if(${probe})
-            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}_probe)
+            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}${variant}_probe)
         else()
-            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout})
+            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}${variant})
         endif()
         add_snitch_test(${target_name} ${file})
         target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
@@ -223,9 +224,23 @@ macro(add_spatz_test_rlc_full layout name file param1 param2 param3)
         add_dependencies(test-${SNITCH_TEST_PREFIX}${target_name} rlc_data_${rlc_cfg})
     endforeach()
 endmacro()
-add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1157)
-add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 4882)
-add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 4800 800 1963)
+add_spatz_test_rlc_full(P64_C192 "" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1157)
+add_spatz_test_rlc_full(P64_C192 "" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 4882)
+add_spatz_test_rlc_full(P64_C192 "" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 4800 800 1963)
+
+# Sustained-load sweep: 8 DL slots (TC1, TC3) or 4 (TC2, the 16 MiB source window holds 4.2), on
+# 4, 64 and 256 cores. `_pad` = RLC_PAD_SYNC (one cache line per lock/flag, look before locking);
+# `_paced` adds RLC_ARRIVAL_PPS = the test case's packet rate, so the offered load is the target
+# and latency is measured from each packet's arrival.
+set(RLC_T multi_producer_single_consumer_double_linked_list)
+foreach(rlc_layout P2_C2 P16_C48 P64_C192)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 RLC_PAD_SYNC=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 RLC_PAD_SYNC=1 RLC_ARRIVAL_PPS=1851851)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_paced" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1 RLC_ARRIVAL_PPS=7812500)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_pad_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_ARRIVAL_PPS=3125000)
+endforeach()
 
 # Scalar-planner control: same scan algorithm, RVV primitives swapped for their
 # plain-C twins (RLC_PLAN_VECTOR=0). Executes no vector instruction in the

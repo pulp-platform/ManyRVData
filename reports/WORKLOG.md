@@ -7,6 +7,42 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-22 (late)
+
+### Scaling fixes (RLC_PAD_SYNC), paced arrival, 8-slot sustained-load sweep on 4 / 64 / 256 cores
+- **Time:** 2026-09-22 ~22:30 +0200
+- **Files:** `kernel/llist.h` (RLC_PAD_SYNC, RLC_LINE_VAR), `kernel/mm.h`, `kernel/rlc.h`, `kernel/rlc.c`,
+  `kernel/rlc_am.c`, `main.c` (lock accessors RLC_TOSEND_LOCK/RLC_SENT_LOCK), `kernel/perf_probe_events.h`
+  (PKT_LATE), `script/generate_pdcp_pkg.py` (`"payload": false`), 9 `script/pdcp_pkg_*_{p2_c2,p16_c48,p64_c192}.json`,
+  `software/tests/CMakeLists.txt` (sweep targets).
+- **RLC_PAD_SYNC=1:** every lock and cross-core flag on its own 64 B line (per-user list locks, descriptor
+  pointer + lock, `producer_done`, `mm_lock`, arrival t0) and an idle consumer reads `list.sduNum` before
+  taking the lock. Default 0: loaded sections of `M1_N1350_K100` identical to before (md5 checked).
+- **RLC_ARRIVAL_PPS=N:** descriptor i arrives at t0 + i/N; a producer waits for it; PKT_LATE tells the
+  collector the arrival time, so latency is arrival -> PDU out and producer lag counts as latency.
+- **Datasets:** 8 DL slots for TC1 (9256) and TC3 (15704), 4 for TC2 (19528, the 16 MiB source window
+  holds 4.2); no payload bytes (headers ~100 KB). Layouts 2P+2C, 16P+48C (tile 0 of every group),
+  64P+192C (every tile).
+- **GVSoC 4x4, steady delivered rate (M pkt/s), all EOC 0:**
+
+| | 2P+2C | 16P+48C | 64P+192C | target |
+|---|---|---|---|---|
+| TC1 (1 UE) | 0.41 | 0.22 | ~0.017 (partial) | 1.85 |
+| TC2 (48 UE) | 0.32 | **4.01** | 0.92 | 7.81 |
+| TC3 (4800 UE) | 0.27 | **4.03** | 0.92 | 3.13 |
+
+- **TC3 at 16P+48C, paced at 3.125 M/s: sustained** -- delivered 3.126 M/s, p50 11 us / p99 32 us in
+  every one of the 8 slots, 100% of packets within 350 us.
+- **Ceiling is the global producer path:** TC2 and TC3 cap at the same rate for the same producer count
+  (4.0 at 16P, 0.92 at 64P; producers 90-98% in receive). Every packet takes the one descriptor lock and
+  the one pool lock; 64 producers spread over the mesh make each handoff slower, not faster.
+- **TC1 is bound by its single entity:** all cores do ~15-20 atomic updates per packet on the same few
+  lines of `rlc_ctx[0]`; at 16P+48C every core is 91% memory-stalled at ~1 memory op per 30 cycles.
+- **Next:** per-group descriptor streams and node pools (TC2), entity-local accounting / owner-core
+  design (TC1), STATUS sweep over 4800 entities makes the end-of-kernel drain ~8 ms (not in the rates).
+
+---
+
 ## 2026-09-22 (evening)
 
 ### Perf-probe hooks and full-cluster (256-core) DP test cases

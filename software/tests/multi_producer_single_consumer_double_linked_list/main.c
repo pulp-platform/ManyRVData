@@ -73,8 +73,8 @@ int main(void) {
         tosend_llist_lock = 0;
         sent_llist_lock = 0;
         for (unsigned int u = 0; u < NUM_USERS; u++) {
-            mcs_lock_init(&tosend_llist_lock_2[u]);
-            mcs_lock_init(&sent_llist_lock_2[u]);
+            mcs_lock_init(RLC_TOSEND_LOCK(u));
+            mcs_lock_init(RLC_SENT_LOCK(u));
         }
     }
 

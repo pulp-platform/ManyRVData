@@ -62,7 +62,9 @@ enum perf_probe_evt {
     PROBE_EVT_MARK         = 19, /* free-form                                                     */
     PROBE_EVT_PKT_IN       = 20, /* tag (e.g. node address)   SDU entered the entity; opens latency */
     PROBE_EVT_PKT_OUT      = 21, /* same tag                  SDU fully sent; closes latency        */
-    PROBE_EVT_NB_DEFINED   = 22,
+    PROBE_EVT_PKT_LATE     = 22, /* cycles since this hart's next packet arrived (paced     */
+                                 /* arrival); the collector back-dates the next PKT_IN to it   */
+    PROBE_EVT_NB_DEFINED   = 23,
 };
 
 /* Events whose value packs an entity id in the upper 16 bits. */
@@ -80,7 +82,7 @@ enum perf_probe_evt {
 #define PERF_PROBE_EVENT_NAMES { \
     "kernel_start", "kernel_end", "role", "sdu_rx", "pdu_tx", "grant", "segment", "poll", \
     "status_ack", "qdepth", "ackdepth", "tti_begin", "tti_end", "phase", "lock_spin", "mm_live", \
-    "ul_tb", "ul_deliver", "ul_status", "mark", "pkt_in", "pkt_out" }
+    "ul_tb", "ul_deliver", "ul_status", "mark", "pkt_in", "pkt_out", "pkt_late" }
 
 #define PERF_PROBE_ROLE_IDLE      0
 #define PERF_PROBE_ROLE_PRODUCER  1

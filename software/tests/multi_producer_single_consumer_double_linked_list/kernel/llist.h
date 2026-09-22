@@ -29,6 +29,27 @@
 /* We use a volatile int as a spinlock. Zero means unlocked. */
 typedef volatile int spinlock_t __attribute__((aligned(4)));
 
+/* RLC_PAD_SYNC=1 gives every lock and every cross-core flag a cache line of its own, and lets an
+   idle consumer look at a queue before locking it. Default 0 keeps the historical layout.
+
+   Why it matters: in the default layout one 64 B line holds the descriptor lock every producer
+   takes per packet, `producer_done` which every core polls every iteration, and the per-user list
+   locks, all 48 of TC2's in about three lines. At 256 cores every lock operation and every poll
+   hits the same few lines; measured on GVSoC 4x4, TC1 ran 9x slower on 256 cores than on 4. */
+#ifndef RLC_PAD_SYNC
+#define RLC_PAD_SYNC 0
+#endif
+#define RLC_SYNC_LINE_BYTES 64
+/* Declares `name` in .data; with RLC_PAD_SYNC it is the only thing on its cache line (the name
+   then refers to `name##_line.v` through a #define placed next to the declaration). */
+#if RLC_PAD_SYNC
+#define RLC_LINE_VAR(type, name) \
+    struct { type v; char pad[RLC_SYNC_LINE_BYTES - sizeof(type)]; } name##_line \
+        __attribute__((aligned(RLC_SYNC_LINE_BYTES))) __attribute__((section(".data")))
+#else
+#define RLC_LINE_VAR(type, name) type name __attribute__((section(".data")))
+#endif
+
 spinlock_t tosend_llist_lock __attribute__((section(".data")));
 spinlock_t sent_llist_lock __attribute__((section(".data")));
 /* Per-user mcs locks (tosend_llist_lock_2[NUM_USERS] / sent_llist_lock_2[NUM_USERS])

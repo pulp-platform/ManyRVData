@@ -34,6 +34,9 @@ Config fields:
   tgt_addr             (hex or int base address)
   tgt_length           (int bytes)
   total_pkg_number     (optional int): explicit number of PDCP packages to generate
+  payload              (optional bool, default true): false leaves the source slots zero. Nothing
+                       in the kernel's timing depends on the byte values, only RLC_SELF_CHECK does,
+                       and it keeps multi-slot headers small (tens of KB instead of ~100 MB).
 
 If `total_pkg_number` is absent, it's derived as `src_length // (pdcp_header_length + pkg_length)`.
 """
@@ -134,16 +137,20 @@ def main():
         filename = f"data_{active_users}_{pkg_len}_{num_pkgs}.h"
         out_path = os.path.join(data_dir, filename)
 
+    payload = bool(cfg.get('payload', True))
+
     # select unique slots
     slots = random.sample(range(num_src_slots), k=num_pkgs)
 
     # assemble metadata and data buffer
     entries = []
-    pdu_buf = [[0] * pdu_stride for _ in range(num_src_slots)]
+    pdu_buf = [[0] * pdu_stride for _ in range(num_src_slots)] if payload else None
     for uid, slot in zip((random.randrange(active_users) for _ in range(num_pkgs)), slots):
         src_addr = src_base + slot * pdu_stride
         tgt_addr = tgt_base + slot * pdu_stride
         entries.append((uid, src_addr, tgt_addr, pdu_size))
+        if not payload:
+            continue
         data = slot
         for i in range(hdr_len, pdu_size):
             pdu_buf[slot][i] = data & 0xFF
@@ -195,7 +202,7 @@ def main():
         # src data in its own section so .pdcp_src can be located at src_base
         h.write('static const uint8_t __attribute__((section(".pdcp_src"), used)) '
                'pdcp_src_data[NUM_SRC_SLOTS][PDU_STRIDE] = {\n')
-        for slot in range(num_src_slots):
+        for slot in (range(num_src_slots) if payload else ()):
             if args.fill_zero:
                 row = ', '.join(f'0x{b:02X}' for b in pdu_buf[slot])
                 if any(pdu_buf[slot]):

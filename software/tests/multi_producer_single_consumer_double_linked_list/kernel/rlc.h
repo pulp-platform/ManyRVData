@@ -46,9 +46,31 @@
 #define RLC_ENABLE_PACING 0
 #endif
 
+/* Paced arrival. 0 (default): every descriptor is available at t=0 (a burst). N: descriptor i
+   arrives at t0 + i * CPU_FREQ / N cycles, t0 = when the first descriptor is taken, so the
+   offered load is N packets/s -- the DP test case's rate. A producer holding a descriptor that
+   has not arrived yet waits for it. Latency is then measured from the arrival time, so a
+   producer that falls behind shows up as latency, not as a lower offered rate. */
+#ifndef RLC_ARRIVAL_PPS
+#define RLC_ARRIVAL_PPS 0
+#endif
+
 /* Per-user list locks (indexed by RLC entity / user id). */
+#if RLC_PAD_SYNC
+typedef struct {
+    _Atomic mcs_lock_t l;
+    char pad[RLC_SYNC_LINE_BYTES - sizeof(mcs_lock_t)];
+} rlc_lock_line_t;
+static rlc_lock_line_t tosend_llist_lock_2_line[NUM_USERS] __attribute__((aligned(RLC_SYNC_LINE_BYTES))) __attribute__((section(".data")));
+static rlc_lock_line_t sent_llist_lock_2_line[NUM_USERS]   __attribute__((aligned(RLC_SYNC_LINE_BYTES))) __attribute__((section(".data")));
+#define RLC_TOSEND_LOCK(u) (&tosend_llist_lock_2_line[u].l)
+#define RLC_SENT_LOCK(u)   (&sent_llist_lock_2_line[u].l)
+#else
 static _Atomic mcs_lock_t tosend_llist_lock_2[NUM_USERS] __attribute__((aligned(4))) __attribute__((section(".data")));
 static _Atomic mcs_lock_t sent_llist_lock_2[NUM_USERS]   __attribute__((aligned(4))) __attribute__((section(".data")));
+#define RLC_TOSEND_LOCK(u) (&tosend_llist_lock_2[u])
+#define RLC_SENT_LOCK(u)   (&sent_llist_lock_2[u])
+#endif
 
 
 typedef struct {
@@ -185,10 +207,21 @@ void cluster_entry(const unsigned int core_id);
 /*
    pdcp_pkd_ptr is a pointer to the new PDCP packet data structure.
 */
-spinlock_t pdcp_pkd_ptr __attribute__((section(".data")));
-mcs_lock_t pdcp_pkd_ptr_lock __attribute__((section(".data")));
+RLC_LINE_VAR(spinlock_t, pdcp_pkd_ptr);
+RLC_LINE_VAR(mcs_lock_t, pdcp_pkd_ptr_lock);
 
-_Atomic(uint32_t) producer_done __attribute__((section(".data")));
+RLC_LINE_VAR(_Atomic(uint32_t), producer_done);
+#if RLC_ARRIVAL_PPS
+RLC_LINE_VAR(uint32_t, rlc_arrival_t0);
+#if RLC_PAD_SYNC
+#define rlc_arrival_t0 (rlc_arrival_t0_line.v)
+#endif
+#endif
+#if RLC_PAD_SYNC
+#define pdcp_pkd_ptr      (pdcp_pkd_ptr_line.v)
+#define pdcp_pkd_ptr_lock (pdcp_pkd_ptr_lock_line.v)
+#define producer_done     (producer_done_line.v)
+#endif
 /* Number of producer cores that have finished; producer_done is only set
    once this reaches NUM_PRODUCER_CORES, so multiple producers don't cause
    the consumer(s) to exit early when just the first one finishes. */
