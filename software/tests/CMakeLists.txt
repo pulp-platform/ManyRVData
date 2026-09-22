@@ -253,6 +253,38 @@ foreach(rlc_layout P16_C48 P64_C192)
     add_spatz_test_rlc_full(${rlc_layout} "_pad_grp_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1 RLC_ARRIVAL_PPS=3125000)
 endforeach()
 
+# `_tile`: RLC_TILE_AFFINITY -- every UE owned by one tile, its state in that tile's private L1
+# partition (2 of 4 banks private, 2 shared); `_L64` datasets put every packet on its own lines.
+add_spatz_test_rlc_full(P48_C144_L64 "_tile" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1)
+add_spatz_test_rlc_full(P48_C144_L64 "_tile_paced" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1 RLC_ARRIVAL_PPS=7812500)
+foreach(rlc_layout P64_C192_L64 P48_C144_L64)
+    add_spatz_test_rlc_full(${rlc_layout} "_tile" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_tile_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1 RLC_ARRIVAL_PPS=3125000)
+endforeach()
+
+# `_am_tile`: RLC AM (grant-based transport blocks) on the tile-affinity layout; the TTI loop runs
+# inside each worker tile.
+add_spatz_test_rlc_full(P48_C144_L64 "_am_tile" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1)
+add_spatz_test_rlc_full(P48_C144_L64 "_am_tile_paced" ${RLC_T} ${RLC_T}/main.c 48 800 19528 RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1 RLC_ARRIVAL_PPS=7812500)
+foreach(rlc_layout P64_C192_L64 P48_C144_L64)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_tile" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_tile_paced" ${RLC_T} ${RLC_T}/main.c 4800 800 15704 RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PAD_SYNC=1 RLC_TILE_AFFINITY=1 RLC_ARRIVAL_PPS=3125000)
+endforeach()
+
+# `_am_x`: TC1 -- one UE served across tiles. The owner plans, helpers on other tiles copy. What
+# crosses tiles (entity, plan, transport block, queue) is below the partition boundary (shared);
+# payload sources stay private. 2 of 4 banks private; producers on per-group streams.
+set(RLC_AMX RLC_TB_MODE=1 RLC_MAX_PDUS_PER_GRANT=128 RLC_AM_CLAIM_CHUNK=2 RLC_TB_BASE=0x9A000000u
+    RLC_AM_ALLOW_CROSS_TILE_TB=1 RLC_PAD_SYNC=1 RLC_GROUP_STREAMS=1 RLC_PRIVATE_BANKS=2)
+foreach(rlc_layout P16_C48_L64 P64_C192_L64)
+    # `_am_xb`: + RLC_AM_BATCH -- the owner's commit moves the finished chain in two O(1) locked
+    # steps and plans from a lock-free walk (it was 80% of the owner's time, per-node locking).
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xb" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_BATCH=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xb_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_BATCH=1 RLC_ARRIVAL_PPS=1851851)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_x" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_x_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_ARRIVAL_PPS=1851851)
+endforeach()
+
 # Scalar-planner control: same scan algorithm, RVV primitives swapped for their
 # plain-C twins (RLC_PLAN_VECTOR=0). Executes no vector instruction in the
 # planner at all, so it separates "my algorithm is wrong" from "my RVV is wrong"

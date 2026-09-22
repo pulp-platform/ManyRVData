@@ -7,6 +7,46 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-23 (night)
+
+### Tile affinity on a half-private L1, AM in-tile and cross-tile, batched AM commit
+- **Time:** 2026-09-23 ~02:00 +0200
+- **Files:** `kernel/llist.{h,c}` (RLC_TILE_AFFINITY switch; batched queue ops under RLC_AM_BATCH),
+  `kernel/mm.h`, `kernel/rlc.h` (private-region layout, tile arena, tile barrier line),
+  `kernel/rlc.c` (tile setup, tile producer/consumer/STATUS/node pool), `kernel/rlc_am.{h,c}`
+  (rlc_am_consumer_tile, per-core grant state, batched commit, lock-free peek, PKT_OUT at commit),
+  `main.c` (RLC_PRIVATE_BANKS partition, per-tile setup between barriers),
+  `script/generate_pdcp_pkg.py` (`slot_align`), new `_l64` JSONs, `software/tests/CMakeLists.txt`.
+- **Why:** GVSoC now honours l1d_part() (it silently ignored it before), and the kernel's
+  all-private `l1d_part(num_cores_per_tile)` is only correct when everything runs in one tile.
+  User design: 2 private + 2 shared banks per tile; tile-private data above the 0xA000_0000
+  boundary, globally shared data below it -- software-controlled coherence.
+- **RLC_TILE_AFFINITY=1:** UE u owned by worker tile u % n_workers; rlc_ctx, list locks (one line
+  each), AM entity, node pool, the tile's copy of its descriptors, plan buffers and transport
+  blocks all in the private region, written only by the owner tile. Each tile's producer also runs
+  STATUS for its UEs. Data slots aligned to 64 B so no line is shared by two tiles' packets.
+- **AM in tile:** plan/execute/commit among the tile's 3 consumers, software sense-reversal barrier
+  on a private line (the HW barrier is cluster-wide). **AM cross tile (TC1):** the existing TTI loop
+  with the transport block moved below the boundary (0x9A00_0000, shared), 128 KB grants, producers
+  on per-group streams. **Fix:** per-consumer AM grant state is now per core; the 16-slot table made
+  consumers >= 16 share slot 0 and commit the owner's grant.
+- **RLC_AM_BATCH=1:** commit moves the finished chain (the plan already holds its nodes) in two O(1)
+  locked steps; plan walks the queue without holding its lock (only the owner removes).
+- **Results (GVSoC 4x4, 2P+2S banks, all EOC 0, every packet delivered), steady M pkt/s:**
+
+| | legacy tile | AM tile | AM cross-tile (+batch) | target |
+|---|---|---|---|---|
+| TC1 16P+48C | -- | -- | 0.69 (1.41 batched; 0.98 paced) | 1.85 |
+| TC2 48 tiles | 10.7 burst / keeps up paced, p99 ~330 us | 11.4 burst / 9.1 paced, p99 460 us | -- | 7.81 |
+| TC3 48 / 64 tiles | 5.3 / 4.3 burst, keeps up paced | 2.3 / 2.5 | -- | 3.13 |
+
+- **Open:** AM TC3 (one grant per owner per TTI, few SDUs per UE); AM TC1 producers on one queue
+  lock (64P worse than 16P); first-slot cold-start latency.
+- AM-in-tile runs first hung in GVSoC: a Spatz model deadlock (chaining on a writer-less vreg),
+  fixed in the GVSoC repo (core f3550501).
+
+---
+
 ## 2026-09-23
 
 ### Per-group packet streams (RLC_GROUP_STREAMS): TC2 and TC3 sustained at their DP targets

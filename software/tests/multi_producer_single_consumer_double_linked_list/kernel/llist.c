@@ -272,4 +272,52 @@ void list_remove(spinlock_t *llist_lock, LinkedList *list, Node *node) {
 }
 
 
+
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1) && RLC_AM_BATCH
+unsigned int list_peek_budget_nolock(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                                     unsigned int max, unsigned int budget, unsigned int overhead,
+                                     unsigned int *reached_end) {
+    spin_lock(llist_lock, 10);
+    Node *p = list->head;
+    unsigned int avail = (unsigned int)list->sduNum;
+    spin_unlock(llist_lock, 10);
+    unsigned int n = 0, acc = 0, stopped_on_budget = 0;
+    for (unsigned int k = 0; k < avail && n < max; k++) {
+        out[n++] = p;
+        acc += overhead + (unsigned int)p->data_size;
+        if (acc >= budget) { stopped_on_budget = 1; break; }
+        if (k + 1 < avail) p = p->next;      /* never past the snapshot: tail->next may be moving */
+    }
+    /* "Transmission buffer empty" as of the snapshot: the walk took the last queued SDU (the
+       locked version's p == NULL). A node appended after the snapshot is seen next grant. */
+    (void)stopped_on_budget;
+    if (reached_end) *reached_end = (n == avail) ? 1u : 0u;
+    return n;
+}
+
+void list_detach_front_upto(spinlock_t *llist_lock, LinkedList *list, Node *last,
+                            unsigned int n, unsigned int bytes) {
+    spin_lock(llist_lock, 10);
+    Node *rest = last->next;
+    list->head = rest;
+    if (rest != NULL) rest->prev = NULL; else list->tail = NULL;
+    last->next = NULL;
+    list->sduNum -= (int)n;
+    list->sduBytes -= (int)bytes;
+    spin_unlock(llist_lock, 10);
+}
+
+void list_append_chain(spinlock_t *llist_lock, LinkedList *list, Node *first, Node *last,
+                       unsigned int n, unsigned int bytes) {
+    spin_lock(llist_lock, 10);
+    first->prev = list->tail;
+    if (list->tail != NULL) list->tail->next = first; else list->head = first;
+    list->tail = last;
+    last->next = NULL;
+    list->sduNum += (int)n;
+    list->sduBytes += (int)bytes;
+    spin_unlock(llist_lock, 10);
+}
+#endif
+
 #endif
