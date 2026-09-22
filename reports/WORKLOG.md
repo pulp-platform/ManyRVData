@@ -7,6 +7,36 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-23 (noon)
+
+### TC1 reaches its target: descriptor-ring to-send queue + owner plans in its private partition
+- **Files:** `kernel/rlc_am.h` (RLC_AM_RING structures, RLC_AM_PRIV_PLAN), `kernel/rlc_am.c` (ring gather in
+  plan, ring commit/STATUS, RLC_AM_QUEUED, private plan + vector publish), `kernel/rlc.c` (producer ring path,
+  per-core receive-statistics shard), `software/tests/CMakeLists.txt` (`_am_xr`, `_am_xrp` targets).
+- **Why:** TC1's single owner core was the serial bottleneck (plan 53% + commit 31%, IPC 0.15, 70% memory stall;
+  48 helpers idle 87%). Causes: a linked to-send list in shared memory (a dependent remote load per node), 15
+  producers on its lock, ~10 per-packet atomics on the entity's lines, and the ~7 KB plan buffer spread over ~28
+  home tiles which the vector planner reads and writes.
+- **RLC_AM_RING=1:** one array ring of SDU descriptors per entity (tail: producers, one atomic add; head: owner;
+  ack: STATUS). No list, node pool or queue lock; commit advances head, STATUS advances ack. Per-packet entity
+  statistics go to a per-core shard. Requires RLC_AM_WORKQ=0.
+- **RLC_AM_PRIV_PLAN=1:** the owner plans in a buffer in its tile's private partition (0xB800_0000 + owner*size)
+  and publishes the 8 executor fields to the shared plan with vector copies (scalar remote stores each wait for
+  their response and made it slower: 1.40 M/s).
+- **Results (GVSoC 4x4, 2P+2S banks, P16_C48_L64, 8 slots, all EOC 0):**
+
+| TC1 | steady M pkt/s (burst / paced) | paced latency | <= 350 us |
+|---|---|---|---|
+| linked list (`am_x`) | 0.69 / 0.67 | backlog | 2% |
+| + batched commit (`am_xb`) | 1.41 / 0.98 | backlog | 6% |
+| + ring (`am_xr`) | 1.73 / 1.73 | p99 396 us, growing | 87% |
+| + private plan (`am_xrp`) | **1.91 / 1.84 (target 1.852)** | **p50 49 us, p99 72 us, flat over 8 slots** | **100%** |
+
+- **Open:** 64P+192C not rerun with `_am_xrp` (with `_am_xr` it was worse than 16P: 1.50); more headroom via
+  vectorised ring gather and vector reductions in commit (owner PC profile: gather 29%, commit 25%, planner 24%).
+
+---
+
 ## 2026-09-23 (morning)
 
 ### AM tile: STATUS only for entities that transmitted; up to G grants per owner per TTI

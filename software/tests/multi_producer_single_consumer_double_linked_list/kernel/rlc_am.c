@@ -78,6 +78,23 @@ static uint32_t rlc_am_sweeps[RLC_AM_MAX_TRACKED_CONSUMERS]
    does not work: the linker is free to place it after rlc_am_ent (it did), so
    the addresses would not move at all. Enclosing both in one struct makes the
    offset a language guarantee rather than a linker accident. */
+#if RLC_AM_RING
+#if RLC_TILE_AFFINITY || RLC_AM_WORKQ
+#error "RLC_AM_RING: cross-tile AM without the work-queue bitmaps (RLC_AM_WORKQ=0), not tile mode"
+#endif
+/* Below the partition boundary (.dram): producers and owner are on different tiles. */
+static rlc_ring_t rlc_ring[NUM_USERS] __attribute__((section(".dram"))) __attribute__((aligned(64)));
+#define RLC_RING_MASK (RLC_AM_RING_SIZE - 1u)
+#define RLC_RING_TAG(u, i) (((uint32_t)(u) << 24) | ((uint32_t)(i) & 0xffffffu))
+static inline int rlc_ring_queued(uint32_t u) {
+  const uint32_t h = atomic_load_explicit(&rlc_ring[u].head, memory_order_relaxed);
+  return rlc_ring[u].slot[h & RLC_RING_MASK].seq == h + 1u;
+}
+#define RLC_AM_QUEUED(u) rlc_ring_queued(u)
+#else
+#define RLC_AM_QUEUED(u) (rlc_ctx[u].list.sduNum != 0)
+#endif
+
 #if RLC_TILE_AFFINITY
 /* Per-UE AM state in the owner tile's private partition: rlc_am_ent is defined in rlc.h. */
 _Static_assert(sizeof(rlc_am_entity_t) % CACHE_LINE_SIZE == 0,
@@ -210,6 +227,14 @@ void rlc_am_init(uint32_t u) {
   rlc_am_entity_t *e = &rlc_am_ent[u];
   e->so_next = 0u;
   e->plan = &rlc_am_plan_pool[rlc_am_owner_idx(u)];
+#if RLC_AM_PRIV_PLAN
+#if RLC_TILE_AFFINITY
+#error "RLC_AM_PRIV_PLAN is for cross-tile AM; tile mode already keeps plans private"
+#endif
+  /* One private buffer per owner, at distinct addresses (no line shared between owners). */
+  e->plan_priv = (rlc_plan_t *)(uintptr_t)(RLC_AM_PRIV_PLAN_BASE +
+                                           rlc_am_owner_idx(u) * (uint32_t)sizeof(rlc_plan_t));
+#endif
   e->tb = (uint8_t *)(uintptr_t)(RLC_TB_BASE + u * RLC_TB_STRIDE);
   e->n = 0u;
   e->tb_used = 0u;
@@ -247,11 +272,41 @@ void rlc_am_init(uint32_t u) {
 static int rlc_am_try_plan(uint32_t u) {
   rlc_am_entity_t *e = &rlc_am_ent[u];
   rlc_context_t *ctx = &rlc_ctx[u];
+#if RLC_AM_PRIV_PLAN
+  rlc_plan_t *plan = e->plan_priv;
+#else
   rlc_plan_t *plan = e->plan;
+#endif
 
   /* Look ahead over the queue without detaching anything: a partially sent
      SDU must stay at the head until its final segment goes out. */
   e->plan_calls++;
+#if RLC_AM_RING
+  /* Gather published slots from head: independent loads, no lock, no pointer chase. */
+  unsigned int reached_end = 0u;
+  uint32_t avail = 0u, acc = 0u;
+  {
+    rlc_ring_t *rg = &rlc_ring[u];
+    const uint32_t h = atomic_load_explicit(&rg->head, memory_order_relaxed);
+    const uint32_t budget = RLC_GRANT_BYTES + e->so_next;
+    while (avail < RLC_MAX_PDUS_PER_GRANT) {
+      const rlc_ring_slot_t *sl = &rg->slot[(h + avail) & RLC_RING_MASK];
+      if (sl->seq != h + avail + 1u) { reached_end = 1u; break; }
+      plan->sdu_data[avail] = (void *)(uintptr_t)sl->data;
+      plan->sdu_len[avail] = sl->len;
+      avail++;
+      acc += RLC_AMD_HDR_MIN + sl->len;
+      if (acc >= budget) {
+        reached_end = (rg->slot[(h + avail) & RLC_RING_MASK].seq != h + avail + 1u);
+        break;
+      }
+    }
+    asm volatile("fence r, rw" ::: "memory");   /* slot contents after their seq */
+  }
+  e->peek_done++;
+  if (avail > e->peek_max) e->peek_max = avail;
+  if (avail == 0u) { e->peek_empty++; return 0; }
+#else
   /* Peek straight into the plan's own node array. A local Node*[128] would put
      512 B on the stack, and Snitch stacks are small -- this keeps the frame
      flat and saves a copy. */
@@ -279,6 +334,7 @@ static int rlc_am_try_plan(uint32_t u) {
     plan->sdu_data[i] = peek[i]->data;
     plan->sdu_len[i] = (uint32_t)peek[i]->data_size;
   }
+#endif
   plan->n_avail = avail;
 
   const rlc_plan_in_t in = {
@@ -310,6 +366,25 @@ static int rlc_am_try_plan(uint32_t u) {
 #endif
   if (n == 0u) { e->plan_zero++; return 0; }
   e->plan_ok++;
+#if RLC_AM_PRIV_PLAN
+  /* Publish what the executors read (rlc_am_execute_range) to the shared plan: streaming stores,
+     no reads of remote lines. */
+  {
+    /* Vector copies: a scalar store to a remote line waits for its response, so 8 x n scalar
+       stores cost more than the private planning saved; the vector unit streams them. */
+    rlc_plan_t *sp = e->plan;
+    const size_t nb = (size_t)n * 4u;
+    vector_memcpy32_m8_m4_general_opt(sp->sdu_data, plan->sdu_data, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->sn, plan->sn, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->tb_off, plan->tb_off, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->seg_len, plan->seg_len, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->so, plan->so, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->si, plan->si, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->poll, plan->poll, nb);
+    vector_memcpy32_m8_m4_general_opt(sp->hdr_len, plan->hdr_len, nb);
+    asm volatile("fence" ::: "memory");   /* published (vector stores drained) before the generation bump */
+  }
+#endif
 
   /* Stash what commit needs; it must not re-run the planner. */
   e->n = n;
@@ -390,7 +465,11 @@ static uint32_t rlc_am_help(uint32_t u) {
 static void rlc_am_commit(uint32_t u) {
   rlc_am_entity_t *e = &rlc_am_ent[u];
   rlc_context_t *ctx = &rlc_ctx[u];
+#if RLC_AM_PRIV_PLAN
+  const rlc_plan_t *p = e->plan_priv;   /* the owner's local copy */
+#else
   const rlc_plan_t *p = e->plan;
+#endif
   const uint32_t n = e->n;
   const uint32_t partial = e->partial;
 
@@ -399,7 +478,19 @@ static void rlc_am_commit(uint32_t u) {
      SDU is fully acknowledged. The trailing segment's SDU stays at the head
      with e->so_next recording how much of it has gone out. */
   uint32_t retire = 0u;
-#if RLC_AM_BATCH
+#if RLC_AM_RING
+  {
+    rlc_ring_t *rg = &rlc_ring[u];
+    const uint32_t h = atomic_load_explicit(&rg->head, memory_order_relaxed);
+    while (retire < n && p->last_seg[retire]) {
+      rg->slot[(h + retire) & RLC_RING_MASK].last_sn = p->sn[retire];
+      perf_probe(PROBE_EVT_PKT_OUT, RLC_RING_TAG(u, h + retire));   /* SDU fully sent */
+      retire++;
+    }
+    asm volatile("fence w, w" ::: "memory");   /* last_sn before STATUS can see the new head */
+    atomic_store_explicit(&rg->head, h + retire, memory_order_release);
+  }
+#elif RLC_AM_BATCH
   /* PDU i carries SDU i (plan order = queue order), and only the grant's last PDU can leave its
      SDU unfinished. So the retired SDUs are exactly the first `retire` queued nodes, which the
      plan already holds: stamp them, then move the whole chain in two O(1) locked steps. */
@@ -476,7 +567,7 @@ static void rlc_am_commit(uint32_t u) {
   rlc_am_bm_clr(rlc_am_bm_active, u);
   /* Anything left -- queued SDUs, or a segment mid-flight -- re-arms the
      entity so it is picked up again without a scan. */
-  if (ctx->list.sduNum != 0 || e->so_next != 0u) {
+  if (RLC_AM_QUEUED(u) || e->so_next != 0u) {
     rlc_am_bm_set(rlc_am_bm_ready, u);
   }
 #endif
@@ -643,7 +734,7 @@ static void rlc_am_plan_phase(uint32_t me) {
        re-arms the entity, and round-robin visits it again next TTI anyway.
        What it avoids is a lock acquire and a pointer chase per idle entity per
        TTI, which is what dominates at TC3's 4800 mostly-idle entities. */
-    if (rlc_ctx[u].list.sduNum == 0 && e->so_next == 0u) continue;
+    if (!RLC_AM_QUEUED(u) && e->so_next == 0u) continue;
     if (rlc_am_try_plan(u)) {
       rlc_am_my_open = u;
       rlc_am_my_rr = (idx + 1u) % n; /* next TTI starts at the following one */
@@ -652,7 +743,7 @@ static void rlc_am_plan_phase(uint32_t me) {
 #if RLC_AM_WORKQ
     /* Nothing planned but work remains (e.g. the grant cannot hold even a
        header): re-arm, or the entity would drop out of the idle check. */
-    if (rlc_ctx[u].list.sduNum != 0 || e->so_next != 0u)
+    if (RLC_AM_QUEUED(u) || e->so_next != 0u)
       rlc_am_bm_set(rlc_am_bm_ready, u);
 #endif
   }
@@ -996,6 +1087,15 @@ void rlc_am_status(void) {
        retired in order, their last_sn values are monotonic, so the first node
        that is not acknowledged ends the scan. */
     uint32_t freed = 0u;
+#if RLC_AM_RING
+    {
+      rlc_ring_t *rg = &rlc_ring[u];
+      uint32_t a = atomic_load_explicit(&rg->ack, memory_order_relaxed);
+      const uint32_t hd = atomic_load_explicit(&rg->head, memory_order_acquire);
+      while (a != hd && rlc_sn_lt(rg->slot[a & RLC_RING_MASK].last_sn, got_ack_sn)) { a++; freed++; }
+      atomic_store_explicit(&rg->ack, a, memory_order_release);
+    }
+#else
     while (1) {
       Node *head = NULL;
       if (list_peek_n((spinlock_t *)RLC_SENT_LOCK(u), &ctx->sent_list,
@@ -1009,6 +1109,7 @@ void rlc_am_status(void) {
       RLC_NODE_FREE(node);
       freed++;
     }
+#endif
 
     atomic_store_explicit(&ctx->vtNextAck, got_ack_sn, memory_order_relaxed);
     ctx->acksn = got_ack_sn;
@@ -1231,7 +1332,7 @@ int rlc_am_idle(void) {
   for (uint32_t u = 0u; u < NUM_USERS; u++) {
     if (atomic_load_explicit(&rlc_am_ent[u].gen, memory_order_acquire) & 1u)
       return 0;
-    if (rlc_ctx[u].list.sduNum != 0) return 0;
+    if (RLC_AM_QUEUED(u)) return 0;
     if (rlc_am_ent[u].so_next != 0u) return 0;
   }
   return 1;

@@ -281,6 +281,12 @@ foreach(rlc_layout P16_C48_L64 P64_C192_L64)
     # steps and plans from a lock-free walk (it was 80% of the owner's time, per-node locking).
     add_spatz_test_rlc_full(${rlc_layout} "_am_xb" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_BATCH=1)
     add_spatz_test_rlc_full(${rlc_layout} "_am_xb_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_BATCH=1 RLC_ARRIVAL_PPS=1851851)
+    # `_am_xr`: + RLC_AM_RING -- descriptor-ring to-send queue (no list, no node pool, no queue lock).
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xr" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_RING=1 RLC_AM_WORKQ=0)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xr_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_RING=1 RLC_AM_WORKQ=0 RLC_ARRIVAL_PPS=1851851)
+    # `_am_xrp`: + RLC_AM_PRIV_PLAN -- the owner plans in its tile's private partition.
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xrp" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_RING=1 RLC_AM_WORKQ=0 RLC_AM_PRIV_PLAN=1)
+    add_spatz_test_rlc_full(${rlc_layout} "_am_xrp_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_AM_RING=1 RLC_AM_WORKQ=0 RLC_AM_PRIV_PLAN=1 RLC_ARRIVAL_PPS=1851851)
     add_spatz_test_rlc_full(${rlc_layout} "_am_x" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072)
     add_spatz_test_rlc_full(${rlc_layout} "_am_x_paced" ${RLC_T} ${RLC_T}/main.c 1 1350 9256 ${RLC_AMX} RLC_GRANT_BYTES=131072 RLC_ARRIVAL_PPS=1851851)
 endforeach()
