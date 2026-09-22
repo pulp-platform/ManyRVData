@@ -419,6 +419,14 @@ static void rlc_am_commit(uint32_t u) {
   e->pdus += n;
   e->polls += polls;
   e->segments += segs;
+  /* One grant: n PDUs carrying `bytes` of payload. In AM, PDU_TX is one event per grant whose
+     value is the grant's payload bytes; the PDU count comes from GRANT. */
+#if RLC_PROBE
+  perf_probe_entity(PROBE_EVT_GRANT, u, n);
+  perf_probe_entity(PROBE_EVT_PDU_TX, u, (uint32_t)bytes);
+  if (segs) perf_probe_entity(PROBE_EVT_SEGMENT, u, segs);
+  if (polls) perf_probe_entity(PROBE_EVT_POLL, u, polls);
+#endif
 
 #ifdef RLC_SELF_CHECK
   rlc_am_verify_grant(u);
@@ -577,16 +585,24 @@ void rlc_am_consumer_tti(uint32_t core_id) {
 #if RLC_TTI_CYCLES
     const uint32_t tti_start = benchmark_get_cycle();
 #endif
+    if (me == 0u) perf_probe(PROBE_EVT_TTI_BEGIN, rlc_am_ttis);
+    perf_probe_phase(PERF_PROBE_PHASE_PLAN);
     rlc_am_plan_phase(me);
+    perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_phase_barrier(mask);  /* helpers BLOCK here; fenced -- see rlc_sync.h */
 
+    perf_probe_phase(PERF_PROBE_PHASE_EXECUTE);
     rlc_am_execute_phase();
+    perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_phase_barrier(mask);
 
+    perf_probe_phase(PERF_PROBE_PHASE_COMMIT);
     rlc_am_commit_phase(me);
+    perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
     rlc_phase_barrier(mask);
 
     if (me == 0u) {
+      perf_probe(PROBE_EVT_TTI_END, rlc_am_ttis);
       rlc_am_ttis++;
       atomic_store_explicit(&rlc_am_stop,
           (atomic_load_explicit(&producer_done, memory_order_relaxed) >=
@@ -829,6 +845,9 @@ void rlc_am_status(void) {
     ctx->acksn = got_ack_sn;
     ctx->nackcount = 0u;
     if (freed) ctx->parseindex++;
+#if RLC_PROBE
+    if (freed) perf_probe_entity(PROBE_EVT_STATUS_ACK, u, freed);
+#endif
   }
 }
 
