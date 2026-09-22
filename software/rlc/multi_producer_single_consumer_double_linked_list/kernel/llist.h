@@ -47,6 +47,14 @@ typedef volatile int spinlock_t __attribute__((aligned(4)));
 #define RLC_GROUP_STREAMS 0
 #endif
 #define RLC_MAX_STREAMS 64
+
+/* RLC_TILE_AFFINITY=1: every UE is owned by one tile and handled entirely inside it, with its
+   state in that tile's PRIVATE L1 partition (see rlc.h). RLC_PRIVATE_BANKS: L1 banks per tile
+   given to the private partition (0 / 1 / N/2 / N-1 / N of N; the RTL's tcdm_cache_interco).
+   Default 0 / the historical all-private setting. */
+#ifndef RLC_TILE_AFFINITY
+#define RLC_TILE_AFFINITY 0
+#endif
 /* Declares `name` in .data; with RLC_PAD_SYNC it is the only thing on its cache line (the name
    then refers to `name##_line.v` through a #define placed next to the declaration). */
 #if RLC_PAD_SYNC
@@ -168,6 +176,30 @@ unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
 unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
                               Node **out, unsigned int max, unsigned int budget,
                               unsigned int overhead, unsigned int *reached_end);
+
+#ifndef RLC_AM_BATCH
+#define RLC_AM_BATCH 0
+#endif
+#if RLC_AM_BATCH
+/* Batched queue operations for an AM owner (RLC_AM_BATCH=1). Only the owner removes nodes from
+   its to-send queue; producers only append at the tail. That makes two things safe:
+
+   list_peek_budget_nolock(): read head and length under the lock, then walk the nodes WITHOUT it.
+     Every node in front of the snapshot length is fixed (nobody but the caller removes), and the
+     walk never reads past that count, so it never races the producer writing tail->next. The
+     locked walk held the lock for the whole pointer chase and stalled every producer behind it.
+
+   list_detach_front_upto(): detach the chain head..last (the caller knows `last` and the chain's
+     length and bytes, from its plan) in one O(1) locked step, instead of one lock per node.
+   list_append_chain(): append a detached chain in one O(1) locked step. */
+unsigned int list_peek_budget_nolock(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                                     unsigned int max, unsigned int budget, unsigned int overhead,
+                                     unsigned int *reached_end);
+void list_detach_front_upto(spinlock_t *llist_lock, LinkedList *list, Node *last,
+                            unsigned int n, unsigned int bytes);
+void list_append_chain(spinlock_t *llist_lock, LinkedList *list, Node *first, Node *last,
+                       unsigned int n, unsigned int bytes);
+#endif
 #endif
 
 /*

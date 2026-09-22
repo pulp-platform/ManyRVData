@@ -35,7 +35,7 @@
 /* Set when this build narrows the cluster barrier mask for a consumer-only
    partial-barrier region, which requires non-participants to stay out of any
    barrier for the duration. */
-#if (RLC_UL_MODE) || ((RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_TTI)
+#if (RLC_UL_MODE) || ((RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_TTI && !RLC_TILE_AFFINITY)
 #define RLC_NARROWED_BARRIER 1
 #else
 #define RLC_NARROWED_BARRIER 0
@@ -512,6 +512,128 @@ static void rlc_node_free(void *p) {
 }
 #define RLC_NODE_ALLOC(idx) rlc_node_alloc((uint32_t)(idx) % rlc_nstreams)
 #define RLC_NODE_FREE(p) rlc_node_free(p)
+#elif RLC_TILE_AFFINITY
+#if !RLC_CORE_LISTS
+#error "RLC_TILE_AFFINITY needs the data header's producer/consumer lists"
+#endif
+#define RLC_ARRIVAL_LEAD 5000u
+
+/* Per core, set once by rlc_tile_setup(): this core's tile arena (NULL if its tile owns no UEs),
+   and its rank among the consumers of its tile. */
+static __thread rlc_tile_hdr_t *rlc_my_arena;
+static __thread uint32_t rlc_my_crank, rlc_my_ncons;
+static uint32_t rlc_n_workers_cached;    /* per-core copy, written only by rlc_tile_setup() */
+
+static inline uint32_t rlc_tile_of(uint32_t core) { return core / snrt_cluster_core_per_tile(); }
+
+/* Worker tiles = distinct tiles of producer_core_ids, in list order; exactly one producer each. */
+static uint32_t rlc_worker_of_tile(uint32_t tile, uint32_t *n_workers) {
+    uint32_t n = 0u, mine = 0xffffffffu;
+    for (uint32_t i = 0u; i < NUM_PRODUCER_CORES; i++) {
+        const uint32_t t = rlc_tile_of(producer_core_ids[i]);
+        uint32_t j = 0u;
+        while (j < i && rlc_tile_of(producer_core_ids[j]) != t) j++;
+        if (j < i) continue;                 /* tile already counted */
+        if (t == tile) mine = n;
+        n++;
+    }
+    *n_workers = n;
+    return mine;
+}
+
+static inline void rlc_zero_lines(void *p, uint32_t bytes) {
+    volatile uint32_t *w = (volatile uint32_t *)p;
+    for (uint32_t i = 0u; i < bytes / 4u; i++) w[i] = 0u;
+}
+
+/* Every core, after the partition is set and before the start barrier. The tile's producer also
+   builds the tile: its UEs (cleared and initialised here, by the owner, so no other tile ever
+   holds a copy of their lines), their locks, the tile's descriptors and its node pool. */
+void rlc_tile_setup(const unsigned int core_id) {
+    const uint32_t tile = rlc_tile_of(core_id);
+    uint32_t nw;
+    const uint32_t w = rlc_worker_of_tile(tile, &nw);
+    rlc_n_workers_cached = nw;
+    rlc_my_arena = (w == 0xffffffffu) ? NULL : RLC_TILE_ARENA(w);
+    rlc_my_crank = 0u; rlc_my_ncons = 0u;
+    for (uint32_t i = 0u; i < NUM_CONSUMER_CORES; i++) {
+        if (rlc_tile_of(consumer_core_ids[i]) != tile) continue;
+        if (consumer_core_ids[i] == core_id) rlc_my_crank = rlc_my_ncons;
+        rlc_my_ncons++;
+    }
+    if (rlc_my_arena == NULL || !rlc_is_producer(core_id)) return;
+
+    rlc_tile_hdr_t *th = rlc_my_arena;
+    rlc_zero_lines(th, sizeof(*th));
+    uint32_t *ues = RLC_TILE_UES(th);
+    uint32_t n_ues = 0u;
+    for (uint32_t u = w; u < NUM_USERS; u += nw) {
+        if (n_ues == RLC_TILE_MAX_UES) {
+            printf("[TILE][FATAL] tile %u owns more than %u UEs\n", tile, (unsigned)RLC_TILE_MAX_UES);
+            break;
+        }
+        ues[n_ues++] = u;
+        rlc_zero_lines(&rlc_ctx[u], sizeof(rlc_context_t));
+        rlc_init(u, 0, &mm_ctx);
+        mcs_lock_init(RLC_TOSEND_LOCK(u));
+        mcs_lock_init(RLC_SENT_LOCK(u));
+    }
+    th->n_ues = n_ues;
+#if RLC_TB_MODE == RLC_TB_MODE_AM
+    /* Owner of the tile's k-th UE = tile consumer k % stride (the global rule, applied inside the
+       tile); each owner has one plan buffer and one transport block in the arena. */
+    {
+        const uint32_t stride = (rlc_my_ncons < n_ues) ? rlc_my_ncons : n_ues;
+        for (uint32_t k = 0u; k < n_ues && stride; k++) {
+            const uint32_t r = k % stride;
+            rlc_am_ent[ues[k]].plan = (rlc_plan_t *)((uint8_t *)th + RLC_TILE_PLAN_OFF + r * sizeof(rlc_plan_t));
+            rlc_am_ent[ues[k]].tb   = (uint8_t *)th + RLC_TILE_TB_OFF + r * RLC_TILE_TB_BYTES;
+        }
+        rlc_tile_bar_t *bar = RLC_TILE_BAR(th);
+        rlc_zero_lines(bar, sizeof(*bar));
+        if (rlc_my_ncons > RLC_TILE_MAX_CONS || RLC_TILE_PLAN_OFF + RLC_TILE_MAX_CONS * sizeof(rlc_plan_t) > RLC_TILE_TB_OFF ||
+            RLC_TILE_TB_OFF + RLC_TILE_MAX_CONS * RLC_TILE_TB_BYTES > RLC_TILE_ARENA_BYTES)
+            printf("[TILE][FATAL] AM arena layout does not fit (grant %u B)\n", (unsigned)RLC_GRANT_BYTES);
+    }
+#endif
+    /* A private copy of the scheduling indication every consumer reads per iteration, so idle
+       polling never leaves the tile. */
+    for (uint32_t i = 0u; i < sizeof(DlschInd); i++)
+        RLC_TILE_DLSCH(th)->content[i] = dlsch_ind.content[i];
+    rlc_tile_pkt_t *pk = RLC_TILE_PKTS(th);
+    uint32_t n = 0u;
+    for (uint32_t i = 0u; i < NUM_PKGS; i++) {
+        if ((uint32_t)pdcp_pkgs[i].user_id % nw != w) continue;
+        pk[n].gidx = i;
+        pk[n].pkg = pdcp_pkgs[i];
+        n++;
+    }
+    th->n_pkts = n;
+    th->pool_off = (RLC_TILE_PKTS_OFF + n * (uint32_t)sizeof(rlc_tile_pkt_t) + 63u) & ~63u;
+    th->pool_pages = n;                  /* one node per packet: never runs dry */
+    if (th->pool_off + n * PAGE_SIZE > RLC_TILE_POOL_END)
+        printf("[TILE][FATAL] tile %u: %u packets overflow its %u-byte arena\n",
+               tile, n, (unsigned)RLC_TILE_ARENA_BYTES);
+}
+
+/* The tile's node pool. Allocation (producer) and release (STATUS) both run on the tile's
+   producer core, so no lock. */
+static void *rlc_tile_node_alloc(void) {
+    rlc_tile_hdr_t *th = rlc_my_arena;
+    if (th->pool_used < th->pool_pages)
+        return (uint8_t *)th + th->pool_off + (th->pool_used++) * PAGE_SIZE;
+    MM_FreePage *p = th->free_list;
+    if (p != NULL) th->free_list = p->next;
+    return p;
+}
+static void rlc_tile_node_free(void *p) {
+    if (!p) return;
+    rlc_tile_hdr_t *th = rlc_my_arena;
+    ((MM_FreePage *)p)->next = th->free_list;
+    th->free_list = (MM_FreePage *)p;
+}
+#define RLC_NODE_ALLOC(idx) rlc_tile_node_alloc()
+#define RLC_NODE_FREE(p) rlc_tile_node_free(p)
 #else
 #define RLC_NODE_ALLOC(idx) mm_alloc()
 #define RLC_NODE_FREE(p) mm_free(p)
@@ -561,7 +683,14 @@ void ue_status_rpt(const unsigned int core_id)
     // Simulate receiving ACK from UE after certain sent pkgs, per RLC entity.
     // ACK_SN is ctx->vtNextAck+2. Core 0 scans all users each call (single
     // writer per entity; striping across producer cores is a future option).
+#if RLC_TILE_AFFINITY
+    /* Only this tile's UEs: STATUS runs on every worker tile's producer. */
+    const rlc_tile_hdr_t *th_st = rlc_my_arena;
+    for (unsigned int k = 0; k < th_st->n_ues; k++) {
+        const unsigned int u = RLC_TILE_UES(th_st)[k];
+#else
     for (unsigned int u = 0; u < NUM_USERS; u++) {
+#endif
         rlc_context_t *ctx = &rlc_ctx[u];
         if (ctx->sent_list.sduNum >= 2) {
             char head = ue_status_rpt_content.stateRpt[0];
@@ -710,6 +839,10 @@ static void consumer(const unsigned int core_id) { rlc_ul_consumer(core_id); }
 #elif RLC_TB_MODE == RLC_TB_MODE_AM
 static void consumer(const unsigned int core_id) {
     /* Grant-based assembly: plan (owner) + execute (all cores) + commit. */
+#if RLC_TILE_AFFINITY
+    rlc_am_consumer_tile(core_id);   /* the whole TTI loop runs inside the tile */
+    return;
+#endif
 #if RLC_AM_TTI && RLC_CORE_LISTS
     /* TTI-structured: the three phases are separated by a partial barrier over
        the consumer set, so a helper with nothing to do blocks rather than
@@ -736,6 +869,44 @@ static void consumer(const unsigned int core_id) {
                 PRODUCER_CORE_NUM &&
             rlc_am_idle()) {
             break;
+        }
+    }
+}
+#elif RLC_TILE_AFFINITY
+/* Tile mode: a consumer serves only its tile's UEs (split over the tile's consumers the same way
+   the global version splits all UEs over all consumers) and watches only its tile's producer. */
+static void consumer(const unsigned int core_id) {
+    rlc_tile_hdr_t *th = rlc_my_arena;
+    if (th == NULL || rlc_my_ncons == 0u) return;
+    const uint32_t *ues = RLC_TILE_UES(th);
+    const unsigned int n = th->n_ues;
+    if (n == 0u) { while (!th->tile_done) { } return; }
+    const unsigned int stride = (rlc_my_ncons < n) ? rlc_my_ncons : n;
+    const unsigned int first  = rlc_my_crank % stride;
+    unsigned int cursor = first;
+#if RLC_PROBE
+    uint32_t probe_ph = 0xffffffffu;
+#endif
+    while (1) {
+        TestDataStru dfx = {0};
+        dfx.dlschInd = *RLC_TILE_DLSCH(th);
+        unsigned int k = cursor;
+        int sent = 0;
+        do {
+            sent = rlc_send_pkt(core_id, &rlc_ctx[ues[k]], &dfx);
+            if (!sent) { k += stride; if (k >= n) k = first; }
+        } while (!sent && k != cursor);
+        if (sent) { k += stride; if (k >= n) k = first; cursor = k; }
+#if RLC_PROBE
+        if (sent) probe_ph = PERF_PROBE_PHASE_EXECUTE;
+        else RLC_PROBE_PHASE_TO(probe_ph, PERF_PROBE_PHASE_IDLE);
+#endif
+        if (th->tile_done) {
+            int drained = 1;
+            for (unsigned int j = first; j < n; j += stride) {
+                if (rlc_ctx[ues[j]].list.sduNum != 0) { drained = 0; break; }
+            }
+            if (drained) break;
         }
     }
 }
@@ -786,6 +957,12 @@ static void consumer(const unsigned int core_id) {
 
 /* Producer behavior (runs on cores other than 0) */
 /* Returns 0 on success, -1 when no more packages available. */
+/* The descriptor of the packet being produced: the tile's local copy in tile mode. */
+#if RLC_TILE_AFFINITY
+#define RLC_PKG(i) (rlc_cur->pkg)
+#else
+#define RLC_PKG(i) pdcp_pkgs[i]
+#endif
 static int producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
     // DEBUG_PRINTF("Producer (core %u): pdcp_src_data[0][0] = %d, pdcp_src_data[3657][500] = %d, pdcp_src_data[%d-1][%d-1] = %d, @mcycle = %d\n",
@@ -799,6 +976,12 @@ static int producer(const unsigned int core_id) {
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 #if RLC_GROUP_STREAMS
     int new_pdcp_pkg_ptr = rlc_stream_take();
+#elif RLC_TILE_AFFINITY
+    /* The tile's own packets, in arrival order; this core is the tile's only producer. */
+    rlc_tile_hdr_t *th_p = rlc_my_arena;
+    if (th_p->next >= th_p->n_pkts) return -1;
+    const rlc_tile_pkt_t *rlc_cur = &RLC_TILE_PKTS(th_p)[th_p->next++];
+    int new_pdcp_pkg_ptr = (int)rlc_cur->gidx;
 #else
     int new_pdcp_pkg_ptr = pdcp_receive_pkg(core_id, &pdcp_pkd_ptr_lock);
 #endif
@@ -819,17 +1002,17 @@ static int producer(const unsigned int core_id) {
 #endif
 
     /* Route the package to its owning RLC entity (one per UE). */
-    const unsigned int uid = (unsigned int)pdcp_pkgs[new_pdcp_pkg_ptr].user_id;
+    const unsigned int uid = (unsigned int)RLC_PKG(new_pdcp_pkg_ptr).user_id;
     rlc_context_t *ctx = &rlc_ctx[uid];
     ctx->latestSduPktRxCycle = benchmark_get_cycle();
 #ifdef RLC_NODE_GUARD
     if (uid >= NUM_USERS ||
-        (pdcp_pkgs[new_pdcp_pkg_ptr].src_addr & 0xFF000000) != 0xA0000000 ||
-        (pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr & 0xFF000000) != 0xB0000000) {
+        (RLC_PKG(new_pdcp_pkg_ptr).src_addr & 0xFF000000) != 0xA0000000 ||
+        (RLC_PKG(new_pdcp_pkg_ptr).tgt_addr & 0xFF000000) != 0xB0000000) {
         printf_lock_acquire(&printf_lock);
         printf("[GUARD][core %u] BAD DESCRIPTOR idx=%d uid=%u src=0x%x tgt=0x%x cyc=%d\n",
                core_id, new_pdcp_pkg_ptr, uid,
-               pdcp_pkgs[new_pdcp_pkg_ptr].src_addr, pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr,
+               RLC_PKG(new_pdcp_pkg_ptr).src_addr, RLC_PKG(new_pdcp_pkg_ptr).tgt_addr,
                benchmark_get_cycle());
         printf_lock_release(&printf_lock);
     }
@@ -867,9 +1050,9 @@ static int producer(const unsigned int core_id) {
     node->user_id = uid;
     /* Set the payload pointer immediately after the Node structure */
     if (new_pdcp_pkg_ptr >= 0) {
-        node->data = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].src_addr));
-        node->tgt = (void *)((uint8_t *)(pdcp_pkgs[new_pdcp_pkg_ptr].tgt_addr));
-        node->data_size = pdcp_pkgs[new_pdcp_pkg_ptr].pkg_length;
+        node->data = (void *)((uint8_t *)(RLC_PKG(new_pdcp_pkg_ptr).src_addr));
+        node->tgt = (void *)((uint8_t *)(RLC_PKG(new_pdcp_pkg_ptr).tgt_addr));
+        node->data_size = RLC_PKG(new_pdcp_pkg_ptr).pkg_length;
         /* read one cacheline from node mem */
         RcvPktHeader tmp = *(RcvPktHeader *)node->data;
         unsigned int pingflag = ctx->pingFlag;
@@ -899,9 +1082,7 @@ static int producer(const unsigned int core_id) {
     // /* Zero-initialize the payload using our custom mm_memset */
     // mm_memset(node->data, 0, PACKET_SIZE);
     /* Append the node to the owning entity's to-send list */
-#if RLC_TB_MODE != RLC_TB_MODE_AM
     perf_probe(PROBE_EVT_PKT_IN, (uint32_t)(uintptr_t)node);
-#endif
     perf_probe_entity(PROBE_EVT_SDU_RX, uid, (uint32_t)node->data_size);
     list_push_back((spinlock_t *)RLC_TOSEND_LOCK(uid), &ctx->list, node);
 #if (RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_WORKQ
@@ -957,13 +1138,16 @@ static void pkt_production_and_recycle(const unsigned int core_id)
         if (!this_core_done) {
             if (producer(core_id) < 0) {
                 this_core_done = 1;
+#if RLC_TILE_AFFINITY
+                rlc_my_arena->tile_done = 1u;   /* the tile's consumers watch this, locally */
+#endif
                 atomic_fetch_add_explicit(&producer_done, 1, memory_order_relaxed);
             }
         }
         /* UE status report runs on exactly one core -- the first producer in
            the list, not core 0: with explicit core lists core 0 need not be a
            producer at all, and gating on it would drop the ACK task entirely. */
-        if (core_id == rlc_status_core()) {
+        if (RLC_TILE_AFFINITY || core_id == rlc_status_core()) {   /* tile mode: each tile acks its own UEs */
 #if RLC_PROBE
             if (!this_core_done) RLC_PROBE_PHASE_TO(probe_ph, PERF_PROBE_PHASE_STATUS);
 #endif

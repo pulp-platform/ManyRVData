@@ -56,7 +56,85 @@
 #endif
 
 /* Per-user list locks (indexed by RLC entity / user id). */
-#if RLC_PAD_SYNC
+#if RLC_TILE_AFFINITY
+/* Tile affinity (RLC_TILE_AFFINITY=1).
+
+   The L1 runs half private / half shared (RLC_PRIVATE_BANKS of each tile's banks private).
+   Addresses at or above the partition boundary (0xA000_0000, the reset value) are cached in the
+   requesting tile's private banks -- always local, never on the mesh, but EACH TILE HAS ITS OWN
+   COPY and nothing keeps copies in step. Below the boundary there is one copy per line, at its
+   home tile.
+
+   Every UE is owned by one worker tile (u % n_workers); its packets are produced, assembled and
+   acknowledged there, by that tile's cores only. So everything that belongs to a UE lives in the
+   private region, and the only rule is: no cache line is ever touched by two tiles.
+     - rlc_ctx[u]         0xB100_0000 + u * sizeof(rlc_context_t)   (a whole number of lines)
+     - its two list locks 0xB300_0000 + u * 128                     (one line each)
+     - per worker tile    0xB400_0000 + w * 1 MiB: header, owned-UE list, the tile's packet
+                          descriptors (copied at init, read-only after), node pool
+   Cross-tile state -- the finish counter, the paced-arrival clock -- stays below the boundary. */
+#if RLC_GROUP_STREAMS
+#error "RLC_TILE_AFFINITY and RLC_GROUP_STREAMS are alternative producer designs"
+#endif
+#if !RLC_PAD_SYNC
+#error "RLC_TILE_AFFINITY needs RLC_PAD_SYNC"
+#endif
+#ifndef RLC_PRIVATE_BANKS
+#define RLC_PRIVATE_BANKS 2
+#endif
+#define RLC_PRIV_UE_BASE     0xB1000000u
+#define RLC_PRIV_LOCK_BASE   0xB3000000u
+#define RLC_PRIV_TILE_BASE   0xB4000000u
+#define RLC_PRIV_AM_BASE     0xB3200000u   /* rlc_am_ent[NUM_USERS] (AM builds), whole lines each */
+#define rlc_am_ent ((rlc_am_entity_t *)(uintptr_t)RLC_PRIV_AM_BASE)
+#define RLC_TILE_ARENA_BYTES 0x00100000u
+#define RLC_TILE_DLSCH_OFF   64u          /* the tile's copy of the DL scheduling indication */
+#define RLC_TILE_UES_OFF     128u         /* owned-UE ids, u32 each, up to RLC_TILE_PKTS_OFF */
+#define RLC_TILE_PKTS_OFF    0x2000u      /* rlc_tile_pkt_t each */
+#define RLC_TILE_BAR_OFF     (RLC_TILE_PKTS_OFF - 64u)   /* tile barrier + AM grant table line */
+#define RLC_TILE_MAX_UES     ((RLC_TILE_BAR_OFF - RLC_TILE_UES_OFF) / 4u)
+#define RLC_TILE_PLAN_OFF    0xC0000u     /* AM: one plan buffer per tile consumer (owner) */
+#define RLC_TILE_TB_OFF      0xD0000u     /* AM: one transport block per tile consumer */
+#define RLC_TILE_MAX_CONS    4u
+#define RLC_TILE_POOL_END    RLC_TILE_PLAN_OFF
+#define RLC_TILE_TB_BYTES    ((((uint32_t)RLC_GRANT_BYTES) + 63u) & ~63u)
+#define RLC_TOSEND_LOCK(u) ((_Atomic mcs_lock_t *)(uintptr_t)(RLC_PRIV_LOCK_BASE + (uint32_t)(u) * 128u))
+#define RLC_SENT_LOCK(u)   ((_Atomic mcs_lock_t *)(uintptr_t)(RLC_PRIV_LOCK_BASE + (uint32_t)(u) * 128u + 64u))
+
+typedef struct {
+    uint32_t   gidx;              /* global packet index = its arrival slot under pacing */
+    pdcp_pkg_t pkg;               /* the descriptor, copied into the tile at init */
+    uint32_t   pad[3];
+} rlc_tile_pkt_t;                 /* 32 B, two per line: both belong to the same tile */
+
+typedef struct {
+    uint32_t next;                /* next of this tile's packets; only the tile's producer takes */
+    uint32_t n_pkts;
+    uint32_t n_ues;
+    volatile uint32_t tile_done;       /* set by the tile's producer, read by its consumers */
+    uint32_t pool_off;            /* byte offset of the node pool in the arena */
+    uint32_t pool_pages;
+    uint32_t pool_used;
+    MM_FreePage *free_list;       /* alloc and free both run on the tile's producer core */
+    uint32_t pad[8];
+} rlc_tile_hdr_t;                 /* one line */
+
+#define RLC_TILE_ARENA(w)  ((rlc_tile_hdr_t *)(uintptr_t)(RLC_PRIV_TILE_BASE + (uint32_t)(w) * RLC_TILE_ARENA_BYTES))
+#define RLC_TILE_UES(th)   ((uint32_t *)((uint8_t *)(th) + RLC_TILE_UES_OFF))
+#define RLC_TILE_DLSCH(th) ((volatile DlschInd *)((uint8_t *)(th) + RLC_TILE_DLSCH_OFF))
+
+/* Tile-local software barrier and AM grant table: the tile's consumers only, in the tile's
+   private banks. The hardware barrier is cluster-wide, so a per-tile TTI loop cannot use it. */
+typedef struct {
+    _Atomic uint32_t count;
+    _Atomic uint32_t sense;
+    volatile uint32_t stop;
+    volatile uint32_t open[RLC_TILE_MAX_CONS];   /* AM: entity with rank r's open grant */
+    uint32_t pad[16 - 3 - RLC_TILE_MAX_CONS];
+} rlc_tile_bar_t;
+#define RLC_TILE_BAR(th)   ((rlc_tile_bar_t *)((uint8_t *)(th) + RLC_TILE_BAR_OFF))
+#define RLC_TILE_PKTS(th)  ((rlc_tile_pkt_t *)((uint8_t *)(th) + RLC_TILE_PKTS_OFF))
+#elif RLC_PAD_SYNC
 typedef struct {
     _Atomic mcs_lock_t l;
     char pad[RLC_SYNC_LINE_BYTES - sizeof(mcs_lock_t)];
@@ -182,7 +260,14 @@ typedef struct {
 /* One RLC entity per UE. 64-byte alignment gives every entity its own cache
    lines (no inter-entity false sharing); at NUM_USERS == 1 the layout is
    identical to the single-entity kernel. */
+#if RLC_TILE_AFFINITY
+/* In the private region, owner tile only (see above). */
+#define rlc_ctx ((rlc_context_t *)(uintptr_t)RLC_PRIV_UE_BASE)
+_Static_assert(sizeof(rlc_context_t) % CACHE_LINE_SIZE == 0,
+               "rlc_context_t must be whole lines: two UEs of different tiles may not share one");
+#else
 rlc_context_t rlc_ctx[NUM_USERS] __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
+#endif
 
 /* rlc_init() initializes the RLC context for the given RLC ID and cell ID.
    It sets the initial values for pollPdu, pollByte, pduWithoutPoll, byteWithoutPoll,
@@ -240,6 +325,9 @@ RLC_LINE_VAR(uint32_t, rlc_stream_pages);    /* pool pages per stream */
 #define rlc_stream_pages (rlc_stream_pages_line.v)
 #endif
 void rlc_streams_init(void);
+#endif
+#if RLC_TILE_AFFINITY
+void rlc_tile_setup(const unsigned int core_id);
 #endif
 
 #if RLC_ARRIVAL_PPS

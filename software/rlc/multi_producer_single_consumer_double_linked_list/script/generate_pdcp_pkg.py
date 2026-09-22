@@ -34,6 +34,9 @@ Config fields:
   tgt_addr             (hex or int base address)
   tgt_length           (int bytes)
   total_pkg_number     (optional int): explicit number of PDCP packages to generate
+  slot_align           (optional int, default 4): slot stride alignment in bytes. 64 puts every
+                       packet on its own cache lines, which tile-private L1 partitions need:
+                       two tiles writing different packets must never share a line.
   payload              (optional bool, default true): false leaves the source slots zero. Nothing
                        in the kernel's timing depends on the byte values, only RLC_SELF_CHECK does,
                        and it keeps multi-slot headers small (tens of KB instead of ~100 MB).
@@ -115,7 +118,8 @@ def main():
     # Slot stride: slots must stay 4-byte aligned or the word/vector payload
     # copies in the kernel trap on misaligned bases (e.g. 810-byte PDUs).
     # The copy length stays pdu_size; padding [pdu_size, pdu_stride) is zero.
-    pdu_stride = (pdu_size + 3) & ~3
+    align = int(cfg.get('slot_align', 4))
+    pdu_stride = (pdu_size + align - 1) // align * align
     num_src_slots = src_len // pdu_stride
     num_pkgs = min(int(cfg.get('total_pkg_number', num_src_slots)), num_src_slots)
 

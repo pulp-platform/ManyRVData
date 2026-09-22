@@ -196,6 +196,9 @@
    to be untenable: 8 entities x 8 packets could not finish an hour of RTL even
    with this enabled, because helpers poll. Without it, cost scales with the
    entity count on every step. */
+#if RLC_TILE_AFFINITY && !defined(RLC_AM_WORKQ)
+#define RLC_AM_WORKQ 0   /* tile mode scans its own few UEs; no cluster-wide bitmaps */
+#endif
 #ifndef RLC_AM_WORKQ
 #define RLC_AM_WORKQ 1
 #endif
@@ -319,6 +322,9 @@ void rlc_am_status(void);
 /* TTI-structured consumer entry point. Returns when every producer has
    finished and every entity is drained. */
 void rlc_am_consumer_tti(uint32_t core_id);
+
+/* Tile-affinity variant: the TTI loop among one tile's consumers, over its UEs. */
+void rlc_am_consumer_tile(uint32_t core_id);
 
 /* Print the AM summary (grants, PDUs, segments, polls) and, when the checks
    are compiled in, the verdict. Call on one core after the final barrier. */
