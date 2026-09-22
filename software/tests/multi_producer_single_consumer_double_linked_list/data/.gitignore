@@ -1,0 +1,2 @@
+# Generated at build time from ../script/pdcp_pkg_*_p<P>_c<C>.json (see software/tests/CMakeLists.txt)
+data_*_p*_c*.h

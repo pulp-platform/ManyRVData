@@ -7,6 +7,37 @@ time, commit, files, what + why, and verification.
 
 ---
 
+## 2026-09-22 (evening)
+
+### Perf-probe hooks and full-cluster (256-core) DP test cases
+- **Time:** 2026-09-22 ~21:00 +0200
+- **Commits:** perf-probe hooks (`kernel/perf_probe.h`, `perf_probe_events.h`, hooks in `rlc.c` /
+  `rlc_am.c`); full-cluster test cases (`software/tests/CMakeLists.txt`, three
+  `script/pdcp_pkg_*_p64_c192.json`, `data/.gitignore`).
+- **Probes:** every hook is under `#if RLC_PROBE`; default targets' loaded sections and symbols are
+  identical to a clean build. One posted store per event to 0xC002_0000 + hart<<8 + evt<<2, through
+  a per-core pointer set once (a `csrr mhartid` per event cost +8.7%: Snitch's csrr waits for the
+  vector sequencer). Events: role, phase, SDU in / PDU out (per-packet latency by node address),
+  STATUS ACK, kernel/TTI markers. `_probe` targets for K100, M48_K300 and the AM K10 G8192 case.
+  GVSoC decodes them (GVSoC repo `prompt/perf_probe_design.md`).
+- **Full-cluster cases:** one DL slot of packets per DP test case -- TC1 M1_N1350_K1157, TC2
+  M48_N800_K4882, TC3 M4800_N800_K1963 -- with 1 producer + 3 consumers in every tile (64 P /
+  192 C). Headers are generated at build time from the JSONs (10-24 MB; too large for git).
+  `MM_POOL_PAGES=K`: nodes are freed two per entity per ACK, so with many entities most stay live,
+  and an exhausted pool silently drops the packet whose descriptor the producer already took.
+- **GVSoC 4x4 (256 CC), all EOC 0, every packet timed:** TC1 0.044 M PDU/s (26.5 ms), TC2 0.132 M
+  (37.0 ms, of which a 27 ms tail after the last PDU), TC3 0.745 M (2.6 ms). 256 cores are ~9x
+  slower than 2P2C on TC1.
+- **Cause (from the ELF):** one 64 B line at 0x8000ad40 holds the tail of `sent_llist_lock_2`,
+  `pdcp_pkd_ptr_lock` (every producer, every packet), `producer_done` (polled by all 256 cores every
+  iteration) and the head of `tosend_llist_lock_2`; all 48 users' locks fit in ~3 lines. Idle
+  consumers poll by taking the lock (test-and-set). In the TC2 tail core 0 (STATUS) is 100%
+  memory-stalled at ~2,500 cycles per access while the cache's mean latency is 15 cycles.
+- **Next:** cache-line padding of locks/flags + lock-free empty check (define-guarded), paced
+  arrival for sustained throughput/latency, multi-slot datasets.
+
+---
+
 ## 2026-09-22
 
 ### Full kernel review against the DP Introduction and ETH RLC docs; four fixes

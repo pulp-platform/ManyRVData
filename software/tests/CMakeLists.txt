@@ -171,6 +171,62 @@ add_spatz_test_rlc_am(multi_producer_single_consumer_double_linked_list multi_pr
 # Small grant -> segmentation on nearly every grant.
 add_spatz_test_rlc_am(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100 2 4 1024 1)
 
+# --- Performance-probe variants ---------------------------------------------
+# Same kernels with RLC_PROBE=1: they also emit software probe events (role, phase, SDU/PDU,
+# queue depth, per-packet latency, TTI) for the GVSoC perf-probe collector. Targets get a
+# `_probe` suffix; the default targets above are untouched and stay byte-identical.
+macro(add_spatz_test_rlc_probe suffix name file param1 param2 param3)
+    set(target_name ${name}_M${param1}_N${param2}_K${param3}${suffix}_probe)
+    add_snitch_test(${target_name} ${file})
+    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+        DATAHEADER="data/data_${param1}_${param2}_${param3}.h" RLC_PROBE=1 ${ARGN})
+endmacro()
+add_spatz_test_rlc_probe("" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
+add_spatz_test_rlc_probe("" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300)
+add_spatz_test_rlc_probe("_P2_C2_am_G8192" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10
+    PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2 RLC_TB_MODE=1 RLC_GRANT_BYTES=8192)
+
+# --- Full-cluster DP test cases (16 groups / 64 tiles / 256 cores) ------------
+# One DL slot of packets per test case (DP Introduction: TC1 1157, TC2 4882, TC3 1963 per slot).
+# Core layout from the data header: per tile, core 0 produces and cores 1-3 consume, so every
+# core of the cluster works (64 producers, 192 consumers). `layout` is both the header suffix and
+# the target suffix. The node pool is sized to the packet count: nodes are only freed by ACKs,
+# which come two per entity, so with many entities most nodes stay live to the end, and an
+# exhausted pool drops the packet whose descriptor the producer already took.
+# The data header is generated from script/pdcp_pkg_<M>_<N>_<K>_<layout>.json at build time (it is
+# 10-200 MB, too large to keep in git).
+set(RLC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/multi_producer_single_consumer_double_linked_list)
+macro(add_spatz_test_rlc_full layout name file param1 param2 param3)
+    string(TOLOWER ${layout} layout_lc)
+    set(rlc_cfg ${param1}_${param2}_${param3}_${layout_lc})
+    if(NOT TARGET rlc_data_${rlc_cfg})
+        add_custom_command(
+            OUTPUT ${RLC_DIR}/data/data_${rlc_cfg}.h
+            COMMAND python3 ${RLC_DIR}/script/generate_pdcp_pkg.py ${RLC_DIR}/script/pdcp_pkg_${rlc_cfg}.json
+                    -o ${RLC_DIR}/data/data_${rlc_cfg}.h
+            DEPENDS ${RLC_DIR}/script/pdcp_pkg_${rlc_cfg}.json ${RLC_DIR}/script/generate_pdcp_pkg.py
+            COMMENT "Generating RLC data header data_${rlc_cfg}.h")
+        add_custom_target(rlc_data_${rlc_cfg} DEPENDS ${RLC_DIR}/data/data_${rlc_cfg}.h)
+    endif()
+    foreach(probe 0 1)
+        if(${probe})
+            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}_probe)
+        else()
+            set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout})
+        endif()
+        add_snitch_test(${target_name} ${file})
+        target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+        target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+            DATAHEADER="data/data_${param1}_${param2}_${param3}_${layout_lc}.h"
+            MM_POOL_PAGES=${param3} RLC_PROBE=${probe} ${ARGN})
+        add_dependencies(test-${SNITCH_TEST_PREFIX}${target_name} rlc_data_${rlc_cfg})
+    endforeach()
+endmacro()
+add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1157)
+add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 4882)
+add_spatz_test_rlc_full(P64_C192 multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 4800 800 1963)
+
 # Scalar-planner control: same scan algorithm, RVV primitives swapped for their
 # plain-C twins (RLC_PLAN_VECTOR=0). Executes no vector instruction in the
 # planner at all, so it separates "my algorithm is wrong" from "my RVV is wrong"
