@@ -34,7 +34,10 @@ static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))
    __attribute__((aligned(32)));
 
-spinlock_t mm_lock __attribute__((section(".data")));
+RLC_LINE_VAR(spinlock_t, mm_lock);
+#if RLC_PAD_SYNC
+#define mm_lock (mm_lock_line.v)
+#endif
 
 /* Type for free list entries */
 typedef struct MM_FreePage {
@@ -49,6 +52,8 @@ typedef struct {
     spinlock_t lock;    /* Spinlock for mutual exclusion */
 } mm_context_t __attribute__((aligned(8)));
 
+/* Not given its own line: the name is also a parameter and a struct field, and every hot
+   neighbour it could share a line with already has one of its own under RLC_PAD_SYNC. */
 mm_context_t mm_ctx __attribute__((section(".data")));
 
 /*

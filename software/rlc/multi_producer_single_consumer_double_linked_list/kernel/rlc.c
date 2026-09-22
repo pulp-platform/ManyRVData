@@ -224,6 +224,11 @@ int __attribute__((noinline)) pdcp_receive_pkg(const unsigned int core_id, volat
         // If the pointer is within bounds, return the package pointer
         pkg_ptr = pdcp_pkd_ptr;
         pdcp_pkd_ptr++; // Increment the pointer for the next package
+#if RLC_ARRIVAL_PPS
+        /* The arrival clock starts with the first descriptor. Set under the lock, so every later
+           taker (who acquires the lock after this release) sees it. */
+        if (pkg_ptr == 0) rlc_arrival_t0 = benchmark_get_cycle();
+#endif
     } else {
         DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
         DEBUG_PRINTF("Producer (core %u): out of PDCP pkg, pdcp_pkd_ptr = %d\n", core_id, pdcp_pkd_ptr);
@@ -427,7 +432,7 @@ void ue_status_rpt(const unsigned int core_id)
 
             for (int i = vtNextAck; i < ACK_SN; i++) {
                 char ack = ue_status_rpt_content.stateRpt[16 + ACK_SN - i];
-                Node *sent_node = list_pop_front((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list);
+                Node *sent_node = list_pop_front((spinlock_t *)RLC_SENT_LOCK(u), &ctx->sent_list);
                 if (sent_node != NULL) {
                     // DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
                     // DEBUG_PRINTF("[core %u][consumer] pop sent_list, ACK_SN=%d, SN=%d, sent node %p, data_size=%zu\n",
@@ -459,7 +464,12 @@ void ue_status_rpt(const unsigned int core_id)
 static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestDataStru *testData)
 {
     const unsigned int u = (unsigned int)(ctx - rlc_ctx); // lock-free user index
-    Node *node = list_pop_front((spinlock_t *)&tosend_llist_lock_2[u], &ctx->list);
+#if RLC_PAD_SYNC
+    /* Look before locking: an idle consumer otherwise takes the lock (an atomic swap) on every
+       poll of an empty queue. A plain load; a push that lands just after is seen next pass. */
+    if (ctx->list.sduNum == 0) return 0;
+#endif
+    Node *node = list_pop_front((spinlock_t *)RLC_TOSEND_LOCK(u), &ctx->list);
     if (node == 0) {
         return 0;
     }
@@ -540,7 +550,7 @@ static int rlc_send_pkt(const unsigned int core_id, rlc_context_t *ctx, TestData
         perf_probe_entity(PROBE_EVT_PDU_TX, u, (uint32_t)node->data_size);
         perf_probe(PROBE_EVT_PKT_OUT, (uint32_t)(uintptr_t)node);
             // Add the node to the sent list
-        list_push_back((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list, node);
+        list_push_back((spinlock_t *)RLC_SENT_LOCK(u), &ctx->sent_list, node);
         return 1;
 }
 
@@ -651,6 +661,18 @@ static int producer(const unsigned int core_id) {
     if (new_pdcp_pkg_ptr < 0) {
         return -1;  // No more packages
     }
+#if RLC_ARRIVAL_PPS
+    /* Wait for this packet's arrival time. Q8 fixed-point period keeps the math in 64-bit
+       multiplies (no 64-bit divide on rv32). */
+    const uint64_t rlc_period_q8 = ((uint64_t)CPU_FREQENCY << 8) / RLC_ARRIVAL_PPS;
+    const uint32_t due = rlc_arrival_t0 + (uint32_t)(((uint64_t)new_pdcp_pkg_ptr * rlc_period_q8) >> 8);
+    uint32_t now_cyc;
+    while ((int32_t)((now_cyc = benchmark_get_cycle()) - due) < 0) { }
+    /* How long ago it arrived; the collector back-dates this packet's PKT_IN by it. Sent here,
+       from the cycle already read, not later: a csrr after the vector header copy would wait for
+       the vector unit to drain. */
+    perf_probe(PROBE_EVT_PKT_LATE, now_cyc - due);
+#endif
 
     /* Route the package to its owning RLC entity (one per UE). */
     const unsigned int uid = (unsigned int)pdcp_pkgs[new_pdcp_pkg_ptr].user_id;
@@ -737,7 +759,7 @@ static int producer(const unsigned int core_id) {
     perf_probe(PROBE_EVT_PKT_IN, (uint32_t)(uintptr_t)node);
 #endif
     perf_probe_entity(PROBE_EVT_SDU_RX, uid, (uint32_t)node->data_size);
-    list_push_back((spinlock_t *)&tosend_llist_lock_2[uid], &ctx->list, node);
+    list_push_back((spinlock_t *)RLC_TOSEND_LOCK(uid), &ctx->list, node);
 #if (RLC_TB_MODE == RLC_TB_MODE_AM) && RLC_AM_WORKQ
     /* Announce the entity so an owner picks it up without scanning. */
     rlc_am_mark_ready(uid);

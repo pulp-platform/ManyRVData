@@ -256,7 +256,7 @@ static int rlc_am_try_plan(uint32_t u) {
      the walk can only ever stop later than strictly necessary, never early. */
   unsigned int reached_end = 0u;
   const uint32_t avail = list_peek_budget(
-      (spinlock_t *)&tosend_llist_lock_2[u], &ctx->list, peek,
+      (spinlock_t *)RLC_TOSEND_LOCK(u), &ctx->list, peek,
       RLC_MAX_PDUS_PER_GRANT, RLC_GRANT_BYTES + e->so_next, RLC_AMD_HDR_MIN,
       &reached_end);
   e->peek_done++; /* distinguishes "blocked in the peek" from "peek was empty" */
@@ -389,7 +389,7 @@ static void rlc_am_commit(uint32_t u) {
   uint32_t retire = 0u;
   for (uint32_t i = 0u; i < n; i++) {
     if (!p->last_seg[i]) continue;
-    Node *node = list_pop_front((spinlock_t *)&tosend_llist_lock_2[u],
+    Node *node = list_pop_front((spinlock_t *)RLC_TOSEND_LOCK(u),
                                 &ctx->list);
     if (node == NULL) {
       DEBUG_PRINTF_LOCK_ACQUIRE(&printf_lock);
@@ -398,7 +398,7 @@ static void rlc_am_commit(uint32_t u) {
       break;
     }
     node->last_sn = p->sn[i];
-    list_push_back((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list, node);
+    list_push_back((spinlock_t *)RLC_SENT_LOCK(u), &ctx->sent_list, node);
     retire++;
   }
 
@@ -829,12 +829,12 @@ void rlc_am_status(void) {
     uint32_t freed = 0u;
     while (1) {
       Node *head = NULL;
-      if (list_peek_n((spinlock_t *)&sent_llist_lock_2[u], &ctx->sent_list,
+      if (list_peek_n((spinlock_t *)RLC_SENT_LOCK(u), &ctx->sent_list,
                       &head, 1u) == 0u) {
         break;
       }
       if (!rlc_sn_lt(head->last_sn, got_ack_sn)) break;
-      Node *node = list_pop_front((spinlock_t *)&sent_llist_lock_2[u],
+      Node *node = list_pop_front((spinlock_t *)RLC_SENT_LOCK(u),
                                   &ctx->sent_list);
       if (node == NULL) break;
       mm_free(node);
