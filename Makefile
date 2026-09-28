@@ -186,11 +186,20 @@ FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
 
 # Auto-select FlooNoC YAML based on config name
 ifneq ($(filter %_16g_tiny,$(config)),)
-  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g_tiny.yml
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_8ch_tiny.yml
 else ifneq ($(filter %_16g,$(config)),)
-  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_16g.yml
+  # One channel per group (16ch/16g) -> chimneys on all four mesh sides with
+  # same-ID placement, so group K owns channel K. Anything else (e.g. 8ch/16g)
+  # keeps the West/East-only linear layout. Must stay inside this %_16g branch:
+  # the 4g config also has l2_channel == num_groups but only 4 boundary ports,
+  # and cachepool_cluster.sv's L2SameIdPlacement rejects it for that reason.
+  ifeq ($(l2_channel),$(num_groups))
+    FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_16ch.yml
+  else
+    FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_8ch.yml
+  endif
 else
-  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc_cachepool_4g.yml
+  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_4g_4ch.yml
 endif
 FLOO_NAME     = cachepool
 FLOO_NOC      ?= $(FLOO_GEN_OUTDIR)/floo_$(FLOO_NAME)_noc_pkg.sv
@@ -526,6 +535,7 @@ vis4mesh-data:
 	    --input-dir $(NOC_VIS_INPUT_DIR) --output-dir $(NOC_VIS_OUTPUT_PREFIX)-$$level \
 	    --num-groups-x $(num_groups_x) --num-groups-y $$(( $(num_groups) / $(num_groups_x) )) \
 	    --num-tiles-per-group $(num_tiles_per_group) --num-noc-ports-per-tile $(num_noc_ports_per_tile) \
+	    $$( [ $$level = l2 ] && echo --num-l2-channels $(l2_channel) ) \
 	    --slice-cycles $(NOC_VIS_SLICE_CYCLES) --clk-freq $(NOC_VIS_CLK_FREQ); \
 	done
 

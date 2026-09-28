@@ -195,11 +195,11 @@ int main() {
       write_cyc(timer);
       printf("\n----- (%dx%d) sp fmatmul -----\n", gemm_l.M, gemm_l.N);
       printf("Active cores %u \n", active_cores);
-      printf("First iteration execution took %u cycles.\n", timer_iter1);
-      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+      printf("First iter took %u cycles.\n", timer_iter1);
+      printf("The perf is %ld OP/1000cycle (%ld%%o utilization).\n",
              performance_iter1, utilization_iter1);
-      printf("The execution took %u cycles.\n", timer);
-      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
+      printf("Best iter took %u cycles.\n", timer);
+      printf("The perf is %ld OP/1000cycle (%ld%%o utilization).\n",
              performance, utilization);
     }
 

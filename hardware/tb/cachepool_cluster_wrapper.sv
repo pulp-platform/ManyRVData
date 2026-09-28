@@ -290,6 +290,9 @@ module cachepool_cluster_wrapper
 
   // Assertions
 
+  if (NumGroups <= 1)
+    $error("[spatz_cluster_wrapper] NumGroups must be > 1: the cluster's L2 refill mesh, and with it every DRAM output port, is only generated for a multi-group cluster.");
+
   if (AxiAddrWidth != SpatzAxiAddrWidth)
     $error("[spatz_cluster_wrapper] AXI Address Width does not match the configuration.");
 

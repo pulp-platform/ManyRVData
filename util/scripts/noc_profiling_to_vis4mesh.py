@@ -111,12 +111,15 @@
 # The RTL's own comment names the West-boundary HBM channels "ejection
 # points" (cachepool_cluster.sv's gen_hbm_west: one HBM channel chimney per
 # row, attached at column gx=0's West port; gen_hbm_east symmetric on the
-# right -- North/South boundaries are dead-ended, no chimney). To render
-# these as real spatial nodes (not just a color on the boundary groups), the
-# grid gains one extra column on each side: width becomes NumGroupsX+2,
-# groups shift to columns 1..NumGroupsX, column 0 holds West HBM channels
-# (ids 0..NumGroupsY-1) and the far column holds East HBM channels (ids
-# NumGroupsY..2*NumGroupsY-1) -- L2_CHANNEL = 2*NumGroupsY.
+# right). To render these as real spatial nodes (not just a color on the
+# boundary groups), the grid gains one extra column on each side: width
+# becomes NumGroupsX+2, groups shift to columns 1..NumGroupsX, column 0 holds
+# West HBM channels (ids 0..NumGroupsY-1) and the far column holds East HBM
+# channels (ids NumGroupsY..2*NumGroupsY-1).
+#
+# --num-l2-channels selects the 16-channel layout (North/South get chimneys
+# too); defaults to West/East-only. Equal to num-groups-x*num-groups-y also
+# switches labels to same-ID numbering, matching cachepool_cluster.sv.
 #
 # Usage:
 #   noc_profiling_to_vis4mesh.py --level l1 --num-groups-x 4 --num-groups-y 4 \
@@ -124,6 +127,7 @@
 #     [--input-dir noc_profiling] [--output-dir util/vis4mesh/visdata/cachepool-l1] \
 #     [--slice-cycles 500] [--clk-freq 500]
 #   noc_profiling_to_vis4mesh.py --level l2 --num-groups-x 4 --num-groups-y 4 \
+#     [--num-l2-channels 16] \
 #     [--input-dir noc_profiling] [--output-dir util/vis4mesh/visdata/cachepool-l2] \
 #     [--slice-cycles 500] [--clk-freq 500]
 
@@ -141,7 +145,9 @@ SESSION_DIR_RE = re.compile(r'session_(\d+)$')
 
 # floo_pkg.sv direction encoding (North=y+, East=x+, South=y-, West=x-).
 DIR_DELTA = {0: (0, 1), 1: (1, 0), 2: (0, -1), 3: (-1, 0)}
+NORTH = 0
 EAST = 1
+SOUTH = 2
 WEST = 3
 
 CH_REQ_READ, CH_REQ_WRITE, CH_RESP = 0, 1, 2
@@ -167,14 +173,15 @@ def neighbor(g, portidx, gx_count, gy_count):
     return None
 
 
-def display_id(g, gx_count, gy_count, col_offset=0, width=None):
+def display_id(g, gx_count, gy_count, col_offset=0, width=None, row_offset=0):
     """Y-flip: vis4mesh renders row 0 (id // width) at the top; we want
     gy=0 (CachePool's own row-major group id) at the bottom. col_offset/width
     let --level l2 shift group columns right to make room for the HBM
-    column at 0."""
+    column at 0. row_offset additionally shifts rows down to make room for a
+    North HBM row at the top (16-channel topology)."""
     gy, gx = divmod(g, gx_count)
     w = width if width is not None else gx_count
-    return (gy_count - 1 - gy) * w + (gx + col_offset)
+    return (gy_count - 1 - gy + row_offset) * w + (gx + col_offset)
 
 
 def write_json(path, obj):
@@ -358,11 +365,43 @@ def convert_l2(args):
     num_groups = gx_count * gy_count
     link_channels = 1  # single physical link per group, per your "one channel" request
     value_len = NUM_TRANSFER_TYPES * NUM_HOP_UNITS * NUM_MSG_TYPES * link_channels
-    # +1 column each side: West HBM channels (cachepool_cluster.sv's
-    # gen_hbm_west, ids 0..NumGroupsY-1) at column 0, East HBM channels
-    # (gen_hbm_east, ids NumGroupsY..2*NumGroupsY-1) at the far right --
-    # L2_CHANNEL = 2*NumGroupsY, split evenly between the two boundaries.
+
+    # West/East chimneys always exist (+1 column each side); North/South
+    # (16-channel layout) only when --num-l2-channels selects them.
+    num_hbm_we = 2 * gy_count
+    num_hbm_all = 2 * gy_count + 2 * gx_count
+    has_ns = args.num_l2_channels == num_hbm_all
+    if args.num_l2_channels is not None and args.num_l2_channels not in (num_hbm_we, num_hbm_all):
+        print(f'--num-l2-channels {args.num_l2_channels} matches neither the West/East-only '
+              f'count ({num_hbm_we}) nor the all-four-sides count ({num_hbm_all}) for a '
+              f'{gx_count}x{gy_count} mesh -- falling back to West/East-only layout',
+              file=sys.stderr)
     grid_width = gx_count + 2
+    grid_height = gy_count + (2 if has_ns else 0)
+    row_offset = 1 if has_ns else 0
+
+    # Matches cachepool_cluster.sv's L2SameIdPlacement: only affects labels
+    # below, not node position or traffic parsing.
+    SAME_ID_CHANNEL_ID = {
+        'W': [0, 4, 8, 12], 'E': [3, 7, 11, 15], 'N': [13, 9, 10, 14], 'S': [1, 5, 6, 2],
+    }
+    same_id_placement = has_ns and args.num_l2_channels == num_groups
+    if same_id_placement and (gx_count, gy_count) != (4, 4):
+        print(f'num-l2-channels == num-groups ({num_groups}) implies same-ID placement, '
+              f'which is only defined for a 4x4 mesh (got {gx_count}x{gy_count}) -- '
+              f'falling back to flat labels', file=sys.stderr)
+        same_id_placement = False
+
+    def channel_id(side, idx):
+        if same_id_placement:
+            return SAME_ID_CHANNEL_ID[side][idx]
+        if side == 'W':
+            return idx
+        if side == 'E':
+            return gy_count + idx
+        if side == 'N':
+            return num_hbm_we + idx
+        return num_hbm_we + gx_count + idx  # 'S'
 
     router_files = sorted(glob.glob(os.path.join(args.input_dir, 'l2_router_g*_*.log')))
     if not router_files:
@@ -373,8 +412,8 @@ def convert_l2(args):
     # edge_counts[(slice, g_src, g_dst_or_hbm_key)] = {sub_ch: [1]}
     edge_counts = defaultdict(lambda: new_subch_vecs(link_channels))
 
-    def hbm_key(side, gy):
-        return ('hbm', side, gy)  # side: 'W' or 'E'
+    def hbm_key(side, idx):
+        return ('hbm', side, idx)  # side: 'W'/'E' (idx=gy) or 'N'/'S' (idx=gx)
 
     for path in router_files:
         m = L2_ROUTER_LOG_RE.search(os.path.basename(path))
@@ -408,9 +447,16 @@ def convert_l2(args):
                     edge_counts[(slc, g_src, hbm_key('W', gy_src))][sub_ch][0] += 1
                 elif portidx == EAST and gx_src == gx_count - 1:
                     # East-boundary link -> that row's East HBM channel
-                    # chimney (gen_hbm_east). North/South boundaries are
-                    # dead-ended (no chimney) and drop here.
+                    # chimney (gen_hbm_east).
                     edge_counts[(slc, g_src, hbm_key('E', gy_src))][sub_ch][0] += 1
+                elif has_ns and portidx == NORTH and gy_src == gy_count - 1:
+                    # North-boundary link -> that column's North HBM channel
+                    # chimney (gen_hbm_north, 16-channel topology only).
+                    edge_counts[(slc, g_src, hbm_key('N', gx_src))][sub_ch][0] += 1
+                elif has_ns and portidx == SOUTH and gy_src == 0:
+                    # South-boundary link -> that column's South HBM channel
+                    # chimney (gen_hbm_south, 16-channel topology only).
+                    edge_counts[(slc, g_src, hbm_key('S', gx_src))][sub_ch][0] += 1
 
     if not edge_counts:
         print('no accepted L2 mesh-direction flits found in the logs', file=sys.stderr)
@@ -422,7 +468,8 @@ def convert_l2(args):
     num_slices = max_slice - min_slice + 1
 
     # Topology: ordinary group-group mesh edges, plus one group->HBM edge per
-    # row from each boundary column (gx=0 -> West, gx=gx_count-1 -> East).
+    # row from each West/East boundary column, plus (if has_ns) one per
+    # column from each North/South boundary row.
     topology = []
     for g in range(num_groups):
         for portidx in range(4):
@@ -434,6 +481,12 @@ def convert_l2(args):
         g_east = gy * gx_count + (gx_count - 1)
         topology.append((g_west, hbm_key('W', gy)))
         topology.append((g_east, hbm_key('E', gy)))
+    if has_ns:
+        for gx in range(gx_count):
+            g_south = gx
+            g_north = (gy_count - 1) * gx_count + gx
+            topology.append((g_north, hbm_key('N', gx)))
+            topology.append((g_south, hbm_key('S', gx)))
 
     os.makedirs(args.output_dir, exist_ok=True)
     edge_dir = os.path.join(args.output_dir, 'edge_prefix_sum')
@@ -442,7 +495,7 @@ def convert_l2(args):
     slice_seconds = args.slice_cycles / (args.clk_freq * 1e6)
     write_json(os.path.join(args.output_dir, 'meta.json'), {
         "width": str(grid_width),
-        "height": str(gy_count),
+        "height": str(grid_height),
         "slice": f"{slice_seconds:.9f}",
         "elapse": str(num_slices),
         "hops_per_unit": "1",
@@ -452,35 +505,54 @@ def convert_l2(args):
         "channel_groups": [{"name": "L2 Traffic", "channels": [0]}],
     })
 
-    def hbm_id(side, gy):
-        col = 0 if side == 'W' else grid_width - 1
-        return (gy_count - 1 - gy) * grid_width + col
+    def hbm_id(side, idx):
+        if side == 'W':
+            return (gy_count - 1 - idx + row_offset) * grid_width + 0
+        if side == 'E':
+            return (gy_count - 1 - idx + row_offset) * grid_width + (grid_width - 1)
+        if side == 'N':
+            return 0 * grid_width + (idx + 1)
+        return (grid_height - 1) * grid_width + (idx + 1)  # 'S'
 
     nodes = []
     for g in range(num_groups):
         gy, gx = divmod(g, gx_count)
         nodes.append({
-            "id": display_id(g, gx_count, gy_count, col_offset=1, width=grid_width),
+            "id": display_id(g, gx_count, gy_count, col_offset=1, width=grid_width,
+                              row_offset=row_offset),
             "label": f"G{g}",
             "detail": f"Group[{gx},{gy}]",
         })
     for gy in range(gy_count):
         nodes.append({
             "id": hbm_id('W', gy),
-            "label": f"HBM{gy}",
-            "detail": f"HBM channel {gy} (West)",
+            "label": f"HBM{channel_id('W', gy)}",
+            "detail": f"HBM channel {channel_id('W', gy)} (West)",
         })
         nodes.append({
             "id": hbm_id('E', gy),
-            "label": f"HBM{gy_count + gy}",
-            "detail": f"HBM channel {gy_count + gy} (East)",
+            "label": f"HBM{channel_id('E', gy)}",
+            "detail": f"HBM channel {channel_id('E', gy)} (East)",
         })
+    if has_ns:
+        for gx in range(gx_count):
+            nodes.append({
+                "id": hbm_id('N', gx),
+                "label": f"HBM{channel_id('N', gx)}",
+                "detail": f"HBM channel {channel_id('N', gx)} (North)",
+            })
+            nodes.append({
+                "id": hbm_id('S', gx),
+                "label": f"HBM{channel_id('S', gx)}",
+                "detail": f"HBM channel {channel_id('S', gx)} (South)",
+            })
     write_json(os.path.join(args.output_dir, 'nodes.json'), nodes)
 
     def node_disp_id(key):
         if isinstance(key, tuple):
             return hbm_id(key[1], key[2])
-        return display_id(key, gx_count, gy_count, col_offset=1, width=grid_width)
+        return display_id(key, gx_count, gy_count, col_offset=1, width=grid_width,
+                           row_offset=row_offset)
 
     empty = new_subch_vecs(link_channels)
     for slc in range(min_slice, max_slice + 1):
@@ -518,8 +590,9 @@ def convert_l2(args):
     write_json(os.path.join(args.output_dir, 'flat.json'), flat)
 
     total_flits = sum(sum(v) for d in edge_counts.values() for v in d.values())
-    print(f'wrote {args.output_dir}: {num_groups} group nodes + {2 * gy_count} HBM nodes '
-          f'({grid_width}x{gy_count} grid), {len(topology)} directed edges, '
+    num_hbm_nodes = num_hbm_all if has_ns else num_hbm_we
+    print(f'wrote {args.output_dir}: {num_groups} group nodes + {num_hbm_nodes} HBM nodes '
+          f'({grid_width}x{grid_height} grid), {len(topology)} directed edges, '
           f'{num_slices} time slices ({args.slice_cycles} cyc/slice), '
           f'{total_flits} accepted flits total, 1 channel, value[] length {value_len}')
 
@@ -534,6 +607,9 @@ def main():
                      help='Vis4Mesh dataset directory to write (upload this whole directory)')
     ap.add_argument('--num-groups-x', type=int, required=True)
     ap.add_argument('--num-groups-y', type=int, required=True)
+    ap.add_argument('--num-l2-channels', type=int, default=None,
+                     help='required for --level l2 to render North/South HBM (16-channel '
+                          'topology); defaults to West/East-only (2*num-groups-y) when omitted')
     ap.add_argument('--num-tiles-per-group', type=int, default=None,
                      help='required for --level l1')
     ap.add_argument('--num-noc-ports-per-tile', type=int, default=None,

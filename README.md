@@ -217,7 +217,7 @@ The Spatz cluster consumes **`config/cachepool.hjson`**, which is **generated** 
 - `config/cachepool.hjson.tmpl` (skeleton with comments)
 - `config/config.mk` (source of truth)
 
-Multi-group configurations also require a FlooNoC topology file (e.g. `config/floonoc_cachepool_4g.yml`, `config/floonoc_cachepool_16g.yml`, `config/floonoc_cachepool_16g_tiny.yml`), auto-selected by the config name suffix. `make generate` regenerates the FlooNoC package automatically; run `make update-floonoc` standalone only if you need to refresh it without a full generate.
+Multi-group configurations also require a FlooNoC topology file, named `config/floonoc/floonoc_cachepool_<groups>g_<channels>ch[_<variant>].yml` (e.g. `floonoc_cachepool_4g_4ch.yml`, `floonoc_cachepool_16g_8ch.yml`, `floonoc_cachepool_16g_16ch.yml`), auto-selected from the config name suffix and `l2_channel` — see `config/README.md`. `make generate` regenerates the FlooNoC package automatically; run `make update-floonoc` standalone only if you need to refresh it without a full generate.
 
 To switch configurations, always clean first:
 

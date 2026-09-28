@@ -62,6 +62,6 @@ for {set idx 0} {$idx < 16} {incr idx} {
 }
 
 # Others
+add wave -noupdate -group Cluster -group Internal ${cluster_path}/axi_out_req_o
+add wave -noupdate -group Cluster -group Internal ${cluster_path}/axi_out_resp_i
 add wave -noupdate -group Cluster -group Internal ${cluster_path}/*
-
-

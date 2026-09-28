@@ -103,7 +103,7 @@ l1d_num_way ?= 4
 l1d_tile_size ?= 256
 
 # L1 data cache tag width (TODO: should be calcualted)
-l1d_tag_data_width ?= 52
+l1d_tag_data_width ?= 92
 
 ### Derieved parameters, do NOT change ###
 # L1 data cache number of banks per tile

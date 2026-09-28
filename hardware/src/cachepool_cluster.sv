@@ -306,7 +306,7 @@ module cachepool_cluster
         .meip_i                   ( meip_i                                          ),
         .mtip_i                   ( mtip_i                                          ),
         .msip_i                   ( msip_i                                          ),
-        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup * NumScalarPerCC)             ),
+        .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup * NumScalarPerCC)         ),
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
         .private_start_addr_i     ( private_start_addr                              ),
@@ -408,7 +408,7 @@ module cachepool_cluster
     assign noc_rsp_in      [gy*NumGroupsX][3]  = '0;
     assign noc_rsp_in_valid[gy*NumGroupsX][3]  = '0;
     assign noc_rsp_out_ready[gy*NumGroupsX][3] = '1;
-`ifndef SYNTHESIS
+`ifndef TARGET_SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_west_chk
       always_ff @(posedge clk_i) begin
         if (rst_ni && noc_req_out_valid[gy*NumGroupsX][3][p])
@@ -444,7 +444,7 @@ module cachepool_cluster
     assign noc_rsp_in       [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
     assign noc_rsp_in_valid [(NumGroupsX-1) + gy*NumGroupsX][1] = '0;
     assign noc_rsp_out_ready[(NumGroupsX-1) + gy*NumGroupsX][1] = '1;
-`ifndef SYNTHESIS
+`ifndef TARGET_SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_east_chk
       always_ff @(posedge clk_i) begin
         if (rst_ni && noc_req_out_valid[(NumGroupsX-1) + gy*NumGroupsX][1][p])
@@ -480,7 +480,7 @@ module cachepool_cluster
     assign noc_rsp_in       [gx][2] = '0;
     assign noc_rsp_in_valid [gx][2] = '0;
     assign noc_rsp_out_ready[gx][2] = '1;
-`ifndef SYNTHESIS
+`ifndef TARGET_SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_south_chk
       always_ff @(posedge clk_i) begin
         if (rst_ni && noc_req_out_valid[gx][2][p])
@@ -516,7 +516,7 @@ module cachepool_cluster
     assign noc_rsp_in       [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
     assign noc_rsp_in_valid [gx + (NumGroupsY-1)*NumGroupsX][0] = '0;
     assign noc_rsp_out_ready[gx + (NumGroupsY-1)*NumGroupsX][0] = '1;
-`ifndef SYNTHESIS
+`ifndef TARGET_SYNTHESIS
     for (genvar p = 0; p < NumTilesPerGroup*NumNoCPortsPerTile; p++) begin : gen_north_chk
       always_ff @(posedge clk_i) begin
         if (rst_ni && noc_req_out_valid[gx + (NumGroupsY-1)*NumGroupsX][0][p])
@@ -595,31 +595,56 @@ module cachepool_cluster
     end
 
     // --------------------------------------------------
-    // Boundary tie-offs (North/South edges)
+    // North/South boundary: tied off (8ch) or hosts extra HBM chimneys for
+    // more refill bandwidth (16ch). Assertion catches a mismatched mesh
+    // shape/channel count.
     // --------------------------------------------------
 
-    // North boundary (gy=NumGroupsY-1, direction North=0)
-    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_north_bnd
-      assign l2_req_in       [gx][NumGroupsY-1][0] = '0;
-      assign l2_req_in_valid [gx][NumGroupsY-1][0] = 1'b0;
-      assign l2_req_out_ready[gx][NumGroupsY-1][0] = 1'b1;
-      assign l2_rsp_in       [gx][NumGroupsY-1][0] = '0;
-      assign l2_rsp_in_valid [gx][NumGroupsY-1][0] = 1'b0;
-      assign l2_rsp_out_ready[gx][NumGroupsY-1][0] = 1'b1;
-    end
+    localparam int unsigned NumHbmWestEast = 2 * NumGroupsY;
+    localparam int unsigned NumHbmAllSides = 2 * NumGroupsY + 2 * NumGroupsX;
+    initial assert (NumL2Channel == NumHbmWestEast || NumL2Channel == NumHbmAllSides)
+      else $fatal(1, "NumL2Channel must equal the West/East or all-sides chimney count.");
 
-    // South boundary (gy=0, direction South=2)
-    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_south_bnd
-      assign l2_req_in       [gx][0][2] = '0;
-      assign l2_req_in_valid [gx][0][2] = 1'b0;
-      assign l2_req_out_ready[gx][0][2] = 1'b1;
-      assign l2_rsp_in       [gx][0][2] = '0;
-      assign l2_rsp_in_valid [gx][0][2] = 1'b0;
-      assign l2_rsp_out_ready[gx][0][2] = 1'b1;
-    end
+    // Same-ID placement: reassigns channel ID <-> physical port so each group
+    // reaches the channel carrying its own ID in 1 hop (edge columns) or 2
+    // hops (interior columns), the fairest achievable spread. Selected when
+    // there is exactly one channel per group AND all four sides carry
+    // chimneys; else linear placement. Only the 4x4 mesh satisfies both, so
+    // the 4g config (4 channels, 4 groups, West/East only) stays linear.
+    // SAM and address scrambling are unaffected either way.
+    localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups) &&
+                                       (NumL2Channel == NumHbmAllSides);
+    // Only a 4x4 mesh has exactly as many boundary ports as groups, which is
+    // what lets every group own a distinct nearby channel. The North/South
+    // channel IDs below are written for that mapping only, so reject any other
+    // mesh shape that asks for all-sides chimneys rather than mis-wiring it.
+    initial assert (NumL2Channel != NumHbmAllSides || (NumGroupsX == 4 && NumGroupsY == 4))
+      else $fatal(1, "All-sides HBM placement is only implemented for a 4x4 group mesh.");
+
+    if (NumL2Channel == NumHbmWestEast) begin : gen_l2_north_south_tieoff
+      // North boundary (gy=NumGroupsY-1, direction North=0)
+      for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_north_bnd
+        assign l2_req_in       [gx][NumGroupsY-1][0] = '0;
+        assign l2_req_in_valid [gx][NumGroupsY-1][0] = 1'b0;
+        assign l2_req_out_ready[gx][NumGroupsY-1][0] = 1'b1;
+        assign l2_rsp_in       [gx][NumGroupsY-1][0] = '0;
+        assign l2_rsp_in_valid [gx][NumGroupsY-1][0] = 1'b0;
+        assign l2_rsp_out_ready[gx][NumGroupsY-1][0] = 1'b1;
+      end
+
+      // South boundary (gy=0, direction South=2)
+      for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_l2_south_bnd
+        assign l2_req_in       [gx][0][2] = '0;
+        assign l2_req_in_valid [gx][0][2] = 1'b0;
+        assign l2_req_out_ready[gx][0][2] = 1'b1;
+        assign l2_rsp_in       [gx][0][2] = '0;
+        assign l2_rsp_in_valid [gx][0][2] = 1'b0;
+        assign l2_rsp_out_ready[gx][0][2] = 1'b1;
+      end
+    end : gen_l2_north_south_tieoff
 
     // --------------------------------------------------
-    // West HBM ejection points (HBM channels 0..NumGroupsY-1)
+    // West HBM ejection points (one per mesh row, channel ID per HbmIdx below)
     // floo_tcdm_chimney (SbrPort, no router) at mesh edge:
     //   unpack req flit → reqrsp_to_axi → DRAM
     //   response → chimney packs flit with source route back to requester
@@ -627,7 +652,8 @@ module cachepool_cluster
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
-      localparam int unsigned HbmIdx = gy;
+      // Same-ID: the attached group's own ID (gy 0,1,2,3 -> channel 0,4,8,12).
+      localparam int unsigned HbmIdx = !L2SameIdPlacement ? gy : gy * NumGroupsX;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
       // Chimney subordinate port ↔ REQRSP bundle bridge
@@ -890,12 +916,14 @@ module cachepool_cluster
     end
 
     // --------------------------------------------------
-    // East HBM ejection points (HBM channels NumGroupsY..2*NumGroupsY-1)
+    // East HBM ejection points (one per mesh row, channel ID per HbmIdx below)
     // floo_tcdm_chimney (SbrPort, no router) at mesh edge.
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_east
-      localparam int unsigned HbmIdx = NumGroupsY + gy;
+      // Same-ID: the attached group's own ID (gy 0,1,2,3 -> channel 3,7,11,15).
+      localparam int unsigned HbmIdx = !L2SameIdPlacement ? NumGroupsY + gy :
+        gy * NumGroupsX + NumGroupsX - 1;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
       // Chimney subordinate port ↔ REQRSP bundle bridge
@@ -1005,9 +1033,259 @@ module cachepool_cluster
       );
 
       assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
-      assign hbm_axi_rsp               = wide_axi_slv_rsp[HbmIdx];
+      assign hbm_axi_rsp              = wide_axi_slv_rsp[HbmIdx];
 
     end
+
+    // --------------------------------------------------
+    // North/South HBM ejection points (16ch only), mirroring gen_hbm_east
+    // (no demux: HbmIdx==0 always lands in gen_hbm_west).
+    // --------------------------------------------------
+
+    if (NumL2Channel == NumHbmAllSides) begin : gen_hbm_north_south
+
+      for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_hbm_north
+        // Same-ID: no interior-column group touches an edge, so North serves
+        // the interior-column group one hop in -- outer columns reach
+        // sideways, inner columns reach down (gx 0,1,2,3 -> channel 13,9,10,14).
+        localparam int unsigned HbmIdx =
+          (gx == 0)            ? (NumGroupsY-1) * NumGroupsX + 1              :
+          (gx == NumGroupsX-1) ? (NumGroupsY-1) * NumGroupsX + NumGroupsX - 2 :
+                                 (NumGroupsY-2) * NumGroupsX + gx;
+        localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
+
+        // Chimney subordinate port ↔ REQRSP bundle bridge
+        cache_trans_req_chan_t hbm_sbr_req;
+        logic                  hbm_sbr_req_valid;
+        logic                  hbm_sbr_req_ready;
+        cache_trans_rsp_chan_t hbm_sbr_rsp;
+        logic                  hbm_sbr_rsp_valid;
+        logic                  hbm_sbr_rsp_ready;
+
+        floo_tcdm_chimney #(
+          .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
+          .EnMgrPort  ( 1'b0                                ),
+          .EnSbrPort  ( 1'b1                                ),
+          .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+          .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+          .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+          .hdr_t      ( l2_noc_hdr_t                        ),
+          .req_chan_t ( cache_trans_req_chan_t              ),
+          .rsp_chan_t ( cache_trans_rsp_chan_t              ),
+          .floo_req_t ( l2_noc_req_t                        ),
+          .floo_rsp_t ( l2_noc_rsp_t                        ),
+          .addr_t     ( axi_addr_t                          ),
+          .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+          .Sam        ( floo_cachepool_noc_pkg::Sam         )
+        ) i_hbm_chimney (
+          .clk_i            ( clk_i                                          ),
+          .rst_ni           ( rst_ni                                         ),
+          .test_enable_i    ( 1'b0                                           ),
+          // Manager port: unused
+          .mgr_req_i        ( '0                                             ),
+          .mgr_req_valid_i  ( 1'b0                                           ),
+          .mgr_req_ready_o  (                                                ),
+          .mgr_rsp_o        (                                                ),
+          .mgr_rsp_valid_o  (                                                ),
+          .mgr_rsp_ready_i  ( 1'b0                                           ),
+          // Subordinate port: drives reqrsp_to_axi
+          .sbr_req_o        ( hbm_sbr_req                                    ),
+          .sbr_req_valid_o  ( hbm_sbr_req_valid                              ),
+          .sbr_req_ready_i  ( hbm_sbr_req_ready                              ),
+          .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
+          .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
+          .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+          .sbr_txn_id_i     ( hbm_sbr_rsp.user.l2_src_id                     ),
+          // Routing
+          .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)         ),
+          .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
+          // Request flit from mesh North(0) edge (no router)
+          .floo_req_o       (                                                ),
+          .floo_req_valid_o (                                                ),
+          .floo_req_ready_i ( 1'b1                                           ),
+          .floo_req_i       ( l2_req_out[gx][NumGroupsY-1][0]                ),
+          .floo_req_valid_i ( l2_req_out_valid[gx][NumGroupsY-1][0]          ),
+          .floo_req_ready_o ( l2_req_out_ready[gx][NumGroupsY-1][0]          ),
+          // Response flit into mesh North(0) edge
+          .floo_rsp_o       ( l2_rsp_in[gx][NumGroupsY-1][0]                 ),
+          .floo_rsp_valid_o ( l2_rsp_in_valid[gx][NumGroupsY-1][0]           ),
+          .floo_rsp_ready_i ( l2_rsp_in_ready[gx][NumGroupsY-1][0]           ),
+          .floo_rsp_i       ( '0                                             ),
+          .floo_rsp_valid_i ( 1'b0                                           ),
+          .floo_rsp_ready_o (                                                )
+        );
+
+        // Tie off unused
+        assign l2_req_in       [gx][NumGroupsY-1][0] = '0;
+        assign l2_req_in_valid [gx][NumGroupsY-1][0] = 1'b0;
+        assign l2_rsp_out_ready[gx][NumGroupsY-1][0] = 1'b1;
+
+        // Pack chimney sbr signals into REQRSP bundle for reqrsp_to_axi
+        cache_trans_req_t  hbm_reqrsp_req;
+        cache_trans_rsp_t  hbm_reqrsp_rsp;
+
+        assign hbm_reqrsp_req = '{
+          q:       hbm_sbr_req,
+          q_valid: hbm_sbr_req_valid,
+          p_ready: hbm_sbr_rsp_ready
+        };
+        assign hbm_sbr_req_ready = hbm_reqrsp_rsp.q_ready;
+        assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
+        assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
+
+        // REQRSP → AXI conversion
+        axi_slv_cache_req_t  hbm_axi_req;
+        axi_slv_cache_resp_t hbm_axi_rsp;
+
+        reqrsp_to_axi #(
+          .MaxTrans     ( L2RefillMaxTrans ),
+          .ID           ( 0                     ),
+          .EnBurst      ( 1                     ),
+          .ShuffleId    ( 1                     ),
+          .AxiIdWidth   ( WideIdWidthOut        ),
+          .DataWidth    ( AxiDataWidth          ),
+          .UserWidth    ( $bits(refill_user_t)  ),
+          .AxiUserWidth ( AxiUserWidth          ),
+          .reqrsp_req_t ( cache_trans_req_t     ),
+          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
+          .axi_req_t    ( axi_slv_cache_req_t   ),
+          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        ) i_hbm_reqrsp_to_axi (
+          .clk_i        ( clk_i            ),
+          .rst_ni       ( rst_ni           ),
+          .user_i       ( '0               ),
+          .reqrsp_req_i ( hbm_reqrsp_req   ),
+          .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
+          .axi_req_o    ( hbm_axi_req      ),
+          .axi_rsp_i    ( hbm_axi_rsp      )
+        );
+
+        assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
+        assign hbm_axi_rsp              = wide_axi_slv_rsp[HbmIdx];
+
+      end
+
+      for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_hbm_south
+        // Same-ID: mirror of North -- outer columns reach sideways, inner
+        // columns reach up (gx 0,1,2,3 -> channel 1,5,6,2).
+        localparam int unsigned HbmIdx =
+          (gx == 0)            ? 1              :
+          (gx == NumGroupsX-1) ? NumGroupsX - 2 :
+                                 NumGroupsX + gx;
+        localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
+
+        // Chimney subordinate port ↔ REQRSP bundle bridge
+        cache_trans_req_chan_t hbm_sbr_req;
+        logic                  hbm_sbr_req_valid;
+        logic                  hbm_sbr_req_ready;
+        cache_trans_rsp_chan_t hbm_sbr_rsp;
+        logic                  hbm_sbr_rsp_valid;
+        logic                  hbm_sbr_rsp_ready;
+
+        floo_tcdm_chimney #(
+          .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
+          .EnMgrPort  ( 1'b0                                ),
+          .EnSbrPort  ( 1'b1                                ),
+          .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+          .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+          .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+          .hdr_t      ( l2_noc_hdr_t                        ),
+          .req_chan_t ( cache_trans_req_chan_t              ),
+          .rsp_chan_t ( cache_trans_rsp_chan_t              ),
+          .floo_req_t ( l2_noc_req_t                        ),
+          .floo_rsp_t ( l2_noc_rsp_t                        ),
+          .addr_t     ( axi_addr_t                          ),
+          .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+          .Sam        ( floo_cachepool_noc_pkg::Sam         )
+        ) i_hbm_chimney (
+          .clk_i            ( clk_i                                          ),
+          .rst_ni           ( rst_ni                                         ),
+          .test_enable_i    ( 1'b0                                           ),
+          // Manager port: unused
+          .mgr_req_i        ( '0                                             ),
+          .mgr_req_valid_i  ( 1'b0                                           ),
+          .mgr_req_ready_o  (                                                ),
+          .mgr_rsp_o        (                                                ),
+          .mgr_rsp_valid_o  (                                                ),
+          .mgr_rsp_ready_i  ( 1'b0                                           ),
+          // Subordinate port: drives reqrsp_to_axi
+          .sbr_req_o        ( hbm_sbr_req                                    ),
+          .sbr_req_valid_o  ( hbm_sbr_req_valid                              ),
+          .sbr_req_ready_i  ( hbm_sbr_req_ready                              ),
+          .sbr_rsp_i        ( hbm_sbr_rsp                                    ),
+          .sbr_rsp_valid_i  ( hbm_sbr_rsp_valid                              ),
+          .sbr_rsp_ready_o  ( hbm_sbr_rsp_ready                              ),
+          .sbr_txn_id_i     ( hbm_sbr_rsp.user.l2_src_id                     ),
+          // Routing
+          .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)         ),
+          .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId] ),
+          // Request flit from mesh South(2) edge (no router)
+          .floo_req_o       (                                                ),
+          .floo_req_valid_o (                                                ),
+          .floo_req_ready_i ( 1'b1                                           ),
+          .floo_req_i       ( l2_req_out[gx][0][2]                           ),
+          .floo_req_valid_i ( l2_req_out_valid[gx][0][2]                     ),
+          .floo_req_ready_o ( l2_req_out_ready[gx][0][2]                     ),
+          // Response flit into mesh South(2) edge
+          .floo_rsp_o       ( l2_rsp_in[gx][0][2]                            ),
+          .floo_rsp_valid_o ( l2_rsp_in_valid[gx][0][2]                      ),
+          .floo_rsp_ready_i ( l2_rsp_in_ready[gx][0][2]                      ),
+          .floo_rsp_i       ( '0                                             ),
+          .floo_rsp_valid_i ( 1'b0                                           ),
+          .floo_rsp_ready_o (                                                )
+        );
+
+        // Tie off unused
+        assign l2_req_in       [gx][0][2] = '0;
+        assign l2_req_in_valid [gx][0][2] = 1'b0;
+        assign l2_rsp_out_ready[gx][0][2] = 1'b1;
+
+        // Pack chimney sbr signals into REQRSP bundle for reqrsp_to_axi
+        cache_trans_req_t  hbm_reqrsp_req;
+        cache_trans_rsp_t  hbm_reqrsp_rsp;
+
+        assign hbm_reqrsp_req = '{
+          q:       hbm_sbr_req,
+          q_valid: hbm_sbr_req_valid,
+          p_ready: hbm_sbr_rsp_ready
+        };
+        assign hbm_sbr_req_ready = hbm_reqrsp_rsp.q_ready;
+        assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
+        assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
+
+        // REQRSP → AXI conversion
+        axi_slv_cache_req_t  hbm_axi_req;
+        axi_slv_cache_resp_t hbm_axi_rsp;
+
+        reqrsp_to_axi #(
+          .MaxTrans     ( L2RefillMaxTrans ),
+          .ID           ( 0                     ),
+          .EnBurst      ( 1                     ),
+          .ShuffleId    ( 1                     ),
+          .AxiIdWidth   ( WideIdWidthOut        ),
+          .DataWidth    ( AxiDataWidth          ),
+          .UserWidth    ( $bits(refill_user_t)  ),
+          .AxiUserWidth ( AxiUserWidth          ),
+          .reqrsp_req_t ( cache_trans_req_t     ),
+          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
+          .axi_req_t    ( axi_slv_cache_req_t   ),
+          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        ) i_hbm_reqrsp_to_axi (
+          .clk_i        ( clk_i            ),
+          .rst_ni       ( rst_ni           ),
+          .user_i       ( '0               ),
+          .reqrsp_req_i ( hbm_reqrsp_req   ),
+          .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
+          .axi_req_o    ( hbm_axi_req      ),
+          .axi_rsp_i    ( hbm_axi_rsp      )
+        );
+
+        assign wide_axi_slv_req[HbmIdx] = hbm_axi_req;
+        assign hbm_axi_rsp              = wide_axi_slv_rsp[HbmIdx];
+
+      end
+
+    end : gen_hbm_north_south
 
   end
 

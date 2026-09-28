@@ -95,7 +95,7 @@ snitch_max_trans ?= 16
 dram_type ?= HBM2
 
 # L2 number of channels
-l2_channel ?= 8
+l2_channel ?= 16
 
 # L2 bank width (DRAM width, change with care)
 l2_bank_width ?= 512
