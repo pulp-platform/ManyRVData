@@ -45,7 +45,7 @@ Named `floonoc/floonoc_cachepool_<groups>g_<channels>ch[_<variant>].yml`.
 
 | File | Topology |
 | --- | --- |
-| `floonoc_cachepool_4g_4ch.yml` | 2x2 mesh, 4 HBM channels on West/East |
+| `floonoc_cachepool_4g_4ch.yml` | 2x2 mesh, 4 HBM channels on West/East, same-ID placement |
 | `floonoc_cachepool_16g_8ch.yml` | 4x4 mesh, 8 HBM channels on West/East |
 | `floonoc_cachepool_16g_8ch_tiny.yml` | 4x4 mesh, 8 HBM channels, reduced widths |
 | `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels on all four sides, same-ID placement |
@@ -263,20 +263,22 @@ channel.
 `cachepool_cluster.sv` supports two HBM chimney layouts, chosen by channel
 count, and the `Makefile` picks the matching YAML automatically.
 
-| `l2_channel` | Chimneys | Placement | YAML (16g) |
+| `l2_channel` | Chimneys | Placement | YAML |
 | --- | --- | --- | --- |
 | `2 * num_groups_y` | West/East only | Linear | `floonoc_cachepool_16g_8ch.yml` |
 | `2 * (num_groups_x + num_groups_y)` | All four sides | Same-ID | `floonoc_cachepool_16g_16ch.yml` |
+| `num_groups` (2-column mesh) | West/East only | Same-ID | `floonoc_cachepool_4g_4ch.yml` |
 
-- **(asserted)** `l2_channel` must equal one of those two counts, otherwise some
-  channel has no chimney or some boundary port has no channel.
-- **(asserted)** Same-ID placement requires a 4x4 group mesh. Only there does
-  the boundary port count equal the group count, which is what lets every group
-  own a distinct nearby channel. The 4g flavour also satisfies
-  `l2_channel == num_groups`, but has only West/East chimneys, so it correctly
-  stays linear.
-- **Same-ID placement** assigns channel IDs so group *K* reaches channel *K* in
-  one hop (groups in mesh columns 0 and 3) or two hops (interior columns):
+- **(asserted)** `l2_channel` must equal one of the first two counts, otherwise
+  some channel has no chimney or some boundary port has no channel. The third
+  row is the 2-column special case of the first: at `num_groups_x == 2`,
+  `2 * num_groups_y == num_groups`, so both conditions hold at once.
+- **Same-ID placement** is selected by `l2_channel == num_groups`: there is
+  exactly one channel per group, so each group can own the channel carrying its
+  own ID. Two mesh shapes qualify.
+- **(asserted)** All-sides same-ID requires a 4x4 group mesh — only there does
+  the boundary port count equal the group count. Group *K* reaches channel *K*
+  in one hop (mesh columns 0 and 3) or two hops (interior columns):
 
   ```
    X  13  9 10 14  X
@@ -290,9 +292,20 @@ count, and the `Makefile` picks the matching YAML automatically.
   Outer ring is the HBM channel, inner 4x4 is the group (`g = gy*4 + gx`, with
   `gy=0` on the bottom row).
 
-- The `HbmIdx` tables in `cachepool_cluster.sv` and the `dst_idx`/`dst_dir`
+- **(asserted)** West/East same-ID requires a 2-column group mesh, so that both
+  columns touch an edge. Every group then reaches its own channel in one hop:
+
+  ```
+  2  G2 G3  3
+  0  G0 G1  1
+  ```
+
+  This is the 4g layout (`g = gy*2 + gx`, `gy=0` on the bottom row).
+
+- The `HbmIdx` formulas in `cachepool_cluster.sv` and the `dst_idx`/`dst_dir`
   entries in the YAML describe the same wiring from opposite ends. **Both must
-  be edited together** — nothing cross-checks them at build time.
+  be edited together** — nothing cross-checks them at build time. The labels in
+  `util/scripts/noc_profiling_to_vis4mesh.py` are a third copy.
 - Channel-to-address-window mapping is independent of placement. Moving a
   channel physically does not move its address range.
 

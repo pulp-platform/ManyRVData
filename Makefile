@@ -190,9 +190,9 @@ ifneq ($(filter %_16g_tiny,$(config)),)
 else ifneq ($(filter %_16g,$(config)),)
   # One channel per group (16ch/16g) -> chimneys on all four mesh sides with
   # same-ID placement, so group K owns channel K. Anything else (e.g. 8ch/16g)
-  # keeps the West/East-only linear layout. Must stay inside this %_16g branch:
-  # the 4g config also has l2_channel == num_groups but only 4 boundary ports,
-  # and cachepool_cluster.sv's L2SameIdPlacement rejects it for that reason.
+  # keeps the West/East-only linear layout. The 4g config also has
+  # l2_channel == num_groups and is same-ID too, but on West/East only -- it
+  # has a single YAML, selected by the else branch below.
   ifeq ($(l2_channel),$(num_groups))
     FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_16ch.yml
   else

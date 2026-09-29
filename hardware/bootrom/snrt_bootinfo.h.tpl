@@ -21,5 +21,6 @@
 #define SNRT_BOOT_GLOBAL_MEM_START ${hex(cfg['dram']['address'])}
 #define SNRT_BOOT_GLOBAL_MEM_END   ${hex(cfg['dram']['address'] + cfg['dram']['length'])}
 #define SNRT_BOOT_TILE_COUNT       ${cfg['cluster']['nr_tiles']}
+#define SNRT_BOOT_GROUP_COUNT      ${cfg['cluster']['nr_groups']}
 
 #endif // SNRT_BOOTINFO_H_

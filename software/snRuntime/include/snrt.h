@@ -106,6 +106,8 @@ extern uint32_t snrt_cluster_core_idx();
 extern uint32_t snrt_cluster_core_num();
 extern uint32_t snrt_cluster_tile_idx();
 extern uint32_t snrt_cluster_tile_num();
+extern uint32_t snrt_cluster_group_idx();
+extern uint32_t snrt_cluster_group_num();
 extern uint32_t snrt_cluster_core_per_tile();
 extern uint32_t snrt_cluster_idx();
 extern uint32_t snrt_cluster_num();

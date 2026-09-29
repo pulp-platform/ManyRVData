@@ -608,18 +608,22 @@ module cachepool_cluster
     // Same-ID placement: reassigns channel ID <-> physical port so each group
     // reaches the channel carrying its own ID in 1 hop (edge columns) or 2
     // hops (interior columns), the fairest achievable spread. Selected when
-    // there is exactly one channel per group AND all four sides carry
-    // chimneys; else linear placement. Only the 4x4 mesh satisfies both, so
-    // the 4g config (4 channels, 4 groups, West/East only) stays linear.
+    // there is exactly one channel per group; else linear placement. Two mesh
+    // shapes qualify: the 4x4 all-sides layout (16ch/16g) and any 2-column
+    // West/East layout (4ch/4g), where both columns touch an edge.
     // SAM and address scrambling are unaffected either way.
-    localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups) &&
-                                       (NumL2Channel == NumHbmAllSides);
+    localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups);
     // Only a 4x4 mesh has exactly as many boundary ports as groups, which is
     // what lets every group own a distinct nearby channel. The North/South
     // channel IDs below are written for that mapping only, so reject any other
     // mesh shape that asks for all-sides chimneys rather than mis-wiring it.
     initial assert (NumL2Channel != NumHbmAllSides || (NumGroupsX == 4 && NumGroupsY == 4))
       else $fatal(1, "All-sides HBM placement is only implemented for a 4x4 group mesh.");
+    // West/East same-ID needs both columns on an edge, i.e. exactly 2 columns.
+    // NumL2Channel == NumGroups == NumHbmWestEast already forces this, so the
+    // check only guards against a future edit breaking that equality.
+    initial assert (!L2SameIdPlacement || NumL2Channel == NumHbmAllSides || NumGroupsX == 2)
+      else $fatal(1, "West/East same-ID HBM placement requires a 2-column group mesh.");
 
     if (NumL2Channel == NumHbmWestEast) begin : gen_l2_north_south_tieoff
       // North boundary (gy=NumGroupsY-1, direction North=0)
@@ -652,7 +656,7 @@ module cachepool_cluster
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
-      // Same-ID: the attached group's own ID (gy 0,1,2,3 -> channel 0,4,8,12).
+      // Same-ID: the attached group's own ID (4x4: 0,4,8,12; 2x2: 0,2).
       localparam int unsigned HbmIdx = !L2SameIdPlacement ? gy : gy * NumGroupsX;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
@@ -921,7 +925,7 @@ module cachepool_cluster
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_east
-      // Same-ID: the attached group's own ID (gy 0,1,2,3 -> channel 3,7,11,15).
+      // Same-ID: the attached group's own ID (4x4: 3,7,11,15; 2x2: 1,3).
       localparam int unsigned HbmIdx = !L2SameIdPlacement ? NumGroupsY + gy :
         gy * NumGroupsX + NumGroupsX - 1;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
