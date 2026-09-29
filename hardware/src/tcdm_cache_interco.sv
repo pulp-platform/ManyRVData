@@ -279,6 +279,8 @@ module tcdm_cache_interco #(
     logic [TileBits-1:0]     addr_group_id;
     // Whether the addressed group matches this tile's group.
     logic                    same_group;
+    // Partition-mode shorthands, decoded once per port.
+    logic                    all_private, all_shared, all_local, use_private;
 
     always_comb begin
       // Defaults.
@@ -293,48 +295,32 @@ module tcdm_cache_interco #(
       // Compare group IDs.
       same_group    = (addr_group_id == my_group_id);
 
-      if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache)
-          || (NumTiles == 1 && NumRemoteGroupPort == 0)) begin
-        // All-private, or single-tile single-group: every request is local.
-        // Use the full BankSel field directly (no folding needed).
-        core_req_sel[port] = core_sel_t'(addr_bank);
+      // A request stays local when the partition it targets is the private
+      // one, or when every bank is private. all_local also covers the
+      // degenerate single-tile single-group build, which has no remote ports.
+      all_private = (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache));
+      all_shared  = (num_private_cache_q == '0);
+      all_local   = all_private || (NumTiles == 1 && NumRemoteGroupPort == 0);
+      use_private = !all_shared && is_private[port];
 
-      end else if (num_private_cache_q == '0) begin
-        // All-shared: full three-way classification.
-        if (NumRemoteGroupPort > 0 && !same_group) begin
-          // Inter-group: route to inter-group remote port.
-          core_req_sel[port] = core_sel_t'(NumCache + NumLGPort
-                                          + (port % NumRemoteGroupPort));
-        end else if (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]
-                    && !(NumTiles == 1)) begin
-          // Intra-group remote: different tile, same group.
-          core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
-        end else begin
-          // Local: same tile.
-          core_req_sel[port] = core_sel_t'(addr_bank);
-        end
-
+      if (all_local || use_private) begin
+        // Local private bank. Folding is a no-op when every bank is private,
+        // and num_private_cache_q is non-zero on both paths that reach here.
+        core_req_sel[port] = all_local ? core_sel_t'(addr_bank)
+                                       : core_sel_t'(addr_bank % num_private_cache_q);
+      end else if (NumRemoteGroupPort > 0 && !same_group) begin
+        core_req_sel[port] = core_sel_t'(NumCache + NumLGPort
+                                        + (port % NumRemoteGroupPort));
+      end else if (NumTiles > 1
+                   && addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]) begin
+        core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
       end else begin
-        // Mixed partition: fold addr_bank into the appropriate partition.
-        if (is_private[port]) begin
-          // Private request: always local.
-          core_req_sel[port] = core_sel_t'(addr_bank % num_private_cache_q);
-        end else begin
-          // Shared request: three-way classification.
-          if (NumRemoteGroupPort > 0 && !same_group) begin
-            // Inter-group: route to inter-group remote port.
-            core_req_sel[port] = core_sel_t'(NumCache + NumLGPort
-                                            + (port % NumRemoteGroupPort));
-          end else if (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]
-                      && !(NumTiles == 1)) begin
-            // Intra-group remote: different tile, same group.
-            core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
-          end else begin
-            // Local: same tile.
-            core_req_sel[port] = core_sel_t'(num_private_cache_q
-                                            + (addr_bank % num_shared_cache_q));
-          end
-        end
+        // Local shared bank. num_shared_cache_q is non-zero here: all_private
+        // was handled above, so at least one bank is shared.
+        core_req_sel[port] = all_shared
+                           ? core_sel_t'(addr_bank)
+                           : core_sel_t'(num_private_cache_q
+                                        + (addr_bank % num_shared_cache_q));
       end
     end
   end
@@ -455,26 +441,12 @@ module tcdm_cache_interco #(
   for (genvar port = 0; port < NumCache; port++) begin : gen_scramble
     logic [RotWidth-1:0] bits_to_rotate;
 
-    always_comb begin
-      // All-private: rotate BankSel only (no TileID in private addresses).
-      // All-shared:  rotate BankSel + TileID.
-      // Half-half:   private ports rotate BankSel only,
-      //              shared  ports rotate BankSel + TileID.
-      // The port index is a genvar constant so the if/else is static per bank.
-      if (num_private_cache_q == '0) begin
-        // All-shared: every bank is shared.
-        bits_to_rotate = RotWidth'(CacheBankBits + TileBits);
-      end else if (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache)) begin
-        // All-private: every bank is private.
-        bits_to_rotate = RotWidth'(CacheBankBits);
-      end else begin
-        // Mixed: port index determines private vs. shared.
-        if (port < int'(num_private_cache_q))
-          bits_to_rotate = RotWidth'(CacheBankBits);             // private bank
-        else
-          bits_to_rotate = RotWidth'(CacheBankBits + TileBits);  // shared bank
-      end
-    end
+    // Private banks rotate BankSel only; shared banks also rotate TileID.
+    // The bank index is a genvar constant, so this covers the all-private
+    // (every port below the boundary) and all-shared (none below) cases too.
+    assign bits_to_rotate = (port < int'(num_private_cache_q))
+                          ? RotWidth'(CacheBankBits)
+                          : RotWidth'(CacheBankBits + TileBits);
 
     always_comb begin
       addr_t lower, rot_field, upper;

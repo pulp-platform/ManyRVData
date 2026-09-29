@@ -1167,23 +1167,12 @@ module cachepool_tile
 
     logic [RefillRotWidth-1:0] refill_bits_to_rotate;
 
-    always_comb begin : refill_rot_sel
-      if (num_private_cache == '0) begin
-        // All-shared: every bank is shared.
-        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
-      end else if (num_private_cache == 3'(NumL1CtrlTile)) begin
-        // All-private: every bank is private.
-        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
-      end else begin
-        // Mixed: use num_private_cache boundary, mirroring gen_scramble in
-        // tcdm_cache_interco.  Banks [0..num_private_cache-1] are private,
-        // banks [num_private_cache..NumL1CtrlTile-1] are shared.
-        if (cb < int'(num_private_cache))
-          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
-        else
-          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
-      end
-    end
+    // Mirrors gen_scramble in tcdm_cache_interco: banks below the boundary are
+    // private and rotate BankSel only, the rest also rotate TileID. cb is a
+    // genvar constant, so this covers all-private and all-shared as well.
+    assign refill_bits_to_rotate = (cb < int'(num_private_cache))
+                                 ? RefillRotWidth'(RefillCacheBankBits)
+                                 : RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
 
     always_comb begin : bank_addr_scramble
       cache_refill_req_o[cb].q = '{
