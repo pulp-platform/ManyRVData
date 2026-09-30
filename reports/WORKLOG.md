@@ -7,6 +7,15 @@ time, commit, files, what + why, and verification.
 
 ---
 
+
+## 2026-09-30
+
+### History rewrite: tool attribution trailers removed from 2094188
+- Commit `2094188` ([RTL] insitu_cache_ooc_wrapper) carried `Co-Authored-By: Claude...` and `Claude-Session:` trailers, against the no-tool-mention rule for commit messages. Reworded via `git rebase -i` on `dev/rlc-next` (unpushed); the 37 commits after it were re-created with **identical trees** (verified: new HEAD tree == old HEAD tree, 128 commits both).
+- **All hashes from that commit onward changed.** References in this file were remapped; the full old->new map is `reports/history_rewrite_2026-09-30.map`. Hashes quoted to the GVSoC / timing sessions before today are the OLD ones -- translate with the map.
+- Backup of the pre-rewrite branch: `backup/rlc-next-before-reword` (old HEAD `0b40899`). Delete once satisfied.
+- Same trailers also on `007d31e` in `working_dir/insitu-cache` (branch `zexin/timing-metabank-loop-committed`, the L1-timing session's). Left for that session to reword; it has been told.
+
 ## 2026-09-23 (noon)
 
 ### TC1 reaches its target: descriptor-ring to-send queue + owner plans in its private partition
@@ -247,7 +256,7 @@ Every historical M16/24/48 failure was measured on a platform and a kernel that 
 ---
 
 ### Partial-barrier fix landed and validated; AM mismatch column resolved as THREE bugs, none payload corruption
-- **Time:** 2026-09-08 ~09:00 +0200. Commits `6df0e68` (narrow fix), `145d66a` (verifier SN), `e0f505c` (progress line), `dedde97`/`246b430`/`a9c647f` (reports), `a79e83b`/`0143e71`/`171c79d`/`a750067` (notes).
+- **Time:** 2026-09-08 ~09:00 +0200. Commits `dd5531e` (narrow fix), `46e1a33` (verifier SN), `3da7786` (progress line), `cbc45bf`/`9cd4457`/`4a9995a` (reports), `671462c`/`aaec01a`/`dab460d`/`3488749` (notes).
 
 #### T3.1-T3.12 re-verify: both kernels exact
 `bandwidth` 2,058 / 32 / EOC 33,876 / AR-R 335-422 and `byte-enable` EOC 303,288 -- **identical to both the 08-25 pristine reference and the T3.1-T3.15 arm.** Tripwire `DUT UNCHANGED` across both runs; ran the **frozen** `elf_under_test/` binaries so RTL was the only variable while I rebuilt `software/build` in parallel. **Designed the confound out rather than catching it** -- the earlier near-miss was the lesson. Deliverables in `reports/rtl_reference_t312_2026-09-08/`.
@@ -282,7 +291,7 @@ Three confounds caught before landing on the wrong side, and in every case the f
 
 ### RTL reference batch COMPLETE; and the RLC partial-barrier design found broken at 3 levels
 - **Time:** 2026-09-08 ~06:20 +0200
-- **Commits:** `136fe71` (mask read-back guard), `577ba57` / `171c79d` / `0143e71` (PARTIAL_BARRIER_MISUSE note), `d6d7439` (provenance synthesis), `f3269de` (batch results). All local, unpushed.
+- **Commits:** `18ae20d` (mask read-back guard), `523b8e2` / `dab460d` / `aaec01a` (PARTIAL_BARRIER_MISUSE note), `c08c1fc` (provenance synthesis), `3b4b1a0` (batch results). All local, unpushed.
 
 #### Batch result -- cycle-identity established
 | kernel | status | EOC | kernel cyc | vs 08-25 pristine |
@@ -369,7 +378,7 @@ Found by the GVSoC session after they implemented real participation-mask semant
 
 ### RLC UL: barrier flag was invisible cross-core; UL re-parameterised to the documented 160 B profile; committed
 - **Time:** 2026-09-08 ~03:52 +0200
-- **Commit:** `7325757` "rlc: AM transport-block assembly (DL) and reassembly (UL)" -- 40 files, 7419 insertions. Frozen ELF binaries deliberately NOT committed.
+- **Commit:** `7cbc7a2` "rlc: AM transport-block assembly (DL) and reassembly (UL)" -- 40 files, 7419 insertions. Frozen ELF binaries deliberately NOT committed.
 - **The v3 fix did not take, and GVSoC's guard caught its own build.** All five v3 ELFs printed `[UL] FATAL: tile participation mask never programmed`. **My static verification metric was worthless**: I had been grepping the objdump listing for the symbol name, which counts *interleaved source-comment lines and the definition label* -- for the v3 ELFs all three "hits" were a comment, a label and a source line, and **not one was a call**. GVSoC spotted the disagreement between my metric and their runtime guard and told me to re-derive it.
 - **Second root cause, also mine:** `rlc_ul_barrier_armed` was a plain `static uint32_t` (in `.sbss`), written by core 0 in `rlc_init()` and read by the consumers after `main.c`'s `snrt_cluster_hw_barrier()`. Proven by disassembly that **the store executes** (inside main's `bnez s0` core-0 block, `sb s1, 1572(a0)`) and **the load executes** (`lbu`+`beqz`, not constant-folded) -- and they still disagreed. **The hardware barrier is a synchronisation event, not a memory fence, and a non-atomic store carries no ordering of its own.** Fixed: `_Atomic` with release/acquire, in `.data` cacheline-aligned, plus an explicit `fence`.
 - **Same class, wider blast radius:** `snrt_cluster_partial_barrier()` is documented as "a plain volatile store" -- so **the phase barriers do not order memory either**. Consumer 0 writes the scan buffer in phase 1 and the others read it in phase 2. Added `rlc_ul_barrier()` which fences on both sides. **The AM TTI loop has the same unfenced pattern (plan writes -> execute reads across `snrt_cluster_partial_barrier`) and is a live suspect for the unresolved multi-entity wedge** -- NOT changed yet, because GVSoC holds AM baselines against the current loop. Flagged.
