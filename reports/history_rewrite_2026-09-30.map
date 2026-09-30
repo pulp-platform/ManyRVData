@@ -1,0 +1,39 @@
+# old new subject
+2094188 c7ddb5d [RTL] add insitu_cache_ooc_wrapper: OOC timing harness for one L1 cache ctrl
+7325757 7cbc7a2 rlc: AM transport-block assembly (DL) and reassembly (UL)
+db94852 ec7a2ff rlc: fence the UL phase barriers; align uplink to the documented 160 B profile
+de08892 eea647a worklog: RTL reference batch, bandwidth reproduces pristine exactly
+0346ebf 4239973 rlc: fence the TTI phase barriers
+aa7ad50 d11b98c notes: synchronisation is not visibility -- four instances of one defect
+691d316 22ad3e4 notes: read the generated artefact, not the config
+c47d883 909b88d notes: dependency tree is tool-owned; a marker inside it can outlive a revert
+e7ad2d4 ccd5077 notes: an assertion that can outlive its condition must carry its own falsifier
+136fe71 18ae20d rlc: read the participation-mask register back instead of echoing what we wrote
+577ba57 523b8e2 notes: RLC partial-barrier design is wrong at more than one tile
+171c79d dab460d notes: barrier done is broadcast cluster-wide, so the mask gates arrival not release
+0143e71 aaec01a notes: record the refuted workaround for defect 2 explicitly
+d6d7439 c08c1fc notes: the mechanism was checking claims against artefacts, not descriptions
+f3269de 3b4b1a0 reports: RTL reference batch 2026-09-08 -- cycle-identity established on two kernels
+681813e 20cb24a worklog: batch complete; partial-barrier design broken at three levels
+01d17a5 317b85c reports: record that the batch measured T3.1-T3.15, not the recommended T3.1-T3.12
+a05aeea 3a584af notes: relative log paths make cwd a shared resource across sessions
+a750067 3488749 notes: the transferable part is the habit -- grep for what a thing writes before running it
+246b430 9cd4457 reports: pristine arm clears cache-mix-smoke and makes it a third cycle-identity kernel
+a9c647f 4a9995a reports: qualify the sensitivity argument -- the race window width is unmeasured
+dedde97 cbc45bf reports: close the T3.1-T3.15 batch record; pin the T3.1-T3.12 state, unrun
+6df0e68 dd5531e rlc: fix partial-barrier misuse -- arm on entry, keep non-participants out, restore on exit
+a79e83b 671462c notes: the fix requires masked semantics -- deadlocks without them, by construction
+145d66a 46e1a33 rlc: the grant verifier still assumed SN advances per PDU
+e0f505c 3da7786 rlc: one AM progress line per grant, always
+843032d 4a5b0de worklog: partial-barrier fix validated; AM mismatch column resolved as three bugs
+b6eb72f 4245048 worklog: wedge signature absent at 64 cores/M48; original observation retracted as confounded
+32b5198 a0e5d3d notes: five of six were cross-artefact, one was re-reading the reference
+00ab4ef da9f0b6 rlc: TTI loop never terminated with the work queue on; fix polls, UL rate, phase cost
+a3ced2b 9ac50f9 worklog: kernel review and four fixes
+2cc5b8a 78a00b0 rlc: software perf-probe hooks (RLC_PROBE=1, default builds unchanged)
+09fba4d e16dd15 rlc: full-cluster DP test cases (TC1/TC2/TC3, 64 producers + 192 consumers), probe targets
+eb9259e 3ba3e5d rlc: lock/flag cache-line padding (RLC_PAD_SYNC), paced arrival (RLC_ARRIVAL_PPS), multi-slot sweep targets
+4942fc4 2cf725c rlc: per-group packet streams and node pools (RLC_GROUP_STREAMS) with work stealing
+33fb09d 1bfe7b2 rlc: tile affinity on a half-private L1, AM in-tile and cross-tile, batched AM commit
+b997edd 2e03e38 rlc: AM tile STATUS on a dirty bitmap, multiple grants per owner per TTI
+0b40899 82613d3 rlc: TC1 at target -- descriptor-ring to-send queue, owner plans in its private partition
