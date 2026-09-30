@@ -235,14 +235,18 @@
     },
     {
         name: "L1D_PRIVATE",
-        desc: '''Number of private banks configured per tile '''
+        desc: '''L1D partitioning: private bank count and how it is folded '''
         swaccess: "rw",
         hwaccess: "hro",
         resval: "0",
         fields: [{
-            bits: "3:0",
-            name: "NUMBER",
-            desc: "range: 0-8"
+            bits: "2:0",
+            name: "PARTITION",
+            desc: "Number of private banks per tile, 0 (all-shared) to NumL1CtrlTile (all-private)"
+          },{
+            bits: "3:3",
+            name: "GROUP_FOLD",
+            desc: "0: private banks are local to the tile. 1: they are folded across the group, so a line is fetched once per group. Only takes effect when PARTITION selects all-private."
         }]
     },
     {

@@ -100,12 +100,12 @@ module cachepool_peripheral
 
 
   //////////// L1 DCache ////////////
-  logic [9:0]           l1d_spm_size_d, l1d_spm_size_q;
-  logic [3:0]           l1d_private_d, l1d_private_q;
-  addr_t                private_start_addr_d, private_start_addr_q;
+  logic [9:0]              l1d_spm_size_d, l1d_spm_size_q;
+  logic [PrivateWidth-1:0] l1d_private_d, l1d_private_q;
+  addr_t                   private_start_addr_d, private_start_addr_q;
   // L1 is running flush/invalidation
-  logic [NumTiles-1:0]  l1d_lock_d, l1d_lock_q;
-  logic                 l1d_spm_commit, l1d_insn_commit;
+  logic [NumTiles-1:0]     l1d_lock_d, l1d_lock_q;
+  logic                    l1d_spm_commit, l1d_insn_commit;
 
   // L1D Cache
   // For committing the cfg, if the cfg is taken, it will be pulled to 0;
@@ -170,7 +170,8 @@ module cachepool_peripheral
     hw2reg.l1d_insn_commit.de = 1'b0;
 
     if (l1d_insn_commit) begin
-      l1d_private_d         = reg2hw.l1d_private.q;
+      l1d_private_d         = {reg2hw.l1d_private.group_fold.q,
+                               reg2hw.l1d_private.partition.q};
       private_start_addr_d  = reg2hw.l1d_addr.q;
       // User issues a flush/invalidation
       if (|l1d_lock_q == '0) begin

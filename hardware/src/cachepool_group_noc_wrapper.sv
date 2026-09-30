@@ -94,7 +94,7 @@ module cachepool_group_noc_wrapper
     output icache_l1_events_t [NumCC-1:0]                                 icache_events_o,
     input  logic                                                          icache_prefetch_enable_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]                  dynamic_offset_i,
-    input  logic              [$clog2(NumL1CtrlTile):0]                   l1d_private_i,
+    input  logic              [L1PrivWidth-1:0]                           l1d_private_i,
     input  cache_insn_t                                                   l1d_insn_i,
     input  logic                                                          l1d_insn_valid_i,
     output logic              [NumTilesPerGroup-1:0]                      l1d_insn_ready_o,
@@ -161,7 +161,7 @@ module cachepool_group_noc_wrapper
   // here -- it is optionally cut inside cachepool_group itself, controlled
   // by RegisterBarrier, on top of the group_barrier FSM's own registered state.
   logic       [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_d, dynamic_offset_q;
-  logic       [$clog2(NumL1CtrlTile):0]   l1d_private_d,    l1d_private_q;
+  logic       [L1PrivWidth-1:0]           l1d_private_d,    l1d_private_q;
   cache_insn_t                            l1d_insn_d,       l1d_insn_q;
   logic                                   l1d_insn_valid_d, l1d_insn_valid_q;
   logic       [NumTilesPerGroup-1:0]      l1d_insn_ready_d, l1d_insn_ready_q;

@@ -24,7 +24,12 @@ void l1d_cluster_shared_flush();
 void l1d_cluster_private_flush(uint64_t tile);
 void l1d_wait();
 void l1d_spm_config (uint32_t size);
+// How an all-private partition is folded, for l1d_part_folded().
+#define L1D_FOLD_TILE  0u
+#define L1D_FOLD_GROUP 1u
+
 void l1d_part (uint32_t size);
+void l1d_part_folded (uint32_t size, uint32_t fold);
 void l1d_addr (uint32_t addr);
 
 void set_eoc (uint32_t eoc_value);

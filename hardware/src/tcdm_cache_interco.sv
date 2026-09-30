@@ -101,6 +101,9 @@ module tcdm_cache_interco #(
   input  logic             [$clog2(AddrWidth)-1:0] dynamic_offset_i,
   /// Number of private cache banks for this tile. Must be 0, NumCache/2, or NumCache.
   input  logic                [$clog2(NumCache):0] num_private_cache_i,
+  /// Fold the private partition across the group instead of the tile. Only
+  /// takes effect when every bank is private; ignored otherwise.
+  input  logic                                     group_fold_i,
   /// Partitioning address
   input  addr_t                                    private_start_addr_i,
   /// Request port (cores + intra-group remote-in + inter-group remote-in).
@@ -182,19 +185,28 @@ module tcdm_cache_interco #(
   // -------------------------------------------------------------------------
 
   logic [$clog2(NumCache):0] num_private_cache_q, num_private_cache_d;
+  logic                      group_fold_q,        group_fold_d;
   logic [$clog2(NumCache):0] num_shared_cache_q,  num_shared_cache_d;
 
   addr_t private_start_addr_d, private_start_addr_q;
 
   `FF(num_private_cache_q,  num_private_cache_d,  1'b0)
   `FF(num_shared_cache_q,   num_shared_cache_d,   NumCache[$clog2(NumCache):0])
+  `FF(group_fold_q,         group_fold_d,         1'b0)
   `FF(private_start_addr_q, private_start_addr_d, 1'b0)
 
   always_comb begin
     num_private_cache_d   = num_private_cache_i;
     num_shared_cache_d    = ($clog2(NumCache)+1)'(NumCache) - num_private_cache_i;
+    group_fold_d          = group_fold_i;
     private_start_addr_d  = private_start_addr_i;
   end
+
+  // Only with every bank private do the tile's banks serve the whole group,
+  // addressed by the local tile bits; other partitionings are unaffected.
+  logic group_fold;
+  assign group_fold = group_fold_q &&
+                      (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache));
 
   // -------------------------------------------------------------------------
   // Private/shared classification (request side, before xbar)
@@ -303,7 +315,16 @@ module tcdm_cache_interco #(
       all_local   = all_private || (NumTiles == 1 && NumRemoteGroupPort == 0);
       use_private = !all_shared && is_private[port];
 
-      if (all_local || use_private) begin
+      if (group_fold) begin
+        // Private banks shared across the group: local if the address selects
+        // this tile, otherwise out through the intra-group remote port.
+        if (NumTiles > 1
+            && addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]) begin
+          core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
+        end else begin
+          core_req_sel[port] = core_sel_t'(addr_bank);
+        end
+      end else if (all_local || use_private) begin
         // Local private bank. Folding is a no-op when every bank is private,
         // and num_private_cache_q is non-zero on both paths that reach here.
         core_req_sel[port] = all_local ? core_sel_t'(addr_bank)
@@ -445,8 +466,9 @@ module tcdm_cache_interco #(
     // The bank index is a genvar constant, so this covers the all-private
     // (every port below the boundary) and all-shared (none below) cases too.
     assign bits_to_rotate = (port < int'(num_private_cache_q))
-                          ? RotWidth'(CacheBankBits)
-                          : RotWidth'(CacheBankBits + TileBits);
+          ? (group_fold ? RotWidth'(CacheBankBits + LocalTileBits)
+                        : RotWidth'(CacheBankBits))
+          : RotWidth'(CacheBankBits + TileBits);
 
     always_comb begin
       addr_t lower, rot_field, upper;

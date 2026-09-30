@@ -113,9 +113,12 @@ module cachepool_peripheral_reg_top #(
   logic l1d_insn_commit_we;
   logic l1d_flush_status_qs;
   logic l1d_flush_status_re;
-  logic [3:0] l1d_private_qs;
-  logic [3:0] l1d_private_wd;
-  logic l1d_private_we;
+  logic [2:0] l1d_private_partition_qs;
+  logic [2:0] l1d_private_partition_wd;
+  logic l1d_private_partition_we;
+  logic l1d_private_group_fold_qs;
+  logic l1d_private_group_fold_wd;
+  logic l1d_private_group_fold_we;
   logic [31:0] l1d_addr_qs;
   logic [31:0] l1d_addr_wd;
   logic l1d_addr_we;
@@ -546,17 +549,18 @@ module cachepool_peripheral_reg_top #(
 
   // R[l1d_private]: V(False)
 
+  //   F[partition]: 2:0
   prim_subreg #(
-    .DW      (4),
+    .DW      (3),
     .SWACCESS("RW"),
-    .RESVAL  (4'h0)
-  ) u_l1d_private (
+    .RESVAL  (3'h0)
+  ) u_l1d_private_partition (
     .clk_i   (clk_i    ),
     .rst_ni  (rst_ni  ),
 
     // from register interface
-    .we     (l1d_private_we),
-    .wd     (l1d_private_wd),
+    .we     (l1d_private_partition_we),
+    .wd     (l1d_private_partition_wd),
 
     // from internal hardware
     .de     (1'b0),
@@ -564,10 +568,36 @@ module cachepool_peripheral_reg_top #(
 
     // to internal hardware
     .qe     (),
-    .q      (reg2hw.l1d_private.q ),
+    .q      (reg2hw.l1d_private.partition.q ),
 
     // to register interface (read)
-    .qs     (l1d_private_qs)
+    .qs     (l1d_private_partition_qs)
+  );
+
+
+  //   F[group_fold]: 3:3
+  prim_subreg #(
+    .DW      (1),
+    .SWACCESS("RW"),
+    .RESVAL  (1'h0)
+  ) u_l1d_private_group_fold (
+    .clk_i   (clk_i    ),
+    .rst_ni  (rst_ni  ),
+
+    // from register interface
+    .we     (l1d_private_group_fold_we),
+    .wd     (l1d_private_group_fold_wd),
+
+    // from internal hardware
+    .de     (1'b0),
+    .d      ('0  ),
+
+    // to internal hardware
+    .qe     (),
+    .q      (reg2hw.l1d_private.group_fold.q ),
+
+    // to register interface (read)
+    .qs     (l1d_private_group_fold_qs)
   );
 
 
@@ -755,8 +785,11 @@ module cachepool_peripheral_reg_top #(
 
   assign l1d_flush_status_re = addr_hit[16] & reg_re & !reg_error;
 
-  assign l1d_private_we = addr_hit[17] & reg_we & !reg_error;
-  assign l1d_private_wd = reg_wdata[3:0];
+  assign l1d_private_partition_we = addr_hit[17] & reg_we & !reg_error;
+  assign l1d_private_partition_wd = reg_wdata[2:0];
+
+  assign l1d_private_group_fold_we = addr_hit[17] & reg_we & !reg_error;
+  assign l1d_private_group_fold_wd = reg_wdata[3];
 
   assign l1d_addr_we = addr_hit[18] & reg_we & !reg_error;
   assign l1d_addr_wd = reg_wdata[31:0];
@@ -840,7 +873,8 @@ module cachepool_peripheral_reg_top #(
       end
 
       addr_hit[17]: begin
-        reg_rdata_next[3:0] = l1d_private_qs;
+        reg_rdata_next[2:0] = l1d_private_partition_qs;
+        reg_rdata_next[3] = l1d_private_group_fold_qs;
       end
 
       addr_hit[18]: begin

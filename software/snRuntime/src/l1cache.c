@@ -146,8 +146,11 @@ void l1d_wait() {
   }
 }
 
-// Used to configure the number of private cache banks per tile
-void l1d_part (uint32_t size) {
+// Used to configure the number of private cache banks per tile.
+// fold selects how an all-private partition is shared: L1D_FOLD_TILE keeps
+// each tile's banks to itself, L1D_FOLD_GROUP spreads them across the group so
+// a line is fetched once per group. Ignored unless every bank is private.
+void l1d_part_folded (uint32_t size, uint32_t fold) {
   // All cores fence and sync before reconfiguration
   asm volatile("fence" ::: "memory");
   snrt_cluster_hw_barrier();
@@ -157,10 +160,14 @@ void l1d_part (uint32_t size) {
     volatile uint32_t *cfg_private =
         (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                      CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
-    *cfg_private = size;
+    *cfg_private = (size & 0x7u) | ((fold & 0x1u) << 3);
     l1d_commit();
   }
   snrt_cluster_hw_barrier();
+}
+
+void l1d_part (uint32_t size) {
+  l1d_part_folded(size, L1D_FOLD_TILE);
 }
 
 // Configure the starting address mapping to the private partition

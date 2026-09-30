@@ -185,7 +185,7 @@ module cachepool_cluster
   logic                                       l1d_insn_valid;
   logic         [NumTiles-1:0]                l1d_insn_ready;
   logic         [NumTiles-1:0]                l1d_busy;
-  logic         [$clog2(NumL1CtrlTile):0]     l1d_private;
+  logic         [L1PrivWidth-1:0]             l1d_private;
 
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
@@ -1550,7 +1550,7 @@ module cachepool_cluster
     .NumTiles        ( NumTiles                  ),
     .NumGroups       ( NumGroups                 ),
     .NumBarrierSlots ( NumBarrierSlots           ),
-    .PrivateWidth    ( $clog2(NumL1CtrlTile) + 1 ),
+    .PrivateWidth    ( L1PrivWidth               ),
     .reg_req_t       ( reg_csr_req_t             ),
     .reg_rsp_t       ( reg_csr_rsp_t             ),
     .cache_insn_t    ( cache_insn_t              )

@@ -74,7 +74,12 @@ package cachepool_peripheral_reg_pkg;
   } cachepool_peripheral_reg2hw_l1d_insn_commit_reg_t;
 
   typedef struct packed {
-    logic [3:0]  q;
+    struct packed {
+      logic [2:0]  q;
+    } partition;
+    struct packed {
+      logic        q;
+    } group_fold;
   } cachepool_peripheral_reg2hw_l1d_private_reg_t;
 
   typedef struct packed {
