@@ -14,7 +14,8 @@ time, commit, files, what + why, and verification.
 - Commit `2094188` ([RTL] insitu_cache_ooc_wrapper) carried `Co-Authored-By: Claude...` and `Claude-Session:` trailers, against the no-tool-mention rule for commit messages. Reworded via `git rebase -i` on `dev/rlc-next` (unpushed); the 37 commits after it were re-created with **identical trees** (verified: new HEAD tree == old HEAD tree, 128 commits both).
 - **All hashes from that commit onward changed.** References in this file were remapped; the full old->new map is `reports/history_rewrite_2026-09-30.map`. Hashes quoted to the GVSoC / timing sessions before today are the OLD ones -- translate with the map.
 - Backup of the pre-rewrite branch: `backup/rlc-next-before-reword` (old HEAD `0b40899`). Delete once satisfied.
-- Same trailers also on `007d31e` in `working_dir/insitu-cache` (branch `zexin/timing-metabank-loop-committed`, the L1-timing session's). Left for that session to reword; it has been told.
+- Same trailers also on `007d31e` in `working_dir/insitu-cache` (branch `zexin/timing-metabank-loop-committed`, the tip; not checked out, unpushed). Reworded by us: new tip **`3c371bb`**, same tree, same parent `f1cbe54`, same author/dates. Backup: `backup/timing-metabank-loop-committed-before-reword`. The L1-timing session was notified that it is done.
+- Verified: no commit on any non-backup branch of either repo mentions Claude/Anthropic.
 
 ## 2026-09-23 (noon)
 
