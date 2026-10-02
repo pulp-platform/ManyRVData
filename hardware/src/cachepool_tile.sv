@@ -219,8 +219,7 @@ module cachepool_tile
   // L1D_PRIVATE.GROUP_FOLD: fold the private partition across the
   // group. Only meaningful when every bank is private; ignored otherwise.
   logic                             group_fold;
-  assign group_fold        = l1d_private_i[L1PrivFoldBit] &&
-                             (num_private_cache == ($clog2(NumL1CtrlTile)+1)'(NumL1CtrlTile));
+  assign group_fold        = l1d_private_i[L1PrivFoldBit];
 
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NumCC);

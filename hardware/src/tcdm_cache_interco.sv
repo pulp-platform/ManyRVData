@@ -205,8 +205,7 @@ module tcdm_cache_interco #(
   // Only with every bank private do the tile's banks serve the whole group,
   // addressed by the local tile bits; other partitionings are unaffected.
   logic group_fold;
-  assign group_fold = group_fold_q &&
-                      (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache));
+  assign group_fold = group_fold_q;
 
   // -------------------------------------------------------------------------
   // Private/shared classification (request side, before xbar)
@@ -292,7 +291,8 @@ module tcdm_cache_interco #(
     // Whether the addressed group matches this tile's group.
     logic                    same_group;
     // Partition-mode shorthands, decoded once per port.
-    logic                    all_private, all_shared, all_local, use_private;
+    logic                    all_private, all_shared, all_local;
+    logic                    use_private, fold_remote;
 
     always_comb begin
       // Defaults.
@@ -313,17 +313,15 @@ module tcdm_cache_interco #(
       all_private = (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache));
       all_shared  = (num_private_cache_q == '0);
       all_local   = all_private || (NumTiles == 1 && NumRemoteGroupPort == 0);
-      use_private = !all_shared && is_private[port];
+      use_private = all_private || (!all_shared && is_private[port]);
+      // A folded private line lives in the tile its local address bits select,
+      // which may not be this one. NumTiles > 1 excludes the single-tile build,
+      // where there is nowhere else to send it.
+      fold_remote = group_fold && (NumTiles > 1)
+                  && (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]);
 
-      if (group_fold) begin
-        // Private banks shared across the group: local if the address selects
-        // this tile, otherwise out through the intra-group remote port.
-        if (NumTiles > 1
-            && addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]) begin
-          core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
-        end else begin
-          core_req_sel[port] = core_sel_t'(addr_bank);
-        end
+      if (use_private && fold_remote) begin
+        core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
       end else if (all_local || use_private) begin
         // Local private bank. Folding is a no-op when every bank is private,
         // and num_private_cache_q is non-zero on both paths that reach here.

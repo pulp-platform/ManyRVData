@@ -24,7 +24,8 @@ void l1d_cluster_shared_flush();
 void l1d_cluster_private_flush(uint64_t tile);
 void l1d_wait();
 void l1d_spm_config (uint32_t size);
-// How an all-private partition is folded, for l1d_part_folded().
+// How the private partition is folded, for l1d_part_folded(). Applies at any
+// partition size; the shared partition is always cluster-wide.
 #define L1D_FOLD_TILE  0u
 #define L1D_FOLD_GROUP 1u
 

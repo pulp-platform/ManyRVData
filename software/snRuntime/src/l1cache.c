@@ -147,9 +147,10 @@ void l1d_wait() {
 }
 
 // Used to configure the number of private cache banks per tile.
-// fold selects how an all-private partition is shared: L1D_FOLD_TILE keeps
-// each tile's banks to itself, L1D_FOLD_GROUP spreads them across the group so
-// a line is fetched once per group. Ignored unless every bank is private.
+// fold selects how the private partition is shared: L1D_FOLD_TILE keeps each
+// tile's banks to itself, L1D_FOLD_GROUP spreads them across the group so a
+// line is fetched once per group instead of once per tile. Applies at any
+// partition size; the shared partition stays cluster-wide either way.
 void l1d_part_folded (uint32_t size, uint32_t fold) {
   // All cores fence and sync before reconfiguration
   asm volatile("fence" ::: "memory");

@@ -251,7 +251,31 @@ L1 cache banks can be partitioned at runtime between a **shared pool** (accessib
 
 Private banks are local to each tile and not visible to remote tiles. Shared banks participate in the cluster-wide interleaved pool. For non-power-of-2 partition sizes (1 or 3 banks), bank selection uses modulo folding, which causes slightly uneven bank utilisation.
 
-Partitioning is controlled via the `l1d_private` memory-mapped register in the cluster peripheral. The interconnect (`tcdm_cache_interco`) uses a runtime-configurable address rotation scheme to present a dense index space to each cache bank regardless of partition mode, preserving full SRAM utilization. The refill unit applies the inverse rotation before issuing misses to the NoC.
+### Group folding of the private partition
+
+The private partition can additionally be **folded across the group**, so that
+the private banks of a group's tiles form one pool rather than one pool per
+tile. A line's home tile is then taken from the local-tile address bits, so a
+core often reaches its data over the intra-group port instead of locally.
+
+| `l1d_part_folded` fold | Private banks serve | A shared line is fetched |
+|---|---|---|
+| `L1D_FOLD_TILE` (default) | their own tile | once per **tile** |
+| `L1D_FOLD_GROUP` | the whole group | once per **group** |
+
+This matters for data every core reads. Folded, one copy per group replaces one
+copy per tile — a 4x reduction at 4 tiles per group — and cores in the same
+group see each other's writes through the group's banks instead of only through
+DRAM. It does not extend across groups: a line shared between groups still
+needs the cluster-shared partition or an explicit flush.
+
+The fold applies only to the private partition; the shared partition stays
+cluster-wide in every mode. It is independent of the partition size, so it
+composes with all five modes above.
+
+Partitioning is controlled via the `l1d_private` memory-mapped register in the
+cluster peripheral, whose fields are `PARTITION` (private bank count) and
+`GROUP_FOLD` (the fold select). The interconnect (`tcdm_cache_interco`) uses a runtime-configurable address rotation scheme to present a dense index space to each cache bank regardless of partition mode, preserving full SRAM utilization. The refill unit applies the inverse rotation before issuing misses to the NoC.
 
 ### Private/shared address classification
 
@@ -262,7 +286,11 @@ The boundary between private and shared address regions is configurable at runti
 
 The default boundary is `0xA000_0000`. This means data in `.pdcp_src` (at `0xA000_0000+`) is private by default, and data in `.data` (at `0x8000_0000+`) is shared by default. The boundary can be raised or lowered at runtime to reclassify data regions without moving them in memory.
 
-> Changing either the partition mode or the boundary address while the cache contains valid data requires a flush first.
+> Changing the partition mode, the fold, or the boundary address while the
+> cache contains valid data requires a flush first. `l1d_part()`,
+> `l1d_part_folded()` and `l1d_addr()` each flush internally, so a
+> reconfiguration always starts from a cold cache — it cannot be used to carry
+> resident data from one configuration into another.
 
 ## Cache Flushing
 

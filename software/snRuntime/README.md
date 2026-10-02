@@ -109,8 +109,25 @@ void l1d_cluster_private_flush(uint32_t tile); // Flush private banks of selecte
 void l1d_xbar_config(uint32_t offset);
 
 // Set the number of private banks per tile (0=all-shared … 4=all-private).
+// Equivalent to l1d_part_folded(size, L1D_FOLD_TILE).
 void l1d_part(uint32_t size);
+
+// As above, plus how the private partition is folded:
+//   L1D_FOLD_TILE  - private banks serve their own tile (the long-standing
+//                    behaviour, and what l1d_part() selects)
+//   L1D_FOLD_GROUP - private banks serve the whole group, so a line read by
+//                    every core is fetched once per group instead of once per
+//                    tile, and cores in a group see each other's writes
+//                    without going through DRAM
+// The fold never applies to the shared partition, which stays cluster-wide.
+void l1d_part_folded(uint32_t size, uint32_t fold);
 ```
+
+Group folding helps whenever a buffer is read by every core: at four tiles per
+group it replaces four copies with one. The cost is that a core's *private*
+data may also land in a sibling tile, reached over the intra-group port rather
+than locally — so it trades local hits for fewer refills. It does not extend
+across groups.
 
 #### Address boundary and polling
 
@@ -221,5 +238,5 @@ int main() {
 ## Notes
 
 - `snrt_fence()` drains both Snitch's scalar LSU and Spatz's outstanding memory operations (`acc_mem_cnt_q`). Call it before a hardware barrier or before reading back results written by a vector kernel.
-- Changing the partition mode (`l1d_part`) or the address boundary (`l1d_addr`) while valid data is cached requires a flush first.
+- Changing the partition mode (`l1d_part`/`l1d_part_folded`) or the address boundary (`l1d_addr`) while valid data is cached requires a flush first. All three flush internally, so a reconfiguration always resumes from a cold cache — it cannot carry resident data from one configuration into the next.
 - The `start_snitch.S` platform startup calls `l1d_flush` (single-core, invalidate) on the boot core before handing off to `main`. Application code does not need to call `l1d_init` manually.
