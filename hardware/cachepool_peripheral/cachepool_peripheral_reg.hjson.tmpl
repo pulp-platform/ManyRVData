@@ -246,7 +246,7 @@
           },{
             bits: "3:3",
             name: "GROUP_FOLD",
-            desc: "0: private banks are local to the tile. 1: they are folded across the group, so a line is fetched once per group. Only takes effect when PARTITION selects all-private."
+            desc: "0: private banks are local to the tile. 1: they are folded across the group, so a line is fetched once per group instead of once per tile. Applies at any PARTITION size; the shared partition is always cluster-wide."
         }]
     },
     {

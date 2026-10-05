@@ -148,17 +148,17 @@ def emit_GEMM_layer(name="gemm", **kwargs):
     dtype = ctypes[str(kwargs["prec"])]
     if dtype != "char":
         layer_str += (
-            f'static {dtype} {name}_A_dram [{m}*{k}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_A_dram [{m}*{k}] __attribute__((section(".data"), aligned(1024))) = '
             + array_to_cstr(mat_A)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_B_dram [{k}*{n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_B_dram [{k}*{n}] __attribute__((section(".data"), aligned(1024))) = '
             + array_to_cstr(mat_B)
             + ";\n\n\n"
         )
         layer_str += (
-            f'static {dtype} {name}_C_dram [{m}*{n}] __attribute__((section(".data"))) = '
+            f'static {dtype} {name}_C_dram [{m}*{n}] __attribute__((section(".data"), aligned(1024))) = '
             + array_to_cstr(mat_C)
             + ";\n\n\n"
         )

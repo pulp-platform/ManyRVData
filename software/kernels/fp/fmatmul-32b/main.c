@@ -29,6 +29,39 @@
 #define KERNEL_SIZE 4
 #endif
 
+// L1 configuration. These defaults are the measured best general setting.
+//
+// XBAR_OFFSET picks the first L1 bank-select address bit, i.e. the interleave
+// granularity across a tile's cache controllers. 6 is the finest the hardware
+// allows (one cacheline; l1d_xbar_config clamps anything lower), which spreads
+// a core's sequential vector stream over all four controllers.
+//
+// Offset 8 (256 B) trades cold for hot and is the better choice when the same
+// matmul runs many times on 16g -- measured at M1024_N128_K128, all-private,
+// group-folded:
+//
+//   offset 6: cold 31711 cyc (51.7% peak), hot 20692 cyc (79.2%)
+//   offset 8: cold 50189 cyc (32.6% peak), hot 17819 cyc (91.9%)
+//
+// So prefer 6 for a one-shot matmul and 8 for a repeated one. On 4g, offset 6
+// wins on both axes and there is no trade.
+#ifndef XBAR_OFFSET
+#define XBAR_OFFSET 6
+#endif
+// Number of private banks per tile (0 = all-shared). All-private is a large
+// win here; all-shared costs ~2.7x on cold.
+#ifndef L1D_PART
+#define L1D_PART num_cores_per_tile
+#endif
+// L1D_FOLD_TILE keeps the private banks to their own tile; L1D_FOLD_GROUP
+// spreads them across the group, so a line shared by the group -- B here -- is
+// fetched once per group instead of once per tile. Group folding is the single
+// biggest win for this kernel (2.30x cold / 2.48x hot at 4g), so it is the
+// default; the sweep_*.c wrappers pin it explicitly either way.
+#ifndef L1D_FOLD
+#define L1D_FOLD L1D_FOLD_GROUP
+#endif
+
 float *a;
 float *b;
 float *c;
@@ -92,9 +125,12 @@ int main() {
   snrt_cluster_hw_barrier();
 
   // Set xbar policy and switch to private cache mode for the matmul.
-  // All cores will access the same B; scramble based on cacheline.
-  l1d_xbar_config(6);
-  l1d_part(num_cores_per_tile);
+  // Bank is addr[offset +: 2], so an offset where (A row pitch >> offset) is
+  // odd spreads a core's kernel_size rows over distinct banks. At cacheline
+  // offset the row index drops out of the bank field entirely and the scalar
+  // A stream sits on one bank for K/16 iterations, filling its MSHRs.
+  l1d_xbar_config(XBAR_OFFSET);
+  l1d_part_folded(L1D_PART, L1D_FOLD);
 
   a = gemm_A_dram;
   b = gemm_B_dram;
@@ -184,22 +220,26 @@ int main() {
 
     // Check and display results
     if (cid == 0) {
-      long unsigned int performance =
-          1000 * 2 * gemm_l.M * gemm_l.N * gemm_l.K / timer;
-      long unsigned int utilization = performance / (2 * active_cores * 4);
+      // 1000 * 2*M*N*K overflows 32 bits from ~128^3 upward, so the FLOP
+      // count is formed in 64 bits and only the (small) results narrowed.
+      const unsigned long long flops =
+          2ULL * gemm_l.M * gemm_l.N * gemm_l.K;
+      const uint32_t performance = (uint32_t)(1000ULL * flops / timer);
+      const uint32_t utilization = performance / (2 * active_cores * 4);
 
-      long unsigned int performance_iter1 =
-          1000 * 2 * gemm_l.M * gemm_l.N * gemm_l.K / timer_iter1;
-      long unsigned int utilization_iter1 = performance_iter1 / (2 * active_cores * 4);
+      const uint32_t performance_iter1 =
+          (uint32_t)(1000ULL * flops / timer_iter1);
+      const uint32_t utilization_iter1 =
+          performance_iter1 / (2 * active_cores * 4);
 
       write_cyc(timer);
       printf("\n----- (%dx%d) sp fmatmul -----\n", gemm_l.M, gemm_l.N);
       printf("Active cores %u \n", active_cores);
       printf("First iter took %u cycles.\n", timer_iter1);
-      printf("The perf is %ld OP/1000cycle (%ld%%o utilization).\n",
+      printf("The perf is %u OP/1000cycle (%u%%o utilization).\n",
              performance_iter1, utilization_iter1);
       printf("Best iter took %u cycles.\n", timer);
-      printf("The perf is %ld OP/1000cycle (%ld%%o utilization).\n",
+      printf("The perf is %u OP/1000cycle (%u%%o utilization).\n",
              performance, utilization);
     }
 

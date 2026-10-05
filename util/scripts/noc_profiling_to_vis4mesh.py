@@ -381,20 +381,29 @@ def convert_l2(args):
     row_offset = 1 if has_ns else 0
 
     # Matches cachepool_cluster.sv's L2SameIdPlacement: only affects labels
-    # below, not node position or traffic parsing.
-    SAME_ID_CHANNEL_ID = {
-        'W': [0, 4, 8, 12], 'E': [3, 7, 11, 15], 'N': [13, 9, 10, 14], 'S': [1, 5, 6, 2],
-    }
-    same_id_placement = has_ns and args.num_l2_channels == num_groups
-    if same_id_placement and (gx_count, gy_count) != (4, 4):
-        print(f'num-l2-channels == num-groups ({num_groups}) implies same-ID placement, '
-              f'which is only defined for a 4x4 mesh (got {gx_count}x{gy_count}) -- '
-              f'falling back to flat labels', file=sys.stderr)
+    # below, not node position or traffic parsing. West/East follow the RTL
+    # formulas; North/South exist only in the 4x4 all-sides layout, whose IDs
+    # are a fixed table (interior columns reach one hop in).
+    SAME_ID_NS_CHANNEL_ID = {'N': [13, 9, 10, 14], 'S': [1, 5, 6, 2]}
+    same_id_placement = args.num_l2_channels == num_groups
+    if same_id_placement and has_ns and (gx_count, gy_count) != (4, 4):
+        print(f'num-l2-channels == num-groups ({num_groups}) with all-sides chimneys '
+              f'implies same-ID placement, which is only defined for a 4x4 mesh '
+              f'(got {gx_count}x{gy_count}) -- falling back to flat labels', file=sys.stderr)
+        same_id_placement = False
+    if same_id_placement and not has_ns and gx_count != 2:
+        print(f'num-l2-channels == num-groups ({num_groups}) with West/East chimneys '
+              f'implies same-ID placement, which needs a 2-column mesh '
+              f'(got {gx_count}x{gy_count}) -- falling back to flat labels', file=sys.stderr)
         same_id_placement = False
 
     def channel_id(side, idx):
         if same_id_placement:
-            return SAME_ID_CHANNEL_ID[side][idx]
+            if side == 'W':
+                return idx * gx_count
+            if side == 'E':
+                return idx * gx_count + gx_count - 1
+            return SAME_ID_NS_CHANNEL_ID[side][idx]
         if side == 'W':
             return idx
         if side == 'E':
