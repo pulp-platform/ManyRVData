@@ -59,7 +59,7 @@ TB_DIR                := ${HARDWARE_DIR}/tb
 DPI_PATH              := ${TB_DIR}/dpi
 DRAM_CFG_PATH         := ${TB_DIR}/dram_config
 DPI_LIB               ?= work-dpi
-DEBUG                 ?= 1
+DEBUG                 ?= 0
 
 ## Bender usage (binary comes from toolchain.mk install)
 BENDER                ?= ${BENDER_INSTALL_DIR}/bender

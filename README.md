@@ -287,10 +287,13 @@ The boundary between private and shared address regions is configurable at runti
 The default boundary is `0xA000_0000`. This means data in `.pdcp_src` (at `0xA000_0000+`) is private by default, and data in `.data` (at `0x8000_0000+`) is shared by default. The boundary can be raised or lowered at runtime to reclassify data regions without moving them in memory.
 
 > Changing the partition mode, the fold, or the boundary address while the
-> cache contains valid data requires a flush first. `l1d_part()`,
-> `l1d_part_folded()` and `l1d_addr()` each flush internally, so a
-> reconfiguration always starts from a cold cache — it cannot be used to carry
-> resident data from one configuration into another.
+> cache contains valid data requires a flush first. `l1d_part()` and
+> `l1d_part_folded()` flush internally, so a partition or fold change always
+> starts from a cold cache and cannot carry resident data into the new
+> configuration. **`l1d_addr()` does not flush** — it only fences, syncs and
+> writes the register, so lines already cached stay classified under the old
+> boundary. Flush explicitly before moving it (see the note under
+> `l1d_addr()` below).
 
 ## Cache Flushing
 

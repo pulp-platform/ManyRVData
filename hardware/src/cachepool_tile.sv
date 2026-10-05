@@ -631,7 +631,11 @@ module cachepool_tile
               default: '0
             },
             p_valid: remote_group_rsp_i[flat].p_valid,
-            q_ready: remote_group_rsp_i[flat].q_ready,
+            // Gated with the same condition as the outgoing q_valid above:
+            // suppressing valid while leaving ready through would let the
+            // interco retire a request the NoC never saw, dropping it and the
+            // response the core is waiting for.
+            q_ready: remote_group_rsp_i[flat].q_ready && !l1d_busy_i,
             default: '0
           };
         end

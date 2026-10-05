@@ -238,5 +238,5 @@ int main() {
 ## Notes
 
 - `snrt_fence()` drains both Snitch's scalar LSU and Spatz's outstanding memory operations (`acc_mem_cnt_q`). Call it before a hardware barrier or before reading back results written by a vector kernel.
-- Changing the partition mode (`l1d_part`/`l1d_part_folded`) or the address boundary (`l1d_addr`) while valid data is cached requires a flush first. All three flush internally, so a reconfiguration always resumes from a cold cache — it cannot carry resident data from one configuration into the next.
+- Changing the partition mode (`l1d_part`/`l1d_part_folded`) or the address boundary (`l1d_addr`) while valid data is cached requires a flush first. `l1d_part()` and `l1d_part_folded()` flush internally, so a partition change always resumes from a cold cache. `l1d_addr()` does **not** flush — flush explicitly before moving the boundary, or cached lines stay classified under the old one.
 - The `start_snitch.S` platform startup calls `l1d_flush` (single-core, invalidate) on the boot core before handing off to `main`. Application code does not need to call `l1d_init` manually.

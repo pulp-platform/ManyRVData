@@ -46,6 +46,14 @@
 #define LS_PART1 1
 #endif
 
+// Part 2 (private flush isolation) and Part 3 share LS_FLUSH_ISOLATION, but
+// Part 3 depends on the value Part 2 leaves in gemm_A, so this only skips
+// Part 2 when you are deliberately iterating and expect Part 3's gemm_A check
+// to fail.
+#ifndef LS_PART2
+#define LS_PART2 1
+#endif
+
 // 1 = run a single fold configuration (all-private, fold-group, offset 6) and
 // skip the visibility sub-test, so a waveform covers one case end to end.
 #ifndef LS_FOLD_MIN
@@ -332,6 +340,7 @@ int main() {
 #endif  // LS_PART1
 
 #if LS_FLUSH_ISOLATION
+#if LS_PART2
   // ===========================================================================
   // Part 2: Private flush isolation
   // ===========================================================================
@@ -399,6 +408,8 @@ int main() {
     printf("private-flush-isolation: %s\n", (pass_a && pass_d) ? "PASS" : "FAIL");
   }
   snrt_cluster_hw_barrier();
+
+#endif  // LS_PART2
 
   // ===========================================================================
   // Part 3: Shared flush isolation
