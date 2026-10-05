@@ -16,11 +16,10 @@ CACHEPOOL_DIR := $(shell git rev-parse --show-toplevel 2>/dev/null || echo $$CAC
 SOFTWARE_DIR ?= ${CACHEPOOL_DIR}/software
 
 # Host compilers (for DPI, simulators, tools)
-CXX ?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
-CC  ?= /usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
-CXX_PATH ?= $(shell realpath -P $(CXX))
-CC_PATH  ?= $(shell realpath -P $(CC))
-GCC_LIB  ?= /usr/pack/gcc-11.2.0-af/linux-x64/lib64
+CXX_PATH ?= $(shell command -v $(CXX))
+CC_PATH  ?= $(shell command -v $(CC))
+# Runtime library directory of CXX (rpath of the simulation DPI libraries)
+GCC_LIB  ?= $(dir $(realpath $(shell $(CXX) -print-file-name=libstdc++.so)))
 
 # Tools
 CMAKE  ?= cmake-3.28.3
