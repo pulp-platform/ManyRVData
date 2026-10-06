@@ -62,15 +62,10 @@ endpoints:
     mgr_port_protocol:
       - "wide_in"
   # Address windows are contiguous by channel ID and independent of placement.
-  # HBM0 also handles peripheral traffic (demuxed at cluster output)
   - name: "hbm0"
     addr_range:
-      - start: 0x0000_0000
-        end: 0x7FFF_FFFF
       - start: 0x8000_0000
         end: 0x83FF_FFFF
-      - start: 0xC000_0000
-        end: 0xFFFF_FFFF
     sbr_port_protocol:
       - "wide_out"
   - name: "hbm1"
@@ -91,10 +86,16 @@ endpoints:
         end: 0x8FFF_FFFF
     sbr_port_protocol:
       - "wide_out"
+  # HBM4 sits on the West chimney at gy=0 and also carries peripheral traffic
+  # (demuxed at cluster output; see L2PeriphChannel in cachepool_cluster.sv).
   - name: "hbm4"
     addr_range:
+      - start: 0x0000_0000
+        end: 0x7FFF_FFFF
       - start: 0x9000_0000
         end: 0x93FF_FFFF
+      - start: 0xC000_0000
+        end: 0xFFFF_FFFF
     sbr_port_protocol:
       - "wide_out"
   - name: "hbm5"
@@ -180,69 +181,71 @@ connections:
     - [0, 3]
     dst_dir: "Eject"
   # Listed in channel order; each comment names the group served and the hop
-  # count. West/East carry the edge-column channels (gx=0: 0,4,8,12;
-  # gx=3: 3,7,11,15), North/South the interior-column ones.
-  - src: "hbm0"        # group 0  (0,0), 1 hop
-    dst: "group_router"
-    dst_idx: [0, 0]
-    dst_dir: "West"
-  - src: "hbm1"        # group 1  (1,0), 2 hops via group 0
+  # count. One aligned block of four channels per edge, because four adjacent
+  # channels share one controller IP: South 0-3 (left to right), West 4-7
+  # (bottom to top), East 8-11 (bottom to top), North 12-15 (left to right).
+  # Every channel is 1 hop from the group it attaches to.
+  - src: "hbm0"        # South edge, group 0 (0,0), 1 hop
     dst: "group_router"
     dst_idx: [0, 0]
     dst_dir: "South"
-  - src: "hbm2"        # group 2  (2,0), 2 hops via group 3
-    dst: "group_router"
-    dst_idx: [3, 0]
-    dst_dir: "South"
-  - src: "hbm3"        # group 3  (3,0), 1 hop
-    dst: "group_router"
-    dst_idx: [3, 0]
-    dst_dir: "East"
-  - src: "hbm4"        # group 4  (0,1), 1 hop
-    dst: "group_router"
-    dst_idx: [0, 1]
-    dst_dir: "West"
-  - src: "hbm5"        # group 5  (1,1), 2 hops via group 1
+  - src: "hbm1"        # South edge, group 1 (1,0), 1 hop
     dst: "group_router"
     dst_idx: [1, 0]
     dst_dir: "South"
-  - src: "hbm6"        # group 6  (2,1), 2 hops via group 2
+  - src: "hbm2"        # South edge, group 2 (2,0), 1 hop
     dst: "group_router"
     dst_idx: [2, 0]
     dst_dir: "South"
-  - src: "hbm7"        # group 7  (3,1), 1 hop
+  - src: "hbm3"        # South edge, group 3 (3,0), 1 hop
     dst: "group_router"
-    dst_idx: [3, 1]
-    dst_dir: "East"
-  - src: "hbm8"        # group 8  (0,2), 1 hop
+    dst_idx: [3, 0]
+    dst_dir: "South"
+  - src: "hbm4"        # West edge, group 0 (0,0), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "West"
+  - src: "hbm5"        # West edge, group 4 (0,1), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 1]
+    dst_dir: "West"
+  - src: "hbm6"        # West edge, group 8 (0,2), 1 hop
     dst: "group_router"
     dst_idx: [0, 2]
     dst_dir: "West"
-  - src: "hbm9"        # group 9  (1,2), 2 hops via group 13
-    dst: "group_router"
-    dst_idx: [1, 3]
-    dst_dir: "North"
-  - src: "hbm10"       # group 10 (2,2), 2 hops via group 14
-    dst: "group_router"
-    dst_idx: [2, 3]
-    dst_dir: "North"
-  - src: "hbm11"       # group 11 (3,2), 1 hop
-    dst: "group_router"
-    dst_idx: [3, 2]
-    dst_dir: "East"
-  - src: "hbm12"       # group 12 (0,3), 1 hop
+  - src: "hbm7"        # West edge, group 12 (0,3), 1 hop
     dst: "group_router"
     dst_idx: [0, 3]
     dst_dir: "West"
-  - src: "hbm13"       # group 13 (1,3), 2 hops via group 12
+  - src: "hbm8"        # East edge, group 3 (3,0), 1 hop
     dst: "group_router"
-    dst_idx: [0, 3]
-    dst_dir: "North"
-  - src: "hbm14"       # group 14 (2,3), 2 hops via group 15
+    dst_idx: [3, 0]
+    dst_dir: "East"
+  - src: "hbm9"        # East edge, group 7 (3,1), 1 hop
     dst: "group_router"
-    dst_idx: [3, 3]
-    dst_dir: "North"
-  - src: "hbm15"       # group 15 (3,3), 1 hop
+    dst_idx: [3, 1]
+    dst_dir: "East"
+  - src: "hbm10"       # East edge, group 11 (3,2), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 2]
+    dst_dir: "East"
+  - src: "hbm11"       # East edge, group 15 (3,3), 1 hop
     dst: "group_router"
     dst_idx: [3, 3]
     dst_dir: "East"
+  - src: "hbm12"       # North edge, group 12 (0,3), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 3]
+    dst_dir: "North"
+  - src: "hbm13"       # North edge, group 13 (1,3), 1 hop
+    dst: "group_router"
+    dst_idx: [1, 3]
+    dst_dir: "North"
+  - src: "hbm14"       # North edge, group 14 (2,3), 1 hop
+    dst: "group_router"
+    dst_idx: [2, 3]
+    dst_dir: "North"
+  - src: "hbm15"       # North edge, group 15 (3,3), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 3]
+    dst_dir: "North"

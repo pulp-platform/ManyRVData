@@ -605,18 +605,24 @@ module cachepool_cluster
     initial assert (NumL2Channel == NumHbmWestEast || NumL2Channel == NumHbmAllSides)
       else $fatal(1, "NumL2Channel must equal the West/East or all-sides chimney count.");
 
-    // Same-ID placement: reassigns channel ID <-> physical port so each group
-    // reaches the channel carrying its own ID in 1 hop (edge columns) or 2
-    // hops (interior columns), the fairest achievable spread. Selected when
-    // there is exactly one channel per group; else linear placement. Two mesh
-    // shapes qualify: the 4x4 all-sides layout (16ch/16g) and any 2-column
-    // West/East layout (4ch/4g), where both columns touch an edge.
+    // Two-column West/East same-ID placement: reassigns channel ID <->
+    // physical port so each group reaches the channel carrying its own ID in
+    // 1 hop. Applies to the 4ch/4g layout, where both columns touch an edge;
+    // else linear placement. The all-sides layout uses the side-contiguous
+    // scheme below instead, which is not same-ID.
     // SAM and address scrambling are unaffected either way.
     localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups);
-    // Only a 4x4 mesh has exactly as many boundary ports as groups, which is
-    // what lets every group own a distinct nearby channel. The North/South
-    // channel IDs below are written for that mapping only, so reject any other
-    // mesh shape that asks for all-sides chimneys rather than mis-wiring it.
+    // All-sides placement packs one aligned block of channels per mesh edge:
+    // four adjacent channels share one controller IP and cannot be split
+    // across edges. Order within a side follows the floorplan.
+    localparam int unsigned HbmPerSide = NumHbmAllSides / 4;
+    // The peripheral demux stays on the West chimney at gy=0 -- the corner
+    // next to group 0 -- so its channel ID follows the placement.
+    localparam int unsigned L2PeriphChannel =
+      (NumL2Channel == NumHbmAllSides) ? HbmPerSide : 0;
+    // The side-contiguous IDs below assume four channels per edge on a 4x4
+    // mesh, so reject any other mesh shape asking for all-sides chimneys
+    // rather than mis-wiring it.
     initial assert (NumL2Channel != NumHbmAllSides || (NumGroupsX == 4 && NumGroupsY == 4))
       else $fatal(1, "All-sides HBM placement is only implemented for a 4x4 group mesh.");
     // West/East same-ID needs both columns on an edge, i.e. exactly 2 columns.
@@ -656,8 +662,12 @@ module cachepool_cluster
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
-      // Same-ID: the attached group's own ID (4x4: 0,4,8,12; 2x2: 0,2).
-      localparam int unsigned HbmIdx = !L2SameIdPlacement ? gy : gy * NumGroupsX;
+      // All-sides: West owns HbmPerSide..2*HbmPerSide-1, bottom to top
+      // (4x4: 4,5,6,7). Two-column same-ID keeps the group's own ID (2x2: 0,2).
+      localparam int unsigned HbmIdx =
+        (NumL2Channel == NumHbmAllSides) ? HbmPerSide + gy :
+        !L2SameIdPlacement               ? gy              :
+                                           gy * NumGroupsX;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
       // Chimney subordinate port ↔ REQRSP bundle bridge
@@ -749,12 +759,15 @@ module cachepool_cluster
       // miss/request info lives in refill_user_t, not in arrival order.
       // Each path still has its own reqrsp_to_axi so the user-field FIFO
       // stays in-order per path and refill_user_t is preserved end-to-end.
-      if (HbmIdx == 0) begin : gen_hbm0_demux
+      if (HbmIdx == L2PeriphChannel) begin : gen_hbm0_demux
 
-        // Address-based select: DRAM = port 0, Peripheral = port 1
+        // Address-based select: DRAM = port 0, Peripheral = port 1. The
+        // window is this chimney's own channel slice: under all-sides
+        // placement that is channel L2PeriphChannel, not channel 0.
+        localparam int unsigned HbmChBase = DramAddr + HbmIdx * DramPerChSize;
         logic hbm0_reqrsp_sel;
-        assign hbm0_reqrsp_sel = !((hbm_reqrsp_req.q.addr >= DramAddr) &&
-                                    (hbm_reqrsp_req.q.addr <  DramAddr + DramPerChSize));
+        assign hbm0_reqrsp_sel = !((hbm_reqrsp_req.q.addr >= HbmChBase) &&
+                                    (hbm_reqrsp_req.q.addr <  HbmChBase + DramPerChSize));
 
         cache_trans_req_t  [1:0] hbm0_demux_req;
         cache_trans_rsp_t  [1:0] hbm0_demux_rsp;
@@ -843,8 +856,8 @@ module cachepool_cluster
           .axi_rsp_i    ( hbm0_dram_axi_rsp  )
         );
 
-        assign wide_axi_slv_req[0] = hbm0_dram_axi_req;
-        assign hbm0_dram_axi_rsp   = wide_axi_slv_rsp[0];
+        assign wide_axi_slv_req[HbmIdx] = hbm0_dram_axi_req;
+        assign hbm0_dram_axi_rsp        = wide_axi_slv_rsp[HbmIdx];
 
 
         // Port 1: Non-DRAM — revert VA back to PA, then DW convert to 32b
@@ -925,9 +938,12 @@ module cachepool_cluster
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_east
-      // Same-ID: the attached group's own ID (4x4: 3,7,11,15; 2x2: 1,3).
-      localparam int unsigned HbmIdx = !L2SameIdPlacement ? NumGroupsY + gy :
-        gy * NumGroupsX + NumGroupsX - 1;
+      // All-sides: East owns 2*HbmPerSide..3*HbmPerSide-1, bottom to top
+      // (4x4: 8,9,10,11). Two-column same-ID keeps the group's own ID (2x2: 1,3).
+      localparam int unsigned HbmIdx =
+        (NumL2Channel == NumHbmAllSides) ? 2 * HbmPerSide + gy          :
+        !L2SameIdPlacement               ? NumGroupsY + gy              :
+                                           gy * NumGroupsX + NumGroupsX - 1;
       localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
       // Chimney subordinate port ↔ REQRSP bundle bridge
@@ -1043,19 +1059,15 @@ module cachepool_cluster
 
     // --------------------------------------------------
     // North/South HBM ejection points (16ch only), mirroring gen_hbm_east
-    // (no demux: HbmIdx==0 always lands in gen_hbm_west).
+    // (no demux: L2PeriphChannel always lands in gen_hbm_west at gy=0).
     // --------------------------------------------------
 
     if (NumL2Channel == NumHbmAllSides) begin : gen_hbm_north_south
 
       for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_hbm_north
-        // Same-ID: no interior-column group touches an edge, so North serves
-        // the interior-column group one hop in -- outer columns reach
-        // sideways, inner columns reach down (gx 0,1,2,3 -> channel 13,9,10,14).
-        localparam int unsigned HbmIdx =
-          (gx == 0)            ? (NumGroupsY-1) * NumGroupsX + 1              :
-          (gx == NumGroupsX-1) ? (NumGroupsY-1) * NumGroupsX + NumGroupsX - 2 :
-                                 (NumGroupsY-2) * NumGroupsX + gx;
+        // North owns the top aligned block, left to right
+        // (gx 0,1,2,3 -> channel 12,13,14,15).
+        localparam int unsigned HbmIdx = 3 * HbmPerSide + gx;
         localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
         // Chimney subordinate port ↔ REQRSP bundle bridge
@@ -1170,12 +1182,9 @@ module cachepool_cluster
       end
 
       for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_hbm_south
-        // Same-ID: mirror of North -- outer columns reach sideways, inner
-        // columns reach up (gx 0,1,2,3 -> channel 1,5,6,2).
-        localparam int unsigned HbmIdx =
-          (gx == 0)            ? 1              :
-          (gx == NumGroupsX-1) ? NumGroupsX - 2 :
-                                 NumGroupsX + gx;
+        // South owns the bottom aligned block, left to right
+        // (gx 0,1,2,3 -> channel 0,1,2,3).
+        localparam int unsigned HbmIdx = gx;
         localparam int unsigned HbmEndpointId = NumGroups + HbmIdx;
 
         // Chimney subordinate port ↔ REQRSP bundle bridge

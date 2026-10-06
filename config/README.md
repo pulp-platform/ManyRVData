@@ -47,6 +47,7 @@ Named `floonoc/floonoc_cachepool_<groups>g_<channels>ch[_<variant>].yml`.
 | --- | --- |
 | `floonoc_cachepool_4g_4ch.yml` | 2x2 mesh, 4 HBM channels on West/East, same-ID placement |
 | `floonoc_cachepool_16g_8ch.yml` | 4x4 mesh, 8 HBM channels on West/East |
+| `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels, one aligned block of 4 per edge: South 0-3, West 4-7, East 8-11, North 12-15 |
 | `floonoc_cachepool_16g_8ch_tiny.yml` | 4x4 mesh, 8 HBM channels, reduced widths |
 | `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels on all four sides, same-ID placement |
 
