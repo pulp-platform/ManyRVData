@@ -11,6 +11,10 @@
 
 export INSTALL_DIR=/home/dishen/cachepool-32b/install
 
+# Host compilers (DPI, fesvr, DRAMSys); the Makefile otherwise uses cc/g++ from PATH.
+export CC=/usr/pack/gcc-11.2.0-af/linux-x64/bin/gcc
+export CXX=/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
+
 # Python deps for hardware code generation (make generate) - venv instead of uv,
 # to match the existing local dev flow.
 # python3.12 (not the default python3) is required: floogen needs Python >=3.10.
