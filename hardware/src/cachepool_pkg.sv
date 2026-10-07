@@ -158,6 +158,11 @@ package cachepool_pkg;
   // NOTE: these are used by AXI/L2 as well, keep here but ordered as "cluster-level cache topology"
   localparam int unsigned NumL1CacheCtrl      = NumCC;
   localparam int unsigned NumL1CtrlTile       = NumL1CacheCtrl / NumTiles;
+  // L1D_PRIVATE layout: PARTITION holds 0..NumL1CtrlTile, GROUP_FOLD sits
+  // immediately above, so both move with the controller count.
+  localparam int unsigned L1PrivPartWidth     = $clog2(NumL1CtrlTile) + 1;
+  localparam int unsigned L1PrivFoldBit       = L1PrivPartWidth;
+  localparam int unsigned L1PrivWidth         = L1PrivFoldBit + 1;
 
   // Number of data banks assigned to each cache controller
   localparam int unsigned NumDataBankPerCtrl  = (L1LineWidth / SpatzDataWidth) * L1AssoPerCtrl * L1BankFactor;

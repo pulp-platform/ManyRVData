@@ -183,7 +183,7 @@ module cachepool_tile
     input  logic                                          icache_prefetch_enable_i,
     input  logic              [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_i,
     input  cache_insn_t                                   l1d_insn_i,
-    input  logic              [$clog2(NumL1CtrlTile):0]   l1d_private_i,
+    input  logic              [L1PrivWidth-1:0]           l1d_private_i,
     input  logic                                          l1d_insn_valid_i,
     output logic                                          l1d_insn_ready_o,
     input  logic                                          l1d_busy_i,
@@ -211,6 +211,15 @@ module cachepool_tile
   // TODO: Should be imported from Memory-mapped Reg
   logic   [$clog2(NumL1CtrlTile):0] num_private_cache;
   assign num_private_cache = l1d_private_i  [$clog2(NumL1CtrlTile):0];
+  // The register's GROUP_FOLD bit must sit above the PARTITION field, or the
+  // two would overlap. Widen both the hjson field and L1PrivPartWidth together.
+  initial assert (L1PrivFoldBit >= $clog2(NumL1CtrlTile) + 1)
+    else $fatal(1, "L1D_PRIVATE: PARTITION field overlaps GROUP_FOLD bit.");
+
+  // L1D_PRIVATE.GROUP_FOLD: fold the private partition across the
+  // group. Only meaningful when every bank is private; ignored otherwise.
+  logic                             group_fold;
+  assign group_fold        = l1d_private_i[L1PrivFoldBit];
 
   /// Minimum width to hold the core number.
   // localparam int unsigned CoreIDWidth       = cf_math_pkg::idx_width(NumCC);
@@ -622,7 +631,11 @@ module cachepool_tile
               default: '0
             },
             p_valid: remote_group_rsp_i[flat].p_valid,
-            q_ready: remote_group_rsp_i[flat].q_ready,
+            // Gated with the same condition as the outgoing q_valid above:
+            // suppressing valid while leaving ready through would let the
+            // interco retire a request the NoC never saw, dropping it and the
+            // response the core is waiting for.
+            q_ready: remote_group_rsp_i[flat].q_ready && !l1d_busy_i,
             default: '0
           };
         end
@@ -714,6 +727,7 @@ module cachepool_tile
         .dynamic_offset_i     ( dynamic_offset_q                                   ),
         .private_start_addr_i ( private_start_addr_i                               ),
         .num_private_cache_i  ( num_private_cache                                  ),
+        .group_fold_i         ( group_fold                                         ),
         .core_req_i           ({xbar_remote_group_in_req,     xbar_remote_req_gated,  cache_req        [j]}),
         .core_rsp_ready_i     ({xbar_remote_group_in_pready,  xbar_remote_in_pready,  cache_pready     [j]}),
         .core_rsp_o           ({xbar_remote_group_in_rsp,     xbar_remote_rsp_xbar,   cache_rsp        [j]}),
@@ -744,6 +758,7 @@ module cachepool_tile
         .dynamic_offset_i     ( dynamic_offset_q                                   ),
         .private_start_addr_i ( private_start_addr_i                               ),
         .num_private_cache_i  ( num_private_cache                                  ),
+        .group_fold_i         ( group_fold                                         ),
         .core_req_i           ({xbar_remote_req_gated,  cache_req        [j]}     ),
         .core_rsp_ready_i     ({xbar_remote_in_pready,  cache_pready     [j]}     ),
         .core_rsp_o           ({xbar_remote_rsp_xbar,   cache_rsp        [j]}     ),
@@ -908,6 +923,7 @@ module cachepool_tile
   //     N = CacheBankBits + TileBits
   localparam int unsigned RefillCacheBankBits = $clog2(NumL1CtrlTile);
   localparam int unsigned RefillTileBits      = $clog2(NumL1CacheCtrl / NumL1CtrlTile);
+  localparam int unsigned RefillLocalTileBits = $clog2(NumTilesPerGroup);
   localparam int unsigned RefillRotWidth      = $clog2(RefillCacheBankBits + RefillTileBits + 1) + 1;
 
   localparam NumWordPerLine = L1LineWidth / DataWidth;
@@ -1167,23 +1183,13 @@ module cachepool_tile
 
     logic [RefillRotWidth-1:0] refill_bits_to_rotate;
 
-    always_comb begin : refill_rot_sel
-      if (num_private_cache == '0) begin
-        // All-shared: every bank is shared.
-        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
-      end else if (num_private_cache == 3'(NumL1CtrlTile)) begin
-        // All-private: every bank is private.
-        refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
-      end else begin
-        // Mixed: use num_private_cache boundary, mirroring gen_scramble in
-        // tcdm_cache_interco.  Banks [0..num_private_cache-1] are private,
-        // banks [num_private_cache..NumL1CtrlTile-1] are shared.
-        if (cb < int'(num_private_cache))
-          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits);
-        else
-          refill_bits_to_rotate = RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
-      end
-    end
+    // Mirrors gen_scramble in tcdm_cache_interco: banks below the boundary are
+    // private and rotate BankSel only, the rest also rotate TileID. cb is a
+    // genvar constant, so this covers all-private and all-shared as well.
+    assign refill_bits_to_rotate = (cb < int'(num_private_cache))
+          ? (group_fold ? RefillRotWidth'(RefillCacheBankBits + RefillLocalTileBits)
+                        : RefillRotWidth'(RefillCacheBankBits))
+          : RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
 
     always_comb begin : bank_addr_scramble
       cache_refill_req_o[cb].q = '{

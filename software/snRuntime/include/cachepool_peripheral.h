@@ -110,14 +110,15 @@ extern "C" {
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x40
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_BIT 0
 
-// Number of private banks configured per tile
+// L1D partitioning: private bank count and how it is folded
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x44
-#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_MASK 0xf
-#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_OFFSET 0
-#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_FIELD                          \
-  ((bitfield_field32_t){.mask = CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_MASK,  \
-                        .index =                                               \
-                            CACHEPOOL_PERIPHERAL_L1D_PRIVATE_NUMBER_OFFSET})
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_MASK 0x7
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_OFFSET 0
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_FIELD                       \
+  ((bitfield_field32_t){                                                       \
+      .mask = CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_MASK,                 \
+      .index = CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_OFFSET})
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_GROUP_FOLD_BIT 3
 
 // Starting address of private L1D partition
 #define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x48

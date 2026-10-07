@@ -48,6 +48,16 @@ uint32_t snrt_cluster_tile_idx() {
     return snrt_cluster_core_idx() / cpt;
 }
 
+uint32_t snrt_cluster_group_num() {
+    uint32_t n = SNRT_BOOT_GROUP_COUNT;
+    return n ? n : 1;
+}
+
+uint32_t snrt_cluster_group_idx() {
+    uint32_t tpg = snrt_cluster_tile_num() / snrt_cluster_group_num();
+    return tpg ? snrt_cluster_tile_idx() / tpg : 0;
+}
+
 uint32_t snrt_cluster_core_idx() { return _snrt_core_idx; }
 
 int snrt_cluster_is_primary() {

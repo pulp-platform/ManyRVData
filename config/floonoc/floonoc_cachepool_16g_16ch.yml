@@ -1,0 +1,251 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
+# Author: Diyou Shen, ETH Zurich
+
+# FlooNoC topology for CachePool 16-group (4x4 mesh) with AXI-only links.
+# 16-channel variant of floonoc_cachepool_16g_8ch.yml: HBM chimneys on all four
+# mesh sides instead of West/East only, giving each group more parallel refill
+# bandwidth. Channel IDs are placed so group K reaches channel K in as few hops
+# as possible ("same-ID placement"); the address window of a channel does not
+# depend on where it sits. Selected by the Makefile whenever l2_channel ==
+# num_groups, and must match cachepool_cluster.sv's HbmIdx assignment.
+#
+# Wide channel: dCache refill (512b data)
+#
+# Ring layout (outer = channel, inner = group, gy=3 on top):
+#    X  13  9 10 14  X
+#   12  12 13 14 15  15
+#    8   8  9 10 11  11
+#    4   4  5  6  7   7
+#    0   0  1  2  3   3
+#    X   1  5  6  2   X
+# Edge-column groups (gx=0,3) reach their channel in 1 hop, interior-column
+# groups in 2 -- the lowest achievable maximum.
+# Peripheral traffic routed through hbm0 chimney (demuxed at cluster output)
+#
+# Width calculation notes (for cachepool_fpu_16g config, 4 tiles/group):
+#   wide_in  id_width  = GroupWideIdWidth + 1 = TileAxiIdWidth + clog2(4) + 1 + 1 = 7
+#   wide_out id_width  = SpatzAxiIdOutWidth = clog2(32*2) = 6
+#   user_width         = SpatzAxiUserWidth = axi_user_width + clog2(NumTiles) = 17 + 6 = 23
+#   HBM per-channel    = DramSize / l2_channel = 0x4000_0000 / 16 = 0x0400_0000
+#   DRAM total: 0x8000_0000 - 0xBFFF_FFFF (1 GB)
+
+name: cachepool
+description: "CachePool AXI NoC - 16 groups, 16 HBM channels"
+network_type: "axi"
+
+routing:
+  route_algo: "SRC"
+  use_id_table: true
+
+protocols:
+  - name: "wide_in"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 7
+    user_width: 23
+  - name: "wide_out"
+    type: "wide"
+    protocol: "AXI4"
+    data_width: 512
+    addr_width: 32
+    id_width: 6
+    user_width: 23
+
+endpoints:
+  - name: "group"
+    array: [4, 4]
+    mgr_port_protocol:
+      - "wide_in"
+  # Address windows are contiguous by channel ID and independent of placement.
+  - name: "hbm0"
+    addr_range:
+      - start: 0x8000_0000
+        end: 0x83FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm1"
+    addr_range:
+      - start: 0x8400_0000
+        end: 0x87FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm2"
+    addr_range:
+      - start: 0x8800_0000
+        end: 0x8BFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm3"
+    addr_range:
+      - start: 0x8C00_0000
+        end: 0x8FFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  # HBM4 sits on the West chimney at gy=0 and also carries peripheral traffic
+  # (demuxed at cluster output; see L2PeriphChannel in cachepool_cluster.sv).
+  - name: "hbm4"
+    addr_range:
+      - start: 0x0000_0000
+        end: 0x7FFF_FFFF
+      - start: 0x9000_0000
+        end: 0x93FF_FFFF
+      - start: 0xC000_0000
+        end: 0xFFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm5"
+    addr_range:
+      - start: 0x9400_0000
+        end: 0x97FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm6"
+    addr_range:
+      - start: 0x9800_0000
+        end: 0x9BFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm7"
+    addr_range:
+      - start: 0x9C00_0000
+        end: 0x9FFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm8"
+    addr_range:
+      - start: 0xA000_0000
+        end: 0xA3FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm9"
+    addr_range:
+      - start: 0xA400_0000
+        end: 0xA7FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm10"
+    addr_range:
+      - start: 0xA800_0000
+        end: 0xABFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm11"
+    addr_range:
+      - start: 0xAC00_0000
+        end: 0xAFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm12"
+    addr_range:
+      - start: 0xB000_0000
+        end: 0xB3FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm13"
+    addr_range:
+      - start: 0xB400_0000
+        end: 0xB7FF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm14"
+    addr_range:
+      - start: 0xB800_0000
+        end: 0xBBFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+  - name: "hbm15"
+    addr_range:
+      - start: 0xBC00_0000
+        end: 0xBFFF_FFFF
+    sbr_port_protocol:
+      - "wide_out"
+
+routers:
+  - name: "group_router"
+    array: [4, 4]
+    degree: 5
+
+connections:
+  - src: "group"
+    dst: "group_router"
+    src_range:
+    - [0, 3]
+    - [0, 3]
+    dst_range:
+    - [0, 3]
+    - [0, 3]
+    dst_dir: "Eject"
+  # Listed in channel order; each comment names the group served and the hop
+  # count. One aligned block of four channels per edge, because four adjacent
+  # channels share one controller IP: South 0-3 (left to right), West 4-7
+  # (bottom to top), East 8-11 (bottom to top), North 12-15 (left to right).
+  # Every channel is 1 hop from the group it attaches to.
+  - src: "hbm0"        # South edge, group 0 (0,0), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "South"
+  - src: "hbm1"        # South edge, group 1 (1,0), 1 hop
+    dst: "group_router"
+    dst_idx: [1, 0]
+    dst_dir: "South"
+  - src: "hbm2"        # South edge, group 2 (2,0), 1 hop
+    dst: "group_router"
+    dst_idx: [2, 0]
+    dst_dir: "South"
+  - src: "hbm3"        # South edge, group 3 (3,0), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 0]
+    dst_dir: "South"
+  - src: "hbm4"        # West edge, group 0 (0,0), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 0]
+    dst_dir: "West"
+  - src: "hbm5"        # West edge, group 4 (0,1), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 1]
+    dst_dir: "West"
+  - src: "hbm6"        # West edge, group 8 (0,2), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 2]
+    dst_dir: "West"
+  - src: "hbm7"        # West edge, group 12 (0,3), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 3]
+    dst_dir: "West"
+  - src: "hbm8"        # East edge, group 3 (3,0), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 0]
+    dst_dir: "East"
+  - src: "hbm9"        # East edge, group 7 (3,1), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 1]
+    dst_dir: "East"
+  - src: "hbm10"       # East edge, group 11 (3,2), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 2]
+    dst_dir: "East"
+  - src: "hbm11"       # East edge, group 15 (3,3), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 3]
+    dst_dir: "East"
+  - src: "hbm12"       # North edge, group 12 (0,3), 1 hop
+    dst: "group_router"
+    dst_idx: [0, 3]
+    dst_dir: "North"
+  - src: "hbm13"       # North edge, group 13 (1,3), 1 hop
+    dst: "group_router"
+    dst_idx: [1, 3]
+    dst_dir: "North"
+  - src: "hbm14"       # North edge, group 14 (2,3), 1 hop
+    dst: "group_router"
+    dst_idx: [2, 3]
+    dst_dir: "North"
+  - src: "hbm15"       # North edge, group 15 (3,3), 1 hop
+    dst: "group_router"
+    dst_idx: [3, 3]
+    dst_dir: "North"

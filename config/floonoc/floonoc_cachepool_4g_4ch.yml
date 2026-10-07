@@ -76,17 +76,21 @@ connections:
     - [0, 1]
     - [0, 1]
     dst_dir: "Eject"
-  # HBM West (hbm0 at [0,0], hbm1 at [0,1])
+  # Same-ID placement: channel K sits next to group K (g = gy*2 + gx), so
+  # every group reaches its own channel in one hop.
+  #   hbm2  G2 G3  hbm3
+  #   hbm0  G0 G1  hbm1
+  # HBM West (hbm0 at [0,0], hbm2 at [0,1])
   - src: "hbm0"
     dst: "group_router"
     dst_idx: [0, 0]
     dst_dir: "West"
-  - src: "hbm1"
+  - src: "hbm2"
     dst: "group_router"
     dst_idx: [0, 1]
     dst_dir: "West"
-  # HBM East (hbm2 at [1,0], hbm3 at [1,1])
-  - src: "hbm2"
+  # HBM East (hbm1 at [1,0], hbm3 at [1,1])
+  - src: "hbm1"
     dst: "group_router"
     dst_idx: [1, 0]
     dst_dir: "East"

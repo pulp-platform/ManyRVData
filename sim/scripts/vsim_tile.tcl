@@ -35,8 +35,9 @@ for {set c 0}  {$c < 4} {incr c} {
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group meta_ctrl1	${cache_path}/i_insitu_cache_tcdm_wrapper/gen_cache_banks[1]/i_access_ctrl_for_meta/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group meta_ctrl2	${cache_path}/i_insitu_cache_tcdm_wrapper/gen_cache_banks[2]/i_access_ctrl_for_meta/*
 	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group meta_ctrl3	${cache_path}/i_insitu_cache_tcdm_wrapper/gen_cache_banks[3]/i_access_ctrl_for_meta/*
-	
-	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group Internal   ${cache_path}/*
+	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group decoder			${cache_path}/i_insitu_cache_tcdm_wrapper/i_insitu_cache_core/i_insitu_cache_decoder/*
+	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group encoder			${cache_path}/i_insitu_cache_tcdm_wrapper/i_insitu_cache_core/i_insitu_cache_encoder/*
+	add wave -noupdate -group ${parent_grp} -group tile[$1] -group cache[$c] -group Internal   	${cache_path}/*
 }
 
 for {set c 0} {$c < $NUM_XBARS} {incr c} {

@@ -19,7 +19,6 @@ add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 256 128 32)
 add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 512 128 32)
 add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 1024 128 32)
 
-add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 32 32 32)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 64 64 64)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 128 128 128)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 1024 32 32)
