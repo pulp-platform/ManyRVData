@@ -21,7 +21,10 @@ export CXX=/usr/pack/gcc-11.2.0-af/linux-x64/bin/g++
 PYTHON=python3.12
 export PYTHON
 $PYTHON -m venv cachepool
-source cachepool/bin/activate
+VIRTUAL_ENV_DISABLE_PROMPT=1 source cachepool/bin/activate
+_OLD_VIRTUAL_PS1="${PS1:-}"
+PS1="${VIRTUAL_ENV_PROMPT}${PS1:-}"
+export PS1
 python3 -m pip install --quiet --upgrade pip
 python3 -m pip install --quiet -r requirements.txt
 

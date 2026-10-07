@@ -284,63 +284,69 @@ VLOG_FLAGS += -64
 # Compile-time definitions
 # ------------------------
 
-VLOG_DEFS = -DCACHEPOOL
+CACHEPOOL_DEFS  = -DCACHEPOOL
 
 # Cluster configuration
-VLOG_DEFS += -DNUM_GROUPS=$(num_groups)
-VLOG_DEFS += -DNUM_GROUPS_X=$(num_groups_x)
-VLOG_DEFS += -DNUM_TILES=$(num_tiles)
-VLOG_DEFS += -DNUM_CORES=$(num_cores)
-VLOG_DEFS += -DDATA_WIDTH=$(data_width)
-VLOG_DEFS += -DADDR_WIDTH=$(addr_width)
-VLOG_DEFS += -DNUM_BARRIER_SLOTS=$(num_barrier_slots)
+CACHEPOOL_DEFS += -DNUM_GROUPS=$(num_groups)
+CACHEPOOL_DEFS += -DNUM_GROUPS_X=$(num_groups_x)
+CACHEPOOL_DEFS += -DNUM_TILES=$(num_tiles)
+CACHEPOOL_DEFS += -DNUM_CORES=$(num_cores)
+CACHEPOOL_DEFS += -DDATA_WIDTH=$(data_width)
+CACHEPOOL_DEFS += -DADDR_WIDTH=$(addr_width)
+CACHEPOOL_DEFS += -DNUM_BARRIER_SLOTS=$(num_barrier_slots)
 
 # Tile configuration
-VLOG_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
+CACHEPOOL_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 
 # L1 Data Cache
-VLOG_DEFS += -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
-VLOG_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
-VLOG_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
-VLOG_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
-VLOG_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
-VLOG_DEFS += -DL1D_DEPTH=$(l1d_depth)
+CACHEPOOL_DEFS += -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
+CACHEPOOL_DEFS += -DL1D_COAL_WINDOW=$(l1d_coal_window)
+CACHEPOOL_DEFS += -DL1D_NUM_WAY=$(l1d_num_way)
+CACHEPOOL_DEFS += -DL1D_TAG_DATA_WIDTH=$(l1d_tag_data_width)
+CACHEPOOL_DEFS += -DL1D_NUM_BANKS=$(l1d_num_banks)
+CACHEPOOL_DEFS += -DL1D_DEPTH=$(l1d_depth)
 # L1 data-bank micro-architecture knobs (1=on/0=off). Production = folded(1) +
 # hash-way(1) + fwd-buffer(1). Unfolded conventional = folded(0)+hash(0)+fwd(0).
-VLOG_DEFS += -DL1D_USE_FOLDED=$(l1d_use_folded)
-VLOG_DEFS += -DL1D_FOLD_WAY_GROUP=$(l1d_fold_way_group)
-VLOG_DEFS += -DL1D_USE_HASH_WAY=$(l1d_use_hash_way)
-VLOG_DEFS += -DL1D_USE_FWD_BUF=$(l1d_use_fwd_buf)
+CACHEPOOL_DEFS += -DL1D_USE_FOLDED=$(l1d_use_folded)
+CACHEPOOL_DEFS += -DL1D_FOLD_WAY_GROUP=$(l1d_fold_way_group)
+CACHEPOOL_DEFS += -DL1D_USE_HASH_WAY=$(l1d_use_hash_way)
+CACHEPOOL_DEFS += -DL1D_USE_FWD_BUF=$(l1d_use_fwd_buf)
 
 # CachePool CC / core cluster
-VLOG_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
-VLOG_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
-VLOG_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
-VLOG_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
-VLOG_DEFS += -DNUM_SCALAR_PER_CC=$(num_scalar_per_core)
+CACHEPOOL_DEFS += -DSPATZ_NUM_FPU=$(spatz_num_fpu)
+CACHEPOOL_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
+CACHEPOOL_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
+CACHEPOOL_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
+CACHEPOOL_DEFS += -DNUM_SCALAR_PER_CC=$(num_scalar_per_core)
 ifeq ($(num_scalar_per_core),2)
-VLOG_DEFS += -DCACHEPOOL_DUAL_CC
+CACHEPOOL_DEFS += -DCACHEPOOL_DUAL_CC
 endif
-VLOG_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
-VLOG_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
-VLOG_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
+CACHEPOOL_DEFS += -DLG_PORT_PER_CORE=$(num_lg_ports_per_core)
+CACHEPOOL_DEFS += -DRG_PORT_PER_CORE=$(num_rg_ports_per_core)
+CACHEPOOL_DEFS += -DNOC_PORT_PER_TILE=$(num_noc_ports_per_tile)
 
 # AXI configuration
-VLOG_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
+CACHEPOOL_DEFS += -DAXI_USER_WIDTH=$(axi_user_width)
 
 # L2 / main memory
-VLOG_DEFS += -DL2_CHANNEL=$(l2_channel)
-VLOG_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
-VLOG_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
-# DRAM type string for DRAMSys (passed as a quoted SV string literal)
-VLOG_DEFS += -DDRAM_TYPE='"$(dram_type)"'
+CACHEPOOL_DEFS += -DL2_CHANNEL=$(l2_channel)
+CACHEPOOL_DEFS += -DL2_BANK_WIDTH=$(l2_bank_width)
+CACHEPOOL_DEFS += -DL2_INTERLEAVE=$(l2_interleave)
 
 # Stack / SPM (boot_addr, stack_addr, periph_start_addr, uart_addr used by hjson
 # generator via environment; not consumed as SV defines)
-VLOG_DEFS += -DSTACK_HW_SIZE=$(stack_hw_size)
-VLOG_DEFS += -DSTACK_HW_DEPTH=$(stack_hw_depth)
-VLOG_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
-VLOG_DEFS += -DSTACK_TOT_DEPTH=$(stack_tot_depth)
+CACHEPOOL_DEFS += -DSTACK_HW_SIZE=$(stack_hw_size)
+CACHEPOOL_DEFS += -DSTACK_HW_DEPTH=$(stack_hw_depth)
+CACHEPOOL_DEFS += -DSTACK_TOT_SIZE=$(stack_tot_size)
+CACHEPOOL_DEFS += -DSTACK_TOT_DEPTH=$(stack_tot_depth)
+
+# Simulation flow: the hardware configuration above plus testbench-only defines.
+# CACHEPOOL_DEFS is the single source of truth, also consumed by the PD flow
+# (see pd/pd.mk), so new configuration defines only need to be added there.
+VLOG_DEFS  = $(CACHEPOOL_DEFS)
+
+# DRAM type string for DRAMSys (passed as a quoted SV string literal)
+VLOG_DEFS += -DDRAM_TYPE='"$(dram_type)"'
 
 VLOG_DEFS += -DENABLE_SPATZ_REQ_SCOREBOARD
 
@@ -538,6 +544,28 @@ vis4mesh-data:
 	    --slice-cycles $(NOC_VIS_SLICE_CYCLES) --clk-freq $(NOC_VIS_CLK_FREQ); \
 	done
 
+###################
+# Physical Design #
+###################
+
+# The PD flow lives in a separate (internal) repository, cloned into PD_DIR.
+# Its pd.mk is included here so the PD flow sees the full RTL configuration.
+PD_DIR    ?= $(CACHEPOOL_DIR)/pd
+PD_REPO   ?= git@iis-git.ee.ethz.ch:cachepool/cachepool-be/cachepool-tsmc7.git
+PD_COMMIT ?= 46a4f87426644296641beffa22cd6590709e9c80
+
+.PHONY: pd-init
+pd-init:
+	@if [ ! -d $(PD_DIR)/.git ]; then \
+	  git clone --no-checkout $(PD_REPO) $(PD_DIR); \
+	elif ! git -C $(PD_DIR) cat-file -e $(PD_COMMIT)^{commit} 2>/dev/null; then \
+	  git -C $(PD_DIR) fetch origin; \
+	fi
+	git -C $(PD_DIR) checkout $(PD_COMMIT)
+	$(MAKE) pd-cockpit
+
+-include $(PD_DIR)/pd.mk
+
 ########
 # Help #
 ########
@@ -586,6 +614,11 @@ help:
 	@echo "Lint:"
 	@echo ""
 	@echo "*lint*:           run SpyGlass lint (requires bender + SpyGlass in PATH)"
+	@echo ""
+	@echo "Physical design:"
+	@echo ""
+	@echo "*pd-init*:        *ETH Member Only* clone the PD repository into PD_DIR at PD_COMMIT and run its cockpit setup"
+	@echo "*pd-help*:        list the PD targets (available once PD_DIR is populated)"
 	@echo ""
 	@echo "Logs:"
 	@echo ""
