@@ -27,3 +27,5 @@ software/snRuntime/include/snrt_bootinfo.h
 *noc_profiling
 # CI venv (created by iis-env.sh)
 /cachepool
+# Physical design flow
+/pd

@@ -50,8 +50,11 @@ Build the RISC-V toolchains (LLVM + GCC). Spike (`riscv-isa-sim`) is also availa
 make toolchain
 ```
 
+The host compilers (used for DPI, fesvr and DRAMSys) default to `cc`/`g++` from your `PATH`;
+set `CC`/`CXX` in your environment or on the `make` command line to use a different one.
+
 For ETH users, a **pre-built toolchain** is available for faster setup. Source `iis-env.sh`
-to point the toolchain at it and set up the Python venv needed for RTL/config generation:
+to point the toolchain and host compilers at it and set up the Python venv needed for RTL/config generation:
 
 ```bash
 # ETH only: point at a prebuilt toolchain and set up the venv
