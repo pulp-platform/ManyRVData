@@ -99,7 +99,10 @@ module tcdm_cache_interco #(
   /// Configurations-----------------------------------------------------
   /// Dynamic address offset for cache bank selection (= log2 of cacheline size).
   input  logic             [$clog2(AddrWidth)-1:0] dynamic_offset_i,
-  /// Number of private cache banks for this tile. Must be 0, NumCache/2, or NumCache.
+  /// Number of private cache banks for this tile, 0..NumCache. The original
+  /// design allowed only 0, NumCache/2 and NumCache; 1 and NumCache-1 were
+  /// added later and are mapped by folding the bank field with a modulo, so
+  /// non-power-of-two splits distribute lines unevenly by design.
   input  logic                [$clog2(NumCache):0] num_private_cache_i,
   /// Fold the private partition across the group instead of the tile. Only
   /// takes effect when every bank is private; ignored otherwise.
@@ -211,6 +214,14 @@ module tcdm_cache_interco #(
   // Private/shared classification (request side, before xbar)
   // -------------------------------------------------------------------------
 
+  // Assumptions the routing below relies on, so they are checked once here
+  // instead of being re-tested as conditions in the selection chain.
+  // Bare `initial assert`: ASSERT_INIT expands to nothing (INC_ASSERT unset).
+  initial assert (NumTilesPerGroup > 1)
+    else $fatal(1, "tcdm_cache_interco: NumTilesPerGroup must exceed 1; with a single tile per group there is no sibling tile and LocalTileBits would be 0.");
+  initial assert (NumTiles == NumTilesPerGroup || NumRemoteGroupPort > 0)
+    else $fatal(1, "tcdm_cache_interco: a multi-group build (NumTiles > NumTilesPerGroup) needs NumRemoteGroupPort > 0, or cross-group requests have no port to leave on.");
+
   for (genvar inp = 0; inp < NumInp; inp++) begin : gen_is_private
     assign is_private[inp] = (core_req[inp].addr >= private_start_addr_q);
   end
@@ -312,12 +323,11 @@ module tcdm_cache_interco #(
       // degenerate single-tile single-group build, which has no remote ports.
       all_private = (num_private_cache_q == ($clog2(NumCache)+1)'(NumCache));
       all_shared  = (num_private_cache_q == '0);
-      all_local   = all_private || (NumTiles == 1 && NumRemoteGroupPort == 0);
+      all_local   = all_private;
       use_private = all_private || (!all_shared && is_private[port]);
       // A folded private line lives in the tile its local address bits select,
-      // which may not be this one. NumTiles > 1 excludes the single-tile build,
-      // where there is nowhere else to send it.
-      fold_remote = group_fold && (NumTiles > 1)
+      // which may not be this one.
+      fold_remote = group_fold
                   && (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]);
 
       if (use_private && fold_remote) begin
@@ -327,11 +337,10 @@ module tcdm_cache_interco #(
         // and num_private_cache_q is non-zero on both paths that reach here.
         core_req_sel[port] = all_local ? core_sel_t'(addr_bank)
                                        : core_sel_t'(addr_bank % num_private_cache_q);
-      end else if (NumRemoteGroupPort > 0 && !same_group) begin
+      end else if (!same_group) begin
         core_req_sel[port] = core_sel_t'(NumCache + NumLGPort
                                         + (port % NumRemoteGroupPort));
-      end else if (NumTiles > 1
-                   && addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]) begin
+      end else if (addr_tile_id[LocalTileBits-1:0] != tile_id_i[LocalTileBits-1:0]) begin
         core_req_sel[port] = core_sel_t'(NumCache + (port % NumLGPort));
       end else begin
         // Local shared bank. num_shared_cache_q is non-zero here: all_private
@@ -366,8 +375,7 @@ module tcdm_cache_interco #(
       if (mem_rsp[port].user.tile_id != tile_id_i) begin
         // Response originates from a different tile (intra-group remote or
         // inter-group remote).  Determine which input port set it came from.
-        if (NumRemoteGroupPort > 0
-            && rsp_group_id != my_group_id) begin
+        if (rsp_group_id != my_group_id) begin
           // Inter-group: forward to the inter-group remote-in input port.
           mem_rsp_sel[port] = mem_sel_t'(NumCores + NumLGPort
                               + (mem_rsp[port].user.core_id % NumRemoteGroupPort));

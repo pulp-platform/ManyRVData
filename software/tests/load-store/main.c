@@ -56,6 +56,10 @@
 
 // 1 = run a single fold configuration (all-private, fold-group, offset 6) and
 // skip the visibility sub-test, so a waveform covers one case end to end.
+#ifndef LS_FOLD_SWEEP
+#define LS_FOLD_SWEEP 0
+#endif
+
 #ifndef LS_FOLD_MIN
 #define LS_FOLD_MIN 0
 #endif
@@ -80,7 +84,9 @@
 // the first TEST_CLS cachelines of each slice are actually touched, to keep
 // RTL simulation short.
 // A/B/C are placed in the private region; D is placed in the shared region.
-#define LOAD_STORE_TOTAL_ELEMS 262144
+// Smallest size giving every core a slice >= FOLD_BLOCKS*FOLD_STRIDE, so
+// Part 4 stays inside its own window. Keeps the ELF ~1 MB.
+#define LOAD_STORE_TOTAL_ELEMS 65536
 
 // Private region: default boundary puts these addresses in the private partition
 static uint32_t gemm_A_dram[LOAD_STORE_TOTAL_ELEMS]
@@ -174,6 +180,11 @@ static inline void copy_blocks(uint32_t *base, uint32_t *src) {
     stream_copy_vec(base + b * FOLD_STRIDE, src + b * FOLD_BLOCK_ELEMS,
                     FOLD_BLOCK_ELEMS);
   }
+  // vse32.v is posted and Spatz tracks it independently of the scalar core,
+  // so a plain `fence` -- and a hardware barrier, which only syncs cores --
+  // does not drain it. Without this the stores can still be in flight when
+  // the caller flushes or reads back, which looks like a cache bug.
+  snrt_fence_spatz();
 }
 
 static int check_blocks(uint32_t *base, uint32_t *src) {
@@ -323,6 +334,7 @@ int main() {
 
     // All cores copy in parallel into their slice of gemm_A.
     stream_copy_vec(a_ptr, src, test_len);
+  snrt_fence_spatz();
     snrt_cluster_hw_barrier();
 
     l1d_cluster_flush();
@@ -383,6 +395,7 @@ int main() {
 
   // Step 5: write value 3 into gemm_A via shared banks, flush to DRAM.
   stream_copy_vec(a_ptr, c_ptr, test_len);
+  snrt_fence_spatz();
   snrt_cluster_hw_barrier();
   l1d_cluster_flush();
 
@@ -451,6 +464,7 @@ int main() {
 
   // Step 5: write value 2 into gemm_D via private banks, flush to DRAM.
   stream_copy_vec(d_ptr, b_ptr, test_len);
+  snrt_fence_spatz();
   snrt_cluster_hw_barrier();
   l1d_cluster_private_flush(all_tiles);
 
@@ -511,54 +525,49 @@ int main() {
 
   static const uint32_t fold_modes[] = {L1D_FOLD_TILE, L1D_FOLD_GROUP};
   static const char    *fold_names[] = {"fold-tile ", "fold-group"};
-  static const uint32_t offsets[]    = {6, 8};
-  // Each core's blocks live inside its own 4 KiB window.
+  // Each core's blocks live inside its own window.
   const uint32_t region_elems = FOLD_BLOCKS * FOLD_STRIDE;
 
-  // gemm_A is in .pdcp_src (>= boundary) so it is classified private and the
-  // fold applies; gemm_D is in .data (< boundary) and stays shared, which
-  // exercises the unchanged path alongside it in the mixed partition.
-#if LS_FOLD_MIN
-  const uint32_t n_part = 1, n_fold = 1, n_off = 1;
-#else
-  const uint32_t n_part = 2, n_fold = 2, n_off = 2;
+  // Three cases by default: control (fold off), the feature, and the feature
+  // on a mixed partition. The full part x fold x offset sweep is behind
+  // LS_FOLD_SWEEP. static: the per-core stack is 1 KiB.
+  static const struct { uint32_t part_div; uint32_t fold; uint32_t off; } cases[] = {
+    {1, 0, 6}, {1, 1, 6}, {2, 1, 6},
+#if LS_FOLD_SWEEP
+    {1, 0, 8}, {1, 1, 8}, {2, 0, 6}, {2, 0, 8}, {2, 1, 8},
 #endif
+  };
 
-  for (uint32_t pm = 0; pm < n_part; pm++) {
-    const uint32_t part = (pm == 0) ? num_cores_per_tile      // all-private
-                                    : (num_cores_per_tile / 2); // mixed
-    for (uint32_t fi = 0; fi < n_fold; fi++) {
-      // Minimal mode wants fold-group, which is index 1.
-      const uint32_t f = (LS_FOLD_MIN != 0) ? 1u : fi;
-      for (uint32_t o = 0; o < n_off; o++) {
-        l1d_xbar_config(offsets[o]);
-        l1d_part_folded(part, fold_modes[f]);
+  for (uint32_t ci = 0; ci < (uint32_t)(sizeof(cases) / sizeof(cases[0])); ci++) {
+    const uint32_t part = num_cores_per_tile / cases[ci].part_div;
+    const uint32_t f    = cases[ci].fold;
 
-        copy_blocks(a_ptr, src);
-        if (part != num_cores_per_tile) {
-          copy_blocks(d_ptr, src);
-        }
-        snrt_cluster_hw_barrier();
-        l1d_cluster_flush();
+    l1d_xbar_config(cases[ci].off);
+    l1d_part_folded(part, fold_modes[f]);
 
-        int err = check_blocks(a_ptr, src);
-        if (part != num_cores_per_tile) {
-          err += check_blocks(d_ptr, src);
-        }
-        error_cnt[cid] = err;
-        snrt_cluster_hw_barrier();
-
-        if (cid == 0) {
-          int total = 0;
-          for (uint32_t c = 0; c < num_cores; c++) {
-            total += error_cnt[c];
-          }
-          printf("%s part=%u offset=%u: %s (%d errors)\n", fold_names[f], part,
-                 offsets[o], total ? "FAIL" : "PASS", total);
-        }
-        snrt_cluster_hw_barrier();
-      }
+    copy_blocks(a_ptr, src);
+    if (part != num_cores_per_tile) {
+      copy_blocks(d_ptr, src);
     }
+    snrt_cluster_hw_barrier();
+    l1d_cluster_flush();
+
+    int err = check_blocks(a_ptr, src);
+    if (part != num_cores_per_tile) {
+      err += check_blocks(d_ptr, src);
+    }
+    error_cnt[cid] = err;
+    snrt_cluster_hw_barrier();
+
+    if (cid == 0) {
+      int total = 0;
+      for (uint32_t c = 0; c < num_cores; c++) {
+        total += error_cnt[c];
+      }
+      printf("%s part=%u offset=%u: %s (%d errors)\n", fold_names[f], part,
+             cases[ci].off, total ? "FAIL" : "PASS", total);
+    }
+    snrt_cluster_hw_barrier();
   }
 
 #if !LS_FOLD_MIN
