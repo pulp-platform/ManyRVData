@@ -101,11 +101,8 @@ module cachepool_tile
     parameter type                                           axi_out_resp_t                     = logic,
     /// SRAM configuration
     parameter type                                           impl_in_t                          = logic,
-    // Memory latency parameter. Most of the memories have a read latency of 1. In
-    // case you have memory macros which are pipelined you want to adjust this
-    // value here. This only applies to the TCDM. The instruction cache macros will break!
-    // In case you are using the `RegisterTCDMCuts` feature this adds an
-    // additional cycle latency, which is taken into account here.
+    // TCDM read latency: 1 for most macros, adjust for pipelined macros (breaks the
+    // instruction cache macros). `RegisterTCDMCuts` adds one cycle, accounted for here.
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
@@ -168,11 +165,8 @@ module cachepool_tile
     input  tcdm_req_t         [NumLGPortTile-1:0]     remote_req_i,
     output tcdm_rsp_t         [NumLGPortTile-1:0]     remote_rsp_o,
     output logic              [NumLGPortTile-1:0]     remote_rsp_ready_o,
-    /// Inter-group remote access ports (to other groups).
-    /// Flat layout: flat index = j + r * NrTCDMPortsPerCore,
-    /// where j is the interco instance and r is the inter-group remote slot.
-    /// Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
-    /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
+    /// Inter-group remote ports (NumRemoteGroupPortCore * NrTCDMPortsPerCore, REQRSP-style),
+    /// flat index j + r * NrTCDMPortsPerCore (j = interco instance, r = inter-group slot).
     output remote_group_req_t [TotRGPorts:0]              remote_group_req_o,
     input  remote_group_rsp_t [TotRGPorts:0]              remote_group_rsp_i,
     /// Inter-group remote access ports (from other groups)
@@ -213,8 +207,10 @@ module cachepool_tile
   assign num_private_cache = l1d_private_i  [$clog2(NumL1CtrlTile):0];
   // The register's GROUP_FOLD bit must sit above the PARTITION field, or the
   // two would overlap. Widen both the hjson field and L1PrivPartWidth together.
+`ifndef TARGET_SYNTHESIS
   initial assert (L1PrivFoldBit >= $clog2(NumL1CtrlTile) + 1)
     else $fatal(1, "L1D_PRIVATE: PARTITION field overlaps GROUP_FOLD bit.");
+`endif
 
   // L1D_PRIVATE.GROUP_FOLD: fold the private partition across the
   // group. Only meaningful when every bank is private; ignored otherwise.
@@ -230,11 +226,14 @@ module cachepool_tile
   localparam int unsigned BanksPerSuperBank = AxiDataWidth / DataWidth;
   localparam int unsigned NrSuperBanks      = NrBanks / BanksPerSuperBank;
 
+  // style-waive: AUTOMATIC: port calculation
   function automatic int unsigned get_tcdm_ports(int unsigned core);
     return spatz_pkg::N_FU + NumScalarPerCC;
   endfunction
 
+  // style-waive: AUTOMATIC: port calculation
   function automatic int unsigned get_tcdm_port_offs(int unsigned core_idx);
+    // style-waive: AUTOMATIC: index used for calculation
     automatic int n = 0;
     for (int i = 0; i < core_idx; i++) n += get_tcdm_ports(i);
     return n;
@@ -382,10 +381,8 @@ module cachepool_tile
 
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_req, cache_xbar_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_rsp, cache_xbar_rsp;
-  // Post-xbar gated copies.
-  // cache_ctrl_req : xbar output with q_valid suppressed during flush.
-  // cache_bank_rsp : raw response from the bank/AMO stage; q_ready is gated before
-  //                  being returned to the interco as cache_xbar_rsp.
+  // Post-xbar gated copies: cache_ctrl_req has q_valid suppressed during flush; cache_bank_rsp
+  // is the raw bank/AMO response, whose q_ready is gated into cache_xbar_rsp.
   tcdm_req_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_ctrl_req;
   tcdm_rsp_t  [NrTCDMPortsPerCore-1:0][NumL1CtrlTile-1:0] cache_bank_rsp;
 
@@ -482,13 +479,9 @@ module cachepool_tile
   // where j is the xbar index and r is the remote slot within that xbar.
   logic [NumLGPortTile-1:0] remote_out_pready, remote_in_pready;
 
-  // Intra-group remote port wiring.
-  // q_valid and q_ready for incoming requests are passed through without gating:
-  // the after-xbar flush gate (cache_xbar_flush_gate) provides the authoritative
-  // protection at the cache bank boundary and naturally back-pressures through
-  // the interco to the remote sender.
-  // response-ready (remote_in_pready) is still gated to prevent draining in-flight
-  // completions during the flush window.
+  // Intra-group remote port wiring. Incoming q_valid/q_ready pass ungated: cache_xbar_flush_gate
+  // protects the banks and back-pressures the sender. remote_in_pready stays gated so in-flight
+  // completions are not drained during a flush.
 
   tcdm_req_t [NumLGPortTile-1:0] remote_req_gated;
   tcdm_rsp_t [NumLGPortTile-1:0] remote_rsp_xbar;
@@ -515,25 +508,22 @@ module cachepool_tile
   // -------------------------------------------------------------------------
   // Inter-group remote ports – type conversion and flush protection
   // -------------------------------------------------------------------------
-  // External ports use REQRSP-style remote_group_req_t / remote_group_rsp_t
-  // (with built-in ready and remote_group_user_t).
-  // Internal interco uses TCDM-style tcdm_req_t / tcdm_rsp_t.
-  // This section bridges the two and applies flush gating.
-  //
-  // Same flat layout as remote ports: flat = j + r * NrTCDMPortsPerCore.
-  // Total count: NumRemoteGroupPortCore * NrTCDMPortsPerCore.
+  // Bridges the REQRSP-style external ports to the TCDM-style interco and applies flush
+  // gating. Same flat layout as remote ports: flat = j + r * NrTCDMPortsPerCore.
 
   localparam int unsigned NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore;
 
   // Internal TCDM-style signals going to/from the interco.
-  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_in_req;   // incoming requests to interco
-  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_in_rsp;   // responses from interco (for incoming)
-  logic      [NumRemoteGroupPortTile-1:0] rg_interco_in_pready; // response ready for incoming
+  // Incoming: requests into the interco, their responses and response ready
+  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_in_req;
+  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_in_rsp;
+  logic      [NumRemoteGroupPortTile-1:0] rg_interco_in_pready;
 
-  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_out_req;  // outgoing requests from interco
-  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_out_rsp;  // responses returning (for outgoing)
-  logic      [NumRemoteGroupPortTile-1:0] rg_interco_out_pready;// response ready for outgoing
-  remote_tile_sel_t [NumRemoteGroupPortTile-1:0] rg_interco_out_dst; // target tile from interco
+  // Outgoing: requests from the interco, returning responses, response ready and target tile
+  tcdm_req_t [NumRemoteGroupPortTile-1:0] rg_interco_out_req;
+  tcdm_rsp_t [NumRemoteGroupPortTile-1:0] rg_interco_out_rsp;
+  logic      [NumRemoteGroupPortTile-1:0] rg_interco_out_pready;
+  remote_tile_sel_t [NumRemoteGroupPortTile-1:0] rg_interco_out_dst;
 
   if (NumRemoteGroupPortCore > 0) begin : gen_remote_group_ports
     always_comb begin
@@ -542,10 +532,8 @@ module cachepool_tile
           automatic int unsigned flat = j + r * NrTCDMPortsPerCore;
 
           // -----------------------------------------------------------
-          // Incoming: REQRSP → TCDM conversion → interco
-          // q_valid and q_ready are passed through without gating; the
-          // after-xbar flush gate (cache_xbar_flush_gate) is the authoritative
-          // protection point and naturally back-pressures through the interco.
+          // Incoming: REQRSP -> TCDM -> interco. q_valid/q_ready pass ungated, the
+          // cache_xbar_flush_gate protects the banks.
           // -----------------------------------------------------------
           rg_interco_in_req[flat] = '{
             q: '{
@@ -631,10 +619,8 @@ module cachepool_tile
               default: '0
             },
             p_valid: remote_group_rsp_i[flat].p_valid,
-            // Gated with the same condition as the outgoing q_valid above:
-            // suppressing valid while leaving ready through would let the
-            // interco retire a request the NoC never saw, dropping it and the
-            // response the core is waiting for.
+            // Gated like the outgoing q_valid: an ungated ready would let the interco retire a
+            // request the NoC never saw, losing the response the core waits for.
             q_ready: remote_group_rsp_i[flat].q_ready && !l1d_busy_i,
             default: '0
           };
@@ -655,11 +641,9 @@ module cachepool_tile
     assign rg_interco_out_dst      = '0;
   end
 
-  /// Wire requests after strb handling to the cache controller.
-  /// Each xbar j handles NumLGPortCore remote slots at flat indices
-  /// j + r*NrTCDMPortsPerCore for r in [0, NumLGPortCore).
-  /// Similarly, each xbar j handles NumRemoteGroupPortCore inter-group remote slots at flat indices
-  /// j + r*NrTCDMPortsPerCore for r in [0, NumRemoteGroupPortCore).
+  /// Wire requests after strb handling to the cache controller. Xbar j handles the remote and
+  /// inter-group remote slots at flat indices j + r*NrTCDMPortsPerCore (r below NumLGPortCore
+  /// and NumRemoteGroupPortCore respectively).
   for (genvar j = 0; j < NrTCDMPortsPerCore; j++) begin : gen_cache_xbar
     // Collect the NumLGPortCore remote slots for this xbar.
     tcdm_req_t [NumLGPortCore-1:0] xbar_remote_req_gated;
@@ -901,10 +885,8 @@ module cachepool_tile
     end
   end
 
-  // Post-xbar flush gate (applied uniformly across all ports).
-  // Suppresses q_valid going into the bank so no new cache accesses are processed
-  // while a flush is in progress, and gates q_ready going back to the interco so the
-  // xbar cannot dequeue a buffered request that is already sitting at its output.
+  // Post-xbar flush gate, all ports: suppress q_valid into the banks during a flush, and gate
+  // q_ready back to the interco so the xbar cannot dequeue a request already at its output.
   always_comb begin : cache_xbar_flush_gate
     for (int j = 0; j < NrTCDMPortsPerCore; j++) begin
       for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
@@ -916,12 +898,8 @@ module cachepool_tile
     end
   end
 
-  // Refill address inverse rotation parameters.
-  // Must mirror the bits_to_rotate table in tcdm_cache_interco gen_scramble:
-  //   All-private or half-half private banks (cb < NumL1CtrlTile/2):
-  //     N = CacheBankBits
-  //   All-shared  or half-half shared  banks (cb >= NumL1CtrlTile/2):
-  //     N = CacheBankBits + TileBits
+  // Refill address inverse rotation parameters, mirroring bits_to_rotate in tcdm_cache_interco
+  // gen_scramble (see refill_bits_to_rotate below).
   localparam int unsigned RefillCacheBankBits = $clog2(NumL1CtrlTile);
   localparam int unsigned RefillTileBits      = $clog2(NumL1CacheCtrl / NumL1CtrlTile);
   localparam int unsigned RefillLocalTileBits = $clog2(NumTilesPerGroup);
@@ -946,6 +924,7 @@ module cachepool_tile
   // equal-window mode to avoid response lane remap corner cases.
   localparam int unsigned EffectiveCoalFactor = UseSkewedFolded ? 1 : L1CoalFactor;
 `ifndef TARGET_SYNTHESIS
+  // style-waive: DEBUG_PROBE: cache configuration report at simulation start
   initial begin
     #1ns;
     if (tile_id_i == '0) begin
@@ -980,25 +959,8 @@ module cachepool_tile
   // -------------------------------------------------------------------------
   // Tile-level flush tracking
   // -------------------------------------------------------------------------
-  //
-  // flush_pending_q : set when this tile accepts an instruction, cleared when
-  //                   all targeted controllers complete (cache_flush_q == 0).
-  //                   Prevents accepting a second instruction mid-flush.
-  //
-  // cache_flush_q[cb] : per-controller pending bit.  Set when ctrl_sync_valid
-  //                     is asserted to controller cb; cleared on ctrl_sync_ready.
-  //
-  // ctrl_sync_valid[cb] : per-controller valid, gated by partition membership.
-  // ctrl_sync_insn[cb]  : per-controller insn encoding (translated to 2-bit
-  //                       controller encoding: flush->2'b00, init->2'b11).
-  // ctrl_sync_ready[cb] : wired back from cache controller.
-  //
-  // l1d_insn_ready_o : one-cycle pulse to peripheral when flush_pending_q
-  //                    is asserted and cache_flush_d has just reached zero.
-  //                    Using cache_flush_d (not _q) avoids the one-cycle delay
-  //                    that _q would introduce.  No combinational loop exists
-  //                    because l1d_insn_ready_o feeds only the peripheral lock
-  //                    register, which has no same-cycle path back into the tile.
+  // flush_pending_q holds off new instructions until every targeted cache_flush_q bit clears;
+  // l1d_insn_ready_o pulses as cache_flush_d hits zero (no loop: it only feeds a peripheral reg).
 
   // Determine whether this tile should act on the incoming instruction.
   // Private flush (insn==00): only if our tile_id bit is set in tile_sel.
@@ -1019,27 +981,29 @@ module cachepool_tile
   logic [NumL1CtrlTile-1:0]       cache_flush_d, cache_flush_q;
   logic                           flush_pending_d, flush_pending_q;
 
-  // Determine which controllers to activate based on insn partition field.
-  //   insn==00 (private) : cb < num_private_cache
-  //   insn==01 (shared)  : cb >= num_private_cache
-  //   insn==10 or 11     : all controllers
+  // Activate controllers by insn: 00 private (cb < num_private_cache), 01 shared, 10/11 all
   always_comb begin : gen_ctrl_valid
     for (int cb = 0; cb < NumL1CtrlTile; cb++) begin
       ctrl_sync_valid[cb] = 1'b0;
-      ctrl_sync_insn[cb]  = 2'b00; // default: flush encoding for controller
+      // Default: flush encoding for the controller
+      ctrl_sync_insn[cb]  = 2'b00;
 
       if (l1d_insn_valid_i && tile_insn_active && !flush_pending_q) begin
         case (l1d_insn_i.insn)
-          2'b00: begin // flush private
+          // Flush private
+          2'b00: begin
             ctrl_sync_valid[cb] = (cb < int'(num_private_cache));
           end
-          2'b01: begin // flush shared
+          // Flush shared
+          2'b01: begin
             ctrl_sync_valid[cb] = (cb >= int'(num_private_cache));
           end
-          2'b10: begin // flush all
+          // Flush all
+          2'b10: begin
             ctrl_sync_valid[cb] = 1'b1;
           end
-          2'b11: begin // invalidate all
+          // Invalidate all
+          2'b11: begin
             ctrl_sync_valid[cb] = 1'b1;
             ctrl_sync_insn[cb]  = 2'b11;
           end
@@ -1111,10 +1075,7 @@ module cachepool_tile
       .cache_sync_valid_i    (ctrl_sync_valid[cb]            ),
       .cache_sync_ready_o    (ctrl_sync_ready[cb]            ),
       .cache_sync_insn_i     (ctrl_sync_insn[cb]             ),
-      // SPM Size
-      // The calculation of spm region in cache is different
-      // than other modules (needs to times 2)
-      // Currently assume full cache
+      // SPM size: computed differently from other modules (times 2); assumes a full cache
       .bank_depth_for_SPM_i  ('0                             ),
       // Request
       .core_req_valid_i      (cache_req_valid[cb]            ),
@@ -1155,32 +1116,9 @@ module cachepool_tile
       .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
     );
 
-    // Inverse rotation for the refill address.
-    //
-    // The cache controller stores a *rotated* address: routing bits (BankSel
-    // and, for shared banks, TileID) were moved to the MSB by the forward
-    // rotation in tcdm_cache_interco so the cache sees a dense index space.
-    // Before issuing the refill to the NoC we must undo that rotation to
-    // recover the original address.
-    //
-    // Forward rotation recap (N = bits_to_rotate):
-    //   rotated = lower | (upper << offset) | (rot_field << (AddrWidth - N))
-    //
-    // Inverse:
-    //   lower     = addr_rot & ((1 << offset) - 1)   // CL offset, verbatim
-    //   rot_field = addr_rot >> (AddrWidth - N)       // routing bits at top
-    //   upper     = (addr_rot >> offset)              // tag+index (no top bits)
-    //             & ((1 << (AddrWidth-offset-N)) - 1)
-    //   original  = lower | (rot_field << offset) | (upper << (offset + N))
-    //
-    // N per bank mirrors tcdm_cache_interco gen_scramble:
-    //   Private banks (cb < num_private_cache):
-    //     N = RefillCacheBankBits
-    //   Shared banks (cb >= num_private_cache):
-    //     N = RefillCacheBankBits + RefillTileBits
-    //
-    // cb is a genvar constant → static per-bank elaboration, but the
-    // boundary (num_private_cache) is a registered runtime signal.
+    // Inverse rotation for the refill address: the controller stores the address rotated by
+    // tcdm_cache_interco (routing bits at the MSB), so restore it before issuing to the NoC.
+    // N = refill_bits_to_rotate, per bank like gen_scramble; num_private_cache is runtime.
 
     logic [RefillRotWidth-1:0] refill_bits_to_rotate;
 
@@ -1285,12 +1223,9 @@ module cachepool_tile
       logic                [L1AssoPerCtrl-1:0][L1BankFactor-1:0][PartSplit-1:0][BankByteCount-1:0]
           part_be;
 
-      // -- Per-way, per-column write contention (loop-free) --
-      // For way W and column col, "another way writes at col" is true
-      // iff some part P' has part_we[col][bank_sel][P'] set AND the
-      // (col, P') mapping belongs to a way != W.  Depends ONLY on
-      // writes (part_we) -- safe to feed into the grant path without
-      // creating a combinational loop through read-side signals.
+      // Per-way, per-column write contention: another way than W writes at col iff some part P'
+      // has part_we[col][bank_sel][P'] set and (col, P') maps to a way != W. Depends only on
+      // part_we, so it feeds the grant path without a combinational loop.
       logic [L1AssoPerCtrl-1:0][L1AssoPerCtrl-1:0][L1BankFactor-1:0] any_other_write_in_col;
       always_comb begin
         for (int wW = 0; wW < L1AssoPerCtrl; wW++) begin
@@ -1337,17 +1272,9 @@ module cachepool_tile
                     l1_data_bank_be[cb][FlatIdx];
                 assign l1_data_bank_rdata[cb][FlatIdx] =
                     bank_rdata[ColIdx][bank_sel][w*DataWidth +: DataWidth];
-                // Grant propagation.  The skew-bank arbiter at (ColIdx,
-                // bank_sel) picks writes with write-priority over reads;
-                // without grant propagation a concurrent read that shares
-                // a column with another way's write is silently dropped
-                // and upstream gets stale rdata.
-                //   - Writes always granted (gnt=1) -- writes win arbitration.
-                //   - Reads granted iff no OTHER way writes at the same
-                //     (col, bank_sel).  We exclude our own way's writes
-                //     to avoid spuriously blocking our way's idle words
-                //     that happen to sit in our own write's column.
-                // Loop-free: depends on part_we only, no read feedback.
+                // Grant propagation: writes win the skew-bank arbiter, so a read is granted only
+                // if no OTHER way writes at (col, bank_sel); otherwise it would get stale rdata.
+                // Own-way writes are excluded so they do not block our idle words.
                 assign l1_data_bank_gnt[cb][FlatIdx] =
                     l1_data_bank_we[cb][FlatIdx]
                     | ~any_other_write_in_col[WayIdx][ColIdx][bank_sel];

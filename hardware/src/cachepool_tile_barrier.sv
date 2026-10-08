@@ -8,6 +8,7 @@
 
 `include "common_cells/registers.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// Hardware barrier to synchronize cores in a tile.
 /// When all participating cores reach the barrier address, asserts `barrier_o`.
 /// Waits for `barrier_rsp_i.done` from group level before releasing cores,
@@ -85,12 +86,8 @@ module cachepool_tile_barrier
   localparam int unsigned LocalOnlyBit = 16;
   localparam int unsigned BarrierIdLsb = 17;
 
-  // Partial-barrier participant mask, encoded in the barrier request itself:
-  // a write to barrier_addr carries the core/tile participant masks, the
-  // local_only bit, and the slot id as its write data; a read (the legacy
-  // full-barrier access) is treated as "everyone participates, cluster-wide,
-  // slot 0". Whichever port's request is first to arrive for a given slot in
-  // a round has its fields latched for that slot.
+  // Barrier write data carries core/tile masks, local_only and slot id; a read is a full
+  // cluster-wide barrier on slot 0. The first request of a round latches its slot's fields.
   typedef enum logic {
     MaskIdle,
     MaskActive
@@ -190,6 +187,7 @@ module cachepool_tile_barrier
     `FFARN(mask_status_q[s], mask_status_d[s], 1'b0,            clk_i, rst_ni)
   end
 
+  // style-waive: DEBUG_PROBE: error-only check on group-level mask mismatch
   always_comb begin
     state_d       = state_q;
     user_d        = user_q;

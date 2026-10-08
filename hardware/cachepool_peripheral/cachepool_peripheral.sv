@@ -154,10 +154,8 @@ module cachepool_peripheral
     end
   end
 
-  // Cache Flush Controller
-  // Operates at tile granularity.  l1d_lock_q[t] is set when tile t is
-  // issued an instruction and cleared when tile t returns ready.
-  // Busy is asserted while any selected tile has not yet completed.
+  // Cache Flush Controller, per tile: l1d_lock_q[t] is set on issue and cleared on ready.
+  // Busy while any selected tile has not completed.
   always_comb begin : l1d_insn_cfg
     // Flush takes time, we cannot take next insn while flushing
     l1d_insn_o            = '0;

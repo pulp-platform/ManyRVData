@@ -9,6 +9,7 @@
 `include "snitch_vm/typedef.svh"
 `include "reqrsp_interface/typedef.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// CachePool Core Complex (dual flavor): 2 Snitch Integer Cores sharing
 /// 1 Spatz Vector Unit, gated by cachepool_spatz_lock. cachepool_cc.sv
 /// (single-hart) is untouched; this is a sibling module for tiles built
@@ -111,11 +112,11 @@ module cachepool_cc_dual
   // FMA architecture is "merged" -> mulexp and macexp instructions are supported
   localparam bit FPEn = RVF | RVD | XF16 | XF8;
   localparam int unsigned FLEN =
-    RVD ? 64  : // D ext.
-    RVF ? 32  : // F ext.
-    XF16 ? 16 : // Xf16 ext.
-    XF8 ? 8   : // Xf8 ext.
-    0;          // Unused in case of no FP
+    RVD ? 64  :
+    RVF ? 32  :
+    XF16 ? 16 :
+    XF8 ? 8   :
+    0;
 
   `SNITCH_VM_TYPEDEF(AddrWidth)
 

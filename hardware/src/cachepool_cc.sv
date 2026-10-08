@@ -88,14 +88,8 @@ module cachepool_cc
     /// Insert Pipeline registers into data memory path (response)
     parameter bit                                          RegisterCoreRsp          = 0,
     parameter snitch_pma_pkg::snitch_pma_t                 SnitchPMACfg             = '{default: 0},
-    /// DEBUG: enable Spatz<->TCDM request/response scoreboard.
-    /// When 1, per-port counters and a queue of outstanding (id,addr,write)
-    /// records are exposed in the waveform under
-    ///   gen_spatz_req_scoreboard.gen_port[P]/{req_id_q,rsp_id_q,outstanding_q,sb_q,...}
-    /// A watchdog $displays the contents of any port that has been stuck
-    /// for >5 us (configurable below).  Defaults off; pass
-    ///   +define+ENABLE_SPATZ_REQ_SCOREBOARD
-    /// to vlog to enable globally, or override per instance.
+    /// Debug: Spatz<->TCDM request/response scoreboard with a stuck-port watchdog, visible in the
+    /// waveform under gen_spatz_req_scoreboard. Enable with +define+ENABLE_SPATZ_REQ_SCOREBOARD.
 `ifdef ENABLE_SPATZ_REQ_SCOREBOARD
     parameter bit                                          EnableSpatzReqScoreboard = 1'b1,
 `else
@@ -135,11 +129,11 @@ module cachepool_cc
   // FMA architecture is "merged" -> mulexp and macexp instructions are supported
   localparam bit FPEn = RVF | RVD | XF16 | XF8;
   localparam int unsigned FLEN =
-  RVD ? 64  : // D ext.
-  RVF ? 32  : // F ext.
-  XF16 ? 16 : // Xf16 ext.
-  XF8 ? 8   : // Xf8 ext.
-  0;          // Unused in case of no FP
+  RVD ? 64  :
+  RVF ? 32  :
+  XF16 ? 16 :
+  XF8 ? 8   :
+  0;
 
   acc_issue_req_t acc_snitch_req;
   acc_issue_req_t acc_snitch_demux;
@@ -372,46 +366,9 @@ module cachepool_cc
   end
 
   // ---------------------------------------------------------------------------
-  // Spatz<->TCDM request/response scoreboard (DEBUG ONLY). Loads only -- stores draw
-  // user.req_id from a separate ROB id pool (spatz_vlsu.sv) and can share an id with
-  // an in-flight load, so they're excluded rather than tracked.
-  //
-  // Excluded from synthesis entirely (`ifndef TARGET_SYNTHESIS`), and further
-  // gated by `EnableSpatzReqScoreboard` for simulation.
-  //
-  // The scoreboard is a per-port table indexed by `user.req_id` (NOT a
-  // FIFO).  This is critical because:
-  //
-  //   * The 4 cache banks can return responses in any global order.
-  //   * Each cache bank has MSHRs and supports hit-under-miss / miss-under-
-  //     miss, so even a single bank can return responses out-of-order.
-  //
-  // A FIFO scoreboard would mis-attribute out-of-order responses to the
-  // wrong issued request.  Indexing the slot table by `user.req_id` makes
-  // the match correct regardless of arrival order: when a response arrives
-  // its `user.req_id` directly identifies which outstanding entry it
-  // resolves.
-  //
-  // Per port:
-  //   sb_q[p][id]     -- {valid, write, global_id, addr, issue_time}
-  //                      Slot is filled on req_fire (idx = req's user.req_id);
-  //                      cleared on rsp_fire (idx = rsp's user.req_id).
-  //                      `valid` set means an outstanding request with that
-  //                      `user.req_id` is currently in flight.
-  //   req_id_q        -- 32-bit cumulative count of issued reqs (sanity)
-  //   rsp_id_q        -- 32-bit cumulative count of received rsps (sanity)
-  //   outstanding_q   -- req_id_q - rsp_id_q (in-flight count)
-  //   req_fire/rsp_fire -- per-cycle handshake strobes (waveform aid)
-  //
-  // The slot table size = `NumSpatzOutstandingLoads`, which is the maximum
-  // number of unique `user.req_id` values Spatz can issue per port.  Spatz
-  // does not reuse a `user.req_id` while another request with the same id
-  // is in flight, so each slot can hold at most one entry at any time.
-  //
-  // SVA / watchdog:
-  //   * sba_no_dup_push  : asserts a slot is not already valid when pushed.
-  //   * sba_pop_was_valid: asserts a slot was valid when popped.
-  //   * watchdog $displays valid entries of stuck ports every WdogPs ps.
+  // Spatz<->TCDM request/response scoreboard (debug only, EnableSpatzReqScoreboard). Loads
+  // only: stores draw req_id from a separate ROB pool. Per-port slot table indexed by
+  // user.req_id (banks respond out of order); SVA checks push/pop, a watchdog dumps stuck ports.
   // ---------------------------------------------------------------------------
   localparam int unsigned SpatzSbPorts    = NumMemPortsPerSpatz;
   localparam int unsigned SpatzSbReqIdW   = (NumSpatzOutstandingLoads <= 1) ? 1
@@ -422,9 +379,11 @@ module cachepool_cc
   typedef struct packed {
     logic         valid;
     logic         write;
-    logic [31:0]  global_id;     // monotonic counter at issue time
+    // Monotonic counter at issue time
+    logic [31:0]  global_id;
     logic [31:0]  addr;
-    logic [63:0]  issue_time;    // $time at issue (sim only)
+    // $time at issue (sim only)
+    logic [63:0]  issue_time;
   } spatz_sb_entry_t;
 
 `ifndef TARGET_SYNTHESIS
@@ -477,10 +436,8 @@ module cachepool_cc
           sb_d[p][req_idx[p]].issue_time       = 64'($time);
         end
 
-        // Pop (slot indexed by response's user.req_id).
-        // If both fire same cycle for the SAME id, the pop wins (rare,
-        // would require Spatz to re-issue the id in the same cycle the
-        // previous one resolves; semantics match a straight-through hit).
+        // Pop the slot of the response's user.req_id. A same-cycle push and pop of the SAME id
+        // lets the pop win (rare, behaves like a straight-through hit).
         if (rsp_fire[p]) begin
           rsp_id_d[p]                          = rsp_id_q[p] + 32'd1;
           sb_d[p][rsp_idx[p]].valid            = 1'b0;
@@ -498,6 +455,7 @@ module cachepool_cc
       // verilog_lint: waive plusarg-assignment
       sb_verbose_log = $test$plusargs("spatz_sb_verbose");
     end
+    // style-waive: DEBUG_PROBE: verbose trace, disabled by default
     always_ff @(posedge clk_i) begin
       if (rst_ni && sb_verbose_log) begin
         for (sb_log_pp = 0; sb_log_pp < SpatzSbPorts; sb_log_pp++) begin
@@ -550,11 +508,10 @@ module cachepool_cc
                     p, rsp_idx[p]);
     end
 
-    // Watchdog: when a port has not received any rsp for SpatzReqScoreboardWdogPs
-    // and outstanding > 0, dump the still-valid entries (each is the
-    // exact `user.req_id` whose response is missing).  Re-warns every
-    // WdogPs while still stuck.
+    // Watchdog: if a port with outstanding requests gets no rsp for SpatzReqScoreboardWdogPs,
+    // dump its valid entries (the missing req_ids), re-warning every WdogPs.
     if (SpatzReqScoreboardWdogPs > 0) begin : gen_wdog
+      // style-waive: DEBUG_PROBE: watchdog, prints only when a port is stuck
       always_ff @(posedge clk_i or negedge rst_ni) begin
         if (!rst_ni) begin
           last_progress_time_q <= '0;
@@ -658,10 +615,7 @@ module cachepool_cc
 
   reqrsp_rule_t [NrScalarXbarSlv-2:0] addr_map;
 
-  // We divide the regions into the following for scalar core's visit:
-  // 0. DRAM region  => Cache
-  // 1. Stack region => SPM (stack)
-  // 2. Others       => Peripheral (bypass cache)
+  // Scalar core regions: DRAM => cache, stack => SPM, others => peripheral (bypass cache)
 
   // SPM Region (Stack SPM)
   // Give stack higher priority for winning the conflict
@@ -912,6 +866,7 @@ module cachepool_cc
   `ASSERT(stack_overflow, mem_req_valid[TotStack] |-> (&stack_addr_check == 1'b1), clk_i, !rst_ni,
             "Core ID bits cannot be used for stack")
 
+  // style-waive: DEBUG_PROBE: instruction tracer
   initial begin
     // We need to schedule the assignment into a safe region, otherwise
     // `hart_id_i` won't have a value assigned at the beginning of the first
@@ -925,6 +880,7 @@ module cachepool_cc
   end
 
   // verilog_lint: waive-start always-ff-non-blocking
+  // style-waive: DEBUG_PROBE: instruction tracer
   always_ff @(posedge clk_i) begin
     automatic string trace_entry;
     automatic string extras_str;
@@ -984,11 +940,8 @@ module cachepool_cc
         $fwrite(f, trace_entry);
       end
       if (FPEn) begin
-        // Trace FPU iff:
-        // an incoming handshake on the accelerator bus occurs <==> an instruction was issued
-        // OR an FPU result is ready to be written back to an FPR register or the bus
-        // OR an LSU result is ready to be written back to an FPR register or the bus
-        // OR an FPU result, LSU result or bus value is ready to be written back to an FPR register
+        // Trace FPU on an accelerator handshake (instruction issued), or when an FPU result, LSU
+        // result or bus value is ready to be written back to an FPR or the bus.
         if (extras_fpu.acc_q_hs || extras_fpu.fpu_out_hs
             || extras_fpu.lsu_q_hs || extras_fpu.fpr_we) begin
           $sformat(trace_entry, "%t %1d %8d 0x%h DASM(%h) #; %s\n",
@@ -1002,6 +955,7 @@ module cachepool_cc
     end
   end
 
+  // style-waive: DEBUG_PROBE: instruction tracer
   final begin
     $fclose(f);
   end
@@ -1012,43 +966,12 @@ module cachepool_cc
   `ASSERT_INIT(BootAddrAligned, BootAddr[1:0] == 2'b00)
 
 `ifndef TARGET_SYNTHESIS
-  // ---------------------------------------------------------------------
-  // Probe D: targeted address watcher at the Spatz boundary.
-  // Off by default; enable with +spatz_write_watch plusarg.
-  // ---------------------------------------------------------------------
-  bit spatz_write_watch_en = 1'b0;
-  // verilog_lint: waive plusarg-assignment
-  initial spatz_write_watch_en = $test$plusargs("spatz_write_watch");
-
   // Loop indices hoisted out of always/final blocks (debug-only).
-  int unsigned dbg_swwatch_p;
   int unsigned dbg_wabal_p;
   int unsigned dbg_wabal_fp;
 
-  always_ff @(posedge clk_i) begin
-    if (rst_ni && spatz_write_watch_en) begin
-      for (dbg_swwatch_p = 0; dbg_swwatch_p < TCDMPorts; dbg_swwatch_p++) begin
-        if (tcdm_req_o[dbg_swwatch_p].q_valid && tcdm_rsp_i[dbg_swwatch_p].q_ready &&
-            tcdm_req_o[dbg_swwatch_p].q.write) begin
-          if (tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001308 ||
-              tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001700 ||
-              tcdm_req_o[dbg_swwatch_p].q.addr == 32'ha0001730) begin
-            $display({"[SPATZ-WRITE-WATCH %0t %m port %0d] addr=0x%08h data=0x%08h ",
-                      "strb=0x%h user_tile=%0d user_core=%0d user_req=0x%h"},
-                     $time, dbg_swwatch_p, tcdm_req_o[dbg_swwatch_p].q.addr,
-                     tcdm_req_o[dbg_swwatch_p].q.data,
-                     tcdm_req_o[dbg_swwatch_p].q.strb,
-                     tcdm_req_o[dbg_swwatch_p].q.user.tile_id,
-                     tcdm_req_o[dbg_swwatch_p].q.user.core_id,
-                     tcdm_req_o[dbg_swwatch_p].q.user.req_id);
-          end
-        end
-      end
-    end
-  end
-
   // ---------------------------------------------------------------------
-  // Probe C: per-port write-ack balance at the cachepool_cc <-> tile interface
+  // Per-port write-ack balance at the cachepool_cc <-> tile interface
   // (req side) AND at the FIFO push/pop level (downstream of tile interface).
   // ---------------------------------------------------------------------
   logic [TCDMPorts-1:0][63:0] cc_wreq_n;
@@ -1070,7 +993,8 @@ module cachepool_cc
         if (tcdm_rsp_i[dbg_wabal_p].p_valid && tcdm_rsp_i[dbg_wabal_p].p.write)
           cc_wack_n[dbg_wabal_p] <= cc_wack_n[dbg_wabal_p] + 64'd1;
         // FIFO push side: any p_valid pushes; count those with write=1
-        if (dbg_wabal_p < NumMemPortsPerSpatz) begin  // only Spatz ports have FIFO
+        // Only Spatz ports have a FIFO
+        if (dbg_wabal_p < NumMemPortsPerSpatz) begin
           if (spatz_mem_rsp_push[dbg_wabal_p] && tcdm_rsp_i[dbg_wabal_p].p.write)
             cc_wfifo_push_n[dbg_wabal_p] <= cc_wfifo_push_n[dbg_wabal_p] + 64'd1;
           if (spatz_mem_rsp_pop[dbg_wabal_p] && spatz_mem_fifo[dbg_wabal_p].write)
@@ -1080,6 +1004,7 @@ module cachepool_cc
     end
   end
 
+  // style-waive: DEBUG_PROBE: write-ack balance check at end of simulation
   final begin
     for (dbg_wabal_fp = 0; dbg_wabal_fp < TCDMPorts; dbg_wabal_fp++) begin
       // Hard error: the cache failed to acknowledge a write that Spatz issued
@@ -1090,10 +1015,8 @@ module cachepool_cc
                dbg_wabal_fp, cc_wreq_n[dbg_wabal_fp], cc_wack_n[dbg_wabal_fp],
                cc_wreq_n[dbg_wabal_fp] - cc_wack_n[dbg_wabal_fp]);
       end
-      // FIFO push-pop residue: a tail is benign.  After EOC the hart is idle
-      // (main returned) so Spatz never pops the last few acks the cache pushed.
-      // Such a tail cannot exceed the FIFO depth; only escalate to an error if
-      // it does, which means pushes were lost to overflow (a real fault).
+      // A FIFO push-pop tail is benign after EOC (Spatz never pops the last acks); only a tail
+      // deeper than the FIFO means pushes were lost to overflow.
       if (dbg_wabal_fp < NumMemPortsPerSpatz &&
           cc_wfifo_push_n[dbg_wabal_fp] != cc_wfifo_pop_n[dbg_wabal_fp]) begin
         if ((cc_wfifo_push_n[dbg_wabal_fp] - cc_wfifo_pop_n[dbg_wabal_fp])
@@ -1111,7 +1034,7 @@ module cachepool_cc
       end
     end
   end
-`endif // TARGET_SYNTHESIS
+`endif
 `endif
 
 endmodule

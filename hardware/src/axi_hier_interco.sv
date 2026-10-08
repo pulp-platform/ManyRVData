@@ -186,21 +186,21 @@ module axi_hier_interco
 
     axi_mux #(
       // AXI parameter and channel types
-      .SlvAxiIDWidth (SlvIdWidth ), // AXI ID width, slave ports
-      .slv_aw_chan_t (slv_aw_t   ), // AW Channel Type, slave ports
-      .mst_aw_chan_t (int_aw_t   ), // AW Channel Type, master port
-      .w_chan_t      (w_t        ), //  W Channel Type, all ports
-      .slv_b_chan_t  (slv_b_t    ), //  B Channel Type, slave ports
-      .mst_b_chan_t  (int_b_t    ), //  B Channel Type, master port
-      .slv_ar_chan_t (slv_ar_t   ), // AR Channel Type, slave ports
-      .mst_ar_chan_t (int_ar_t   ), // AR Channel Type, master port
-      .slv_r_chan_t  (slv_r_t    ), //  R Channel Type, slave ports
-      .mst_r_chan_t  (int_r_t    ), //  R Channel Type, master port
-      .slv_req_t     (slv_req_t  ), // Slave port request type
-      .slv_resp_t    (slv_resp_t ), // Slave port response type
-      .mst_req_t     (int_req_t  ), // Master ports request type
-      .mst_resp_t    (int_resp_t ), // Master ports response type
-      .NoSlvPorts    (NumSlvPorts), // Number of slave ports
+      .SlvAxiIDWidth (SlvIdWidth ),
+      .slv_aw_chan_t (slv_aw_t   ),
+      .mst_aw_chan_t (int_aw_t   ),
+      .w_chan_t      (w_t        ),
+      .slv_b_chan_t  (slv_b_t    ),
+      .mst_b_chan_t  (int_b_t    ),
+      .slv_ar_chan_t (slv_ar_t   ),
+      .mst_ar_chan_t (int_ar_t   ),
+      .slv_r_chan_t  (slv_r_t    ),
+      .mst_r_chan_t  (int_r_t    ),
+      .slv_req_t     (slv_req_t  ),
+      .slv_resp_t    (slv_resp_t ),
+      .mst_req_t     (int_req_t  ),
+      .mst_resp_t    (int_resp_t ),
+      .NoSlvPorts    (NumSlvPorts),
       // Maximum number of outstanding transactions per write
       .MaxWTrans     (8          ),
       // If enabled, this multiplexer is purely combinatorial

@@ -7,6 +7,7 @@
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// Arbitrates 2 Snitch acc interfaces onto 1 shared Spatz acc interface for
 /// cachepool_cc_dual, gated by cachepool_spatz_lock's owner/locked/waiting
 /// state. Locked: only the owner passes through, real access, no arbitration.
@@ -205,6 +206,7 @@ module acc_mux #(
   logic spatz_rsp_valid_q;
   `FF(spatz_rsp_valid_q, spatz_rsp_valid_i, 1'b0, clk_i, rst_ni)
 
+  // style-waive: DEBUG_PROBE: general watchdog debug probe
   always_ff @(posedge clk_i) begin
     if (rst_ni && acc_mux_verbose) begin
       if (free_req_o && free_gnt_i) begin
@@ -244,12 +246,11 @@ module acc_mux #(
   end
 
   // Watchdog: warn if a round-robin (Free-mode) transaction has been
-  // accepted by Spatz but its response hasn't drained (route_fifo stuck
-  // non-empty) for more than AccMuxWdogPs, re-warning every AccMuxWdogPs
-  // while still stuck.
+  // accepted by Spatz but its response hasn't drained for more than AccMuxWdogPs
   localparam longint unsigned AccMuxWdogPs = 5_000_000;
   logic [63:0] acc_mux_last_progress_q, acc_mux_last_warn_q;
 
+  // style-waive: DEBUG_PROBE: general watchdog debug probe
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       acc_mux_last_progress_q <= '0;
@@ -271,6 +272,6 @@ module acc_mux #(
       end
     end
   end
-`endif // TARGET_SYNTHESIS
+`endif
 
 endmodule

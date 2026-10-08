@@ -9,10 +9,10 @@
 `include "common_cells/registers.svh"
 
 module cachepool_cluster_wrapper
- import cachepool_pkg::*;
- import fpnew_pkg::fpu_implementation_t;
- import snitch_pma_pkg::snitch_pma_t;
- #(
+  import cachepool_pkg::*;
+  import fpnew_pkg::fpu_implementation_t;
+  import snitch_pma_pkg::snitch_pma_t;
+#(
   parameter int unsigned AxiAddrWidth         = SpatzAxiAddrWidth,
   parameter int unsigned AxiDataWidth         = SpatzAxiDataWidth,
   parameter int unsigned AxiUserWidth         = SpatzAxiUserWidth,
@@ -224,6 +224,7 @@ module cachepool_cluster_wrapper
     end
   end
 
+  // style-waive: DEBUG_PROBE: end-of-simulation AXI utilization report
   final begin
 
     automatic real active_cyc  = act_cyc_q;

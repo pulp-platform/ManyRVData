@@ -50,7 +50,7 @@ RULES = {
     'PORT_NAMING': 'port name must end in {suffixes}',
     'DEBUG_PROBE': 'debug tracer/probe left in RTL, remove it once debugging is done',
     'DEBUG_UNGUARDED': 'check/assertion not guarded by `ifndef TARGET_SYNTHESIS',
-    'WAIVER_NO_REASON': 'waiver without a reason is ignored',
+    'WAIVER_INVALID': 'waiver is ignored: unknown rule or missing reason',
 }
 
 PROC_KW = {'always_ff', 'always_comb', 'always_latch', 'always', 'initial', 'final'}
@@ -73,7 +73,9 @@ PROBE_RE = re.compile(r'^\$(display[bho]?|write[bho]?|monitor[bho]?|strobe[bho]?
 CHECK_TASKS = {'$error', '$fatal', '$warning', '$info'}
 ASSERT_KW = {'assert', 'assume', 'cover'}
 PORT_SUFFIX = {'input': ('_i', '_ni'), 'output': ('_o', '_no'), 'inout': ('_io', )}
-WAIVE_RE = re.compile(r'style-waive(-file)?\s*:\s*([A-Z_*]+(?:\s*,\s*[A-Z_*]+)*)\s*(.*)')
+WAIVE_RE = re.compile(r'style-waive(-file)?\s*:\s*([A-Za-z_*]+(?:\s*,\s*[A-Za-z_*]+)*)'
+                      r'\s*:?\s*(.*)')
+WAIVER_LINE_RE = re.compile(r'^([^|]+)\|([^|]+)\|(.*)\|([^|]*)$')
 SEPARATOR_RE = re.compile(r'^[\s/*\-=#~_+]*$')
 TRANSLATE_RE = re.compile(r'\b(?:pragma|synopsys|synthesis)\s+translate_(off|on)\b')
 
@@ -623,8 +625,8 @@ class Checker:
                     WAIVE_RE.search(b) or pragma.search(b) for _, b in bodies)
             if is_comment:
                 start = start or ln
-                # Separator lines such as `// -----` carry no text and do not count.
-                count += not all(SEPARATOR_RE.match(b) for _, b in bodies) or not bodies
+                # Separator lines such as `// -----` or ` *****/` carry no text and do not count.
+                count += not SEPARATOR_RE.match(src.lines[ln - 1])
                 continue
             if start and count > limit and start > first_code:
                 col = len(src.lines[start - 1]) - len(src.lines[start - 1].lstrip())
@@ -653,18 +655,34 @@ def load_waivers(path):
             text = raw.strip()
             if not text or text.startswith('#'):
                 continue
-            parts = [p.strip() for p in text.split('|')]
-            if len(parts) != 4 or not parts[3]:
+            # The regex is everything between the 2nd and the last `|`, so it may use alternation.
+            m = WAIVER_LINE_RE.match(text)
+            if not m or not m.group(4):
                 problems.append(f'{path}:{n}: expected `RULE | path-glob | line-regex | reason`')
                 continue
+            parts = [g.strip() for g in m.groups()]
             try:
                 regex = re.compile(parts[2]) if parts[2] else None
             except re.error as e:
                 problems.append(f'{path}:{n}: bad line-regex: {e}')
                 continue
             rules = {r.strip() for r in parts[0].split(',')}
+            problem = waiver_problem(rules, parts[3])
+            if problem:
+                problems.append(f'{path}:{n}: {problem}')
+                continue
             waivers.append(Waiver(rules, parts[1], regex, parts[3]))
     return waivers, problems
+
+
+def waiver_problem(rules, reason):
+    """Why a waiver is unusable, or None."""
+    unknown = sorted(r for r in rules if r != '*' and r not in RULES)
+    if unknown:
+        return f'unknown rule {", ".join(unknown)} (see `rtl_style_check.py rules`)'
+    if not reason.strip():
+        return 'a reason is required'
+    return None
 
 
 def inline_waivers(src, out):
@@ -676,9 +694,10 @@ def inline_waivers(src, out):
             if not m:
                 continue
             rules = {r.strip() for r in m.group(2).split(',')}
-            if not m.group(3).strip():
-                out.append(Violation('WAIVER_NO_REASON', src.path, ln, col + 1,
-                                     RULES['WAIVER_NO_REASON'], severity='warning'))
+            problem = waiver_problem(rules, m.group(3))
+            if problem:
+                out.append(Violation('WAIVER_INVALID', src.path, ln, col + 1,
+                                     f'waiver is ignored: {problem}'))
                 continue
             if m.group(1):
                 file_rules |= rules
@@ -692,7 +711,7 @@ def inline_waivers(src, out):
 
 
 def is_waived(v, src, per_line, file_rules, waivers):
-    if v.rule == 'WAIVER_NO_REASON':
+    if v.rule == 'WAIVER_INVALID':
         return False
 
     def hit(rules):
@@ -754,7 +773,6 @@ def load_config(path):
         'nonsynth_if_defined': opt.get('nonsynth_if_defined', '').split(),
         'suffixes': '_i/_ni (input), _o/_no (output), _io (inout)',
     }
-    cfg['severity']['WAIVER_NO_REASON'] = 'warning'
     if cp.has_section('rules'):
         for rule, sev in cp['rules'].items():
             if rule not in RULES:
