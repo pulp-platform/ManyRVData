@@ -6,6 +6,7 @@
 
 `include "common_cells/registers.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// Cluster-level barrier controller.
 /// Collects per-group barrier signals (direct wires, no AXI/NoC) and broadcasts
 /// a done signal when all participating groups have reached the barrier.

@@ -16,11 +16,8 @@ module reqrsp_to_reg #(
   parameter int unsigned UserWidth  = 1,
   // FIFO depth for buffering user field (should match max outstanding)
   parameter int unsigned FifoDepth  = 2,
-  // When enabled, shift response data right by the request byte offset
-  // so that the addressed bytes land at [31:0]. Useful when the regbus
-  // target is wider than the REQRSP requester (e.g., 512b BootROM
-  // accessed by 32b core data loads). Aligned requests (offset=0)
-  // see no change.
+  // Shift response data right by the request byte offset so the addressed bytes land at
+  // [31:0], for regbus targets wider than the requester (e.g. 512b BootROM, 32b loads).
   parameter bit          ShiftResponse = 1'b0,
   parameter type         user_t     = logic [UserWidth-1:0],
   parameter type         reqrsp_req_t = logic,
@@ -63,11 +60,8 @@ module reqrsp_to_reg #(
   `FF(rsp_error_q, reg_rsp_i.error,        1'b0)
   `FF(rsp_write_q, reqrsp_req_i.q.write,   1'b0)
 
-  // Optional response data shift: use the combinational request address
-  // to shift rdata right so the addressed bytes land at the LSB.
-  // Safe because REQRSP holds q.addr stable until q_ready (= gnt),
-  // and gnt fires on the same cycle rdata becomes valid (regbus
-  // ready follows valid by 1 cycle for constant-latency targets).
+  // Shift rdata by the combinational request address. Safe for constant-latency targets:
+  // q.addr is held until q_ready (= gnt), which fires in the cycle rdata becomes valid.
   if (ShiftResponse) begin : gen_shift
     assign rsp_rdata_d = reg_rsp_i.rdata >> (reqrsp_req_i.q.addr[ByteOffset-1:0] * 8);
   end else begin : gen_no_shift

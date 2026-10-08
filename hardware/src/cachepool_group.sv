@@ -86,11 +86,8 @@ module cachepool_group
     parameter type                                      axi_out_resp_t            = logic,
     /// SRAM configuration
     parameter type                                      impl_in_t                 = logic,
-    // Memory latency parameter. Most of the memories have a read latency of 1. In
-    // case you have memory macros which are pipelined you want to adjust this
-    // value here. This only applies to the TCDM. The instruction cache macros will break!
-    // In case you are using the `RegisterTCDMCuts` feature this adds an
-    // additional cycle latency, which is taken into account here.
+    // TCDM read latency: 1 for most macros, adjust for pipelined macros (breaks the
+    // instruction cache macros). `RegisterTCDMCuts` adds one cycle, accounted for here.
     parameter int unsigned                              MemoryMacroLatency        = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
@@ -140,10 +137,8 @@ module cachepool_group
     /// L2 refill reqrsp port (single merged output: cache refill + iCache/peripheral)
     output l2_req_t                                     l2_req_o,
     input  l2_rsp_t                                     l2_rsp_i,
-    /// This group's L2 refill mesh floo endpoint ID. Stamped into
-    /// refill_user_t.l2_src_id on every outgoing L2 request so the HBM
-    /// ejection chimney can route responses back without a local src_id
-    /// FIFO (which assumed in-order HBM completion).
+    /// This group's L2 refill mesh endpoint ID, stamped into refill_user_t.l2_src_id so the
+    /// HBM chimney routes responses back without an in-order src_id FIFO.
     input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
 
     /// Peripheral signals
@@ -156,13 +151,9 @@ module cachepool_group
     output logic                 [NumTilesPerGroup-1:0] l1d_insn_ready_o,
     input  logic                 [NumTilesPerGroup-1:0] l1d_busy_i,
 
-    /// Inter-group remote access ports (to other groups).
-    /// Layout: [NumTilesPerGroup-1:0][NumRemoteGroupPortTile-1:0] flattened to
-    /// [NumTilesPerGroup * NumRemoteGroupPortTile - 1 : 0].
-    /// Per-tile flat index: j + r * NrTCDMPortsPerCore (j = interco instance,
-    /// r = inter-group slot within that instance).
-    /// NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore.
-    /// Uses REQRSP-style types with built-in ready and remote_group_user_t.
+    /// Inter-group remote ports, flattened [NumTilesPerGroup][NumRemoteGroupPortTile] with
+    /// NumRemoteGroupPortTile = NumRemoteGroupPortCore * NrTCDMPortsPerCore. Per-tile index
+    /// j + r * NrTCDMPortsPerCore (j = interco instance, r = slot); REQRSP-style types.
     output remote_group_req_t            [TotRGPorts:0] remote_group_req_o,
     input  remote_group_rsp_t            [TotRGPorts:0] remote_group_rsp_i,
     /// Inter-group remote access ports (from other groups)
@@ -220,10 +211,8 @@ module cachepool_group
   logic [NumTilesPerGroup-1:0] error;
   assign error_o = |error;
 
-  // Direct-wire barrier: per-tile activate/payload/response, terminated by
-  // the group-level barrier FSM (see i_group_barrier below). Tile-major
-  // layout (one slot vector per tile instance); transposed to slot-major
-  // below for the group_barrier FSM, which tracks one round per slot.
+  // Direct-wire barrier per tile, terminated by i_group_barrier. Tile-major; transposed to
+  // slot-major below for the group_barrier FSM, which tracks one round per slot.
   logic         [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier;
   barrier_req_t [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier_req;
   barrier_rsp_t [NumTilesPerGroup-1:0][NumBarrierSlots-1:0] tile_barrier_rsp;
@@ -371,6 +360,7 @@ module cachepool_group
     .reqrsp_rsp_i         ( cache_l2icache_rsp   )
   );
 
+  // style-waive: COMMENT_BLOCK: port layout table
   // ---------------------
   // Wiring: assemble flat xbar input from refill + peripheral + iCache paths
   // ---------------------
@@ -437,10 +427,8 @@ module cachepool_group
             tile_req_chan  [xbar_idx].user.tile_id   = '0;
             tile_req_chan  [xbar_idx].user.bank_id   = BankIdICache;
             tile_req_chan  [xbar_idx].user.l2_src_id = l2_group_id_i;
-            // axi_to_reqrsp with EnUserIdPassthrough packs the AXI ID into
-            // the LSBs of the user field (spanning burst + info).  Move the
-            // ID into info and zero burst so that reqrsp_to_axi (EnBurst+
-            // ShuffleId) sees is_burst=0 → keeps ID=0 for iCache requests.
+            // axi_to_reqrsp puts the AXI ID in the user LSBs (burst + info). Move it into info
+            // and zero burst, so reqrsp_to_axi sees is_burst=0 and keeps ID=0 for iCache.
             tile_req_chan  [xbar_idx].user.info     = cache_info_t'(cache_l2icache_req.q.user);
             tile_req_chan  [xbar_idx].user.burst    = '0;
           end else begin
@@ -576,16 +564,9 @@ module cachepool_group
         assign tile_remote_in_rsp_valid[j][t*NumLGPortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].p_valid;
         assign tile_remote_in_req_ready[j][t*NumLGPortCore+r] = tile_remote_in_rsp[t][j+r*NrTCDMPortsPerCore].q_ready;
 
-        // Request selection: route to target tile's remote-in slot based on
-        // SOURCE tile ID (mod NumLGPortCore).  This is required for
-        // response routing to be consistent: tcdm_cache_interco routes
-        // responses out via (user.tile_id % NumLGPortCore), so the
-        // request must land in the destination's slot indexed by the same
-        // value (the SOURCE tile id mod N).  If we used (target % N) here
-        // instead, the request would arrive on slot (T%N) but the response
-        // would leave on slot (S%N) — different xbar mst ports — and the
-        // xbar's request/response pairing would break, dropping responses
-        // and corrupting cache state at multi-tile configs where S%N != T%N.
+        // Select the target's remote-in slot by SOURCE tile id % NumLGPortCore: responses leave
+        // tcdm_cache_interco on (user.tile_id % NumLGPortCore), and using the target id instead
+        // breaks the xbar request/response pairing whenever S%N != T%N.
         assign remote_out_sel_xbar[j][t*NumLGPortCore+r] = local_remote_xbar_sel_t'(
             remote_out_sel_tile[t][j+r*NrTCDMPortsPerCore] * NumLGPortCore
           + t % NumLGPortCore);

@@ -447,9 +447,25 @@ Cluster peripherals (including the BootROM and memory-mapped registers) are inst
 SpyGlass lint (optional):
 
 ```bash
-make lint config=cachepool_fpu_4g
+make spyglass config=cachepool_fpu_4g
 ```
 
+RTL coding-style check (Python 3 only; rules, scope and severities in `util/lint/script/rtl_style.cfg`):
+
+```bash
+make style-check                                     # full scan of hardware/
+make style-check STYLE_PATHS=hardware/src/foo.sv     # scan specific files or directories
+make style-check STYLE_ARGS='--changed-since origin/main'  # only lines changed on this branch
+make style-hook                                      # pre-commit hook: staged lines of staged RTL files
+```
+
+Waive a finding with a comment line `// style-waive: RULE reason` directly above it, or add
+`RULE | path-glob | line-regex | reason` to `util/lint/script/rtl_style_waivers.txt`.
+`python3 util/lint/script/rtl_style_check.py rules` lists the rules.
+
+Notes and worklogs (e.g. from AI assistants) stay out of the repository: `make files-check`, the
+pre-commit hook and CI reject new documentation-like files not listed in
+`util/lint/script/repo_files_allowlist.txt`.
 ---
 
 ### Tips

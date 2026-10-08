@@ -6,6 +6,7 @@
 
 `include "common_cells/registers.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// Group-level hardware barrier: aggregates direct-wire barrier requests
 /// from tiles within one group. A round whose participant tile mask and
 /// local_only bit (both encoded in the originating core's barrier write,

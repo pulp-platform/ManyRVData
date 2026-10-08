@@ -8,12 +8,8 @@
 `include "common_cells/registers.svh"
 `include "common_cells/assertions.svh"
 
-/// Shim in front of SRAMs which translates atomic (and normal)
-/// memory operations to RMW sequences. The requests are atomic except
-/// for the DMA which can request priority. The current model is
-/// that the DMA will never write to the same memory location.
-/// We provide `amo_conflict_o` to detect such event and
-/// indicate a fault to the programmer.
+/// AMO unit in front of an L1 cache controller: translates atomic memory operations into
+/// read-modify-write sequences and tracks LR/SC reservations; other requests pass through.
 
 /// LR/SC reservations are happening on `DataWidth` granularity.
 module spatz_cache_amo
@@ -76,10 +72,7 @@ module spatz_cache_amo
   typedef struct packed {
     /// Is the reservation valid.
     logic valid;
-    /// On which address is the reservation placed.
-    /// This address is aligned to the memory size
-    /// implying that the reservation happen on a set size
-    /// equal to the word width of the memory (32 or 64 bit).
+    /// Reserved address, aligned to the memory word width (32 or 64 bit).
     logic [AddrMemWidth-1:0] addr;
     /// Which core made this reservation. Important to
     /// track the reservations from different cores and
@@ -177,10 +170,8 @@ module spatz_cache_amo
         end
       end
 
-      // An SC may succeed only if no store from another hart (or other device) to
-      // the reservation set can be observed to have occurred between
-      // the LR and the SC, and if there is no other SC between the
-      // LR and itself in program order.
+      // An SC may succeed only if no other hart stored to the reservation set, and no
+      // other SC was issued, between the LR and the SC.
 
       // check whether another core has made a write attempt
       if (!amo_is_owner &&
@@ -253,7 +244,8 @@ module spatz_cache_amo
             (amo_user_q.req_id == amo_rsp.user.req_id)
             ) begin
           state_d = WriteBackAMO;
-          amo_result_en = 1'b1; // Only load amo result when we receive the data response
+          // Only load amo result when we receive the data response
+          amo_result_en = 1'b1;
         end
       end
       // Third cycle: Try to write-back result.

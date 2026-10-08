@@ -153,6 +153,7 @@ module reqrsp_w2n_converter #(
   assign mshr_push_data = slv_req_i.q.user;
 
   // Address allowlist for the post-completion cache (see header comment).
+  // style-waive: AUTOMATIC: boundary check
   function automatic logic addr_is_cacheable(input logic [AddrWidth-1:0] addr);
     addr_is_cacheable = (CacheableSize != '0)
                       && (addr >= CacheableBase)

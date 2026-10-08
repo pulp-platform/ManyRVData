@@ -7,10 +7,11 @@
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
 
+/// style-waive: COMMENT_BLOCK: function description
 /// Spatz ownership lock/switch for a dual-Snitch cachepool_cc_dual. Two
 /// dedicated addresses (ACQUIRE/RELEASE) are intercepted as loads that
 /// always complete immediately, encoding the outcome and current
-/// owner/locked status in the returned word (see note.md). Pure arbiter:
+/// owner/locked status in the returned word. Pure arbiter:
 /// does not route acc/data traffic itself (see acc_mux.sv); only decides
 /// ownership and counts real Spatz acc handshakes to gate a switch until
 /// fully drained. Also hosts the pass-through memory-path register cuts
@@ -63,6 +64,7 @@ module cachepool_spatz_lock
   assign acquire_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_ACQUIRE_OFFSET;
   assign release_addr = cluster_periph_start_address_i + CACHEPOOL_PERIPHERAL_SPATZ_LOCK_RELEASE_OFFSET;
 
+  // style-waive: COMMENT_BLOCK: FSM transition table
   // Single lock FSM (host 0 is the implicit owner while Free). AcqWait/RelWait
   // are drain-wait sub-states, resolved autonomously once drain_done -- no
   // response is owed then, since the triggering request already got SUCCESS-WAIT.
@@ -378,6 +380,7 @@ module cachepool_spatz_lock
     spatz_lock_verbose = $test$plusargs("spatz_lock_verbose");
   end
 
+  // style-waive: DEBUG_PROBE: verbose trace, disabled by default
   always_ff @(posedge clk_i) begin
     if (rst_ni && spatz_lock_verbose) begin
       if (lock_d != lock_q) begin
@@ -408,6 +411,7 @@ module cachepool_spatz_lock
   localparam longint unsigned SpatzLockWdogPs = 5_000_000;
   logic [63:0] spatz_lock_last_progress_q, spatz_lock_last_warn_q;
 
+  // style-waive: DEBUG_PROBE: watchdog, prints only when the FSM is stuck
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       spatz_lock_last_progress_q <= '0;
@@ -429,6 +433,6 @@ module cachepool_spatz_lock
       end
     end
   end
-`endif // TARGET_SYNTHESIS
+`endif
 
 endmodule

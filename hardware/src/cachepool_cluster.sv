@@ -83,11 +83,8 @@ module cachepool_cluster
     parameter type                                           axi_out_resp_t                     = logic,
     /// SRAM configuration
     parameter type                                           impl_in_t                          = logic,
-    // Memory latency parameter. Most of the memories have a read latency of 1. In
-    // case you have memory macros which are pipelined you want to adjust this
-    // value here. This only applies to the TCDM. The instruction cache macros will break!
-    // In case you are using the `RegisterTCDMCuts` feature this adds an
-    // additional cycle latency, which is taken into account here.
+    // TCDM read latency: 1 for most macros, adjust for pipelined macros (breaks the
+    // instruction cache macros). `RegisterTCDMCuts` adds one cycle, accounted for here.
     parameter int                     unsigned               MemoryMacroLatency                 = 1 + RegisterTCDMCuts,
     /// # SRAM Configuration rules needed: L1D Tag + L1D Data + L1D FIFO + L1I Tag + L1I Data
     /*** ATTENTION: `NrSramCfg` should be changed if `L1NumDataBank` and `L1NumTagBank` is changed ***/
@@ -190,11 +187,8 @@ module cachepool_cluster
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
 
-  // Direct-wire barrier: one bit per group per slot (group-level barrier
-  // resolves group-local rounds internally, only forwarding here when
-  // needed). Group-major layout (one slot vector per group instance);
-  // transposed to slot-major below for cachepool_cluster_barrier, which
-  // tracks one round per slot.
+  // Direct-wire barrier: one bit per group per slot, only for rounds that need the cluster.
+  // Group-major; transposed to slot-major below for cachepool_cluster_barrier.
   logic  [NumGroups-1:0][NumBarrierSlots-1:0] group_barrier;
   logic  [NumBarrierSlots-1:0][NumGroups-1:0] group_barrier_slotmajor;
   // Broadcast to every group identically, same as the pre-multi-slot design.
@@ -602,15 +596,14 @@ module cachepool_cluster
 
     localparam int unsigned NumHbmWestEast = 2 * NumGroupsY;
     localparam int unsigned NumHbmAllSides = 2 * NumGroupsY + 2 * NumGroupsX;
+`ifndef TARGET_SYNTHESIS
     initial assert (NumL2Channel == NumHbmWestEast || NumL2Channel == NumHbmAllSides)
       else $fatal(1, "NumL2Channel must equal the West/East or all-sides chimney count.");
+`endif
 
-    // Two-column West/East same-ID placement: reassigns channel ID <->
-    // physical port so each group reaches the channel carrying its own ID in
-    // 1 hop. Applies to the 4ch/4g layout, where both columns touch an edge;
-    // else linear placement. The all-sides layout uses the side-contiguous
-    // scheme below instead, which is not same-ID.
-    // SAM and address scrambling are unaffected either way.
+    // West/East same-ID placement (4ch/4g, else linear): remap channel ID <-> port so each
+    // group reaches its own-ID channel in 1 hop. All-sides uses the side-contiguous scheme
+    // below instead. SAM and address scrambling are unaffected either way.
     localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups);
     // All-sides placement packs one aligned block of channels per mesh edge:
     // four adjacent channels share one controller IP and cannot be split
@@ -623,13 +616,17 @@ module cachepool_cluster
     // The side-contiguous IDs below assume four channels per edge on a 4x4
     // mesh, so reject any other mesh shape asking for all-sides chimneys
     // rather than mis-wiring it.
+`ifndef TARGET_SYNTHESIS
     initial assert (NumL2Channel != NumHbmAllSides || (NumGroupsX == 4 && NumGroupsY == 4))
       else $fatal(1, "All-sides HBM placement is only implemented for a 4x4 group mesh.");
+`endif
     // West/East same-ID needs both columns on an edge, i.e. exactly 2 columns.
     // NumL2Channel == NumGroups == NumHbmWestEast already forces this, so the
     // check only guards against a future edit breaking that equality.
+`ifndef TARGET_SYNTHESIS
     initial assert (!L2SameIdPlacement || NumL2Channel == NumHbmAllSides || NumGroupsX == 2)
       else $fatal(1, "West/East same-ID HBM placement requires a 2-column group mesh.");
+`endif
 
     if (NumL2Channel == NumHbmWestEast) begin : gen_l2_north_south_tieoff
       // North boundary (gy=NumGroupsY-1, direction North=0)
@@ -654,11 +651,9 @@ module cachepool_cluster
     end : gen_l2_north_south_tieoff
 
     // --------------------------------------------------
-    // West HBM ejection points (one per mesh row, channel ID per HbmIdx below)
-    // floo_tcdm_chimney (SbrPort, no router) at mesh edge:
-    //   unpack req flit → reqrsp_to_axi → DRAM
-    //   response → chimney packs flit with source route back to requester
-    // HBM0: axi_demux splits DRAM from peripheral traffic.
+    // West HBM ejection points, one per mesh row: floo_tcdm_chimney (SbrPort, no router)
+    // unpacks req flits -> reqrsp_to_axi -> DRAM and source-routes responses back.
+    // HBM0 also splits off peripheral traffic (reqrsp_xbar, see gen_hbm0_demux).
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
@@ -749,16 +744,9 @@ module cachepool_cluster
       assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
       assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
 
-      // HBM0: splits DRAM vs peripheral before AXI conversion. Uses
-      // reqrsp_xbar rather than reqrsp_demux: the demux tracked every
-      // dispatched request (regardless of target) in a single shared
-      // in-order ID FIFO sized RespDepth, capping outstanding HBM0 refills
-      // far below the windows available at the chimney/reqrsp_to_axi. The
-      // xbar lets each downstream path track its own outstanding requests
-      // independently. Reordering across the two paths is safe because
-      // miss/request info lives in refill_user_t, not in arrival order.
-      // Each path still has its own reqrsp_to_axi so the user-field FIFO
-      // stays in-order per path and refill_user_t is preserved end-to-end.
+      // HBM0: split DRAM vs peripheral with reqrsp_xbar, not reqrsp_demux, whose shared in-order
+      // ID FIFO capped outstanding refills. Cross-path reordering is safe (miss info is in
+      // refill_user_t); a reqrsp_to_axi per path keeps each user-field FIFO in order.
       if (HbmIdx == L2PeriphChannel) begin : gen_hbm0_demux
 
         // Address-based select: DRAM = port 0, Peripheral = port 1. The
@@ -1325,6 +1313,7 @@ module cachepool_cluster
     );
   end
 
+  // style-waive: COMMENT_BLOCK: peripheral fabric data path diagram
   // --------------------------------------------------
   // Peripheral Fabric (REQRSP-based 2×3 xbar)
   // --------------------------------------------------
@@ -1357,6 +1346,7 @@ module cachepool_cluster
   typedef logic [$clog2(PeriXbarNumTgt)-1:0] peri_tgt_sel_t;
   typedef logic                              peri_src_sel_t;
 
+  // style-waive: AUTOMATIC: boundary checks
   function automatic peri_tgt_sel_t peri_addr_decode(input addr_t addr);
     if (addr >= BootAddr && addr < BootAddr + 32'h1_0000)
       return peri_tgt_sel_t'(PeriTgtBootROM);

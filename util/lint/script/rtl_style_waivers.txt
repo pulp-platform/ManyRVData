@@ -1,0 +1,12 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Waivers for rtl_style_check.py, one per line:
+#   RULE[,RULE] | path-glob | line-regex | reason
+# RULE may be `*`. The line-regex is searched in the source line of the violation and may
+# be empty to waive the rule for the whole file, and may contain `|`. A reason (without `|`)
+# is mandatory.
+# Prefer an inline `// style-waive: RULE reason` line above the code for one-off cases.
+EOL_COMMENT | hardware/src/cachepool_pkg.sv | //\s*(FMA|ADDMUL|DIVSQRT|NONCOMP|CONV|DOTP)\s*$ | row labels of the FPU implementation tables
+AUTOMATIC | hardware/src/cachepool_pkg.sv | | package functions need automatic lifetime for per-call local variables

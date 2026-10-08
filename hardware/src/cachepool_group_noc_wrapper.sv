@@ -139,10 +139,8 @@ module cachepool_group_noc_wrapper
   // Must match tcdm_cache_interco.sv's CacheBankBits: slices the same untouched address field.
   localparam int unsigned NocCacheBankBits  = $clog2(NumL1CtrlTile);
   localparam int unsigned NocAddrTileWidth  = (NumTilesPerGroup > 1) ? $clog2(NumTilesPerGroup) : 1;
-  // -- Actual bit counts inside dst_tile_id (can be 0 when that dimension = 1) -
-  // Flat group_id = gy * NumGroupsX + gx  (row-major, set in cachepool_cluster.sv).
-  // dst_tile_id layout: [ group_y (NocGroupBitsY) | group_x (NocGroupBitsX) | local_tile (NocGroupOffset) ]
-  // Lower group bits are X, upper group bits are Y.
+  // Bit counts inside dst_tile_id (0 when that dimension is 1). Group id is row-major
+  // (gy * NumGroupsX + gx), so dst_tile_id = {group_y, group_x, local_tile}.
   localparam int unsigned NocGroupOffset    = $clog2(NumTilesPerGroup);
   localparam int unsigned NocGroupBitsX     = (NumGroupsX > 1) ? $clog2(NumGroupsX) : 0;
   localparam int unsigned NocGroupBitsY     = (NumGroupsY > 1) ? $clog2(NumGroupsY) : 0;
@@ -294,10 +292,8 @@ module cachepool_group_noc_wrapper
         assign mst_xbar_mst_sel[n]   = eject_rsp[noc_port].hdr.src_port_id;
       end
 
-      // Static port-to-NoC-channel mapping: each flat port p has xbar index
-      // j = p % NrTCDMPortsPerCore, and is steered to NoC channel j % NumNoCPortsPerTile.
-      // Spatz ports (j=0..NrTCDMPortsPerCore-2) divide evenly across channels;
-      // Snitch (j=NrTCDMPortsPerCore-1) maps by the same modulo.
+      // Static port-to-NoC-channel mapping: flat port p has xbar index j = p % NrTCDMPortsPerCore
+      // and goes to NoC channel j % NumNoCPortsPerTile (Spatz and Snitch ports alike).
       localparam int unsigned NocMstSelWidth = (NumNoCPortsPerTile > 1)
                                                ? $clog2(NumNoCPortsPerTile) : 1;
       logic [NumRemoteGroupPortTile-1:0][NocMstSelWidth-1:0] noc_mst_sel;
@@ -570,9 +566,8 @@ module cachepool_group_noc_wrapper
   // -------------------------------------------------------------------------
   // L2 path: floo_tcdm_chimney (MgrPort) + floo_router (source routing)
   // -------------------------------------------------------------------------
-  // The chimney translates request addresses to destination IDs via SAM,
-  // looks up source routes in the routing table, and packs/unpacks flits.
-  // Two floo_router instances (req + rsp) handle 5-port source-routed mesh.
+  // The chimney maps addresses to destination IDs (SAM), looks up source routes and
+  // packs/unpacks flits; two floo_routers (req + rsp) form the 5-port source-routed mesh.
 
   // Internal L2 reqrsp between group and chimney
   l2_req_t l2_group_req;
