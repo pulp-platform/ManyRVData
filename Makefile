@@ -481,12 +481,23 @@ all: hw sw
 # Lint #
 ########
 
-LINT_PATH ?= ${CACHEPOOL_DIR}/util/lint
-SNPS_SG   ?= spyglass-2024.09
+LINT_PATH   ?= ${CACHEPOOL_DIR}/util/lint
+SNPS_SG     ?= spyglass-2024.09
+STYLE_CHECK ?= ${LINT_PATH}/script/rtl_style_check.py
+STYLE_PATHS ?= hardware
+STYLE_ARGS  ?=
 
-.PHONY: lint
-lint: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/lint.tcl
-	cd ${LINT_PATH} && $(SNPS_SG) sg_shell -tcl ${LINT_PATH}/script/lint.tcl
+.PHONY: spyglass
+spyglass: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/spyglass.tcl
+	cd ${LINT_PATH} && $(SNPS_SG) sg_shell -tcl ${LINT_PATH}/script/spyglass.tcl
+
+.PHONY: style-check
+style-check:
+	${PYTHON} ${STYLE_CHECK} scan ${STYLE_ARGS} ${STYLE_PATHS}
+
+.PHONY: style-hook
+style-hook:
+	${PYTHON} ${STYLE_CHECK} install-hook
 
 ${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
@@ -613,7 +624,9 @@ help:
 	@echo ""
 	@echo "Lint:"
 	@echo ""
-	@echo "*lint*:           run SpyGlass lint (requires bender + SpyGlass in PATH)"
+	@echo "*spyglass*:       run SpyGlass lint (requires bender + SpyGlass in PATH)"
+	@echo "*style-check*:    check RTL coding style on STYLE_PATHS (default: hardware); STYLE_ARGS='--changed-since origin/main' limits it to changed lines"
+	@echo "*style-hook*:     install a git pre-commit hook that style-checks the staged lines of staged RTL files"
 	@echo ""
 	@echo "Physical design:"
 	@echo ""
