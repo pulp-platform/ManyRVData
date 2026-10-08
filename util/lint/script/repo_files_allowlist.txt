@@ -1,0 +1,12 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Documentation-like files (.md, .txt, NOTES, ...) that check_repo_files.py allows to be added,
+# one glob per line (`**` spans directories). Everything else, notes and worklogs in
+# particular, is rejected. Extending this list in a PR makes a new document visible in review.
+**/README.md
+docs/**
+requirements.txt
+**/CMakeLists.txt
+util/lint/script/*.txt

@@ -916,11 +916,16 @@ def cmd_install_hook(args, root):
         if args.force:
             os.replace(dst, dst + '.bak')
     script = os.path.relpath(os.path.abspath(__file__), root)
+    files_check = os.path.join(os.path.dirname(script), 'check_repo_files.py')
+    # Run both checks so all findings are shown, fail if either fails.
     with open(dst, 'w') as f:
         f.write('#!/bin/sh\n'
                 f'# Installed by {script} install-hook\n'
                 'root=$(git rev-parse --show-toplevel) || exit 1\n'
-                f'exec "${{PYTHON:-python3}}" "$root/{script}" hook\n')
+                'py="${PYTHON:-python3}"\n'
+                f'"$py" "$root/{script}" hook; rc=$?\n'
+                f'"$py" "$root/{files_check}" hook || rc=1\n'
+                'exit $rc\n')
     os.chmod(dst, os.stat(dst).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     print(f'installed {dst}')
     return 0

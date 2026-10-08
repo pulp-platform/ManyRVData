@@ -486,6 +486,8 @@ SNPS_SG     ?= spyglass-2024.09
 STYLE_CHECK ?= ${LINT_PATH}/script/rtl_style_check.py
 STYLE_PATHS ?= hardware
 STYLE_ARGS  ?=
+FILES_CHECK ?= ${LINT_PATH}/script/check_repo_files.py
+FILES_BASE  ?= origin/main
 
 .PHONY: spyglass
 spyglass: ${LINT_PATH}/tmp/files ${LINT_PATH}/sdc/func.sdc ${LINT_PATH}/script/spyglass.tcl
@@ -498,6 +500,10 @@ style-check:
 .PHONY: style-hook
 style-hook:
 	${PYTHON} ${STYLE_CHECK} install-hook
+
+.PHONY: files-check
+files-check:
+	${PYTHON} ${FILES_CHECK} scan --changed-since ${FILES_BASE}
 
 ${LINT_PATH}/tmp/files:
 	mkdir -p ${LINT_PATH}/tmp
@@ -626,7 +632,8 @@ help:
 	@echo ""
 	@echo "*spyglass*:       run SpyGlass lint (requires bender + SpyGlass in PATH)"
 	@echo "*style-check*:    check RTL coding style on STYLE_PATHS (default: hardware); STYLE_ARGS='--changed-since origin/main' limits it to changed lines"
-	@echo "*style-hook*:     install a git pre-commit hook that style-checks the staged lines of staged RTL files"
+	@echo "*style-hook*:     install a git pre-commit hook running style-check and files-check on staged changes"
+	@echo "*files-check*:    reject new notes/worklogs changes since FILES_BASE (default: origin/main)"
 	@echo ""
 	@echo "Physical design:"
 	@echo ""

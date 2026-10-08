@@ -29,3 +29,17 @@ software/snRuntime/include/snrt_bootinfo.h
 /cachepool
 # Physical design flow
 /pd
+# AI assistant files. CLAUDE.md is only added/updated on purpose: `git add -f CLAUDE.md`, then
+# commit with ALLOW_CLAUDE_MD=1. Notes and worklogs never go into the repo.
+CLAUDE.md
+CLAUDE.local.md
+.claude/*
+!.claude/settings.json
+notes.md
+NOTES.md
+worklog*
+WORKLOG*
+PLAN*.md
+TODO.md
+# Python bytecode (util/lint/script imports)
+__pycache__/

@@ -463,6 +463,9 @@ Waive a finding with a comment line `// style-waive: RULE reason` directly above
 `RULE | path-glob | line-regex | reason` to `util/lint/script/rtl_style_waivers.txt`.
 `python3 util/lint/script/rtl_style_check.py rules` lists the rules.
 
+Notes and worklogs (e.g. from AI assistants) stay out of the repository: `make files-check`, the
+pre-commit hook and CI reject new documentation-like files not listed in
+`util/lint/script/repo_files_allowlist.txt`.
 ---
 
 ### Tips
