@@ -436,6 +436,9 @@ package cachepool_pkg;
     logic                   is_amo;
     reqid_t                 req_id;
     logic                   is_fpu;
+    /// SC flag and outcome, set by the AMO unit at issue and echoed back with the response.
+    logic                   is_sc;
+    logic                   sc_fail;
   } tcdm_user_t;
 
   typedef struct packed {

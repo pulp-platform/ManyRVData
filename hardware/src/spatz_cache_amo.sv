@@ -26,6 +26,10 @@ module spatz_cache_amo
   parameter int unsigned DataWidth    = 64,
   /// Core ID type.
   parameter int unsigned CoreIDWidth  = 1,
+  /// Tile ID width. Hart id is {tile_id, core_id}.
+  parameter int unsigned TileIDWidth  = 1,
+  /// Cycles an LR reservation is held without its SC. Must exceed the worst-case LR->SC latency.
+  parameter int unsigned ResvTimeoutCycles = 1024,
   /// Port type of the data request ports.
   parameter type         tcdm_req_t           = logic,
   /// Port type of the data response ports.
@@ -61,7 +65,7 @@ module spatz_cache_amo
   logic [AddrMemWidth-1:0]  addr_q;
   amo_op_e    amo_op_q;
   logic       load_amo;
-  logic       sc_successful, sc_successful_q;
+  logic       sc_successful;
   tcdm_user_t amo_user, amo_user_q;
 
   typedef enum logic [1:0] {
@@ -79,23 +83,37 @@ module spatz_cache_amo
     logic [AddrMemWidth-1:0] addr;
     /// Which core made this reservation. Important to
     /// track the reservations from different cores and
-    /// to prevent any live-locking.
+    /// to prevent any live-locking. {tile, core} is the hart id.
     logic [CoreIDWidth-1:0]  core;
+    logic [TileIDWidth-1:0]  tile;
   } reservation_t;
   reservation_t reservation_d, reservation_q;
 
+  // Reservation aging: bounds blocking by a hart that issues LR without SC
+  localparam int unsigned ResvTimerWidth = $clog2(ResvTimeoutCycles + 1);
+  logic [ResvTimerWidth-1:0] resv_timer_d, resv_timer_q;
+  logic                      resv_expired;
+
+  assign resv_expired = reservation_q.valid & (resv_timer_q == '0);
+
   logic                   core_ready;
+  logic                   amo_req_accepted;
 
   tcdm_req_chan_t         amo_req;
   tcdm_rsp_chan_t         amo_rsp;
   logic                   amo_req_valid, amo_req_ready, amo_rsp_valid, amo_rsp_ready;
   amo_op_e                amo_insn;
   logic [CoreIDWidth-1:0] amo_cid;
+  logic [TileIDWidth-1:0] amo_tid;
+  logic                   amo_is_owner;
 
+  assign amo_req_accepted = amo_req_valid & core_ready;
 
-  assign amo_insn = amo_req.amo;
-  assign amo_cid  = amo_req.user.core_id;
-  assign amo_user = amo_req.user;
+  assign amo_insn     = amo_req.amo;
+  assign amo_cid      = amo_req.user.core_id;
+  assign amo_tid      = amo_req.user.tile_id;
+  assign amo_is_owner = (reservation_q.core == amo_cid) & (reservation_q.tile == amo_tid);
+  assign amo_user     = amo_req.user;
 
   always_comb begin : amo_req_comb
     // By default pass through
@@ -115,59 +133,48 @@ module spatz_cache_amo
   // -----
   // LR/SC
   // -----
-  logic           sc_req_valid, sc_req_ready;
+  // SC outcome is decided at issue and carried in user.{is_sc, sc_fail}, echoed back by memory
   logic           sc_rsp_valid;
-  logic           sc_q, sc_d;
-  logic           sc_set, sc_clr, sc_en;
-  tcdm_user_t     sc_user_d, sc_user_q;
   tcdm_rsp_chan_t sc_rsp;
 
-  logic           is_sc_rsp;
+  assign sc_rsp_valid = amo_rsp_valid & amo_rsp.user.is_sc;
 
-  assign  sc_req_valid = core_req_i.q_valid & (core_req_i.q.amo inside {AMOSC});
-  assign  sc_req_ready = mem_rsp_i.q_ready;
-  assign  sc_rsp_valid = is_sc_rsp;
-
-  assign sc_user_d  = core_req_i.q.user;
-  assign sc_en      = sc_set | sc_clr;
-  assign sc_set     = amo_req_valid & amo_req_ready & (amo_insn == AMOSC);
-
-  assign is_sc_rsp  = amo_rsp_valid & sc_q &
-                      (sc_user_q.tile_id == amo_rsp.user.tile_id) &
-                      (sc_user_q.core_id == amo_rsp.user.core_id) &
-                      (sc_user_q.req_id  == amo_rsp.user.req_id);
-
-  assign sc_clr     = is_sc_rsp & amo_rsp_ready;
-
-  assign sc_d       = sc_set & ~sc_clr;
-
-  `FFL(sc_successful_q, sc_successful, sc_set, 1'b0)
-  `FFL(sc_q, sc_d, sc_en, 1'b0)
-  `FFL(sc_user_q, sc_user_d, sc_set, '0)
   `FF(reservation_q, reservation_d, '0)
+  `FF(resv_timer_q, resv_timer_d, '0)
 
   always_comb begin : sc_rsp_comb
-    sc_rsp = mem_rsp_i.p;
-    sc_rsp.data = sc_q ? {DataWidth/32{31'h0,~sc_successful_q}} : mem_rsp_i.p.data;
+    sc_rsp      = mem_rsp_i.p;
+    // rd = 0 on success, 1 on failure
+    sc_rsp.data = {DataWidth/32{31'h0, mem_rsp_i.p.user.sc_fail}};
   end
 
-  always_comb begin
+  always_comb begin : resv_comb
     reservation_d = reservation_q;
+    resv_timer_d  = resv_timer_q;
     sc_successful = 1'b0;
-    // new valid transaction
-    if (amo_req_valid & amo_req_ready) begin
+
+    // Age the reservation every cycle and drop it on expiry
+    if (reservation_q.valid && (resv_timer_q != '0)) begin
+      resv_timer_d = resv_timer_q - 1'b1;
+    end
+    if (resv_expired) begin
+      reservation_d.valid = 1'b0;
+    end
+
+    // new accepted transaction
+    if (amo_req_accepted) begin
 
       // An SC can only pair with the most recent LR in program order.
-      // Place a reservation on the address if there isn't already a valid reservation.
-      // We prevent a live-lock by don't throwing away the reservation of a hart unless
-      // it makes a new reservation in program order or issues any SC.
-
-      // But it is legal to only run the lr but never run the paired sc,
-      // so this live lock method would cause another live lock
-      if (amo_req.amo == AMOLR /* && (!reservation_q.valid || reservation_q.core == amo_cid) */) begin
+      // Never steal a live reservation from another hart, to guarantee forward progress.
+      if ((amo_insn == AMOLR) && (!reservation_q.valid || resv_expired || amo_is_owner)) begin
         reservation_d.valid = 1'b1;
-        reservation_d.addr = amo_req.addr;
-        reservation_d.core = amo_cid;
+        reservation_d.addr  = amo_req.addr;
+        reservation_d.core  = amo_cid;
+        reservation_d.tile  = amo_tid;
+        // Reload timer on acquire only, so an LR-only loop cannot hold it forever
+        if (!reservation_q.valid || resv_expired) begin
+          resv_timer_d = ResvTimeoutCycles[ResvTimerWidth-1:0];
+        end
       end
 
       // An SC may succeed only if no store from another hart (or other device) to
@@ -176,14 +183,14 @@ module spatz_cache_amo
       // LR and itself in program order.
 
       // check whether another core has made a write attempt
-      if ((amo_cid != reservation_q.core) &&
+      if (!amo_is_owner &&
           (amo_req.addr == reservation_q.addr) &&
           (!(amo_insn inside {AMONone, AMOLR, AMOSC}) || amo_req.write)) begin
         reservation_d.valid = 1'b0;
       end
 
       // An SC from the same hart clears any pending reservation.
-      if (reservation_q.valid && amo_insn == AMOSC && reservation_q.core == amo_cid) begin
+      if (reservation_q.valid && amo_insn == AMOSC && amo_is_owner) begin
         reservation_d.valid = 1'b0;
         sc_successful = reservation_q.addr == amo_req.addr;
       end
@@ -221,6 +228,9 @@ module spatz_cache_amo
     mem_req_o.q.write = amo_req.write | (sc_successful & (amo_insn == AMOSC));
     mem_req_o.q.amo   = AMONone;
     mem_req_o.q.data  = amo_req.data;
+    // Stamp SC outcome on the request, returned with the response
+    mem_req_o.q.user.is_sc   = (amo_insn == AMOSC);
+    mem_req_o.q.user.sc_fail = (amo_insn == AMOSC) & ~sc_successful;
 
     amo_result_en   = 1'b0;
 
@@ -310,6 +320,8 @@ module spatz_cache_amo
   // Check that data width is legal (a power of two and at least 32 bit).
   `ASSERT_INIT(DataWidthCheck,
     DataWidth >= 32 &&  DataWidth <= 64 && 2**$clog2(DataWidth) == DataWidth)
+  // Reservation timer needs a non-zero timeout.
+  `ASSERT_INIT(ResvTimeoutCheck, ResvTimeoutCycles > 0)
   // Make sure that write is never set for AMOs.
   `ASSERT(AMOWriteEnable,  amo_req_valid && !amo_insn inside {AMONone} |-> !amo_req.write)
   // Byte enable mask is correct
