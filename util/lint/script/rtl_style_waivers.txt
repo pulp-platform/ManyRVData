@@ -1,0 +1,9 @@
+# Copyright 2026 ETH Zurich and University of Bologna.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Waivers for rtl_style_check.py, one per line:
+#   RULE[,RULE] | path-glob | line-regex | reason
+# RULE may be `*`. The line-regex is searched in the source line of the violation and may
+# be empty to waive the rule for the whole file. A reason is mandatory.
+# Prefer an inline `// style-waive: RULE reason` line above the code for one-off cases.

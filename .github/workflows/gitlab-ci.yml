@@ -34,6 +34,33 @@ jobs:
           Bender.lock
           .gitignore
 
+  lint-style:
+    runs-on: ubuntu-latest
+    steps:
+    -
+      name: Checkout
+      uses: actions/checkout@v3
+      with:
+        # Full history, so the merge-base with the base branch is available
+        fetch-depth: 0
+    -
+      name: Check RTL coding style on changed lines
+      env:
+        EVENT: ${{ github.event_name }}
+        BASE_REF: ${{ github.base_ref }}
+        BEFORE: ${{ github.event.before }}
+      run: |
+        # Same check as the pre-commit hook: only lines changed by this PR/push are reported.
+        if [ "$EVENT" = "pull_request" ]; then
+          base="origin/$BASE_REF"
+        elif [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+          base="$BEFORE"
+        else
+          base="origin/main"
+        fi
+        echo "Checking lines changed since merge-base with $base"
+        python3 util/lint/script/rtl_style_check.py scan --changed-since "$base"
+
   lint-sv:
     runs-on: ubuntu-latest
     steps:
