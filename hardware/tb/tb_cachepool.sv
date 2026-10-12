@@ -393,6 +393,8 @@ module tb_cachepool;
     axi_dram_sim #(
       .BASE         ( DramBase                           ),
       .DRAMType     ( DramType                           ),
+      // Refills reach the DRAM model as single beats: skip the burst splitter
+      .BurstEn      ( 1'b0                               ),
       .AxiAddrWidth ( SpatzAxiAddrWidth                  ),
       .AxiDataWidth ( SpatzAxiDataWidth                  ),
       .AxiIdWidth   ( WrapperAxiIdOutWidth               ),

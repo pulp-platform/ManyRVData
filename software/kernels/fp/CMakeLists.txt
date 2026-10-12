@@ -14,10 +14,16 @@ add_spatz_test_threeParam(gemv gemv/main.c 256 128 32)
 add_spatz_test_threeParam(gemv gemv/main.c 512 128 32)
 add_spatz_test_threeParam(gemv gemv/main.c 1024 128 32)
 
-add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 128 128 32)
-add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 256 128 32)
-add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 512 128 32)
-add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 1024 128 32)
+# gemv-opt: the third parameter is the mode, then the config (see gemv-opt/README.md)
+# cachepool_fpu_4g
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 4096 64 hot)
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 4096 64 cold)
+# cachepool_fpu_16g
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 16384 64 hot)
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 16384 64 cold)
+# cachepool_fpu_16g_tiny
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 4096 64 hottiny)
+add_spatz_test_threeParam(gemv-opt gemv-opt/main.c 4096 64 coldtiny)
 
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 64 64 64)
 add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 128 128 128)

@@ -1,0 +1,20 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+// cachepool_fpu_4g, cold mode
+// Fields are described in ../README.md.
+
+{
+    kernel: "GEMV"
+    M: 4096,
+    N: 64,
+    groups: 4,
+    lmul: 4,
+    mode: "cold",
+    channels: 4,
+    chan_of_group: [0, 1, 2, 3],
+    cores_per_tile: 4,
+    tiles_per_group: 4,
+    prec: 32
+}

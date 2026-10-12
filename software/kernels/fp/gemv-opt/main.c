@@ -25,224 +25,230 @@
 #include "kernel/gemv.c"
 #include DATAHEADER
 
-#if (PREC == 64)
-#define T double
-#elif (PREC == 32)
-#define T float
-#elif (PREC == 16)
-#define T __fp16
-#else
-#define T float
+// y = A * x with A: M x N, x: N, y: M, all fp32.
+//
+// Each active core owns 16 * lmul rows over all N columns, so there is no
+// reduction. Both modes run with tile-private L1 and xbar offset 8, where the
+// controller is addr[8 +: log2(cores per tile)]: core k of a tile only touches
+// 256 B blocks of its own controller k, so the cores of a tile never contend
+// for a controller and an m4 vector load hits a single one. The data header
+// picks the layout (script/gen_data.py):
+//
+// hot: consecutive blocks of a tile are (tiles + 1) chunks apart, which spreads
+//   the tiles over all HBM channels and every set of the controller, so A
+//   stays resident in L1. Best when A is already in L1.
+//
+// cold: each group reads only its own HBM channel, chan_of_group[g], chosen
+//   against the refill-mesh routes so that no mesh link carries more than one
+//   channel's traffic. A tile then reaches only a few controller sets, so the
+//   mode runs a single (cold) iteration.
+
+// addr[8 +: log2(cores per tile)] selects the controller: 256 B (one m4
+// vector) per controller.
+#ifndef XBAR_OFFSET
+#define XBAR_OFFSET 8
+#endif
+// Number of private banks per tile (0 = all-shared) and how they are folded.
+// Both layouts are built for every bank private to its own tile.
+#ifndef L1D_PART
+#define L1D_PART cores_per_tile
+#endif
+#ifndef L1D_FOLD
+#define L1D_FOLD L1D_FOLD_TILE
 #endif
 
-#define SNRT_NFPU_PER_CORE 4
+// Timed iterations: the first runs on a cold L1, the rest on a hot one. Cold
+// mode only needs the first, and its hot iterations are slow to simulate.
+#ifndef MEASURE_ITER
+#define MEASURE_ITER 3
+#endif
+#ifndef COLD_MEASURE_ITER
+#define COLD_MEASURE_ITER 1
+#endif
 
+// Upper bound on cores, for the per-core error slots
+#define MAX_CORES 256
 
-static inline int fp_check(const T *a, const T *b) {
-  const T threshold = 0.001;
+// Per-core error counts of the result check; every core fills its own slot.
+static int core_errors[MAX_CORES] __attribute__((section(".data")));
+static int num_errors __attribute__((section(".data")));
 
-  // Absolute value
-  float comp = (float)*a - (float)*b;
+static inline int fp_check(const float a, const float b) {
+  const float threshold = 0.001f;
+
+  float comp = a - b;
   if (comp < 0)
     comp = -comp;
 
   return comp > threshold;
 }
 
-// Notice that A matrix might be transposed for easier access (not necessary)
-// But the comments/algorithm will not assume it is transposed
-// A matrix: N-by-M
-// B vector: 1-by-N
-// results:  M-by-1
+// Float offset of a core's block in row 0 of the hot A, x and y layouts:
+// tile t's chunk of cores_per_tile blocks, then core k's block.
+static inline uint32_t core_offset_hot(const uint32_t cid) {
+  return cid * GEMV_CTRL_FLOATS;
+}
 
-static T *result_dram __attribute__((section(".data")));
+// Float offset of a core's block in the first stripes of the cold A, x and y
+// layouts: core q of group g sits in stripe q / 4, in the 1 KiB slot of the
+// group's channel, at block q % 4.
+static inline uint32_t core_offset_cold(const uint32_t cid, const uint32_t cpg,
+                                        const uint32_t stripe) {
+  const uint32_t q = cid % cpg;
+  return (q / 4) * stripe + gemv_chan_of_group[cid / cpg] * GEMV_CHUNK_FLOATS +
+         (q % 4) * GEMV_CTRL_FLOATS;
+}
 
 int main() {
-  T *a;
-  T *b;
-  T *result;
+  const uint32_t num_cores      = snrt_cluster_vpu_num();
+  const uint32_t cores_per_tile = snrt_cluster_vpu_per_tile();
+  const uint32_t num_groups     = snrt_cluster_group_num();
+  const uint32_t cores_per_grp  = num_cores / num_groups;
+  const uint32_t cid            = snrt_cluster_vpu_idx();
+  const int      is_primary     = snrt_cluster_is_primary();
 
-  const uint32_t num_cores = snrt_cluster_vpu_num();
-  const uint32_t cid = snrt_cluster_vpu_idx();
-  const int is_primary = snrt_cluster_is_primary();
+  const uint32_t lmul         = gemv_l.lmul;
+  const uint32_t rows         = GEMV_LINE_FLOATS * lmul;
+  const uint32_t active_cores = gemv_l.groups * cores_per_grp;
+  const int      cold         = (gemv_l.mode == GEMV_MODE_COLD);
+  // Cold: one 1 KiB slot per HBM channel in a stripe
+  const uint32_t stripe       = gemv_l.channels * GEMV_CHUNK_FLOATS;
+  // Distance between a core's consecutive blocks.
+  // Hot: one chunk per active tile plus one empty chunk.
+  // Cold: a group's column spans cores_per_grp / 4 stripes.
+  const uint32_t row          = cold ? (cores_per_grp / 4) * stripe
+                                     : (active_cores / cores_per_tile + 1) *
+                                       cores_per_tile * GEMV_CTRL_FLOATS;
 
-  // How many column of data each core will work on
-  // This will determine the vlen of the calculation
-  const uint32_t m_core = gemv_l.M / num_cores;
-
-  const uint32_t elem_width = sizeof(T) * 8;
-
-  /*** Core Parameters for Optimization ***/
-  const uint32_t lmul_m1       = 512;
-  const uint32_t lmul_m1_elem  = lmul_m1 / elem_width;
-
-  const uint32_t lmul_max      = m_core / lmul_m1_elem;
-  uint32_t lmul;
-  if (lmul_max >= 8) {
-    // Use 4 for now due to implementation
-    lmul = 4;
-  } else if (lmul_max >= 4) {
-    lmul = 4;
-  } else if (lmul_max >= 2) {
-    lmul = 2;
-  } else if (lmul_max == 1) {
-    lmul = 1;
-  } else {
-    if (is_primary && cid == 0) {
-      printf("FATAL: Problem size too small!\n");
-    }
-    snrt_cluster_hw_barrier();
+  // Reject anything the data was not generated for.
+  if (gemv_l.cores_per_tile != cores_per_tile ||
+      gemv_l.tiles_per_group != cores_per_grp / cores_per_tile ||
+      num_cores > MAX_CORES || gemv_l.groups > num_groups ||
+      gemv_l.M != active_cores * rows || (gemv_l.N % GEMV_CTRL_FLOATS) != 0 ||
+      (cold && (lmul != 4 || (cores_per_grp % 4) != 0))) {
+    if (is_primary && cid == 0)
+      printf("FATAL: data (mode %u, groups %u, lmul %u, channels %u) does not fit this config\n",
+             gemv_l.mode, gemv_l.groups, lmul, gemv_l.channels);
     return -1;
   }
 
-  // The elements each core will work on
-  // This is used for scrambling
-  const uint32_t block_elem_core = m_core * gemv_l.N;
-  // offset bits in unit of byte (address)
-  uint32_t offset = 31 - __builtin_clz(m_core * elem_width/8);
+  const uint32_t xbar_offset = XBAR_OFFSET;
+  const uint32_t l1_part     = L1D_PART;
+  const uint32_t l1_fold     = L1D_FOLD;
+  l1d_xbar_config(xbar_offset);
+  l1d_part_folded(l1_part, l1_fold);
 
-  if (is_primary && cid == 0) {
-    result_dram = (T *)snrt_malloc(gemv_l.M * sizeof(T));
-  }
+  const uint32_t offset = cold ? core_offset_cold(cid, cores_per_grp, stripe)
+                               : core_offset_hot(cid);
+  const float *a_core = (const float *)gemv_A_dram + offset;
+  const float *x_core = (const float *)gemv_B_dram + offset;
+  float       *y_core = (float *)gemv_Y_dram + offset;
 
-  // Barrier here ensures all cores see result_dram before the cache mode
-  // changes below.
-  snrt_cluster_hw_barrier();
-
-  // Set xbar policy
-  l1d_xbar_config(offset);
-
-  /*** DRAM Parameters for Optimization ***/
-  const uint32_t l2_interleave = 16;
-  const uint32_t l2_channel    = 4;
-  // in bits
-  const uint32_t l2_lanewidth  = 512;
-  // This is the continuous address block (bits) in DRAM
-  const uint32_t l2_block_size = l2_lanewidth * l2_interleave;
-  const uint32_t l2_block_elem = l2_block_size / elem_width;
-
-  // Are we fully utilizing the off-chip bandwidth?
-  if (block_elem_core < l2_block_elem) {
-    if (is_primary && cid == 0) {
-      printf("FATAL: Current scheme cannot utilize all bandwidth!\n");
-      printf("Core block size:%u, DRAM block size:%u\n", block_elem_core, l2_block_elem);
-    }
-    snrt_cluster_hw_barrier();
-    return -1;
-  }
-
-  // Calculate the starting points for each core
-  // Notice it might be differnt if the matrix is transposed
-  a = gemv_A_dram;
-  b = gemv_B_dram;
-  result = result_dram;
-
-  // Calculate internal pointers
-  // This is the starting point without offset for BW utilization
-  T *a_core       = a + m_core * cid;
-  T *b_core       = b;
-  T *r_core       = result + m_core * cid;
-
-  uint32_t l2_block_bytes = l2_block_size / 8;
-  uint32_t col_bytes      = gemv_l.M * sizeof(T);
-  uint32_t l2_block_cols  = (l2_block_bytes + col_bytes - 1) / col_bytes;
-
-  uint32_t col_shift = (cid * l2_block_cols) % gemv_l.N;
-
-  T *a_offset = a_core + col_shift * gemv_l.M;
-  T *b_offset = b_core + col_shift;
-
-  uint32_t n_core   = gemv_l.N - col_shift;   // first segment length
-  uint32_t comp_size = col_shift;             // second segment length
-
-  if (is_primary && cid == 0) {
-    printf("lmul:%u, mcore:%u\n", lmul, m_core);
-  }
-
-  // Wait for all cores to finish
-  snrt_cluster_hw_barrier();
-
-  // Host 1 never touches Spatz or the shared result/timer state in this
-  // kernel, so the rest of main() is gated by one check instead of many.
+  // Host 1 never touches Spatz or the shared timer state in this kernel, so
+  // the timed region is gated by one check instead of many.
   if (is_primary) {
-    // Reset timer
-    unsigned int timer_start, timer_end, timer, timer_iter1;
+    const uint32_t iters = cold ? COLD_MEASURE_ITER : MEASURE_ITER;
+    uint32_t timer_cold = 0;
+    uint32_t timer_hot  = (uint32_t)-1;
 
     // LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
     // round-robin-arbitrate with host 1 even though it never issues here.
     spatz_lock_acquire();
 
-    for (int i = 0; i < 3; i++) {
-      if (cid == 0) {
+    for (uint32_t i = 0; i < iters; ++i) {
+      if (cid == 0)
         start_kernel();
-        timer_start = benchmark_get_cycle();
-      }
-
-      if (lmul == 4) {
-        gemv_v32b_m4(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
-      } else if (lmul == 2) {
-        gemv_v32b_m2(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
-      } else if (lmul == 1) {
-        gemv_v32b_m1(a_core, b_core, r_core, a_offset, b_offset, gemv_l.M, n_core, m_core, comp_size);
-      }
 
       snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
+
+      uint32_t timer = benchmark_get_cycle();
+
+      if (cid < active_cores) {
+        if (lmul == 2)
+          gemv_v32b_m2(a_core, x_core, y_core, gemv_l.N, row);
+        else
+          gemv_v32b(a_core, x_core, y_core, gemv_l.N, lmul, row);
+      }
+
+      snrt_fence_spatz();
+      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
+
+      timer = benchmark_get_cycle() - timer;
 
       if (cid == 0) {
-        timer_end = benchmark_get_cycle();
-        unsigned int timer_temp = timer_end - timer_start;
-
-        if (timer_temp < timer) {
-          timer = timer_temp;
-        }
-
         stop_kernel();
-
-        if (i == 0) {
-          timer = timer_temp;
-          timer_iter1 = timer;
-
-          for (uint32_t j = 0; j < gemv_l.M; j++) {
-            if (fp_check(&result[j], &gemv_result[j])) {
-              printf("Error: ID: %i Result = %f, Golden = %f\n", i, result[j], gemv_result[j]);
-            }
-          }
-        }
-      } else {
-        cachepool_wait(10);
+        if (i == 0)
+          timer_cold = timer;
+        else if (timer < timer_hot)
+          timer_hot = timer;
       }
-
-      snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
     }
 
-    // Check and display results
     if (cid == 0) {
-      long unsigned int performance =
-          1000 * 2 * gemv_l.M * gemv_l.N / timer;
-      long unsigned int utilization = performance / (2 * num_cores * 4 * (4 / sizeof(T)));
+      // 64-bit FLOP and byte counts: 1000 * 2 * M * N overflows 32 bits.
+      const uint64_t flops = 2ULL * gemv_l.M * gemv_l.N;
+      const uint64_t bytes = 4ULL * gemv_l.M * gemv_l.N;
 
-      long unsigned int performance_iter1 =
-          1000 * 2 * gemv_l.M * gemv_l.N / timer_iter1;
-      long unsigned int utilization_iter1 = performance_iter1 / (2 * num_cores * 4 * (4 / sizeof(T)));
+      const uint32_t perf_cold = (uint32_t)(1000ULL * flops / timer_cold);
+      const uint32_t util_cold = perf_cold / (2 * active_cores * 4);
+      // A bytes moved per 10 cycles, printed with one decimal
+      const uint32_t bw_cold   = (uint32_t)(10ULL * bytes / timer_cold);
 
-      write_cyc(timer);
-      printf("\n----- (%d x %d) x (%d x 1) gemv -----\n", gemv_l.M, gemv_l.N, gemv_l.N);
-      printf("First iteration execution took %u cycles.\n", timer_iter1);
-      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
-             performance_iter1, utilization_iter1);
-      printf("The execution took %u cycles.\n", timer);
-      printf("The performance is %ld OP/1000cycle (%ld%%o utilization).\n",
-             performance, utilization);
+      write_cyc(iters > 1 ? timer_hot : timer_cold);
+      printf("\n----- (%u x %u) x (%u x 1) gemv-opt -----\n", gemv_l.M,
+             gemv_l.N, gemv_l.N);
+      printf("Mode %s: active cores %u (groups %u), lmul %u, L1 part %u fold %u xbar %u\n",
+             cold ? "cold" : "hot", active_cores, gemv_l.groups, lmul,
+             l1_part, l1_fold, xbar_offset);
+      printf("Cold: %u cycles, %u OP/1000cycle (%u%%o utilization), %u.%u B/cycle\n",
+             timer_cold, perf_cold, util_cold, bw_cold / 10, bw_cold % 10);
+      if (iters > 1) {
+        const uint32_t perf_hot = (uint32_t)(1000ULL * flops / timer_hot);
+        const uint32_t util_hot = perf_hot / (2 * active_cores * 4);
+        const uint32_t bw_hot   = (uint32_t)(10ULL * bytes / timer_hot);
+        printf("Hot:  %u cycles, %u OP/1000cycle (%u%%o utilization), %u.%u B/cycle\n",
+               timer_hot, perf_hot, util_hot, bw_hot / 10, bw_hot % 10);
+      }
     }
-
-    snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
 
     // main()'s epilogue restores callee-saved FP registers unconditionally, even for host 1.
     spatz_lock_release();
   }
 
+  // Back to all-shared: this writes the private y lines back to DRAM and
+  // makes them, and num_errors, visible to every core. Called by all cores;
+  // in cold mode it only flushes.
+  l1d_part(0);
+
+  // Every active core checks its own rows; core 0 then adds up the counts.
+  if (is_primary && cid < active_cores) {
+    int errors = 0;
+    for (uint32_t i = cid * rows; i < (cid + 1) * rows; ++i) {
+      const uint32_t r = i % rows;
+      const uint32_t idx = (cold ? core_offset_cold(cid, cores_per_grp, stripe)
+                                 : core_offset_hot(cid)) + r;
+      if (fp_check(((const float *)gemv_Y_dram)[idx], gemv_result[i]))
+        errors++;
+    }
+    core_errors[cid] = errors;
+  }
+
+  snrt_cluster_hw_barrier();
+
+  if (is_primary && cid == 0) {
+    int errors = 0;
+    for (uint32_t c = 0; c < active_cores; ++c) {
+      if (core_errors[c])
+        printf("Core %u: %d wrong rows\n", c, core_errors[c]);
+      errors += core_errors[c];
+    }
+    if (errors)
+      printf("%d errors\n", errors);
+    num_errors = errors;
+  }
+
   // Explicit closing barrier instead of relying on the implicit post-main() one.
   snrt_cluster_hw_barrier();
 
-  return 0;
+  return (num_errors > 0) ? -1 : 0;
 }

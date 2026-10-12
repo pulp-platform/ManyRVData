@@ -185,13 +185,18 @@ FLOO_GEN_OUTDIR ?= $(ROOT_DIR)/hardware/generated
 
 # Auto-select FlooNoC YAML based on config name
 ifneq ($(filter %_16g_tiny,$(config)),)
-  FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_8ch_tiny.yml
+  # Same rule as the full 16g config below, with tiny AXI ID/user widths.
+  ifeq ($(l2_channel),$(num_groups))
+    FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_16ch_tiny.yml
+  else
+    FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_8ch_tiny.yml
+  endif
 else ifneq ($(filter %_16g,$(config)),)
-  # One channel per group (16ch/16g) -> chimneys on all four mesh sides with
-  # same-ID placement, so group K owns channel K. Anything else (e.g. 8ch/16g)
+  # One channel per group (16ch/16g) -> chimneys on all four mesh sides, one
+  # aligned block of four channels per side. Anything else (e.g. 8ch/16g)
   # keeps the West/East-only linear layout. The 4g config also has
-  # l2_channel == num_groups and is same-ID too, but on West/East only -- it
-  # has a single YAML, selected by the else branch below.
+  # l2_channel == num_groups and is same-ID, but on West/East only -- it has a
+  # single YAML, selected by the else branch below.
   ifeq ($(l2_channel),$(num_groups))
     FLOO_CFG ?= $(ROOT_DIR)/config/floonoc/floonoc_cachepool_16g_16ch.yml
   else

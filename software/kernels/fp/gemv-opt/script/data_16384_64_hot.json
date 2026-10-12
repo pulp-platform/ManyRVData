@@ -1,0 +1,18 @@
+// Copyright 2025 ETH Zurich and University of Bologna.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+
+// cachepool_fpu_16g, hot mode
+// Fields are described in ../README.md.
+
+{
+    kernel: "GEMV"
+    M: 16384,
+    N: 64,
+    groups: 16,
+    lmul: 4,
+    mode: "hot",
+    cores_per_tile: 4,
+    tiles_per_group: 4,
+    prec: 32
+}

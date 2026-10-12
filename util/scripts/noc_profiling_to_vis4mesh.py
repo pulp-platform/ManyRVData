@@ -437,6 +437,8 @@ def convert_l2(args):
                 if len(tok) < 2 or tok[0] != 'P':
                     continue
                 portidx = int(tok[1])
+                if portidx == 4:  # Eject port: group injection/ejection, not a mesh edge
+                    continue
                 io = int(tok[2])
                 if io != 1:  # only count the OUTPUT ("so") handshake once per hop
                     continue
