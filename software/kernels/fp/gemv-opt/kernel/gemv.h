@@ -15,28 +15,26 @@
 // limitations under the License.
 
 // Author: Navaneeth Kunhi Purayil, ETH Zurich <nkunhi@iis.ee.ethz.ch>
+// Author: Diyou Shen,              ETH Zurich <dishen@iis.ee.ethz.ch>
 
 #ifndef _GEMV_H
 #define _GEMV_H
 
-inline void gemv_v32b_m4(float *a,         float* b,         float* c,
-                  			 float *a_offset,  float *b_offset,
-                  			 const int unsigned M, const int unsigned N,
-                  			 const int unsigned M_core, const int unsigned N_comp)
-												 __attribute__((always_inline));
+#include <stdint.h>
 
-inline void gemv_v32b_m2(float *a,         float* b,         float* c,
-                  			 float *a_offset,  float *b_offset,
-                  			 const int unsigned M, const int unsigned N,
-                  			 const int unsigned M_core, const int unsigned N_comp)
-												 __attribute__((always_inline));
+// Controller-major layouts, see script/gen_data.py: a 256 B block per cache
+// controller, one chunk of blocks per tile, 1 KiB per HBM channel slot.
+#define GEMV_LINE_FLOATS  16
+#define GEMV_CTRL_FLOATS  64
+#define GEMV_CHUNK_FLOATS 256
 
-inline void gemv_v32b_m1(float *a,         float* b,         float* c,
-                  			 float *a_offset,  float *b_offset,
-                  			 const int unsigned M, const int unsigned N,
-                  			 const int unsigned M_core, const int unsigned N_comp)
-												 __attribute__((always_inline));
-// void gemv_v32b_m4(float *a, float* b, float* c, int M, int M_core, int N);
-// void gemv_v16b_m4(__fp16 *a, __fp16* b, __fp16* c, int M, int M_core, int N);
+inline void gemv_v32b(const float *a, const float *x, float *y,
+                      const uint32_t N, const uint32_t lmul,
+                      const uint32_t row)
+    __attribute__((always_inline));
+
+inline void gemv_v32b_m2(const float *a, const float *x, float *y,
+                         const uint32_t N, const uint32_t row)
+    __attribute__((always_inline));
 
 #endif
