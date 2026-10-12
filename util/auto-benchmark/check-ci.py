@@ -10,6 +10,8 @@
 # Failure conditions:
 #   - Any line containing FAIL or [FAIL] (case-insensitive)
 #   - Any line matching "error <N>" where N is non-zero
+#   - A non-zero return value in the "[EOC] ... (retval = <N>)" line
+#   - No "[EOC]" line at all (the simulation did not finish)
 
 import re
 import sys
@@ -25,12 +27,23 @@ def main():
     error_val_re = re.compile(r'\berror\s+(\d+)\b', re.IGNORECASE)
     # Matches FAIL or [FAIL] anywhere in a line.
     fail_re = re.compile(r'\bFailed\b', re.IGNORECASE)
+    # Matches the end-of-computation line, return value captured as group 1.
+    eoc_re = re.compile(r'\[EOC\].*\(retval\s*=\s*(-?\d+)\)')
 
     failures = []
+    eoc_seen = False
 
     with open(logfile, 'r') as f:
         for lineno, line in enumerate(f, 1):
             stripped = line.rstrip()
+
+            # Check the return value of the test.
+            m = eoc_re.search(stripped)
+            if m:
+                eoc_seen = True
+                if int(m.group(1)) != 0:
+                    failures.append((lineno, stripped))
+                continue
 
             # Check for explicit FAIL keyword.
             if fail_re.search(stripped):
@@ -42,6 +55,9 @@ def main():
                 if int(m.group(1)) != 0:
                     failures.append((lineno, stripped))
                     break
+
+    if not eoc_seen:
+        failures.append((0, "no [EOC] line: simulation did not finish"))
 
     if failures:
         print(f"CI FAILED: {len(failures)} failure(s) detected:")

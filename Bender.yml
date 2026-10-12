@@ -41,6 +41,7 @@ sources:
   # Level 1
   - hardware/generated/floo_cachepool_noc_pkg.sv
   - hardware/src/cachepool_pkg.sv
+  - hardware/src/cachepool_acc_cut.sv
   - hardware/src/cachepool_cc.sv
   - hardware/src/cachepool_spatz_lock.sv
   - hardware/src/acc_mux.sv

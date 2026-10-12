@@ -79,6 +79,8 @@ module cachepool_tile
     /// ## Timing Tuning Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                            RegisterOffloadRsp                 = 1'b0,
+    /// Insert a register cut into off-loading path (request)
+    parameter bit                                            RegisterOffloadReq                 = 1'b0,
     /// Insert Pipeline registers into data memory path (request)
     parameter bit                                            RegisterCoreReq                    = 1'b0,
     /// Insert Pipeline registers into data memory path (response)
@@ -295,6 +297,13 @@ module cachepool_tile
     data_t data_argb;
     addr_t data_argc;
   } acc_issue_req_t;
+
+  // Offload request with the FPU mode Spatz decodes it with, so both pass the offload cut together
+  typedef struct packed {
+    acc_issue_req_t        req;
+    fpnew_pkg::roundmode_e rnd_mode;
+    fpnew_pkg::fmt_mode_t  fmt_mode;
+  } acc_req_mode_t;
 
   typedef struct packed {
     logic accept;
@@ -1451,6 +1460,7 @@ module cachepool_tile
         .hive_req_t              (hive_req_t                 ),
         .hive_rsp_t              (hive_rsp_t                 ),
         .acc_issue_req_t         (acc_issue_req_t            ),
+        .acc_req_mode_t          (acc_req_mode_t             ),
         .acc_issue_rsp_t         (acc_issue_rsp_t            ),
         .acc_rsp_t               (acc_rsp_t                  ),
         .XDivSqrt                (1'b0                       ),
@@ -1465,6 +1475,7 @@ module cachepool_tile
         .FPUImplementation       (FPUImplementation          ),
         .SpmStackDepth           (SpmStackDepth              ),
         .RegisterOffloadRsp      (RegisterOffloadRsp         ),
+        .RegisterOffloadReq      (RegisterOffloadReq         ),
         .RegisterCoreReq         (RegisterCoreReq            ),
         .RegisterCoreRsp         (RegisterCoreRsp            ),
         .NumSpatzFPUs            (NumSpatzFPUs               ),
@@ -1526,6 +1537,7 @@ module cachepool_tile
         .hive_req_t              (hive_req_t                 ),
         .hive_rsp_t              (hive_rsp_t                 ),
         .acc_issue_req_t         (acc_issue_req_t            ),
+        .acc_req_mode_t          (acc_req_mode_t             ),
         .acc_issue_rsp_t         (acc_issue_rsp_t            ),
         .acc_rsp_t               (acc_rsp_t                  ),
         .FPUImplementation       (FPUImplementation          ),
@@ -1547,6 +1559,7 @@ module cachepool_tile
         .NumSpatzIPUs            (NumSpatzIPUs               ),
         .IsoCrossing             (1'b0                       ),
         .RegisterOffloadRsp      (RegisterOffloadRsp         ),
+        .RegisterOffloadReq      (RegisterOffloadReq         ),
         .RegisterCoreReq         (RegisterCoreReq            ),
         .RegisterCoreRsp         (RegisterCoreRsp            ),
         .SnitchPMACfg            (SnitchPMACfg               )

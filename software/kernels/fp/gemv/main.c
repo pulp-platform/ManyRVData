@@ -66,6 +66,8 @@ int main() {
 
   // Reset timer
   unsigned int timer_start, timer_end, timer, timer_iter1;
+  // Wrong results, counted on core 0 (its return value is the test result)
+  unsigned int num_errors = 0;
 
   a = gemv_A_dram;
   b = gemv_B_dram;
@@ -147,6 +149,7 @@ int main() {
       if (i == 0) {
         for (uint32_t j = 0; j < gemv_l.M; j++) {
           if (fp_check(&result[j], &gemv_result[j])) {
+            num_errors++;
             printf("Error: ID: %i Calc", i);
             snrt_printf_float(result[j]);
             printf(",Exp:");
@@ -187,5 +190,5 @@ int main() {
 
   // Wait for core 0 to finish displaying results
   snrt_cluster_hw_barrier();
-  return 0;
+  return num_errors ? -1 : 0;
 }

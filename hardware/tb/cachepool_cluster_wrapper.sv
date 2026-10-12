@@ -89,6 +89,7 @@ module cachepool_cluster_wrapper
     .axi_out_req_t            (spatz_axi_out_req_t      ),
     .axi_out_resp_t           (spatz_axi_out_resp_t     ),
     .RegisterOffloadRsp       (1                        ),
+    .RegisterOffloadReq       (1                        ),
     .RegisterCoreReq          (1                        ),
     .RegisterCoreRsp          (1                        ),
     .RegisterTCDMCuts         (1                        ),

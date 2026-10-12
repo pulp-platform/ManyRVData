@@ -61,6 +61,8 @@ module cachepool_group
     /// ## Timing Tuning Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                       RegisterOffloadRsp        = 1'b0,
+    /// Insert a register cut into off-loading path (request)
+    parameter bit                                       RegisterOffloadReq        = 1'b0,
     /// Insert Pipeline registers into data memory path (request)
     parameter bit                                       RegisterCoreReq           = 1'b0,
     /// Insert Pipeline registers into data memory path (response)
@@ -617,6 +619,7 @@ module cachepool_group
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
         .TileIdxInGroup           ( t                        ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterOffloadReq       ( RegisterOffloadReq       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
         .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
@@ -709,6 +712,7 @@ module cachepool_group
         .NumTilesPerGroup         ( NumTilesPerGroup         ),
         .TileIdxInGroup           ( t                        ),
         .RegisterOffloadRsp       ( RegisterOffloadRsp       ),
+        .RegisterOffloadReq       ( RegisterOffloadReq       ),
         .RegisterCoreReq          ( RegisterCoreReq          ),
         .RegisterCoreRsp          ( RegisterCoreRsp          ),
         .RegisterTCDMCuts         ( RegisterTCDMCuts         ),
