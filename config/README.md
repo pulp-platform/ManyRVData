@@ -27,7 +27,7 @@ config/
 | `cachepool_dual_4g.mk` | 4 groups, dual scalar core per CC, no FPU |
 | `cachepool_dual_fpu_4g.mk` | 4 groups, dual scalar core per CC, Spatz FPU |
 | `cachepool_fpu_16g.mk` | 16 groups (4x4), Spatz FPU, 16 HBM channels |
-| `cachepool_fpu_16g_tiny.mk` | 16 groups (4x4), reduced tiles/cores per group, 8 HBM channels |
+| `cachepool_fpu_16g_tiny.mk` | 16 groups (4x4), reduced tiles/cores per group, 16 HBM channels |
 | `cachepool_dual_fpu_16g.mk` | 16 groups (4x4), dual scalar core per CC, 8 HBM channels |
 
 Flavour names follow `cachepool[_dual][_fpu]_<N>g[_tiny]`: `dual` selects two
@@ -49,7 +49,8 @@ Named `floonoc/floonoc_cachepool_<groups>g_<channels>ch[_<variant>].yml`.
 | `floonoc_cachepool_16g_8ch.yml` | 4x4 mesh, 8 HBM channels on West/East |
 | `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels, one aligned block of 4 per edge: South 0-3, West 4-7, East 8-11, North 12-15 |
 | `floonoc_cachepool_16g_8ch_tiny.yml` | 4x4 mesh, 8 HBM channels, reduced widths |
-| `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels on all four sides, same-ID placement |
+| `floonoc_cachepool_16g_16ch_tiny.yml` | 4x4 mesh, 16 HBM channels on all four sides, reduced widths |
+| `floonoc_cachepool_16g_16ch.yml` | 4x4 mesh, 16 HBM channels on all four sides, one aligned block of 4 per side |
 
 The `Makefile` picks one automatically from `config` and `l2_channel` — see
 [L2 channel placement](#l2-channel-placement) below. A topology file must always
@@ -267,31 +268,33 @@ count, and the `Makefile` picks the matching YAML automatically.
 | `l2_channel` | Chimneys | Placement | YAML |
 | --- | --- | --- | --- |
 | `2 * num_groups_y` | West/East only | Linear | `floonoc_cachepool_16g_8ch.yml` |
-| `2 * (num_groups_x + num_groups_y)` | All four sides | Same-ID | `floonoc_cachepool_16g_16ch.yml` |
+| `2 * (num_groups_x + num_groups_y)` | All four sides | Block of 4 per side | `floonoc_cachepool_16g_16ch.yml` |
 | `num_groups` (2-column mesh) | West/East only | Same-ID | `floonoc_cachepool_4g_4ch.yml` |
 
 - **(asserted)** `l2_channel` must equal one of the first two counts, otherwise
   some channel has no chimney or some boundary port has no channel. The third
   row is the 2-column special case of the first: at `num_groups_x == 2`,
   `2 * num_groups_y == num_groups`, so both conditions hold at once.
-- **Same-ID placement** is selected by `l2_channel == num_groups`: there is
-  exactly one channel per group, so each group can own the channel carrying its
-  own ID. Two mesh shapes qualify.
-- **(asserted)** All-sides same-ID requires a 4x4 group mesh — only there does
-  the boundary port count equal the group count. Group *K* reaches channel *K*
-  in one hop (mesh columns 0 and 3) or two hops (interior columns):
+- `l2_channel == num_groups` (one channel per group) selects one of two
+  layouts, depending on the mesh shape.
+- **(asserted)** All-sides placement requires a 4x4 group mesh — only there
+  does the boundary port count equal the group count. The channels sit in four
+  aligned blocks of four, one per side (South 0-3, West 4-7, East 8-11, North
+  12-15), so group *K* is generally not next to channel *K*:
 
   ```
-   X  13  9 10 14  X
-  12  12 13 14 15  15
-   8   8  9 10 11  11
-   4   4  5  6  7   7
-   0   0  1  2  3   3
-   X   1  5  6  2   X
+   X  12 13 14 15  X
+   7  12 13 14 15  11
+   6   8  9 10 11  10
+   5   4  5  6  7   9
+   4   0  1  2  3   8
+   X   0  1  2  3   X
   ```
 
   Outer ring is the HBM channel, inner 4x4 is the group (`g = gy*4 + gx`, with
-  `gy=0` on the bottom row).
+  `gy=0` on the bottom row). The generated source routes reach West channels
+  X-first and East channels Y-first, so all-to-all refill traffic loads column
+  0's vertical links about twice as much as the others.
 
 - **(asserted)** West/East same-ID requires a 2-column group mesh, so that both
   columns touch an edge. Every group then reaches its own channel in one hop:

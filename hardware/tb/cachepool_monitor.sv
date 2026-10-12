@@ -203,6 +203,85 @@ module cachepool_monitor
   end
 
   // ---------------------------------------------------------------------
+  // Per-(group, tile) L1 Refill Port Monitor.
+  // Each L1 cache controller's refill port toward the group refill xbar
+  // (cache_refill_req_o / cache_refill_rsp_i): read requests accepted, cycles
+  // a request waited for q_ready, read responses received, and the time
+  // integral of reads in flight. avg round trip = in-flight integral / reads,
+  // i.e. the refill latency seen at the controller boundary (Little's law).
+  // ---------------------------------------------------------------------
+  for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_refill_gy
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_refill_gx
+      for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_refill_tile
+
+        cnt_t [NumL1CtrlTile-1:0] rd_req_d,   rd_req_q;
+        cnt_t [NumL1CtrlTile-1:0] req_stall_d, req_stall_q;
+        cnt_t [NumL1CtrlTile-1:0] rd_rsp_d,   rd_rsp_q;
+        cnt_t [NumL1CtrlTile-1:0] inflight_d, inflight_q;
+        // 64-bit: the in-flight integral of a long session can pass 2^32
+        logic [NumL1CtrlTile-1:0][63:0] area_d, area_q;
+        `FF(rd_req_q,    rd_req_d,    '0)
+        `FF(req_stall_q, req_stall_d, '0)
+        `FF(rd_rsp_q,    rd_rsp_d,    '0)
+        `FF(inflight_q,  inflight_d,  '0)
+        `FF(area_q,      area_d,      '0)
+
+        for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin : gen_refill_ctrl
+          logic req_hs, req_wait, rsp_hs;
+          assign req_hs   = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q_valid
+                          & `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].q_ready
+                          & ~`TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q.write;
+          assign req_wait = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q_valid
+                          & ~`TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].q_ready;
+          assign rsp_hs   = `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p_valid
+                          & `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].p_ready
+                          & ~`TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p.write;
+
+          always_comb begin
+            // In-flight count spans sessions; only the per-session totals reset
+            inflight_d[cb]  = inflight_q[cb] + cnt_t'(req_hs) - cnt_t'(rsp_hs);
+            rd_req_d[cb]    = session_edge ? '0 : rd_req_q[cb]    + cnt_t'(req_hs);
+            req_stall_d[cb] = session_edge ? '0 : req_stall_q[cb] + cnt_t'(req_wait);
+            rd_rsp_d[cb]    = session_edge ? '0 : rd_rsp_q[cb]    + cnt_t'(rsp_hs);
+            area_d[cb]      = session_edge ? '0 : area_q[cb]      + 64'(inflight_q[cb]);
+          end
+        end
+
+        int    refill_f;
+        string refill_f_name;
+
+        initial begin
+          @(posedge clk_i);
+          $sformat(refill_f_name, "sim/bin/logs/others/monitor_refill_g%0d_%0d_t%0d.txt", gy, gx, t);
+          refill_f = $fopen(refill_f_name, "w");
+        end
+
+        function automatic void dump_refill_session(input cnt_t idx, input string tag);
+          $fwrite(refill_f, "*** Session %0d (%s): cycles [%0d, %0d) ***\n",
+                  idx, tag, session_start_cycle_q, cycle_q);
+          for (int unsigned cb = 0; cb < NumL1CtrlTile; cb++) begin
+            automatic real span = cycle_q - session_start_cycle_q;
+            automatic real rt   = rd_rsp_q[cb] == 0 ? 0 : real'(area_q[cb]) / real'(rd_rsp_q[cb]);
+            automatic real avg  = span == 0 ? 0 : real'(area_q[cb]) / span;
+            $fwrite(refill_f, "   Ctrl %0d: reads=%0d  rsp=%0d  req stall cyc=%0d  avg in flight=%0.2f  avg round trip=%0.2f\n",
+                    cb, rd_req_q[cb], rd_rsp_q[cb], req_stall_q[cb], avg, rt);
+          end
+          $fwrite(refill_f, "\n");
+        endfunction
+
+        always_ff @(posedge clk_i) begin
+          if (session_edge) dump_refill_session(session_idx_q, session_tag(probe_q, 1'b0));
+        end
+
+        final begin
+          dump_refill_session(session_idx_q, session_tag(cluster_probe_i, 1'b1));
+          $fclose(refill_f);
+        end
+      end
+    end
+  end
+
+  // ---------------------------------------------------------------------
   // L1 Inter-Group NoC Monitor.
   // Cluster-level mesh-link handshakes (noc_req/rsp_out/in), tracked
   // per-(group, direction, tile-port) so that each physical tile-level NoC
@@ -418,6 +497,122 @@ module cachepool_monitor
         $fclose(l2noc_f);
       end
     end
+  end
+
+  // ---------------------------------------------------------------------
+  // L2 Endpoint Path Monitor.
+  // Read requests along each HBM channel's endpoint path, from the reqrsp
+  // request leaving the subordinate chimney to the DRAMSys request port:
+  //   sbr  : hbm_sbr_req (chimney -> reqrsp_to_axi, = mesh edge link)
+  //   axi  : wide_axi_slv_req AR (reqrsp_to_axi output, DUT boundary)
+  //   dw   : axi_dram_sim dram_axi_req AR (after the width converter)
+  //   lite : axi_dram_sim dram_axi_lite_req AR (after the AXI-to-lite converter)
+  //   sim  : axi_dram_sim read_valid/read_ready (into sim_dram)
+  // Per stage: accepted handshakes and cycles with valid high but not ready.
+  // The first stage that shows the stall is where requests are held back.
+  // sbr is traced for the West/East endpoints only.
+  // ---------------------------------------------------------------------
+  for (genvar mem = 0; mem < NumL2Channel; mem++) begin : gen_ep_mon
+    localparam int unsigned NumStg = 4;
+    cnt_t [NumStg-1:0] acc_d, acc_q, stall_d, stall_q;
+    `FF(acc_q,   acc_d,   '0)
+    `FF(stall_q, stall_d, '0)
+
+    logic [NumStg-1:0] stg_valid, stg_ready;
+    assign stg_valid[0] = `CLUSTER_PATH.wide_axi_slv_req[mem].ar_valid;
+    assign stg_ready[0] = `CLUSTER_PATH.wide_axi_slv_rsp[mem].ar_ready;
+    assign stg_valid[1] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.dram_axi_req.ar_valid;
+    assign stg_ready[1] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.dram_axi_resp.ar_ready;
+    assign stg_valid[2] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.dram_axi_lite_req.ar_valid;
+    assign stg_ready[2] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.dram_axi_lite_resp.ar_ready;
+    assign stg_valid[3] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.read_valid;
+    assign stg_ready[3] = $root.tb_cachepool.gen_dram[mem].i_axi_dram_sim.read_ready;
+
+    always_comb begin
+      for (int s = 0; s < NumStg; s++) begin
+        acc_d[s]   = session_edge ? '0 : acc_q[s]   + cnt_t'(stg_valid[s] & stg_ready[s]);
+        stall_d[s] = session_edge ? '0 : stall_q[s] + cnt_t'(stg_valid[s] & ~stg_ready[s]);
+      end
+    end
+
+    int    ep_f;
+    string ep_f_name;
+
+    initial begin
+      @(posedge clk_i);
+      $sformat(ep_f_name, "sim/bin/logs/noc/monitor_dram_path_ch%0d.txt", mem);
+      ep_f = $fopen(ep_f_name, "w");
+    end
+
+    function automatic void dump_ep_session(input cnt_t idx, input string tag);
+      static string name [NumStg] = '{"axi ", "dw  ", "lite", "sim "};
+      $fwrite(ep_f, "*** Session %0d (%s): cycles [%0d, %0d) ***\n",
+              idx, tag, session_start_cycle_q, cycle_q);
+      for (int s = 0; s < NumStg; s++)
+        $fwrite(ep_f, "   %s AR: accepted=%0d  stall_cyc=%0d\n", name[s], acc_q[s], stall_q[s]);
+      $fwrite(ep_f, "\n");
+    endfunction
+
+    always_ff @(posedge clk_i) begin
+      if (session_edge) dump_ep_session(session_idx_q, session_tag(probe_q, 1'b0));
+    end
+
+    final begin
+      dump_ep_session(session_idx_q, session_tag(cluster_probe_i, 1'b1));
+      $fclose(ep_f);
+    end
+  end
+
+  // Chimney -> reqrsp_to_axi request (sbr stage), West/East endpoints, one
+  // per mesh row; labelled by side and row instead of channel index.
+  // gen_l2_refill_mesh only exists in multi-group builds.
+  if (NumGroups > 1) begin : gen_sbr_mon
+  for (genvar side = 0; side < 2; side++) begin : gen_sbr_mon_side
+    for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_sbr_mon_row
+      cnt_t acc_d, acc_q, stall_d, stall_q;
+      `FF(acc_q,   acc_d,   '0)
+      `FF(stall_q, stall_d, '0)
+
+      logic v, r;
+      if (side == 0) begin : gen_w
+        assign v = `CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_west[gy].hbm_sbr_req_valid
+                 & ~`CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_west[gy].hbm_sbr_req.write;
+        assign r = `CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_west[gy].hbm_sbr_req_ready;
+      end else begin : gen_e
+        assign v = `CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_east[gy].hbm_sbr_req_valid
+                 & ~`CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_east[gy].hbm_sbr_req.write;
+        assign r = `CLUSTER_PATH.gen_l2_refill_mesh.gen_hbm_east[gy].hbm_sbr_req_ready;
+      end
+
+      assign acc_d   = session_edge ? '0 : acc_q   + cnt_t'(v & r);
+      assign stall_d = session_edge ? '0 : stall_q + cnt_t'(v & ~r);
+
+      int    sbr_f;
+      string sbr_f_name;
+
+      initial begin
+        @(posedge clk_i);
+        $sformat(sbr_f_name, "sim/bin/logs/noc/monitor_hbm_sbr_%s_gy%0d.txt",
+                 side == 0 ? "west" : "east", gy);
+        sbr_f = $fopen(sbr_f_name, "w");
+      end
+
+      function automatic void dump_sbr_session(input cnt_t idx, input string tag);
+        $fwrite(sbr_f, "*** Session %0d (%s): cycles [%0d, %0d) ***\n",
+                idx, tag, session_start_cycle_q, cycle_q);
+        $fwrite(sbr_f, "   sbr  rd req: accepted=%0d  stall_cyc=%0d\n\n", acc_q, stall_q);
+      endfunction
+
+      always_ff @(posedge clk_i) begin
+        if (session_edge) dump_sbr_session(session_idx_q, session_tag(probe_q, 1'b0));
+      end
+
+      final begin
+        dump_sbr_session(session_idx_q, session_tag(cluster_probe_i, 1'b1));
+        $fclose(sbr_f);
+      end
+    end
+  end
   end
 
   // ---------------------------------------------------------------------

@@ -7,22 +7,23 @@
 # FlooNoC topology for CachePool 16-group (4x4 mesh) with AXI-only links.
 # 16-channel variant of floonoc_cachepool_16g_8ch.yml: HBM chimneys on all four
 # mesh sides instead of West/East only, giving each group more parallel refill
-# bandwidth. Channel IDs are placed so group K reaches channel K in as few hops
-# as possible ("same-ID placement"); the address window of a channel does not
-# depend on where it sits. Selected by the Makefile whenever l2_channel ==
-# num_groups, and must match cachepool_cluster.sv's HbmIdx assignment.
+# bandwidth. The channels are placed in four aligned blocks of four, one block
+# per side: South 0-3, West 4-7, East 8-11, North 12-15. The address window of
+# a channel does not depend on where it sits. Selected by the Makefile whenever
+# l2_channel == num_groups, and must match cachepool_cluster.sv's HbmIdx
+# assignment.
 #
 # Wide channel: dCache refill (512b data)
 #
-# Ring layout (outer = channel, inner = group, gy=3 on top):
-#    X  13  9 10 14  X
-#   12  12 13 14 15  15
-#    8   8  9 10 11  11
-#    4   4  5  6  7   7
-#    0   0  1  2  3   3
-#    X   1  5  6  2   X
-# Edge-column groups (gx=0,3) reach their channel in 1 hop, interior-column
-# groups in 2 -- the lowest achievable maximum.
+# Ring layout (outer = channel, inner = group g = gy*4 + gx, gy=3 on top):
+#    X  12 13 14 15  X
+#    7  12 13 14 15  11
+#    6   8  9 10 11  10
+#    5   4  5  6  7   9
+#    4   0  1  2  3   8
+#    X   0  1  2  3   X
+# Group K is generally not next to channel K: kernels that pin a group to one
+# channel should pick the pairing from the routes (see gemv-opt's cold mode).
 # Peripheral traffic routed through hbm0 chimney (demuxed at cluster output)
 #
 # Width calculation notes (for cachepool_fpu_16g config, 4 tiles/group):

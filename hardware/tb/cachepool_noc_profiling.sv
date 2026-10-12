@@ -192,7 +192,7 @@ module cachepool_noc_profiling
       end
       $fclose(f_rreq[g]);
       $fclose(f_rresp[g]);
-      for (int d = 0; d < 4; d++) begin
+      for (int d = 0; d < 5; d++) begin
         $fwrite(l2_f_req[g], "S %0d 0 %0d %0d %0d\n", d, l2q_start[g][d][0], cycle_q, l2q_st[g][d][0]);
         $fwrite(l2_f_req[g], "S %0d 1 %0d %0d %0d\n", d, l2q_start[g][d][1], cycle_q, l2q_st[g][d][1]);
         $fwrite(l2_f_resp[g], "S %0d 0 %0d %0d %0d\n", d, l2p_start[g][d][0], cycle_q, l2p_st[g][d][0]);
@@ -254,11 +254,11 @@ module cachepool_noc_profiling
   // PE (Snitch core) reqrsp data port: req = core_req[c] (out), resp = core_rsp[c] (in).
   logic [1:0]  pe_req_st [NumGroups][NumTilesPerGroup][NumCoresTile]; logic [63:0] pe_req_s [NumGroups][NumTilesPerGroup][NumCoresTile];
   logic [1:0]  pe_rsp_st [NumGroups][NumTilesPerGroup][NumCoresTile]; logic [63:0] pe_rsp_s [NumGroups][NumTilesPerGroup][NumCoresTile];
-  // L2 router: [group][portidx 0..3][io 0..1] -- one router pair per group,
+  // L2 router: [group][portidx 0..4][io 0..1] -- one router pair per group,
   // no tile/port dimension (see cachepool_group_noc_wrapper.sv's single
-  // i_l2_req_router/i_l2_rsp_router per group).
-  logic [1:0]  l2q_st    [NumGroups][4][2]; logic [63:0] l2q_start [NumGroups][4][2];
-  logic [1:0]  l2p_st    [NumGroups][4][2]; logic [63:0] l2p_start [NumGroups][4][2];
+  // i_l2_req_router/i_l2_rsp_router per group). portidx 4 is the Eject port.
+  logic [1:0]  l2q_st    [NumGroups][5][2]; logic [63:0] l2q_start [NumGroups][5][2];
+  logic [1:0]  l2p_st    [NumGroups][5][2]; logic [63:0] l2p_start [NumGroups][5][2];
 
   // ------------------------------------------------------------
   // Router port capture: mesh directions 0..3 (N/E/S/W, floo_pkg convention)
@@ -571,12 +571,13 @@ module cachepool_noc_profiling
   end
 
   // ------------------------------------------------------------
-  // L2 (DRAM-refill) router capture: mesh directions 0..3 (N/E/S/W) -> one
-  // req + one resp file per group. No tile/port fan-out (unlike the L1
-  // router section above) and no local/Eject-port trace here -- the "Eject"
-  // ports (each group's own manager chimney into this router) aren't graph
-  // edges; the West-boundary HBM channels ARE ordinary West-direction mesh
-  // links from the leftmost column's perspective, already covered below.
+  // L2 (DRAM-refill) router capture: mesh directions 0..3 (N/E/S/W) plus the
+  // Eject port 4 -> one req + one resp file per group. No tile/port fan-out
+  // (unlike the L1 router section above). The Eject port is each group's own
+  // manager chimney into this router: on it, io 0 is a refill request the
+  // group injects and io 1 a response the router hands back to the group. It
+  // is not a graph edge; the West-boundary HBM channels ARE ordinary
+  // West-direction mesh links from the leftmost column's perspective.
   // L2 uses SOURCE ROUTING (l2_noc_hdr_t), not XY, so there's no
   // hdr.dst_id.x/y to log -- only hdr.src_id (an opaque floo endpoint id)
   // and, for req flits, the payload addr/write. Always traced (the L2 mesh
@@ -593,7 +594,7 @@ module cachepool_noc_profiling
           l2q_st[g] <= '{default: '0}; l2q_start[g] <= '{default: '0};
           l2p_st[g] <= '{default: '0}; l2p_start[g] <= '{default: '0};
         end else begin
-          for (int d = 0; d < 4; d++) begin
+          for (int d = 0; d < 5; d++) begin
             begin : l2_req
               automatic logic [1:0] si = `NOCPROF_GRP(gy, gx).l2_router_req_valid_in[d]
                 ? (`NOCPROF_GRP(gy, gx).l2_router_req_ready_out[d]
