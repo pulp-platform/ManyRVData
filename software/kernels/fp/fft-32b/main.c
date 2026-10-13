@@ -105,6 +105,8 @@ int main() {
     for (uint32_t i = 0; i < log2_nfft1; i ++) {
       if (is_primary && cid < active_cores) {
         fft_p1(src_p1, buf_p1, twi_p1, NFFT, NTWI_P1, cid, active_cores, i, len);
+        // The next round reads other cores' outputs: drain the stores before the barrier
+        snrt_fence_spatz();
         // each round will use half the twiddle than previous round
         // the first round needs re/im NFFT/2 twiddles
         src_p1 = (i & 1) ? samples_dram : buffer_dram;
@@ -127,6 +129,8 @@ int main() {
         fft_p2(src_p2, buf_p2, twi_p2, out_p2, store_idx_dram, (NFFT>>log2_nfft1),
               NFFT, log2_nfft2, stride, log2_nfft1, NTWI_P2);
       }
+      // The result is checked after the barrier: drain the stores before it
+      snrt_fence_spatz();
     }
     // Wait for all cores to finish fft
     snrt_cluster_hw_barrier();

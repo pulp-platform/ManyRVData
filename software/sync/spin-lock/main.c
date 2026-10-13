@@ -49,14 +49,16 @@ int main() {
 
   snrt_cluster_hw_barrier();
 
+  int ret = 0;
   if (cid == 0) {
     uint32_t res_hex = (uint32_t) result;
     uint32_t res_gold = (0 + num_cores - 1) * num_cores / 2;
     printf("result: %u; gold: %u\n", res_hex, res_gold);
+    ret = (res_hex != res_gold) ? -1 : 0;
   }
 
   // Wait for core 0 to finish displaying results
   snrt_cluster_hw_barrier();
 
-  return 0;
+  return ret;
 }

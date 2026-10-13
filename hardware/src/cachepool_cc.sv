@@ -47,6 +47,8 @@ module cachepool_cc
     parameter type                                         hive_req_t               = logic,
     parameter type                                         hive_rsp_t               = logic,
     parameter type                                         acc_issue_req_t          = logic,
+    /// Offload request bundled with the FPU mode
+    parameter type                                         acc_req_mode_t           = logic,
     parameter type                                         acc_issue_rsp_t          = logic,
     parameter type                                         acc_rsp_t                = logic,
     // parameter type                                         dma_events_t             = logic,
@@ -83,6 +85,8 @@ module cachepool_cc
     /// Timing Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                          RegisterOffloadRsp       = 0,
+    /// Insert a register cut into off-loading path (request)
+    parameter bit                                          RegisterOffloadReq       = 0,
     /// Insert Pipeline registers into data memory path (request)
     parameter bit                                          RegisterCoreReq          = 0,
     /// Insert Pipeline registers into data memory path (response)
@@ -135,9 +139,12 @@ module cachepool_cc
   XF8 ? 8   :
   0;
 
+  // Spatz decodes with the FPU mode, so it travels with the offload request through the cut.
+  acc_req_mode_t  snitch_acc_req, spatz_acc_req;
   acc_issue_req_t acc_snitch_req;
   acc_issue_req_t acc_snitch_demux;
   acc_issue_rsp_t acc_snitch_resp;
+  acc_issue_rsp_t acc_snitch_demux_resp;
 
   acc_rsp_t acc_demux_snitch;
   acc_rsp_t acc_resp;
@@ -162,6 +169,9 @@ module cachepool_cc
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
   logic       spatz_st_rsp_done;
+  logic [1:0] snitch_mem_finished;
+  logic [1:0] snitch_mem_str_finished;
+  logic       snitch_st_rsp_done;
 
   `SNITCH_VM_TYPEDEF(AddrWidth)
 
@@ -206,15 +216,15 @@ module cachepool_cc
     .inst_valid_o          (hive_req_o.inst_valid    ),
     .inst_ready_i          (hive_rsp_i.inst_ready    ),
     .acc_qreq_o            (acc_snitch_demux         ),
-    .acc_qrsp_i            (acc_snitch_resp          ),
+    .acc_qrsp_i            (acc_snitch_demux_resp    ),
     .acc_qvalid_o          (acc_snitch_demux_qvalid  ),
     .acc_qready_i          (acc_snitch_demux_qready  ),
     .acc_prsp_i            (acc_demux_snitch         ),
     .acc_pvalid_i          (acc_demux_snitch_valid   ),
     .acc_pready_o          (acc_demux_snitch_ready   ),
-    .acc_mem_finished_i    (spatz_mem_finished       ),
-    .acc_mem_str_finished_i(spatz_mem_str_finished   ),
-    .acc_st_rsp_done_i     (spatz_st_rsp_done        ),
+    .acc_mem_finished_i    (snitch_mem_finished      ),
+    .acc_mem_str_finished_i(snitch_mem_str_finished  ),
+    .acc_st_rsp_done_i     (snitch_st_rsp_done       ),
     .data_req_o            (snitch_dreq_d            ),
     .data_rsp_i            (snitch_drsp_d            ),
     .ptw_valid_o           (hive_req_o.ptw_valid     ),
@@ -262,14 +272,41 @@ module cachepool_cc
     .data_o  ( snitch_drsp_d.p       )
   );
 
-  assign acc_qvalid = acc_snitch_demux_qvalid;
-  assign acc_snitch_demux_qready = acc_qready;
+  assign snitch_acc_req = '{
+    req:      acc_snitch_demux,
+    rnd_mode: fpu_rnd_mode,
+    fmt_mode: fpu_fmt_mode
+  };
+  assign acc_snitch_req = spatz_acc_req.req;
+
+  cachepool_acc_cut #(
+    .acc_issue_req_t ( acc_req_mode_t      ),
+    .acc_issue_rsp_t ( acc_issue_rsp_t     ),
+    .Bypass          ( !RegisterOffloadReq )
+  ) i_acc_cut (
+    .clk_i,
+    .rst_ni,
+    .snitch_qreq_i             ( snitch_acc_req          ),
+    .snitch_qvalid_i           ( acc_snitch_demux_qvalid ),
+    .snitch_qready_o           ( acc_snitch_demux_qready ),
+    .snitch_qrsp_o             ( acc_snitch_demux_resp   ),
+    .snitch_mem_finished_o     ( snitch_mem_finished     ),
+    .snitch_mem_str_finished_o ( snitch_mem_str_finished ),
+    .snitch_st_rsp_done_o      ( snitch_st_rsp_done      ),
+    .spatz_qreq_o              ( spatz_acc_req           ),
+    .spatz_qvalid_o            ( acc_qvalid              ),
+    .spatz_qready_i            ( acc_qready              ),
+    .spatz_qrsp_i              ( acc_snitch_resp         ),
+    .spatz_mem_finished_i      ( spatz_mem_finished      ),
+    .spatz_mem_str_finished_i  ( spatz_mem_str_finished  ),
+    .spatz_st_rsp_done_i       ( spatz_st_rsp_done       ),
+    .pending_o                 ( /* Unused */            )
+  );
 
   // There is no shared muldiv in this configuration
   assign hive_req_o.acc_qvalid = 1'b0;
   assign hive_req_o.acc_pready = 1'b0;
   assign hive_req_o.acc_req    = '0;
-  assign acc_snitch_req        = acc_snitch_demux;
 
   assign acc_demux_snitch = acc_resp;
   assign acc_demux_snitch_valid = acc_pvalid;
@@ -324,8 +361,8 @@ module cachepool_cc
     .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
     .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
     .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
-    .fpu_rnd_mode_i          (fpu_rnd_mode          ),
-    .fpu_fmt_mode_i          (fpu_fmt_mode          ),
+    .fpu_rnd_mode_i          (spatz_acc_req.rnd_mode),
+    .fpu_fmt_mode_i          (spatz_acc_req.fmt_mode),
     .fpu_status_o            (fpu_status            )
   );
 

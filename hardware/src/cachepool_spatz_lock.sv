@@ -49,6 +49,9 @@ module cachepool_spatz_lock
   input  logic                    [1:0]  spatz_mem_finished_i,
   input  logic                           spatz_st_rsp_done_i,
 
+  // Offload buffered in a host's request cut, not yet seen by Spatz.
+  input  logic            [NumHosts-1:0] acc_pending_i,
+
   // owner/lock status
   output logic                           owner_id_o,
   output logic                           locked_o,
@@ -153,10 +156,14 @@ module cachepool_spatz_lock
     assign lock_hit[i]    = acquire_hit[i] || release_hit[i];
   end
 
-  // Owner's hit wins on a same-cycle tie; the loser just waits one cycle for resp_pending_q to clear.
+  // A lock op waits until its host's buffered offloads reach Spatz, so it cannot overtake them.
+  logic [1:0] lock_op;
+  assign lock_op = lock_hit & ~acc_pending_i;
+
+  // Owner's op wins on a same-cycle tie; the loser just waits one cycle for resp_pending_q to clear.
   logic hit_any, winner;
-  assign hit_any = lock_hit[0] || lock_hit[1];
-  assign winner  = lock_hit[owner_q] ? owner_q : ~owner_q;
+  assign hit_any = lock_op[0] || lock_op[1];
+  assign winner  = lock_op[owner_q] ? owner_q : ~owner_q;
 
   // Pending, not-yet-delivered completion response (one at a time; a new lock op is
   // only arbitrated once the previous one's response has been taken).

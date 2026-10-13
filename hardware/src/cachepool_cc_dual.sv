@@ -42,6 +42,8 @@ module cachepool_cc_dual
     parameter type                                         hive_req_t               = logic,
     parameter type                                         hive_rsp_t               = logic,
     parameter type                                         acc_issue_req_t          = logic,
+    /// Offload request bundled with the FPU mode
+    parameter type                                         acc_req_mode_t           = logic,
     parameter type                                         acc_issue_rsp_t          = logic,
     parameter type                                         acc_rsp_t                = logic,
     /// FPU configuration.
@@ -75,6 +77,8 @@ module cachepool_cc_dual
     /// Timing Parameters
     /// Insert Pipeline registers into off-loading path (response)
     parameter bit                                          RegisterOffloadRsp       = 0,
+    /// Insert a register cut into off-loading path (request)
+    parameter bit                                          RegisterOffloadReq       = 0,
     /// Insert Pipeline registers into data memory path (request)
     parameter bit                                          RegisterCoreReq          = 0,
     /// Insert Pipeline registers into data memory path (response)
@@ -133,7 +137,9 @@ module cachepool_cc_dual
   dreq_t [1:0] snitch_dreq_d;
   drsp_t [1:0] snitch_drsp_d;
 
-  acc_issue_req_t [1:0] acc_snitch_req;
+  // Spatz decodes with the FPU mode, so it travels with the offload request through the cut
+  // and acc_mux, and Spatz sees the mode of the host that issued the request.
+  acc_req_mode_t  [1:0] acc_snitch_req;
   acc_issue_rsp_t [1:0] acc_snitch_rsp;
   logic           [1:0] acc_snitch_qvalid, acc_snitch_qready;
   acc_rsp_t       [1:0] acc_snitch_prsp;
@@ -151,6 +157,16 @@ module cachepool_cc_dual
   logic [1:0][1:0] acc_mem_finished_h;
   logic [1:0][1:0] acc_mem_str_finished_h;
   logic [1:0]      acc_st_rsp_done_h;
+
+  // Snitch side of each host's offload request cut (acc_snitch_* above is the acc_mux side).
+  acc_issue_req_t  [1:0] snitch_acc_req;
+  acc_req_mode_t   [1:0] snitch_acc_req_mode;
+  acc_issue_rsp_t  [1:0] snitch_acc_rsp;
+  logic            [1:0] snitch_acc_qvalid, snitch_acc_qready;
+  logic [1:0][1:0]       snitch_mem_finished_h;
+  logic [1:0][1:0]       snitch_mem_str_finished_h;
+  logic [1:0]            snitch_st_rsp_done_h;
+  logic [1:0]            acc_pending;
 
   for (genvar h = 0; h < 2; h++) begin : gen_snitch
     snitch #(
@@ -193,16 +209,16 @@ module cachepool_cc_dual
       .inst_data_i           (hive_rsp_i[h].inst_data     ),
       .inst_valid_o          (hive_req_o[h].inst_valid    ),
       .inst_ready_i          (hive_rsp_i[h].inst_ready    ),
-      .acc_qreq_o            (acc_snitch_req[h]           ),
-      .acc_qrsp_i            (acc_snitch_rsp[h]           ),
-      .acc_qvalid_o          (acc_snitch_qvalid[h]        ),
-      .acc_qready_i          (acc_snitch_qready[h]        ),
+      .acc_qreq_o            (snitch_acc_req[h]           ),
+      .acc_qrsp_i            (snitch_acc_rsp[h]           ),
+      .acc_qvalid_o          (snitch_acc_qvalid[h]        ),
+      .acc_qready_i          (snitch_acc_qready[h]        ),
       .acc_prsp_i            (acc_snitch_prsp[h]          ),
       .acc_pvalid_i          (acc_snitch_pvalid[h]        ),
       .acc_pready_o          (acc_snitch_pready[h]        ),
-      .acc_mem_finished_i    (acc_mem_finished_h[h]       ),
-      .acc_mem_str_finished_i(acc_mem_str_finished_h[h]   ),
-      .acc_st_rsp_done_i     (acc_st_rsp_done_h[h]        ),
+      .acc_mem_finished_i    (snitch_mem_finished_h[h]    ),
+      .acc_mem_str_finished_i(snitch_mem_str_finished_h[h]),
+      .acc_st_rsp_done_i     (snitch_st_rsp_done_h[h]     ),
       .data_req_o            (snitch_dreq_d[h]            ),
       .data_rsp_i            (snitch_drsp_d[h]            ),
       .ptw_valid_o           (hive_req_o[h].ptw_valid     ),
@@ -221,10 +237,40 @@ module cachepool_cc_dual
     assign hive_req_o[h].acc_qvalid = 1'b0;
     assign hive_req_o[h].acc_pready = 1'b0;
     assign hive_req_o[h].acc_req    = '0;
+
+    assign snitch_acc_req_mode[h] = '{
+      req:      snitch_acc_req[h],
+      rnd_mode: fpu_rnd_mode_h[h],
+      fmt_mode: fpu_fmt_mode_h[h]
+    };
+
+    cachepool_acc_cut #(
+      .acc_issue_req_t ( acc_req_mode_t      ),
+      .acc_issue_rsp_t ( acc_issue_rsp_t     ),
+      .Bypass          ( !RegisterOffloadReq )
+    ) i_acc_cut (
+      .clk_i,
+      .rst_ni,
+      .snitch_qreq_i             ( snitch_acc_req_mode[h]       ),
+      .snitch_qvalid_i           ( snitch_acc_qvalid[h]         ),
+      .snitch_qready_o           ( snitch_acc_qready[h]         ),
+      .snitch_qrsp_o             ( snitch_acc_rsp[h]            ),
+      .snitch_mem_finished_o     ( snitch_mem_finished_h[h]     ),
+      .snitch_mem_str_finished_o ( snitch_mem_str_finished_h[h] ),
+      .snitch_st_rsp_done_o      ( snitch_st_rsp_done_h[h]      ),
+      .spatz_qreq_o              ( acc_snitch_req[h]            ),
+      .spatz_qvalid_o            ( acc_snitch_qvalid[h]         ),
+      .spatz_qready_i            ( acc_snitch_qready[h]         ),
+      .spatz_qrsp_i              ( acc_snitch_rsp[h]            ),
+      .spatz_mem_finished_i      ( acc_mem_finished_h[h]        ),
+      .spatz_mem_str_finished_i  ( acc_mem_str_finished_h[h]    ),
+      .spatz_st_rsp_done_i       ( acc_st_rsp_done_h[h]         ),
+      .pending_o                 ( acc_pending[h]               )
+    );
   end
 
   // Spatz issue/response bundle, owner-routed by the lock.
-  acc_issue_req_t spatz_issue_req;
+  acc_req_mode_t  spatz_issue_req;
   acc_issue_rsp_t spatz_issue_rsp;
   logic           spatz_issue_valid, spatz_issue_ready;
   acc_rsp_t       spatz_rsp;
@@ -262,6 +308,7 @@ module cachepool_cc_dual
     .spatz_lsu_issue_fire_i         (spatz_lsu_issue_fire),
     .spatz_mem_finished_i           (spatz_mem_finished  ),
     .spatz_st_rsp_done_i            (spatz_st_rsp_done   ),
+    .acc_pending_i                  (acc_pending         ),
     .owner_id_o                     (owner_id            ),
     .locked_o                       (locked              ),
     .waiting_o                      (waiting             ),
@@ -272,7 +319,7 @@ module cachepool_cc_dual
   // Acc mux: real round-robin access to Spatz for both hosts while
   // unlocked, exclusive owner access while locked. See acc_mux.sv.
   acc_mux #(
-    .acc_issue_req_t (acc_issue_req_t),
+    .acc_issue_req_t (acc_req_mode_t ),
     .acc_issue_rsp_t (acc_issue_rsp_t),
     .acc_rsp_t       (acc_rsp_t      )
   ) i_acc_mux (
@@ -306,12 +353,7 @@ module cachepool_cc_dual
     .acc_st_rsp_done_o       (acc_st_rsp_done_h      )
   );
 
-  // FPU rounding-mode/format CSRs: Spatz has one FPU, so it only ever sees the
-  // current owner's config; its status broadcasts back to both hosts.
-  fpnew_pkg::roundmode_e fpu_rnd_mode;
-  fpnew_pkg::fmt_mode_t  fpu_fmt_mode;
-  assign fpu_rnd_mode = fpu_rnd_mode_h[owner_id];
-  assign fpu_fmt_mode = fpu_fmt_mode_h[owner_id];
+  // FPU status from Spatz's one FPU broadcasts back to both hosts.
 
   dreq_t fp_lsu_mem_req;
   drsp_t fp_lsu_mem_rsp;
@@ -346,7 +388,7 @@ module cachepool_cc_dual
     .hart_id_i               (hart_id_i[owner_id]   ),
     .issue_valid_i           (spatz_issue_valid     ),
     .issue_ready_o           (spatz_issue_ready     ),
-    .issue_req_i             (spatz_issue_req       ),
+    .issue_req_i             (spatz_issue_req.req   ),
     .issue_rsp_o             (spatz_issue_rsp       ),
     .rsp_valid_o             (spatz_rsp_valid       ),
     .rsp_ready_i             (spatz_rsp_ready       ),
@@ -362,8 +404,8 @@ module cachepool_cc_dual
     .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
     .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
     .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
-    .fpu_rnd_mode_i          (fpu_rnd_mode          ),
-    .fpu_fmt_mode_i          (fpu_fmt_mode          ),
+    .fpu_rnd_mode_i          (spatz_issue_req.rnd_mode),
+    .fpu_fmt_mode_i          (spatz_issue_req.fmt_mode),
     .fpu_status_o            (fpu_status            )
   );
 

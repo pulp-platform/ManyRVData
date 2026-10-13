@@ -442,5 +442,5 @@ int main(void) {
 
   snrt_cluster_hw_barrier();
 
-  return 0;
+  return errors ? -1 : 0;
 }
