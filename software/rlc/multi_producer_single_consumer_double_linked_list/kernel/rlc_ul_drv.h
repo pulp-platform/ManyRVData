@@ -26,10 +26,7 @@
 #include <stdint.h>
 
 /* MUST be called from exactly one core, from rlc_init(), i.e. BEFORE main.c's
-   startup snrt_cluster_hw_barrier(). It programs the cluster tile
-   participation mask, and that barrier is the resync point the partial-barrier
-   API requires before the mask can be relied on. Doing it later -- lazily on
-   entry to rlc_ul_consumer() -- leaves the phase barriers unprogrammed. */
+   startup snrt_cluster_hw_barrier(), which publishes the state it sets up. */
 void rlc_ul_init(void);
 
 /* Uplink consumer entry point: receive/reassemble/deliver slots. */

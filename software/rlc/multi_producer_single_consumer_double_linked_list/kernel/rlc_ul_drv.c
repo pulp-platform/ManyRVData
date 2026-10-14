@@ -137,15 +137,7 @@ static rlc_ul_cyc_t rlc_ul_cyc_reasm[RLC_ACTUAL_CONSUMERS]
     __attribute__((aligned(CACHE_LINE_SIZE))) __attribute__((section(".data")));
 static uint32_t rlc_ul_cyc_build, rlc_ul_cyc_scan, rlc_ul_cyc_deliver;
 
-/* The arm/restore state for the narrowed-barrier region lives in rlc_sync.h,
-   shared with the downlink -- both directions face the same constraint. */
-
 void rlc_ul_init(void) {
-  /* The tile mask is NOT programmed here. Arming before main.c's startup
-     snrt_cluster_hw_barrier() narrows that barrier too -- the cluster mask is
-     persistent and gates every round, full barriers included -- so it is armed
-     on entry to the consumer loop instead and restored on exit. See
-     rlc_sync.h for the three hardware properties that force this shape. */
   atomic_store_explicit(&rlc_ul_stop, 0u, memory_order_relaxed);
   for (uint32_t u = 0u; u < NUM_USERS; u++) rlc_ul_entity_init(&rlc_ul_ent[u]);
   rlc_ul_cur_sdu = 0u;
@@ -218,7 +210,7 @@ static int rlc_ul_done(void) { return rlc_ul_cur_sdu >= RLC_UL_SDUS; }
    single stream, which is what the scan-versus-reassemble split is measured
    on. Multi-entity uplink reuses these phases under the ownership map the
    downlink already has. */
-static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
+static void rlc_ul_slot(uint32_t me, const rlc_bar_t *bar) {
   uint8_t *tb = (uint8_t *)(uintptr_t)RLC_UL_TB_BASE;
 
   /* --- phase 1: build + scan (serial by construction) --- */
@@ -234,7 +226,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     rlc_ul_cyc_scan += t2 - t1;
     rlc_ul_slots++;
   }
-  rlc_phase_barrier(bar_mask);
+  rlc_phase_barrier(bar);
 
   /* --- phase 2: reassemble (parallel, disjoint slices) --- */
   {
@@ -250,7 +242,7 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     }
     rlc_ul_cyc_reasm[me].cyc += benchmark_get_cycle() - t0;
   }
-  rlc_phase_barrier(bar_mask);
+  rlc_phase_barrier(bar);
 
   /* --- phase 3: deliver in order + STATUS (serial by definition) --- */
   if (me == 0u) {
@@ -266,21 +258,16 @@ static void rlc_ul_slot(uint32_t me, uint32_t bar_mask) {
     if (rlc_ul_done() && rlc_ul_scan_buf.n == 0u)
       atomic_store_explicit(&rlc_ul_stop, 1u, memory_order_relaxed);
   }
-  rlc_phase_barrier(bar_mask);
+  rlc_phase_barrier(bar);
 }
 
-static void rlc_ul_report(uint32_t tm_lo) {
+static void rlc_ul_report(const rlc_bar_t *bar) {
   const rlc_ul_entity_t *e = &rlc_ul_ent[0];
   const uint32_t want = (uint32_t)RLC_UL_SDUS * RLC_UL_SDU_BYTES;
   printf_lock_acquire(&printf_lock);
-  printf("[UL] barrier probe=0x%x wrote=0x%x readback=0x%x local_mask=0x%x %s\n",
-         rlc_narrow_probe, tm_lo, rlc_narrow_readback,
-         snrt_cluster_partial_barrier_mask(consumer_core_ids,
-                                           RLC_ACTUAL_CONSUMERS),
-         rlc_narrow_ok(tm_lo)
-             ? "MASK-OK"
-             : "*** MASK CHECK FAILED: probe should read RESVAL 0xffffffff and "
-               "readback should equal wrote -- check the peripheral map ***");
+  printf("[UL] barrier slot=%u core_mask=0x%x tile_mask=0x%x local_only=%u "
+         "group_mask=0x%x\n", RLC_BARRIER_SLOT, bar->core_mask, bar->tile_mask,
+         bar->local_only, bar->group_mask);
   printf("[UL] check: %s\n",
          (e->delivered == RLC_UL_SDUS && e->out_of_window == 0u &&
           e->delivered_bytes == want)
@@ -294,25 +281,12 @@ static void rlc_ul_report(uint32_t tm_lo) {
    barrier, so rlc_init() needs no uplink hook. */
 void rlc_ul_consumer(uint32_t core_id) {
   const uint32_t me = rlc_consumer_index(core_id);
-  const uint32_t mask =
-      snrt_cluster_partial_barrier_mask(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
-  uint32_t tm_lo, tm_hi;
-  rlc_consumer_tile_mask(&tm_lo, &tm_hi);
-
-  /* Arm the narrowed region here rather than in rlc_init(): the cluster mask
-     gates every barrier round, so narrowing before main.c's startup barrier
-     breaks that barrier. Consumer 0 programs it; the others wait on a flag,
-     because they cannot resync on the barrier being narrowed. */
-  rlc_narrow_enter(tm_lo, tm_hi, me == 0u);
+  const rlc_bar_t bar = rlc_bar_describe(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
 
   while (!atomic_load_explicit(&rlc_ul_stop, memory_order_relaxed))
-    rlc_ul_slot(me, mask);
+    rlc_ul_slot(me, &bar);
 
-  /* Restore before anyone reaches a full barrier again, and only then release
-     the non-participants spinning outside it. */
-  rlc_narrow_exit(me == 0u);
-
-  if (me == 0u) rlc_ul_report(tm_lo);
+  if (me == 0u) rlc_ul_report(&bar);
 }
 
 #endif /* RLC_UL_DRV_C */

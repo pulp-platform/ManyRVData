@@ -185,11 +185,6 @@ void rlc_am_init(uint32_t u) {
       rlc_am_open_entity[k] = RLC_AM_NO_ENTITY;
 
 #if RLC_AM_TTI
-    /* The tile mask is NOT programmed here any more. Doing it at init put the
-       narrowing in force before main.c's startup snrt_cluster_hw_barrier(),
-       which the cluster mask then gates -- so that barrier stopped waiting for
-       anyone outside the consumer tiles. It is armed on entry to the consumer
-       loop instead, and restored on exit. See rlc_sync.h. */
     {
       for (uint32_t k = 0u; k < RLC_AM_MAX_TRACKED_CONSUMERS; k++) rlc_am_rr[k] = 0u;
       atomic_store_explicit(&rlc_am_stop, 0u, memory_order_relaxed);
@@ -796,26 +791,9 @@ void rlc_am_consumer_tti(uint32_t core_id) {
   const uint32_t me = rlc_consumer_index(core_id);
   rlc_am_my_open = RLC_AM_NO_ENTITY;
   rlc_am_my_rr = 0u;
-  /* Tile-local participant mask. O(n), computed once on entry, never in the
-     loop. Every consumer in a tile derives the same value independently. */
-  const uint32_t mask =
-      snrt_cluster_partial_barrier_mask(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
-
-  /* Arm the narrowed region here, not at init. Consumer 0 programs the mask;
-     the others wait on a flag rather than on the barrier they are about to
-     narrow, which is the resync the API documents and which cannot work. */
-  {
-    uint32_t tm_lo, tm_hi;
-    rlc_consumer_tile_mask(&tm_lo, &tm_hi);
-    rlc_narrow_enter(tm_lo, tm_hi, me == 0u);
-    if (me == 0u && !rlc_narrow_ok(tm_lo)) {
-      printf_lock_acquire(&printf_lock);
-      printf("[AM] MASK CHECK FAILED: probe=0x%x readback=0x%x wrote=0x%x -- "
-             "the participation register is not where we wrote it; check the "
-             "peripheral map\n", rlc_narrow_probe, rlc_narrow_readback, tm_lo);
-      printf_lock_release(&printf_lock);
-    }
-  }
+  /* Barrier descriptor. O(n), computed once on entry, never in the loop.
+     Every consumer derives its own tile's value independently. */
+  const rlc_bar_t bar = rlc_bar_describe(consumer_core_ids, RLC_ACTUAL_CONSUMERS);
 
   while (1) {
 #if RLC_TTI_CYCLES
@@ -825,17 +803,17 @@ void rlc_am_consumer_tti(uint32_t core_id) {
     perf_probe_phase(PERF_PROBE_PHASE_PLAN);
     rlc_am_plan_phase(me);
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
-    rlc_phase_barrier(mask);  /* helpers BLOCK here; fenced -- see rlc_sync.h */
+    rlc_phase_barrier(&bar);  /* helpers BLOCK here; fenced -- see rlc_sync.h */
 
     perf_probe_phase(PERF_PROBE_PHASE_EXECUTE);
     rlc_am_execute_phase();
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
-    rlc_phase_barrier(mask);
+    rlc_phase_barrier(&bar);
 
     perf_probe_phase(PERF_PROBE_PHASE_COMMIT);
     rlc_am_commit_phase(me);
     perf_probe_phase(PERF_PROBE_PHASE_BARRIER);
-    rlc_phase_barrier(mask);
+    rlc_phase_barrier(&bar);
 
     if (me == 0u) {
       perf_probe(PROBE_EVT_TTI_END, rlc_am_ttis);
@@ -845,7 +823,7 @@ void rlc_am_consumer_tti(uint32_t core_id) {
                PRODUCER_CORE_NUM && rlc_am_idle()) ? 1u : 0u,
           memory_order_release);
     }
-    rlc_phase_barrier(mask);
+    rlc_phase_barrier(&bar);
     if (atomic_load_explicit(&rlc_am_stop, memory_order_acquire)) break;
 
 #if RLC_TTI_CYCLES
@@ -855,12 +833,6 @@ void rlc_am_consumer_tti(uint32_t core_id) {
     }
 #endif
   }
-
-  /* All consumers are past the last partial barrier here -- they exit on the
-     same iteration, having read rlc_am_stop after a common barrier. Restore
-     the mask before anyone reaches a full barrier again, then release the
-     non-participants spinning outside it. */
-  rlc_narrow_exit(me == 0u);
 }
 #endif /* RLC_AM_TTI */
 

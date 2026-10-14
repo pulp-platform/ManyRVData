@@ -18,12 +18,10 @@
 
 /* Phase barrier for the RLC TTI loops, downlink and uplink.
  
-   **snrt_cluster_partial_barrier() synchronises execution, not memory.** Its
-   whole implementation is one plain store to the barrier register:
+   **A hardware barrier synchronises execution, not memory.** A partial
+   barrier is one plain store to the barrier register:
  
-     void snrt_cluster_partial_barrier(uint32_t local_mask) {
-         *(volatile uint32_t *)_snrt_barrier_reg_ptr() = local_mask;
-     }
+     *(volatile uint32_t *)_snrt_barrier_reg_ptr() = payload;
  
    It makes the participating cores wait for one another, and that is all. It
    issues no fence, so a write made before it is not guaranteed visible to
@@ -52,105 +50,79 @@
 
 #include <stdint.h>
 #include <snrt.h>
+#include "cachepool_peripheral.h"
 
-static inline void rlc_phase_barrier(uint32_t local_mask) {
+/* ------------------------------------------------------------------------ */
+/* Consumer-only barrier on its own hardware slot                            */
+/* ------------------------------------------------------------------------ */
+
+/* The phase barrier runs on a dedicated barrier slot. Slot 0 belongs to the
+   full-cluster barrier (snrt_cluster_hw_barrier) and, on dual-scalar builds,
+   slot 1 to the host barriers; every slot has its own tile/group/cluster
+   round tracker and its own release, so the consumers' rounds never mix with
+   the full barrier the other cores are waiting in. Non-participants therefore
+   simply proceed to snrt_cluster_hw_barrier(). */
+#if SNRT_HOST_BARRIER_SLOT == 1
+#define RLC_BARRIER_SLOT 2u
+#else
+#define RLC_BARRIER_SLOT 1u
+#endif
+
+#if RLC_BARRIER_SLOT >= CACHEPOOL_PERIPHERAL_PARAM_NUM_BARRIER_SLOTS
+#error "RLC phase barrier needs a free barrier slot: raise NumBarrierSlots"
+#endif
+
+/* Everything one barrier round needs; identical on every core of a tile, and
+   the tile mask identical on every tile of a group, which is what the
+   tile/group trackers latch and compare. */
+typedef struct {
+  uint32_t core_mask;   /* participants in my tile                         */
+  uint32_t tile_mask;   /* participating tiles of my group (group-relative) */
+  uint32_t local_only;  /* 1: the round resolves without the cluster level  */
+  uint32_t group_mask;  /* participating groups (cluster-level, per slot)   */
+} rlc_bar_t;
+
+/* Derive the descriptor for the calling core from the participant list. */
+static inline rlc_bar_t rlc_bar_describe(const unsigned int *cids, uint32_t n) {
+  const uint32_t cpt = snrt_cluster_core_per_tile();
+  const uint32_t ngrp = snrt_cluster_group_num();
+  const uint32_t tpg = snrt_cluster_tile_num() / ngrp;
+  const uint32_t my_tile = snrt_cluster_tile_idx();
+  const uint32_t my_grp = my_tile / tpg;
+  rlc_bar_t b = {0u, 0u, 1u, 0u};
+  for (uint32_t i = 0u; i < n; i++) {
+    const uint32_t t = cids[i] / cpt;
+    const uint32_t g = t / tpg;
+    b.group_mask |= 1u << g;
+    if (g == my_grp) b.tile_mask |= 1u << (t % tpg);
+    if (t == my_tile) b.core_mask |= 1u << (cids[i] % cpt);
+  }
+  if (b.group_mask & (b.group_mask - 1u)) {
+    b.local_only = 0u;                     /* several groups: via the cluster */
+  } else if (b.tile_mask == (1u << (my_tile % tpg))) {
+    b.tile_mask = SNRT_BARRIER_TILE_MASK_SELF; /* one tile: never leaves it   */
+  }
+  return b;
+}
+
+/* Called once, by one core, before the startup snrt_cluster_hw_barrier(),
+   which is the resync point the API asks for. Programming slot RLC_BARRIER_SLOT
+   cannot disturb that barrier: it runs on slot 0. Only needed when the round
+   crosses groups and not every group takes part (the register resets to all
+   groups). */
+static inline void rlc_bar_init(const unsigned int *cids, uint32_t n) {
+  const rlc_bar_t b = rlc_bar_describe(cids, n);
+  const uint32_t ngrp = snrt_cluster_group_num();
+  const uint32_t all = (ngrp >= 32u) ? 0xffffffffu : ((1u << ngrp) - 1u);
+  if (!b.local_only && b.group_mask != all)
+    snrt_barrier_set_group_mask(RLC_BARRIER_SLOT, b.group_mask);
+}
+
+static inline void rlc_phase_barrier(const rlc_bar_t *b) {
   asm volatile("fence" ::: "memory"); /* publish this phase's writes */
-  snrt_cluster_partial_barrier(local_mask);
+  snrt_cluster_group_barrier(b->core_mask, b->tile_mask, (int)b->local_only,
+                             RLC_BARRIER_SLOT);
   asm volatile("fence" ::: "memory"); /* observe the other cores' writes */
-}
-
-/* ------------------------------------------------------------------------ */
-/* Narrowed-barrier region                                                   */
-/* ------------------------------------------------------------------------ */
-
-/* Using a partial barrier safely takes more than programming the mask. Three
-   properties of the hardware constrain it -- see
-   reports/design_notes/PARTIAL_BARRIER_MISUSE.md:
- 
-   1. The cluster tile mask is PERSISTENT and gates every round, full barriers
-      included: `mask_d = barrier_mask_i` is re-read at each round start and
-      there is no full-vs-partial distinction at the cluster level. So a mask
-      left narrowed breaks every later snrt_cluster_hw_barrier().
- 
-   2. At tile level, WHICHEVER REQUEST ARRIVES FIRST owns the round --
-      `core_mask_d = req_mask[first_hit_idx]`, where a read means "all cores"
-      and a write means "this mask". Mixing the two inside one tile races, and
-      the two directions give opposite symptoms: a partial barrier absorbed
-      into an all-cores round hangs, a full barrier absorbed into a
-      participants-only round releases early.
- 
-   3. `barrier_done_o` is a SINGLE UNMASKED BROADCAST. The mask gates who must
-      arrive, not who is released, so any partial-barrier completion frees
-      every core waiting at a barrier anywhere in the cluster. This is why
-      non-participants cannot simply be moved to another tile, and why they
-      have to stay out of the barrier entirely rather than wait in one.
- 
-   Hence: arm here rather than at init (arming before main's startup barrier
-   would break that barrier), publish it with a flag rather than a barrier
-   (the participants cannot resync on the barrier they are narrowing), keep
-   non-participants spinning outside, and restore the mask before anyone
-   reaches a full barrier again. */
-
-#define RLC_MASK_RESVAL 0xFFFFFFFFu
-
-static _Atomic uint32_t rlc_narrow_armed;   /* mask programmed; partials legal */
-static _Atomic uint32_t rlc_narrow_done;    /* region over; mask restored      */
-static uint32_t rlc_narrow_probe;           /* pre-write read of the register  */
-static uint32_t rlc_narrow_readback;        /* post-write read               */
-
-/* Bounded pause between polls. Only cores with no work spin -- participants
-   still block on a real barrier -- but idle cores polling a shared line at
-   full rate is pointless memory traffic. */
-static inline void rlc_narrow_pause(void) {
-  for (volatile int i = 0; i < 64; i++) { }
-}
-
-/* Enter the narrowed region. `first` must be true on exactly one participant.
-   Returns nothing; rlc_narrow_ok() reports whether the register agreed. */
-static inline void rlc_narrow_enter(uint32_t tm_lo, uint32_t tm_hi, int first) {
-  if (first) {
-    volatile uint32_t *reg =
-        (volatile uint32_t *)_snrt_barrier_participation_mask_reg_ptr();
-    /* Pre-write probe: the mask register resets to RESVAL 0xFFFFFFFF, while
-       everything else that could sit at this offset under a wrong peripheral
-       map resets to 0. Read-back alone cannot tell them apart -- any RW
-       scratch accepts a write and returns it. */
-    rlc_narrow_probe = reg[0];
-    snrt_barrier_set_tile_mask(tm_lo, tm_hi);
-    asm volatile("fence" ::: "memory");
-    rlc_narrow_readback = reg[0];
-    atomic_store_explicit(&rlc_narrow_armed, 1u, memory_order_release);
-    asm volatile("fence" ::: "memory");
-  } else {
-    while (!atomic_load_explicit(&rlc_narrow_armed, memory_order_acquire))
-      rlc_narrow_pause();
-    asm volatile("fence" ::: "memory");
-  }
-}
-
-/* Leave the narrowed region: restore the mask, then release the cores waiting
-   outside. Order matters -- a non-participant released before the restore
-   would enter a still-narrowed barrier. */
-static inline void rlc_narrow_exit(int first) {
-  if (first) {
-    snrt_barrier_set_tile_mask(RLC_MASK_RESVAL, RLC_MASK_RESVAL);
-    asm volatile("fence" ::: "memory");
-    atomic_store_explicit(&rlc_narrow_done, 1u, memory_order_release);
-    asm volatile("fence" ::: "memory");
-  }
-}
-
-/* Non-participants: wait OUTSIDE any barrier until the region is over. */
-static inline void rlc_narrow_wait_outside(void) {
-  while (!atomic_load_explicit(&rlc_narrow_done, memory_order_acquire))
-    rlc_narrow_pause();
-  asm volatile("fence" ::: "memory");
-}
-
-/* True when the participation-mask register behaved like the mask register:
-   reset signature seen before the write, and the write read back. */
-static inline int rlc_narrow_ok(uint32_t tm_lo) {
-  return (rlc_narrow_probe == RLC_MASK_RESVAL) && (rlc_narrow_readback == tm_lo);
 }
 
 #endif /* RLC_SYNC_H */

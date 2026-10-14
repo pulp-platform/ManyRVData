@@ -514,7 +514,7 @@ macro(add_rlc_ul name source dataheader prod cons exec tc tb suffix)
 endmacro()
 
 # TC1 consumer ladder at the DOCUMENTED uplink profile: 160 B PDUs, 1 Gbps,
-# 1600 slots/s -> 78,125 B and 488 SDUs per slot. Each 8 KB block carries ~49
+# 400 slots/s -> 312,500 B and 1953 SDUs per slot. Each 8 KB block carries ~49
 # PDUs and segments at the boundary, so the serial header walk is measured on
 # traffic that actually contains 5-byte SO headers.
 add_rlc_ul(multi_producer_single_consumer_double_linked_list

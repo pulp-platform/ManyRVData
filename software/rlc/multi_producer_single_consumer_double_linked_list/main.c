@@ -91,6 +91,8 @@ int main(void) {
         }
 #endif
 
+        rlc_barrier_init();
+
 #if RLC_GROUP_STREAMS
         /* Last, right before the start barrier: it also starts the paced-arrival clock. */
         rlc_streams_init();
