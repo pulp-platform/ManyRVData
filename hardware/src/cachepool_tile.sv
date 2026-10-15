@@ -1299,12 +1299,9 @@ module cachepool_tile
             automatic logic sel_found;
             automatic int unsigned sel_part_idx;
 
-            // Timing (T1.1): bank_we/bank_req are value-identical to direct OR-reduces
-            // of the part bits (the arbiter always selects a write-part when any
-            // write exists, else a read-part), so compute them directly off the
-            // critical path tail (data-bank we -> meta-write clock-gate) instead
-            // of riding the priority cascade + 4:1 sel_part_idx mux.  addr/wdata/
-            // be still use the mux.  Matches gen_unfolded_data_banks (1303-1304).
+            // Timing: we/req equal the OR of the part bits (the cascade prefers a write part),
+            // so take them directly instead of through the sel_part_idx mux, off the critical
+            // path tail. addr/wdata/be still use the mux.
             bank_we[col][bank_sel]  = |part_we[col][bank_sel];
             bank_req[col][bank_sel] = (|part_we[col][bank_sel]) | (|part_req[col][bank_sel]);
             bank_addr[col][bank_sel] = '0;
