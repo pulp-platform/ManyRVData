@@ -290,8 +290,9 @@ void rlc_init(const unsigned int rlcId, const unsigned int cellId, mm_context_t 
 /*
    rlc_start() initializes shared RLC resources and starts the RLC kernel
    for the current core. The core ID, obtained in main(), is passed here.
+   Returns non-zero on core 0 when a compiled-in result check failed.
 */
-void rlc_start(const unsigned int core_id);
+int rlc_start(const unsigned int core_id);
 
 /*
    cluster_entry() is the per-core entry function for the RLC kernel.

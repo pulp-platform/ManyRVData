@@ -372,7 +372,8 @@ void rlc_am_consumer_tti(uint32_t core_id);
 void rlc_am_consumer_tile(uint32_t core_id);
 
 /* Print the AM summary (grants, PDUs, segments, polls) and, when the checks
-   are compiled in, the verdict. Call on one core after the final barrier. */
-void rlc_am_report(void);
+   are compiled in, the verdict. Call on one core after the final barrier.
+   Returns non-zero if a check failed. */
+uint32_t rlc_am_report(void);
 
 #endif /* RLC_AM_H */

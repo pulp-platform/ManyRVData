@@ -1096,8 +1096,9 @@ void rlc_am_status(void) {
 #endif
 }
 
-void rlc_am_report(void) {
+uint32_t rlc_am_report(void) {
   uint32_t grants = 0u, pdus = 0u, segs = 0u, polls = 0u;
+  uint32_t failed = 0u;
 #if RLC_TILE_AFFINITY
   /* The entities live in other tiles' private partitions; each owner added its totals on exit. */
   grants = rlc_am_tot[0]; pdus = rlc_am_tot[1]; segs = rlc_am_tot[2]; polls = rlc_am_tot[3];
@@ -1177,6 +1178,7 @@ void rlc_am_report(void) {
         atomic_load_explicit(&rlc_am_plan_bad, memory_order_relaxed);
     printf("[AM] plan vector-vs-reference mismatches: %u -> %s\n", pb,
            pb ? "FAIL" : "PASS");
+    failed |= (pb != 0u);
   }
 #endif
 #ifdef RLC_SELF_CHECK
@@ -1187,6 +1189,7 @@ void rlc_am_report(void) {
         atomic_load_explicit(&rlc_am_verify_grants, memory_order_relaxed);
     printf("[AM] transport-block check: %u grants, %u mismatches -> %s\n", vg,
            ve, ve ? "FAIL" : "PASS");
+    failed |= (ve != 0u);
     for (uint32_t u = 0u; u < NUM_USERS; u++) {
       const rlc_am_entity_t *e = &rlc_am_ent[u];
       if (!e->verify_mask) continue;
@@ -1205,6 +1208,7 @@ void rlc_am_report(void) {
   }
 #endif
   printf_lock_release(&printf_lock);
+  return failed;
 }
 
 /* ------------------------------------------------------------------------ */

@@ -1194,6 +1194,10 @@ static void pkt_production_and_recycle(const unsigned int core_id)
     }
 }
 
+/* Non-zero once a compiled-in result check failed; written and read by core 0 only.
+   rlc_start() returns it so the failure reaches the EOC exit code. */
+static uint32_t rlc_check_failed;
+
 /* cluster_entry() dispatches behavior based on core_id: cores listed in
    producer_core_ids/consumer_core_ids (see the generated data header) run
    the RLC kernel; any other core stays idle for this run and just reaches
@@ -1232,12 +1236,17 @@ void cluster_entry(const unsigned int core_id) {
        the AM path never writes -- it assembles transport blocks instead, and
        those are checked at commit time by rlc_am_verify_grant(). */
     if (core_id == 0) {
-        rlc_am_report();
+        rlc_check_failed |= rlc_am_report();
     }
 #elif defined(RLC_SELF_CHECK)
     /* All sends are complete and tgt buffers are stable here. */
     if (core_id == 0) {
         self_check(pdcp_pkgs, NUM_PKGS);
+    }
+#endif
+#if RLC_UL_MODE
+    if (core_id == 0) {
+        rlc_check_failed |= atomic_load_explicit(&rlc_ul_failed, memory_order_relaxed);
     }
 #endif
 
@@ -1271,9 +1280,10 @@ void cluster_entry(const unsigned int core_id) {
 }
 
 
-void rlc_start(const unsigned int core_id) {
+int rlc_start(const unsigned int core_id) {
     /* Enter per-core processing based on core_id */
     cluster_entry(core_id);
+    return (core_id == 0) ? (int)rlc_check_failed : 0;
 }
 
 

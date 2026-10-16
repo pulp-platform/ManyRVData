@@ -526,6 +526,14 @@ add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
            "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 tc1_smallblk)
 
+# CI regression size: tc1_smallblk cut to 256 SDUs (~20 blocks, still segmenting at every block
+# boundary), so the uplink path and its end-of-run check run in a few minutes on RTL.
+add_rlc_ul(multi_producer_single_consumer_double_linked_list
+           multi_producer_single_consumer_double_linked_list/main.c
+           "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 ci)
+target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci PUBLIC
+    RLC_UL_SDUS=256)
+
 # Same cases with the bitmap work queue (RLC_AM_WORKQ=1), so the scan-free path
 # can be diffed against the plain one rather than replacing it.
 add_spatz_test_rlc_am_wq(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100 2 4 8192 1)

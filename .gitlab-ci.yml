@@ -170,6 +170,8 @@ test:
           - fft-32b_M1024_N16
           - byte-enable
           - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
+          - multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
+          - multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci
   script:
     # The vsim script writes a .rtlbinary marker here; monitor logs need the
     # core/noc/others subfolders. Build artifacts exclude sim/bin/logs/, so

@@ -124,6 +124,10 @@ static uint32_t rlc_ul_status_pdus;
 static _Atomic uint32_t rlc_ul_stop __attribute__((aligned(CACHE_LINE_SIZE)))
     __attribute__((section(".data")));
 
+/* Set by consumer 0 when the end-of-run check fails; core 0 reads it after the final barrier. */
+static _Atomic uint32_t rlc_ul_failed __attribute__((aligned(CACHE_LINE_SIZE)))
+    __attribute__((section(".data")));
+
 
 /* Per-phase cycle accounting. build/scan/deliver run on consumer 0 only;
    reassemble is per-core, because the point of the measurement is how the
@@ -264,15 +268,14 @@ static void rlc_ul_slot(uint32_t me, const rlc_bar_t *bar) {
 static void rlc_ul_report(const rlc_bar_t *bar) {
   const rlc_ul_entity_t *e = &rlc_ul_ent[0];
   const uint32_t want = (uint32_t)RLC_UL_SDUS * RLC_UL_SDU_BYTES;
+  const uint32_t ok = e->delivered == RLC_UL_SDUS && e->out_of_window == 0u &&
+                      e->delivered_bytes == want;
+  atomic_store_explicit(&rlc_ul_failed, ok ? 0u : 1u, memory_order_relaxed);
   printf_lock_acquire(&printf_lock);
   printf("[UL] barrier slot=%u core_mask=0x%x tile_mask=0x%x local_only=%u "
          "group_mask=0x%x\n", RLC_BARRIER_SLOT, bar->core_mask, bar->tile_mask,
          bar->local_only, bar->group_mask);
-  printf("[UL] check: %s\n",
-         (e->delivered == RLC_UL_SDUS && e->out_of_window == 0u &&
-          e->delivered_bytes == want)
-             ? "PASS"
-             : "FAIL");
+  printf("[UL] check: %s\n", ok ? "PASS" : "FAIL");
   printf_lock_release(&printf_lock);
 }
 
