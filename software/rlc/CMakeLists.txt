@@ -103,22 +103,10 @@ add_spatz_test_rlc_probe("_P2_C2_am_G8192" multi_producer_single_consumer_double
 # the target suffix. The node pool is sized to the packet count: nodes are only freed by ACKs,
 # which come two per entity, so with many entities most nodes stay live to the end, and an
 # exhausted pool drops the packet whose descriptor the producer already took.
-# The data header is generated from script/pdcp_pkg_<M>_<N>_<K>_<layout>.json at build time (it is
-# 10-200 MB, too large to keep in git).
-set(RLC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/multi_producer_single_consumer_double_linked_list)
+# The data header comes from script/data_<M>_<N>_<K>_<layout>.json (`make gen-data`).
 # `variant` is appended to the target name and says which extra defines (ARGN) it carries.
 macro(add_spatz_test_rlc_full layout variant name file param1 param2 param3)
     string(TOLOWER ${layout} layout_lc)
-    set(rlc_cfg ${param1}_${param2}_${param3}_${layout_lc})
-    if(NOT TARGET rlc_data_${rlc_cfg})
-        add_custom_command(
-            OUTPUT ${RLC_DIR}/data/data_${rlc_cfg}.h
-            COMMAND python3 ${RLC_DIR}/script/generate_pdcp_pkg.py ${RLC_DIR}/script/pdcp_pkg_${rlc_cfg}.json
-                    -o ${RLC_DIR}/data/data_${rlc_cfg}.h
-            DEPENDS ${RLC_DIR}/script/pdcp_pkg_${rlc_cfg}.json ${RLC_DIR}/script/generate_pdcp_pkg.py
-            COMMENT "Generating RLC data header data_${rlc_cfg}.h")
-        add_custom_target(rlc_data_${rlc_cfg} DEPENDS ${RLC_DIR}/data/data_${rlc_cfg}.h)
-    endif()
     foreach(probe 0 1)
         if(${probe})
             set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}${variant}_probe)
@@ -130,7 +118,6 @@ macro(add_spatz_test_rlc_full layout variant name file param1 param2 param3)
         target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
             DATAHEADER="data/data_${param1}_${param2}_${param3}_${layout_lc}.h"
             MM_POOL_PAGES=${param3} RLC_PROBE=${probe} ${ARGN})
-        add_dependencies(test-${SNITCH_TEST_PREFIX}${target_name} rlc_data_${rlc_cfg})
     endforeach()
 endmacro()
 add_spatz_test_rlc_full(P64_C192 "" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1157)

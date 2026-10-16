@@ -19,9 +19,9 @@
 # Author: Zexin Fu <zexifu@iis.ee.ethz.ch>
 
 """
-generate_pdcp_pkg_header.py
+gen_data.py
 
-Reads a JSON config (default: pdcp_pkg.json), strips C-style comments, and emits a C header defining:
+Reads a JSON config (script/data_<params>.json), strips C-style comments, and emits a C header defining:
   - `pdcp_pkg_t pdcp_pkgs[]` in the .dram section
   - A 2D array `pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE]` in its own .pdcp_src section (so its [0] element begins at src_addr)
 
@@ -75,10 +75,10 @@ LICENSE_HEADER = '''
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Generate a PDCP-package header from JSON config')
-    parser.add_argument('config', nargs='?', default='pdcp_pkg.json',
-                        help='JSON config file (default: pdcp_pkg.json)')
+    parser.add_argument('-c', '--cfg', required=True,
+                        help='JSON config file, script/data_<params>.json')
     parser.add_argument('-o', '--output',
-                        help='Output header file (default: ../data/data_<users>_<len>_<pkgs>.h)')
+                        help='Output header file (default: ../data/data_<params>.h)')
     parser.add_argument('-f', '--fill-zero',
                         help='Fill unused slots with zeroes (default: False)', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=42,
@@ -96,7 +96,7 @@ def main():
     args = parse_args()
     # Load config
     try:
-        cfg = load_config(args.config)
+        cfg = load_config(args.cfg)
     except Exception as e:
         print(f"Error loading config: {e}", file=sys.stderr)
         sys.exit(1)
@@ -138,7 +138,7 @@ def main():
     else:
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
         os.makedirs(data_dir, exist_ok=True)
-        filename = f"data_{active_users}_{pkg_len}_{num_pkgs}.h"
+        filename = os.path.splitext(os.path.basename(args.cfg))[0] + '.h'
         out_path = os.path.join(data_dir, filename)
 
     payload = bool(cfg.get('payload', True))
