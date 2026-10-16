@@ -84,6 +84,7 @@ add_spatz_test_rlc_am(multi_producer_single_consumer_double_linked_list multi_pr
 # Same kernels with RLC_PROBE=1: they also emit software probe events (role, phase, SDU/PDU,
 # queue depth, per-packet latency, TTI) for the GVSoC perf-probe collector. Targets get a
 # `_probe` suffix; the default targets above are untouched and stay byte-identical.
+# GVSoC only: on RTL the probe stores land on cluster control registers (see perf_probe.h).
 macro(add_spatz_test_rlc_probe suffix name file param1 param2 param3)
     set(target_name ${name}_M${param1}_N${param2}_K${param3}${suffix}_probe)
     add_snitch_test(${target_name} ${file})
@@ -105,6 +106,7 @@ add_spatz_test_rlc_probe("_P2_C2_am_G8192" multi_producer_single_consumer_double
 # exhausted pool drops the packet whose descriptor the producer already took.
 # The data header comes from script/data_<M>_<N>_<K>_<layout>.json (`make gen-data`).
 # `variant` is appended to the target name and says which extra defines (ARGN) it carries.
+# Each case also gets a GVSoC-only `_probe` twin (RLC_PROBE=1, see the probe variants above).
 macro(add_spatz_test_rlc_full layout variant name file param1 param2 param3)
     string(TOLOWER ${layout} layout_lc)
     foreach(probe 0 1)

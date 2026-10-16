@@ -79,9 +79,9 @@ uint32_t rlc_ul_scan(rlc_ul_scan_t *s, const uint8_t *tb, uint32_t tb_len) {
     /* The header must be parsed to know its own length: SO is present only
        for LAST/MIDDLE, and SI lives inside the first byte. This is what
        forces the walk to be sequential. */
+    if (rlc_amd_hdr_len((tb[off] >> 4) & 3u) > plen) { s->truncated = 1u; break; }
     rlc_amd_hdr_t h;
     rlc_amd_hdr_read(tb + off, &h);
-    if (h.hdr_len > plen) { s->truncated = 1u; break; }
 
     if (s->n >= RLC_UL_MAX_PDUS) { s->overflow = 1u; break; }
 
@@ -185,7 +185,8 @@ void rlc_ul_reassemble_range(rlc_ul_entity_t *e, const rlc_ul_scan_t *s,
 void rlc_ul_note_highest(rlc_ul_entity_t *e, const rlc_ul_scan_t *s) {
   if (!s->have_sn) return;
   const uint32_t nh = (s->max_sn + 1u) & RLC_SN_MASK;
-  if (((nh - e->rx_next_highest) & RLC_SN_MASK) < RLC_UL_WINDOW)
+  const uint32_t ahead = (nh - e->rx_next_highest) & RLC_SN_MASK;
+  if (ahead != 0u && ahead <= RLC_UL_WINDOW)
     e->rx_next_highest = nh;
 }
 

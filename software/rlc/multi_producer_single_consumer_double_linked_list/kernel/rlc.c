@@ -1238,8 +1238,9 @@ void cluster_entry(const unsigned int core_id) {
     if (core_id == 0) {
         rlc_check_failed |= rlc_am_report();
     }
-#elif defined(RLC_SELF_CHECK)
-    /* All sends are complete and tgt buffers are stable here. */
+#elif defined(RLC_SELF_CHECK) && !RLC_UL_MODE
+    /* All sends are complete and tgt buffers are stable here. The uplink never
+       writes the tgt buffers; it reports its own verdict below. */
     if (core_id == 0) {
         self_check(pdcp_pkgs, NUM_PKGS);
     }

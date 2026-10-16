@@ -19,8 +19,12 @@
  * kernel tree, or add core/models/probe to the include path.
  *
  * One posted 32-bit store per event, to an address that encodes the hart and the event id
- * (perf_probe_events.h). The GVSoC collector decodes it; an RTL testbench snoops the same window,
- * so the instrumentation in the kernel is identical for both engines.
+ * (perf_probe_events.h). The GVSoC collector decodes it.
+ *
+ * GVSoC ONLY: the RTL has no probe endpoint. Its peripheral decode sends the whole window to the
+ * cluster register block, which keeps only the low 7 address bits, so on RTL every probe store
+ * overwrites a control register (barrier, Spatz lock, EOC exit, ...). Never run an RLC_PROBE=1
+ * binary on RTL.
  *
  * EVERYTHING COMPILES AWAY unless the build defines RLC_PROBE=1, so the default binaries stay
  * byte-identical. Enable with -DRLC_PROBE=1.

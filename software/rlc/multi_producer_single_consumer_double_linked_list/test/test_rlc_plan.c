@@ -167,7 +167,7 @@ static void run_stream(const char *name, uint32_t n_sdus, uint32_t sdu_lo,
       if (want_poll) { m_pwp = 0; m_bwp = 0; }
       /* the buffer-empty poll is applied by the planner to the final PDU */
       const int drained_here =
-          in.queue_drained && !out.partial && (i == n - 1u);
+          in.queue_drained && n == avail && !out.partial && (i == n - 1u);
       if (drained_here && !want_poll) {
         want_poll = 1;
         m_pwp = 0;

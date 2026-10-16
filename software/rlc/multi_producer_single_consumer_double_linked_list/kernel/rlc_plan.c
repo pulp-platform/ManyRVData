@@ -485,7 +485,8 @@ uint32_t rlc_plan_compute_scalar(rlc_plan_t *plan, const rlc_plan_in_t *in,
   }
 
   /* A poll is also triggered when the buffer runs empty (§5.3.3.2). */
-  if (n > 0u && in->queue_drained && !partial && !plan->poll[n - 1u]) {
+  if (n > 0u && n == plan->n_avail && in->queue_drained && !partial &&
+      !plan->poll[n - 1u]) {
     plan->poll[n - 1u] = 1u;
     pwp = 0u;
     bwp = 0u;
@@ -607,7 +608,7 @@ uint32_t rlc_plan_compute_vector(rlc_plan_t *plan, const rlc_plan_in_t *in,
   uint32_t bwp = in->byte_without_poll;
   rlc_plan_polls_vector(plan, in, n, &pwp, &bwp);
 
-  if (in->queue_drained && !partial && !plan->poll[n - 1u]) {
+  if (n == n_avail && in->queue_drained && !partial && !plan->poll[n - 1u]) {
     plan->poll[n - 1u] = 1u;
     pwp = 0u;
     bwp = 0u;

@@ -145,7 +145,7 @@ static inline void rlc_amd_hdr_read(const uint8_t *p, rlc_amd_hdr_t *h) {
 #if RLC_SN_BITS == 18
 #define RLC_STATUS_HDR_LEN 3u /* D/C|CPT(3)|ACK_SN[17:14] | [13:6] | [5:0]|E1|R */
 #else
-#define RLC_STATUS_HDR_LEN 2u /* D/C|CPT(3)|ACK_SN[11:8] | [7:0] ... + E1|R    */
+#define RLC_STATUS_HDR_LEN 3u /* D/C|CPT(3)|ACK_SN[11:8] | [7:0] | E1|R(7)     */
 #endif
 
 /* Serialise a STATUS PDU header with the given ACK_SN. e1 = 1 when at least
