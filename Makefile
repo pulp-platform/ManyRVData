@@ -160,9 +160,18 @@ SNRT_BOOTINFO_H := $(SOFTWARE_DIR)/snRuntime/include/snrt_bootinfo.h
 $(SNRT_BOOTINFO_H): $(SCRIPTS_DIR)/generate_bootdata.py $(HJSON_OUT) $(BOOTROM_DIR)/snrt_bootinfo.h.tpl
 	${PYTHON} $< -c $(HJSON_OUT) -d $(BOOTROM_DIR) -t snrt_bootinfo.h.tpl -o $@
 
+# BootROM compiler: the IIS GCC 9.5.0 wrapper when available, otherwise the repo toolchain.
+# Override with BOOTROM_GCC_PREFIX=<path>/riscv32-unknown-elf-
+BOOTROM_GCC_9_5 := riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-
+ifeq ($(shell $(BOOTROM_GCC_9_5)gcc --version >/dev/null 2>&1 && echo ok),ok)
+  BOOTROM_GCC_PREFIX ?= $(BOOTROM_GCC_9_5)
+else
+  BOOTROM_GCC_PREFIX ?= $(GCC_INSTALL_DIR)/bin/riscv32-unknown-elf-
+endif
+
 $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bin: \
   $(BOOTROM_DIR)/bootrom.S $(BOOTROM_DIR)/bootdata_bootrom.cc $(BOOTROM_DIR)/bootrom.ld $(SNRT_BOOTINFO_H)
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-gcc \
+	$(BOOTROM_GCC_PREFIX)gcc \
 		-mabi=ilp32 -march=rv32imaf -static -nostartfiles \
 		-T$(BOOTROM_DIR)/bootrom.ld \
 		$(BOOTROM_DIR)/bootrom.S \
@@ -170,8 +179,8 @@ $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.dump $(BOOTROM_DIR)/bootrom.bi
 		-I$(SPATZ_DIR)/hw/ip/snitch_test/src \
 		-I$(SOFTWARE_DIR)/snRuntime/include \
 		-o $(BOOTROM_DIR)/bootrom.elf
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
-	riscv -riscv64-gcc-9.5.0 riscv64-unknown-elf-objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
+	$(BOOTROM_GCC_PREFIX)objdump -D $(BOOTROM_DIR)/bootrom.elf > $(BOOTROM_DIR)/bootrom.dump
+	$(BOOTROM_GCC_PREFIX)objcopy -O binary $(BOOTROM_DIR)/bootrom.elf $(BOOTROM_DIR)/bootrom.bin
 
 $(BOOTROM_DIR)/bootrom.sv: $(BOOTROM_DIR)/bootrom.bin $(BOOTROM_DIR)/bootdata.cc
 	${PYTHON} $(SCRIPTS_DIR)/generate_bootrom.py \

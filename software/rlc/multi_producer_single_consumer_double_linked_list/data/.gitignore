@@ -1,0 +1,2 @@
+# Generated data headers, reproduced by `make gen-data` from ../script/data_<params>.json
+*.h

@@ -1299,8 +1299,11 @@ module cachepool_tile
             automatic logic sel_found;
             automatic int unsigned sel_part_idx;
 
-            bank_req[col][bank_sel] = 1'b0;
-            bank_we[col][bank_sel] = 1'b0;
+            // Timing: we/req equal the OR of the part bits (the cascade prefers a write part),
+            // so take them directly instead of through the sel_part_idx mux, off the critical
+            // path tail. addr/wdata/be still use the mux.
+            bank_we[col][bank_sel]  = |part_we[col][bank_sel];
+            bank_req[col][bank_sel] = (|part_we[col][bank_sel]) | (|part_req[col][bank_sel]);
             bank_addr[col][bank_sel] = '0;
             bank_wdata[col][bank_sel] = '0;
             bank_be[col][bank_sel] = '0;
@@ -1323,8 +1326,6 @@ module cachepool_tile
             end
 
             if (sel_found) begin
-              bank_req[col][bank_sel] = 1'b1;
-              bank_we[col][bank_sel] = part_we[col][bank_sel][sel_part_idx];
               bank_addr[col][bank_sel] = part_addr[col][bank_sel][sel_part_idx];
               bank_wdata[col][bank_sel] = part_wdata[col][bank_sel][sel_part_idx];
               bank_be[col][bank_sel] = part_be[col][bank_sel][sel_part_idx];

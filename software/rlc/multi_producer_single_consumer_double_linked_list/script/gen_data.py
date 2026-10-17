@@ -19,9 +19,9 @@
 # Author: Zexin Fu <zexifu@iis.ee.ethz.ch>
 
 """
-generate_pdcp_pkg_header.py
+gen_data.py
 
-Reads a JSON config (default: pdcp_pkg.json), strips C-style comments, and emits a C header defining:
+Reads a JSON config (script/data_<params>.json), strips C-style comments, and emits a C header defining:
   - `pdcp_pkg_t pdcp_pkgs[]` in the .dram section
   - A 2D array `pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE]` in its own .pdcp_src section (so its [0] element begins at src_addr)
 
@@ -34,6 +34,12 @@ Config fields:
   tgt_addr             (hex or int base address)
   tgt_length           (int bytes)
   total_pkg_number     (optional int): explicit number of PDCP packages to generate
+  slot_align           (optional int, default 4): slot stride alignment in bytes. 64 puts every
+                       packet on its own cache lines, which tile-private L1 partitions need:
+                       two tiles writing different packets must never share a line.
+  payload              (optional bool, default true): false leaves the source slots zero. Nothing
+                       in the kernel's timing depends on the byte values, only RLC_SELF_CHECK does,
+                       and it keeps multi-slot headers small (tens of KB instead of ~100 MB).
 
 If `total_pkg_number` is absent, it's derived as `src_length // (pdcp_header_length + pkg_length)`.
 """
@@ -69,10 +75,10 @@ LICENSE_HEADER = '''
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Generate a PDCP-package header from JSON config')
-    parser.add_argument('config', nargs='?', default='pdcp_pkg.json',
-                        help='JSON config file (default: pdcp_pkg.json)')
+    parser.add_argument('-c', '--cfg', required=True,
+                        help='JSON config file, script/data_<params>.json')
     parser.add_argument('-o', '--output',
-                        help='Output header file (default: ../data/data_<users>_<len>_<pkgs>.h)')
+                        help='Output header file (default: ../data/data_<params>.h)')
     parser.add_argument('-f', '--fill-zero',
                         help='Fill unused slots with zeroes (default: False)', action='store_true', default=False)
     parser.add_argument('--seed', type=int, default=42,
@@ -90,7 +96,7 @@ def main():
     args = parse_args()
     # Load config
     try:
-        cfg = load_config(args.config)
+        cfg = load_config(args.cfg)
     except Exception as e:
         print(f"Error loading config: {e}", file=sys.stderr)
         sys.exit(1)
@@ -109,7 +115,12 @@ def main():
 
     # PDU configuration
     pdu_size = hdr_len + pkg_len
-    num_src_slots = src_len // pdu_size
+    # Slot stride: slots must stay 4-byte aligned or the word/vector payload
+    # copies in the kernel trap on misaligned bases (e.g. 810-byte PDUs).
+    # The copy length stays pdu_size; padding [pdu_size, pdu_stride) is zero.
+    align = int(cfg.get('slot_align', 4))
+    pdu_stride = (pdu_size + align - 1) // align * align
+    num_src_slots = src_len // pdu_stride
     num_pkgs = min(int(cfg.get('total_pkg_number', num_src_slots)), num_src_slots)
 
     # Cores that actually run the RLC kernel. Defaults preserve the
@@ -127,19 +138,23 @@ def main():
     else:
         data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
         os.makedirs(data_dir, exist_ok=True)
-        filename = f"data_{active_users}_{pkg_len}_{num_pkgs}.h"
+        filename = os.path.splitext(os.path.basename(args.cfg))[0] + '.h'
         out_path = os.path.join(data_dir, filename)
+
+    payload = bool(cfg.get('payload', True))
 
     # select unique slots
     slots = random.sample(range(num_src_slots), k=num_pkgs)
 
     # assemble metadata and data buffer
     entries = []
-    pdu_buf = [[0] * pdu_size for _ in range(num_src_slots)]
+    pdu_buf = [[0] * pdu_stride for _ in range(num_src_slots)] if payload else None
     for uid, slot in zip((random.randrange(active_users) for _ in range(num_pkgs)), slots):
-        src_addr = src_base + slot * pdu_size
-        tgt_addr = tgt_base + slot * pdu_size
+        src_addr = src_base + slot * pdu_stride
+        tgt_addr = tgt_base + slot * pdu_stride
         entries.append((uid, src_addr, tgt_addr, pdu_size))
+        if not payload:
+            continue
         data = slot
         for i in range(hdr_len, pdu_size):
             pdu_buf[slot][i] = data & 0xFF
@@ -153,6 +168,8 @@ def main():
         h.write('#ifndef PDCP_PKG_H\n')
         h.write('#define PDCP_PKG_H\n\n')
 
+        h.write('#include <stdint.h>\n\n')
+
         # type definition
         h.write('typedef struct {\n')
         h.write('    int           user_id;\n')
@@ -164,7 +181,9 @@ def main():
         # constants
         h.write(f'#define NUM_SRC_SLOTS {num_src_slots}\n')
         h.write(f'#define PDU_SIZE      {pdu_size}\n')
-        h.write(f'#define NUM_PKGS      {num_pkgs}\n\n')
+        h.write(f'#define PDU_STRIDE    {pdu_stride}\n')
+        h.write(f'#define NUM_PKGS      {num_pkgs}\n')
+        h.write(f'#define ACTIVE_USER_NUMBER {active_users}\n\n')
 
         # Producer/consumer core selection: any cluster core id not listed
         # in either array stays idle for this kernel.
@@ -186,8 +205,8 @@ def main():
 
         # src data in its own section so .pdcp_src can be located at src_base
         h.write('static const uint8_t __attribute__((section(".pdcp_src"), used)) '
-               'pdcp_src_data[NUM_SRC_SLOTS][PDU_SIZE] = {\n')
-        for slot in range(num_src_slots):
+               'pdcp_src_data[NUM_SRC_SLOTS][PDU_STRIDE] = {\n')
+        for slot in (range(num_src_slots) if payload else ()):
             if args.fill_zero:
                 row = ', '.join(f'0x{b:02X}' for b in pdu_buf[slot])
                 if any(pdu_buf[slot]):

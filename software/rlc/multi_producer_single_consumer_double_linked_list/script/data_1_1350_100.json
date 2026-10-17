@@ -23,21 +23,10 @@
   "src_length": 16777216, // 16777216 bytes = 16 MiB
   "tgt_addr": "0xB0000000",
   "tgt_length": 16777216, // 16777216 bytes = 16 MiB
-  "total_pkg_number": 300, // max 12336 packages = 16777216 bytes / (1350 + 10) bytes per package
+  "total_pkg_number": 100,
   // Cores that limit which cluster cores actually run the RLC kernel.
   // Any core id not listed here stays idle and only touches the
   // matching partial-barrier checkpoints (see snrt_cluster_partial_barrier).
   "producer_cores": [0, 1],
   "consumer_cores": [2, 3]
 }
-
-// {
-//   "active_user_number": 1,
-//   "pkg_length": 2044,
-//   "pdcp_header_length": 4,
-//   "src_addr": "0xA0000000",
-//   "src_length": 268435456, // 268435456 bytes = 256 MiB
-//   "tgt_addr": "0xB0000000",
-//   "tgt_length": 268435456, // 268435456 bytes = 256 MiB
-//   "total_pkg_number": 100 // max 198400 packages = 268435456 bytes / (1350 + 3) bytes per package
-// }

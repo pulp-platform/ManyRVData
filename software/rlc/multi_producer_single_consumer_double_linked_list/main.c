@@ -16,6 +16,10 @@
 
 // Author: Zexin Fu     <zexifu@iis.ee.ethz.ch>
 
+#include <stdint.h>
+/* DATAHEADER must be included before the kernel sources so that rlc.c/rlc.h
+   see NUM_PKGS / PDU_SIZE / ACTIVE_USER_NUMBER (rlc.c has a guarded fallback). */
+#include DATAHEADER
 #include "kernel/printf_lock.c"
 #include "kernel/mm.c"
 #include "kernel/rlc.c"
@@ -26,7 +30,6 @@
 #include "printf.h"
 #include "kernel/printf_lock.h"
 #include "mcs_lock.h"
-#include DATAHEADER
 
 #define L1LineWidth (512/8) // 512 bits
 
@@ -45,7 +48,15 @@ int main(void) {
     // path. Safe for this kernel's cross-core linked-list handoff since
     // private partitioning is tile-scoped, not per-core -- see l1cache.c.
     const unsigned int num_cores_per_tile = snrt_cluster_core_per_tile();
+#if defined(RLC_PRIVATE_BANKS)
+    /* Partial partition (RLC_PRIVATE_BANKS of the tile's banks private, the rest shared); the
+       boundary stays at its reset value 0xA000_0000: data above it is tile-private (tile mode puts
+       the UE state there), everything in .data/.dram below it has one copy cluster-wide. */
+    (void)num_cores_per_tile;
+    l1d_part(RLC_PRIVATE_BANKS);
+#else
     l1d_part(num_cores_per_tile);
+#endif
 
     if (core_id == 0) {
         // Initalize the thread saft printf
@@ -54,21 +65,50 @@ int main(void) {
         // Initialize memory management context
         mm_init();
 
-        // Initialize the RLC context
-        rlc_init(0, 0, &mm_ctx);
+        // Initialize all RLC entities (one per UE). Tile mode: each owner tile does its own
+        // in rlc_tile_setup() -- core 0 writing them here would leave copies of other tiles'
+        // private lines in tile 0.
+#if !RLC_TILE_AFFINITY
+        for (unsigned int u = 0; u < NUM_USERS; u++) {
+            rlc_init(u, 0, &mm_ctx);
+        }
+#endif
 
-        // // Initialize the linked list for receiving queue
-        // list_init(&rlc_ctx.list);
+        // Initialize shared/global resources (single producer-descriptor stream)
+        pdcp_pkd_ptr = 0;
+        mcs_lock_init(&pdcp_pkd_ptr_lock);
+        producer_done = 0;
+        rlc_ctx_lock = 0;
 
         // Initialize locks
         mm_lock = 0;
         tosend_llist_lock = 0;
         sent_llist_lock = 0;
-        mcs_lock_init(&tosend_llist_lock_2);
-        mcs_lock_init(&sent_llist_lock_2);
+#if !RLC_TILE_AFFINITY
+        for (unsigned int u = 0; u < NUM_USERS; u++) {
+            mcs_lock_init(RLC_TOSEND_LOCK(u));
+            mcs_lock_init(RLC_SENT_LOCK(u));
+        }
+#endif
+
+        rlc_barrier_init();
+
+#if RLC_GROUP_STREAMS
+        /* Last, right before the start barrier: it also starts the paced-arrival clock. */
+        rlc_streams_init();
+#endif
     }
 
     // debug_printf_locked("[core %u] pre  snrt_cluster_hw_barrier()\n", core_id);
+
+#if RLC_TILE_AFFINITY
+    snrt_cluster_hw_barrier();
+    rlc_tile_setup(core_id);          // every core; each worker tile's producer builds its tile
+    snrt_cluster_hw_barrier();
+#if RLC_ARRIVAL_PPS
+    if (core_id == 0) rlc_arrival_t0 = benchmark_get_cycle() + RLC_ARRIVAL_LEAD;
+#endif
+#endif
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier();
@@ -81,10 +121,10 @@ int main(void) {
     // DEBUG_PRINTF("[core %u] post snrt_cluster_hw_barrier() done\n", core_id);
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 
-    rlc_start(core_id);
+    const int ret = rlc_start(core_id);
 
     // Wait for all cores to finish
     snrt_cluster_hw_barrier(); // this can trigger Misaligned Load exception
 
-    return 0;
+    return ret;
 }

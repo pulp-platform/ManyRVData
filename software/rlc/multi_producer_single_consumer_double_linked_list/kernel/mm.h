@@ -25,13 +25,24 @@
 
 // #define PAGE_SIZE (1024)                 /* Fixed size of each memory page in bytes */
 #define PAGE_SIZE (sizeof(Node))          /* Fixed size of each memory page in bytes */
-#define BUFFER_SIZE (PAGE_SIZE * 1024)      /* memory pool size in byte */
+#ifndef MM_POOL_PAGES
+#define MM_POOL_PAGES 1024                /* live nodes are bounded by min(NUM_PKGS, MM_POOL_PAGES) */
+#endif
+#if RLC_GROUP_STREAMS
+/* One partition per stream, each rounded up to a whole page count. */
+#define BUFFER_SIZE (PAGE_SIZE * (MM_POOL_PAGES + RLC_MAX_STREAMS))
+#else
+#define BUFFER_SIZE (PAGE_SIZE * MM_POOL_PAGES)      /* memory pool size in byte */
+#endif
 
 static uint32_t bulk_buffer[BUFFER_SIZE / sizeof(uint32_t)]
    __attribute__((section(".dram")))
    __attribute__((aligned(32)));
 
-spinlock_t mm_lock __attribute__((section(".data")));
+RLC_LINE_VAR(spinlock_t, mm_lock);
+#if RLC_PAD_SYNC
+#define mm_lock (mm_lock_line.v)
+#endif
 
 /* Type for free list entries */
 typedef struct MM_FreePage {
@@ -46,6 +57,8 @@ typedef struct {
     spinlock_t lock;    /* Spinlock for mutual exclusion */
 } mm_context_t __attribute__((aligned(8)));
 
+/* Not given its own line: the name is also a parameter and a struct field, and every hot
+   neighbour it could share a line with already has one of its own under RLC_PAD_SYNC. */
 mm_context_t mm_ctx __attribute__((section(".data")));
 
 /*

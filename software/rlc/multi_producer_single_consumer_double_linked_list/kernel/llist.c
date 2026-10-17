@@ -109,6 +109,62 @@ void list_push_back(spinlock_t *llist_lock, LinkedList *list, volatile Node *nod
     // DEBUG_PRINTF_LOCK_RELEASE(&printf_lock);
 }
 
+/* Only built for the AM path: emitting it unconditionally would shift every
+   address in the legacy binary and perturb its cycle baseline. */
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+unsigned int list_peek_n(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                         unsigned int max) {
+    unsigned int n = 0;
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
+    for (Node *p = list->head; p != NULL && n < max; p = p->next) {
+        out[n++] = p;
+    }
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
+    return n;
+}
+#endif /* RLC_TB_MODE == AM */
+
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1)
+unsigned int list_peek_budget(spinlock_t *llist_lock, LinkedList *list,
+                              Node **out, unsigned int max, unsigned int budget,
+                              unsigned int overhead, unsigned int *reached_end) {
+    unsigned int n = 0;
+    unsigned int acc = 0;
+    Node *p;
+#ifdef USE_MCS_LOCK
+    mcs_lock_acquire(llist_lock, 10);
+#else
+    spin_lock(llist_lock, 10);
+#endif
+    for (p = list->head; p != NULL && n < max; p = p->next) {
+        out[n++] = p;
+        acc += overhead + (unsigned int)p->data_size;
+        /* The node that crosses the budget is kept: it is the one the planner
+           may segment. Anything past it cannot appear in this grant. */
+        if (acc >= budget) { p = p->next; break; }
+    }
+    /* Whether the walk saw the end of the queue. The planner's "transmission
+       buffer empty" poll (TS 38.322 5.3.3.2) depends on this, and it must be
+       decided under the lock: a count below `max` does not mean the queue is
+       drained when the walk stopped on the byte budget instead. */
+    if (reached_end) *reached_end = (p == NULL);
+#ifdef USE_MCS_LOCK
+    mcs_lock_release(llist_lock, 10);
+#else
+    spin_unlock(llist_lock, 10);
+#endif
+    return n;
+}
+#endif /* RLC_TB_MODE == AM */
+
 Node *list_pop_front(spinlock_t *llist_lock, LinkedList *list) {
     uint32_t core_id = snrt_cluster_core_idx();
     uint32_t timer_ac_lock_0, timer_ac_lock_1;
@@ -215,5 +271,53 @@ void list_remove(spinlock_t *llist_lock, LinkedList *list, Node *node) {
     spin_unlock(llist_lock, 20);
 }
 
+
+
+#if defined(RLC_TB_MODE) && (RLC_TB_MODE == 1) && RLC_AM_BATCH
+unsigned int list_peek_budget_nolock(spinlock_t *llist_lock, LinkedList *list, Node **out,
+                                     unsigned int max, unsigned int budget, unsigned int overhead,
+                                     unsigned int *reached_end) {
+    spin_lock(llist_lock, 10);
+    Node *p = list->head;
+    unsigned int avail = (unsigned int)list->sduNum;
+    spin_unlock(llist_lock, 10);
+    unsigned int n = 0, acc = 0, stopped_on_budget = 0;
+    for (unsigned int k = 0; k < avail && n < max; k++) {
+        out[n++] = p;
+        acc += overhead + (unsigned int)p->data_size;
+        if (acc >= budget) { stopped_on_budget = 1; break; }
+        if (k + 1 < avail) p = p->next;      /* never past the snapshot: tail->next may be moving */
+    }
+    /* "Transmission buffer empty" as of the snapshot: the walk took the last queued SDU (the
+       locked version's p == NULL). A node appended after the snapshot is seen next grant. */
+    (void)stopped_on_budget;
+    if (reached_end) *reached_end = (n == avail) ? 1u : 0u;
+    return n;
+}
+
+void list_detach_front_upto(spinlock_t *llist_lock, LinkedList *list, Node *last,
+                            unsigned int n, unsigned int bytes) {
+    spin_lock(llist_lock, 10);
+    Node *rest = last->next;
+    list->head = rest;
+    if (rest != NULL) rest->prev = NULL; else list->tail = NULL;
+    last->next = NULL;
+    list->sduNum -= (int)n;
+    list->sduBytes -= (int)bytes;
+    spin_unlock(llist_lock, 10);
+}
+
+void list_append_chain(spinlock_t *llist_lock, LinkedList *list, Node *first, Node *last,
+                       unsigned int n, unsigned int bytes) {
+    spin_lock(llist_lock, 10);
+    first->prev = list->tail;
+    if (list->tail != NULL) list->tail->next = first; else list->head = first;
+    list->tail = last;
+    last->next = NULL;
+    list->sduNum += (int)n;
+    list->sduBytes += (int)bytes;
+    spin_unlock(llist_lock, 10);
+}
+#endif
 
 #endif
