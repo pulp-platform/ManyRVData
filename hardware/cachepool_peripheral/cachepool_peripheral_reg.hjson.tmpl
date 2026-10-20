@@ -69,11 +69,11 @@
         desc: '''Controls prefetching of the instruction cache.'''
         swaccess: "wo",
         hwaccess: "hro",
-        resval: "1",
+        resval: "${icache_prefetch_rst}",
         fields: [{
             bits: "0:0",
             name: "ICACHE_PREFETCH_ENABLE",
-            desc: "Hardware barrier register."
+            desc: "Enable instruction cache prefetching."
         }]
     },
     {
@@ -222,7 +222,8 @@
     },
     {
         name: "L1D_FLUSH_STATUS",
-        desc: '''Indicate the status of flushing '''
+        desc: '''Busy while a committed L1D instruction or configuration is still being
+        applied by the group-level configuration registers.'''
         hwext: "true",
         swaccess: "ro",
         hwaccess: "hwo",
@@ -238,7 +239,7 @@
         desc: '''L1D partitioning: private bank count and how it is folded '''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "0",
+        resval: "${l1d_private_rst}",
         fields: [{
             bits: "2:0",
             name: "PARTITION",
@@ -254,7 +255,7 @@
         desc: '''Starting address of private L1D partition '''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "2684354560",
+        resval: "${l1d_private_addr_rst}",
         fields: [{
             bits: "31:0",
             name: "ADDR",
@@ -266,7 +267,7 @@
         desc: '''Cache xbar offset setting '''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "0",
+        resval: "${l1d_xbar_offset_rst}",
         fields: [{
             bits: "4:0",
             name: "OFFSET",

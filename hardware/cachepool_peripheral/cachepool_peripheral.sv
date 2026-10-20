@@ -2,13 +2,18 @@
 // Solderpad Hardware License, Version 0.51, see LICENSE for details.
 // SPDX-License-Identifier: SHL-0.51
 
-/// Exposes cluster confugration and information as memory mapped information
+/// style-waive: COMMENT_BLOCK: function description
+/// Exposes cluster confugration and information as memory mapped information.
+/// The L1D/xbar configuration is not wired to the groups: every commit is handed to
+/// cachepool_group_cfg_sender as one batch, which writes it into each group's
+/// cachepool_group_cfg over the L2 mesh. L1D_FLUSH_STATUS stays busy until the batch is done.
 
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
 
 module cachepool_peripheral
   import snitch_pkg::*;
+  import cachepool_pkg::*;
   import cachepool_peripheral_reg_pkg::*;
 #(
   parameter int unsigned AddrWidth       = 0,
@@ -24,11 +29,9 @@ module cachepool_peripheral
   parameter int unsigned PrivateWidth    = 4,
   parameter type reg_req_t = logic,
   parameter type reg_rsp_t = logic,
-  parameter type cache_insn_t = logic,
   /// Derived parameter *Do not override*
   parameter type addr_t = logic [AddrWidth-1:0],
-  parameter type spm_size_t = logic [SPMWidth-1:0],
-  parameter type private_sel_t = logic [PrivateWidth-1:0]
+  parameter type spm_size_t = logic [SPMWidth-1:0]
 ) (
   input  logic                       clk_i,
   input  logic                       rst_ni,
@@ -39,18 +42,18 @@ module cachepool_peripheral
   output logic [3:0]                 eoc_o,
   input  addr_t                      tcdm_start_address_i,
   input  addr_t                      tcdm_end_address_i,
-  output addr_t                      private_start_addr_o,
-  output logic                       icache_prefetch_enable_o,
   output logic                       cluster_probe_o,
   input  logic [9:0]                 cluster_hart_base_id_i,
-  /// For cache xbar dynamic configuration
-  output logic [4:0]                 dynamic_offset_o,
   output spm_size_t                  l1d_spm_size_o,
-  output private_sel_t               l1d_private_o,
-  output cache_insn_t                l1d_insn_o,
-  output logic                       l1d_insn_valid_o,
-  input  logic [NumTiles-1:0]        l1d_insn_ready_i,
+  // Per-tile flush interlock, high from an L1D instruction commit until its batch is done
   output logic [NumTiles-1:0]        l1d_busy_o,
+  // Configuration batch towards cachepool_group_cfg_sender, stable until cfg_done_i
+  output logic                       cfg_start_o,
+  output logic                       cfg_issue_o,
+  output logic [1:0]                 cfg_insn_o,
+  output logic [NumTiles-1:0]        cfg_tile_sel_o,
+  output l1d_cfg_t                   cfg_o,
+  input  logic                       cfg_done_i,
   // One group-participation mask per barrier slot (see HW_BARRIER_PARTICIPATION_MASK multireg)
   output logic [NumBarrierSlots-1:0][NumGroups-1:0] barrier_part_mask_o
 );
@@ -59,6 +62,8 @@ module cachepool_peripheral
   `ASSERT_INIT(CheckBarrierSlotsMatchRegPkg,
                NumBarrierSlots == cachepool_peripheral_reg_pkg::NumBarrierSlots,
                "NumBarrierSlots does not match cachepool_peripheral_reg_pkg::NumBarrierSlots -- regenerate the peripheral register file for this config")
+  `ASSERT_INIT(CheckPrivateWidth, PrivateWidth == L1PrivWidth,
+               "PrivateWidth does not match cachepool_pkg::L1PrivWidth")
 
   cachepool_peripheral_reg2hw_t reg2hw;
   cachepool_peripheral_hw2reg_t hw2reg;
@@ -79,45 +84,19 @@ module cachepool_peripheral
   //////////// EOC /////////////
   assign eoc_o = reg2hw.cluster_eoc_exit.q;
 
-  //////////// Cache XBar ////////////
-  logic [4:0] xbar_offset_d, xbar_offset_q;
-  assign      dynamic_offset_o    = xbar_offset_q;
-  logic       xbar_offset_commit;
-  assign      xbar_offset_commit  = reg2hw.xbar_offset_commit.q;
-  always_comb begin : xbar_offset_cfg
-    xbar_offset_d = xbar_offset_q;
-    hw2reg.xbar_offset_commit.d  = 1'b0;
-    hw2reg.xbar_offset_commit.de = 1'b0;
-
-    if (xbar_offset_commit) begin
-      xbar_offset_d = reg2hw.xbar_offset.q;
-      hw2reg.xbar_offset_commit.d  = 1'b0;
-      hw2reg.xbar_offset_commit.de = 1'b1;
-    end
-  end
-  // Default value is 13
-  `FF(xbar_offset_q, xbar_offset_d, 5'd14, clk_i, rst_ni)
-
-
-  //////////// L1 DCache ////////////
+  //////////// L1 DCache SPM ////////////
   logic [9:0]              l1d_spm_size_d, l1d_spm_size_q;
-  logic [PrivateWidth-1:0] l1d_private_d, l1d_private_q;
-  addr_t                   private_start_addr_d, private_start_addr_q;
-  // L1 is running flush/invalidation
-  logic [NumTiles-1:0]     l1d_lock_d, l1d_lock_q;
-  logic                    l1d_spm_commit, l1d_insn_commit;
+  logic                    l1d_spm_commit;
 
-  // L1D Cache
   // For committing the cfg, if the cfg is taken, it will be pulled to 0;
   // Otherwise, it will be kept at 1 until taken.
   assign       l1d_spm_commit  = reg2hw.l1d_spm_commit.q;
-  assign       l1d_insn_commit = reg2hw.l1d_insn_commit.q;
 
   // TODO: Change it to power of 2 to save space
   // SPM Size
   always_comb begin : l1d_spm_cfg
     l1d_spm_size_d   = l1d_spm_size_q;
-    
+
     hw2reg.l1d_spm_commit.d  = 1'b0;
     hw2reg.l1d_spm_commit.de = 1'b0;
 
@@ -133,9 +112,7 @@ module cachepool_peripheral
   // 10b is enough for 1024 cache lines, we should not need all of them
   assign l1d_spm_size_o       = l1d_spm_size_q[SPMWidth-1:0];
 
-  assign l1d_private_o        = l1d_private_q[PrivateWidth-1:0];
-  assign private_start_addr_o = private_start_addr_q;
-
+  //////////// L1D / Cache XBar configuration ////////////
   // Concatenate all tile-select register words into one wide vector and slice
   // to NumTiles.  Unused upper bits (for small configs) are optimised away.
   localparam int unsigned NumTileSelWords = cachepool_peripheral_reg_pkg::NumTileSelRegs;
@@ -146,6 +123,95 @@ module cachepool_peripheral
     end
   end
 
+  // Committed configuration, the copy every group-level register holds once a batch is done
+  l1d_cfg_t            cfg_d,      cfg_q;
+  // A batch is in flight from its commit until all groups have answered
+  logic                busy_d,     busy_q;
+  logic                start_d,    start_q;
+  logic                issue_d,    issue_q;
+  logic [1:0]          insn_d,     insn_q;
+  logic [NumTiles-1:0] tile_sel_d, tile_sel_q;
+  // L1 is running flush/invalidation
+  logic [NumTiles-1:0] l1d_lock_d, l1d_lock_q;
+
+  logic l1d_insn_commit, xbar_offset_commit, prefetch_update;
+
+  assign l1d_insn_commit    = reg2hw.l1d_insn_commit.q;
+  assign xbar_offset_commit = reg2hw.xbar_offset_commit.q;
+  // ICACHE_PREFETCH_ENABLE has no commit register, a changed value starts a batch
+  assign prefetch_update    = (reg2hw.icache_prefetch_enable.q != cfg_q.prefetch_en);
+
+  // A commit is only taken while no batch is in flight; otherwise its commit bit
+  // stays set until the previous batch is done. One commit per batch, INSN first.
+  always_comb begin : cfg_ctrl
+    cfg_d      = cfg_q;
+    busy_d     = busy_q;
+    start_d    = 1'b0;
+    issue_d    = issue_q;
+    insn_d     = insn_q;
+    tile_sel_d = tile_sel_q;
+    l1d_lock_d = l1d_lock_q;
+
+    hw2reg.l1d_insn_commit.d     = 1'b0;
+    hw2reg.l1d_insn_commit.de    = 1'b0;
+    hw2reg.xbar_offset_commit.d  = 1'b0;
+    hw2reg.xbar_offset_commit.de = 1'b0;
+
+    if (busy_q) begin
+      if (cfg_done_i) begin
+        busy_d     = 1'b0;
+        l1d_lock_d = '0;
+      end
+    end else if (l1d_insn_commit) begin
+      // An L1D instruction also commits the partition and its start address
+      cfg_d.l1d_private  = {reg2hw.l1d_private.group_fold.q,
+                            reg2hw.l1d_private.partition.q};
+      cfg_d.private_addr = reg2hw.l1d_addr.q;
+      issue_d            = 1'b1;
+      insn_d             = reg2hw.cfg_l1d_insn.q;
+      // For non-private modes (shared/all/init), tile_sel is forced to '1.
+      tile_sel_d         = (reg2hw.cfg_l1d_insn.q == 2'b00) ? tile_sel_raw[NumTiles-1:0]
+                                                            : '1;
+      // Lock only the tiles that will receive the instruction.
+      l1d_lock_d         = tile_sel_d;
+      busy_d             = 1'b1;
+      start_d            = 1'b1;
+      hw2reg.l1d_insn_commit.de = 1'b1;
+    end else if (xbar_offset_commit) begin
+      cfg_d.xbar_offset  = reg2hw.xbar_offset.q;
+      issue_d            = 1'b0;
+      busy_d             = 1'b1;
+      start_d            = 1'b1;
+      hw2reg.xbar_offset_commit.de = 1'b1;
+    end else if (prefetch_update) begin
+      cfg_d.prefetch_en  = reg2hw.icache_prefetch_enable.q;
+      issue_d            = 1'b0;
+      busy_d             = 1'b1;
+      start_d            = 1'b1;
+    end
+  end
+
+  `FF(cfg_q,      cfg_d,      L1dCfgRst, clk_i, rst_ni)
+  `FF(busy_q,     busy_d,     1'b0,      clk_i, rst_ni)
+  `FF(start_q,    start_d,    1'b0,      clk_i, rst_ni)
+  `FF(issue_q,    issue_d,    1'b0,      clk_i, rst_ni)
+  `FF(insn_q,     insn_d,     '0,        clk_i, rst_ni)
+  `FF(tile_sel_q, tile_sel_d, '0,        clk_i, rst_ni)
+  `FF(l1d_lock_q, l1d_lock_d, '0,        clk_i, rst_ni)
+
+  // The batch starts one cycle after its commit, so the sender sees the updated values
+  assign cfg_start_o    = start_q;
+  assign cfg_issue_o    = issue_q;
+  assign cfg_insn_o     = insn_q;
+  assign cfg_tile_sel_o = tile_sel_q;
+  assign cfg_o          = cfg_q;
+
+  assign l1d_busy_o     = l1d_lock_q;
+  // Busy from the cycle the commit is visible, so a status read right behind the commit write
+  // never sees idle before the batch has started.
+  assign hw2reg.l1d_flush_status.d = busy_q | l1d_insn_commit | xbar_offset_commit |
+                                     prefetch_update;
+
   // One 32-bit register per barrier slot; single register is enough at
   // group granularity (max 32 groups).
   always_comb begin : barrier_mask_concat
@@ -153,59 +219,6 @@ module cachepool_peripheral
       barrier_part_mask_o[s] = reg2hw.hw_barrier_participation_mask[s].q[NumGroups-1:0];
     end
   end
-
-  // Cache Flush Controller, per tile: l1d_lock_q[t] is set on issue and cleared on ready.
-  // Busy while any selected tile has not completed.
-  always_comb begin : l1d_insn_cfg
-    // Flush takes time, we cannot take next insn while flushing
-    l1d_insn_o            = '0;
-    l1d_insn_valid_o      = '0;
-    l1d_lock_d            = l1d_lock_q;
-    l1d_private_d         = l1d_private_q;
-    private_start_addr_d  = private_start_addr_q;
-
-    hw2reg.l1d_insn_commit.d  = 1'b0;
-    hw2reg.l1d_insn_commit.de = 1'b0;
-
-    if (l1d_insn_commit) begin
-      l1d_private_d         = {reg2hw.l1d_private.group_fold.q,
-                               reg2hw.l1d_private.partition.q};
-      private_start_addr_d  = reg2hw.l1d_addr.q;
-      // User issues a flush/invalidation
-      if (|l1d_lock_q == '0) begin
-        // We are ready to accept a new instruction.
-        // Build the cache_insn_t: pack insn + tile_sel.
-        // For non-private modes (shared/all/init), tile_sel is forced to '1.
-        l1d_insn_o.insn     = reg2hw.cfg_l1d_insn.q;
-        l1d_insn_o.tile_sel = (reg2hw.cfg_l1d_insn.q == 2'b00)
-                            ? tile_sel_raw[NumTiles-1:0]
-                            : {NumTiles{1'b1}};
-        l1d_insn_valid_o    = 1'b1;
-        // Lock only the tiles that will receive the instruction.
-        l1d_lock_d          = l1d_insn_o.tile_sel;
-        // Clear the commit
-        hw2reg.l1d_insn_commit.d  = 1'b0;
-        hw2reg.l1d_insn_commit.de = 1'b1;
-      end
-    end
-
-    for (int t = 0; t < NumTiles; t++) begin
-      // Unlock tile t when it signals completion (one-cycle ready pulse).
-      if (l1d_insn_ready_i[t]) begin
-        l1d_lock_d[t] = 1'b0;
-      end
-      l1d_busy_o[t] = l1d_lock_q[t];
-    end
-  end
-
-  `FF(private_start_addr_q, private_start_addr_d, 32'hA000_0000, clk_i, rst_ni)
-  `FF(l1d_private_q, l1d_private_d, 0, clk_i, rst_ni)
-  `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
-  // To show if the current flush/invalidation is complete
-  assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);
-
-  // Enable icache prefetch
-  assign icache_prefetch_enable_o = reg2hw.icache_prefetch_enable.q;
 
   // Probe
   assign cluster_probe_o = reg2hw.spatz_status.q;

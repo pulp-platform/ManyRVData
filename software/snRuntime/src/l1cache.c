@@ -39,6 +39,8 @@ void l1d_xbar_commit() {
       (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                    CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET);
   *commit = 1;
+  // Wait until every group has applied the new offset
+  l1d_wait();
 }
 
 void l1d_commit() {
@@ -163,6 +165,8 @@ void l1d_part_folded (uint32_t size, uint32_t fold) {
                      CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
     *cfg_private = (size & 0x7u) | ((fold & 0x1u) << 3);
     l1d_commit();
+    // Wait until every group has applied the new partition
+    l1d_wait();
   }
   snrt_cluster_hw_barrier();
 }
@@ -184,10 +188,8 @@ void l1d_addr (uint32_t addr) {
                      CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET);
     *cfg_private = addr;
     l1d_commit();
-    // TODO: replace with a real completion status bit in the peripheral.
-    uint32_t start = read_csr(mcycle);
-    while ((read_csr(mcycle) - start) < 100) {
-    }
+    // Wait until every group has applied the new start address
+    l1d_wait();
   }
   snrt_cluster_hw_barrier();
 }

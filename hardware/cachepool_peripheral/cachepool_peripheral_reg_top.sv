@@ -633,7 +633,7 @@ module cachepool_peripheral_reg_top #(
   prim_subreg #(
     .DW      (5),
     .SWACCESS("RW"),
-    .RESVAL  (5'h0)
+    .RESVAL  (5'he)
   ) u_xbar_offset (
     .clk_i   (clk_i    ),
     .rst_ni  (rst_ni  ),

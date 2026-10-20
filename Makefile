@@ -309,6 +309,14 @@ CACHEPOOL_DEFS += -DDATA_WIDTH=$(data_width)
 CACHEPOOL_DEFS += -DADDR_WIDTH=$(addr_width)
 CACHEPOOL_DEFS += -DNUM_BARRIER_SLOTS=$(num_barrier_slots)
 
+# Group-level configuration registers and the reset values shared with the cluster peripheral
+CACHEPOOL_DEFS += -DGROUP_CFG_BASE=$(group_cfg_base)
+CACHEPOOL_DEFS += -DGROUP_CFG_STRIDE=$(group_cfg_stride)
+CACHEPOOL_DEFS += -DL1D_XBAR_OFFSET_RST=$(l1d_xbar_offset_rst)
+CACHEPOOL_DEFS += -DL1D_PRIVATE_RST=$(l1d_private_rst)
+CACHEPOOL_DEFS += -DL1D_PRIVATE_ADDR_RST=$(l1d_private_addr_rst)
+CACHEPOOL_DEFS += -DICACHE_PREFETCH_RST=$(icache_prefetch_rst)
+
 # Tile configuration
 CACHEPOOL_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 

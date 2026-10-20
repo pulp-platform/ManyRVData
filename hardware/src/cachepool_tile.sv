@@ -972,12 +972,12 @@ module cachepool_tile
   // l1d_insn_ready_o pulses as cache_flush_d hits zero (no loop: it only feeds a peripheral reg).
 
   // Determine whether this tile should act on the incoming instruction.
-  // Private flush (insn==00): only if our tile_id bit is set in tile_sel.
+  // Private flush (insn==00): only if our bit within the group is set in tile_sel.
   // All other modes: always act.
   logic tile_insn_active;
   always_comb begin : gen_tile_active
     if (l1d_insn_i.insn == 2'b00)
-      tile_insn_active = l1d_insn_i.tile_sel[tile_id_i];
+      tile_insn_active = l1d_insn_i.tile_sel[TileIdxInGroup];
     else
       tile_insn_active = 1'b1;
   end

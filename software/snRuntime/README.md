@@ -137,8 +137,10 @@ across groups.
 // Requires a flush before changing while valid data is cached.
 void l1d_addr(uint32_t addr);
 
-// Poll the peripheral until the current flush instruction completes.
-// Used by the low-level flush functions; not normally needed in application code.
+// Poll the peripheral until the last committed flush instruction or configuration
+// (partition, address boundary, xbar offset) has been applied by every group.
+// Used by the low-level flush and configuration functions; not normally needed in
+// application code.
 void l1d_wait();
 ```
 

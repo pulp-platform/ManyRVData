@@ -177,14 +177,15 @@ module cachepool_cluster
   peri_narrow_rsp_t  hbm0_peri_narrow_rsp;
 
   // 2. Peripherals
-  axi_addr_t                                  private_start_addr;
-  logic                                       icache_prefetch_enable;
-  logic         [$clog2(L1AddrWidth)-1:0]     dynamic_offset;
-  cache_insn_t                                l1d_insn;
-  logic                                       l1d_insn_valid;
-  logic         [NumTiles-1:0]                l1d_insn_ready;
   logic         [NumTiles-1:0]                l1d_busy;
-  logic         [L1PrivWidth-1:0]             l1d_private;
+
+  // Configuration batch from the peripheral to the group configuration sender
+  logic                                       cfg_start;
+  logic                                       cfg_issue;
+  logic         [1:0]                         cfg_insn;
+  logic         [NumTiles-1:0]                cfg_tile_sel;
+  l1d_cfg_t                                   cfg_l1d;
+  logic                                       cfg_done;
 
   // Per-group error signals.
   logic         [NumGroups-1:0]               group_error;
@@ -306,7 +307,6 @@ module cachepool_cluster
         .hart_base_id_i           ( HartBaseId + 10'(g * NumCoreGroup * NumScalarPerCC)         ),
         .tile_base_id_i           ( TileIDWidth'(g * NumTilesPerGroup)              ),
         .cluster_base_addr_i      ( cluster_base_addr_i                             ),
-        .private_start_addr_i     ( private_start_addr                              ),
         // L2 refill TCDM mesh (4 directions)
         .l2_req_o                 ( l2_req_out       [gx][gy]                       ),
         .l2_req_valid_o           ( l2_req_out_valid  [gx][gy]                      ),
@@ -324,12 +324,6 @@ module cachepool_cluster
         .l2_route_table_i         ( floo_cachepool_noc_pkg::RoutingTables[gx * NumGroupsY + gy] ),
         // Peripherals
         .icache_events_o          ( /* unused */                                    ),
-        .icache_prefetch_enable_i ( icache_prefetch_enable                          ),
-        .dynamic_offset_i         ( dynamic_offset                                  ),
-        .l1d_private_i            ( l1d_private                                     ),
-        .l1d_insn_i               ( l1d_insn                                        ),
-        .l1d_insn_valid_i         ( l1d_insn_valid                                  ),
-        .l1d_insn_ready_o         ( l1d_insn_ready[g*NumTilesPerGroup +: NumTilesPerGroup]),
         .l1d_busy_i               ( l1d_busy      [g*NumTilesPerGroup +: NumTilesPerGroup]),
         .group_xy_id_i            ( group_xy_id_t'{x:       gx,
                                                    y:       gy,
@@ -545,6 +539,9 @@ module cachepool_cluster
   // L2 Refill TCDM Mesh + HBM Edge Adapters
   // -------------------------------------------------------
 
+  // The group configuration registers are only reachable over the L2 mesh.
+  `ASSERT_INIT(CheckMultiGroup, NumGroups > 1, "cachepool_cluster: NumGroups must be > 1")
+
   if (NumGroups > 1) begin : gen_l2_refill_mesh
 
     // --------------------------------------------------
@@ -676,9 +673,20 @@ module cachepool_cluster
       logic                 hbm_sbr_rsp_valid;
       logic                 hbm_sbr_rsp_ready;
 
+      // Only the peripheral chimney (HBM0) also injects requests: the cluster peripheral's writes
+      // to the group configuration registers. Its SAM holds just the group configuration words.
+      localparam bit HbmPeriphMgr = (HbmIdx == L2PeriphChannel);
+
+      cache_trans_req_chan_t hbm_mgr_req;
+      logic                  hbm_mgr_req_valid;
+      logic                  hbm_mgr_req_ready;
+      cache_trans_rsp_chan_t hbm_mgr_rsp;
+      logic                  hbm_mgr_rsp_valid;
+      logic                  hbm_mgr_rsp_ready;
+
       floo_tcdm_chimney #(
-        .RouteCfg    ( floo_cachepool_noc_pkg::RouteCfg    ),
-        .EnMgrPort   ( 1'b0                                ),
+        .RouteCfg    ( PeriRouteCfg                        ),
+        .EnMgrPort   ( HbmPeriphMgr                        ),
         .EnSbrPort   ( 1'b1                                ),
         .id_t        ( floo_cachepool_noc_pkg::id_t        ),
         .route_t     ( floo_cachepool_noc_pkg::route_t     ),
@@ -690,18 +698,18 @@ module cachepool_cluster
         .floo_rsp_t  ( l2_noc_rsp_t                        ),
         .addr_t      ( axi_addr_t                          ),
         .sam_rule_t  ( floo_cachepool_noc_pkg::sam_rule_t  ),
-        .Sam         ( floo_cachepool_noc_pkg::Sam         )
+        .Sam         ( PeriSam                             )
       ) i_hbm_chimney (
         .clk_i            ( clk_i                                         ),
         .rst_ni           ( rst_ni                                        ),
         .test_enable_i    ( 1'b0                                          ),
-        // Manager port: unused
-        .mgr_req_i        ( '0                                            ),
-        .mgr_req_valid_i  ( 1'b0                                          ),
-        .mgr_req_ready_o  (                                               ),
-        .mgr_rsp_o        (                                               ),
-        .mgr_rsp_valid_o  (                                               ),
-        .mgr_rsp_ready_i  ( 1'b0                                          ),
+        // Manager port: group configuration writes (HBM0 only)
+        .mgr_req_i        ( hbm_mgr_req                                   ),
+        .mgr_req_valid_i  ( hbm_mgr_req_valid                             ),
+        .mgr_req_ready_o  ( hbm_mgr_req_ready                             ),
+        .mgr_rsp_o        ( hbm_mgr_rsp                                   ),
+        .mgr_rsp_valid_o  ( hbm_mgr_rsp_valid                             ),
+        .mgr_rsp_ready_i  ( hbm_mgr_rsp_ready                             ),
         // Subordinate port: drives reqrsp_to_axi
         .sbr_req_o        ( hbm_sbr_req                                   ),
         .sbr_req_valid_o  ( hbm_sbr_req_valid                             ),
@@ -713,26 +721,22 @@ module cachepool_cluster
         // Routing
         .id_i             ( floo_cachepool_noc_pkg::id_t'(HbmEndpointId)        ),
         .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[HbmEndpointId]),
-        // Request flit from mesh West(3) edge (no router)
-        .floo_req_o       (                                               ),
-        .floo_req_valid_o (                                               ),
-        .floo_req_ready_i ( 1'b1                                          ),
+        // Request flits on the mesh West(3) edge (no router). Without a manager port the
+        // chimney injects nothing and drains stray responses.
+        .floo_req_o       ( l2_req_in[0][gy][3]                           ),
+        .floo_req_valid_o ( l2_req_in_valid[0][gy][3]                     ),
+        .floo_req_ready_i ( l2_req_in_ready[0][gy][3]                     ),
         .floo_req_i       ( l2_req_out[0][gy][3]                          ),
         .floo_req_valid_i ( l2_req_out_valid[0][gy][3]                    ),
         .floo_req_ready_o ( l2_req_out_ready[0][gy][3]                    ),
-        // Response flit into mesh West(3) edge
+        // Response flits on the mesh West(3) edge
         .floo_rsp_o       ( l2_rsp_in[0][gy][3]                           ),
         .floo_rsp_valid_o ( l2_rsp_in_valid[0][gy][3]                     ),
         .floo_rsp_ready_i ( l2_rsp_in_ready[0][gy][3]                     ),
-        .floo_rsp_i       ( '0                                            ),
-        .floo_rsp_valid_i ( 1'b0                                          ),
-        .floo_rsp_ready_o (                                               )
+        .floo_rsp_i       ( l2_rsp_out[0][gy][3]                          ),
+        .floo_rsp_valid_i ( l2_rsp_out_valid[0][gy][3]                    ),
+        .floo_rsp_ready_o ( l2_rsp_out_ready[0][gy][3]                    )
       );
-
-      // Tie off: no requests injected from HBM, drain stray outgoing responses
-      assign l2_req_in       [0][gy][3] = '0;
-      assign l2_req_in_valid [0][gy][3] = 1'b0;
-      assign l2_rsp_out_ready[0][gy][3] = 1'b1;
 
       // Pack chimney sbr signals into REQRSP bundle
       cache_trans_req_t  hbm_reqrsp_req;
@@ -751,6 +755,30 @@ module cachepool_cluster
       // ID FIFO capped outstanding refills. Cross-path reordering is safe (miss info is in
       // refill_user_t); a reqrsp_to_axi per path keeps each user-field FIFO in order.
       if (HbmIdx == L2PeriphChannel) begin : gen_hbm0_demux
+
+        // Manager port: the cluster peripheral's configuration batches, one write per group.
+        // Requests carry this endpoint's ID so the groups route their responses back here.
+        cachepool_group_cfg_sender #(
+          .req_chan_t ( cache_trans_req_chan_t ),
+          .rsp_chan_t ( cache_trans_rsp_chan_t ),
+          .user_t     ( refill_user_t          ),
+          .ReqUser    ( '{l2_src_id: floo_cachepool_noc_pkg::id_t'(HbmEndpointId), default: '0} )
+        ) i_group_cfg_sender (
+          .clk_i       ( clk_i             ),
+          .rst_ni      ( rst_ni            ),
+          .start_i     ( cfg_start         ),
+          .issue_i     ( cfg_issue         ),
+          .insn_i      ( cfg_insn          ),
+          .tile_sel_i  ( cfg_tile_sel      ),
+          .cfg_i       ( cfg_l1d           ),
+          .done_o      ( cfg_done          ),
+          .req_o       ( hbm_mgr_req       ),
+          .req_valid_o ( hbm_mgr_req_valid ),
+          .req_ready_i ( hbm_mgr_req_ready ),
+          .rsp_i       ( hbm_mgr_rsp       ),
+          .rsp_valid_i ( hbm_mgr_rsp_valid ),
+          .rsp_ready_o ( hbm_mgr_rsp_ready )
+        );
 
         // Address-based select: DRAM = port 0, Peripheral = port 1. The
         // window is this chimney's own channel slice: under all-sides
@@ -891,9 +919,13 @@ module cachepool_cluster
         );
 
       end else begin : gen_hbm_direct
-        // Non-HBM0: single reqrsp_to_axi → DRAM
+        // Non-HBM0: single reqrsp_to_axi → DRAM, manager port unused
         axi_slv_cache_req_t  hbm_axi_req;
         axi_slv_cache_resp_t hbm_axi_rsp;
+
+        assign hbm_mgr_req       = '0;
+        assign hbm_mgr_req_valid = 1'b0;
+        assign hbm_mgr_rsp_ready = 1'b1;
 
         reqrsp_to_axi #(
           .MaxTrans     ( L2RefillMaxTrans      ),
@@ -1554,8 +1586,7 @@ module cachepool_cluster
     .NumBarrierSlots ( NumBarrierSlots           ),
     .PrivateWidth    ( L1PrivWidth               ),
     .reg_req_t       ( reg_csr_req_t             ),
-    .reg_rsp_t       ( reg_csr_rsp_t             ),
-    .cache_insn_t    ( cache_insn_t              )
+    .reg_rsp_t       ( reg_csr_rsp_t             )
   ) i_cachepool_cluster_peripheral (
     .clk_i                    ( clk_i                  ),
     .rst_ni                   ( rst_ni                 ),
@@ -1564,17 +1595,16 @@ module cachepool_cluster
     .reg_rsp_o                ( reg_rsp                ),
     .tcdm_start_address_i     ( tcdm_start_address     ),
     .tcdm_end_address_i       ( tcdm_end_address       ),
-    .icache_prefetch_enable_o ( icache_prefetch_enable ),
     .cluster_hart_base_id_i   ( HartBaseId             ),
     .cluster_probe_o          ( cluster_probe_o        ),
-    .dynamic_offset_o         ( dynamic_offset         ),
-    .private_start_addr_o     ( private_start_addr     ),
     .l1d_spm_size_o           (                        ),
-    .l1d_private_o            ( l1d_private            ),
-    .l1d_insn_o               ( l1d_insn               ),
-    .l1d_insn_valid_o         ( l1d_insn_valid         ),
-    .l1d_insn_ready_i         ( l1d_insn_ready         ),
     .l1d_busy_o               ( l1d_busy               ),
+    .cfg_start_o              ( cfg_start              ),
+    .cfg_issue_o              ( cfg_issue              ),
+    .cfg_insn_o               ( cfg_insn               ),
+    .cfg_tile_sel_o           ( cfg_tile_sel           ),
+    .cfg_o                    ( cfg_l1d                ),
+    .cfg_done_i               ( cfg_done               ),
     .barrier_part_mask_o      ( barrier_part_mask      )
   );
 

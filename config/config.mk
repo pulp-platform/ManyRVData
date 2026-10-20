@@ -227,3 +227,21 @@ boot_addr ?= 4096
 
 # UART address (32'hC001_0000)
 uart_addr ?= 3221291008
+
+# Group-level configuration registers, written by the cluster peripheral over the
+# L2 mesh. Group g owns one word at group_cfg_base + g * group_cfg_stride.
+# Base (32'hD000_0000)
+group_cfg_base ?= 3489660928
+# Stride per group (32'h100)
+group_cfg_stride ?= 256
+
+# Reset values of the L1D/xbar configuration, shared by the cluster peripheral
+# registers and the group-level copies so both always come out of reset equal.
+# Cache xbar offset (bit position selecting the cache bank)
+l1d_xbar_offset_rst ?= 14
+# Private partition size and fold (L1D_PRIVATE)
+l1d_private_rst ?= 0
+# Start address of the private L1D partition (32'hA000_0000)
+l1d_private_addr_rst ?= 2684354560
+# Instruction cache prefetching enable
+icache_prefetch_rst ?= 1

@@ -106,7 +106,7 @@ extern "C" {
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x3c
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_COMMIT_BIT 0
 
-// Indicate the status of flushing
+// Busy while a committed L1D instruction or configuration is still being
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x40
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_BIT 0
 

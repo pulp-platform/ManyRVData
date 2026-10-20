@@ -128,6 +128,17 @@ package cachepool_pkg;
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC001_0000;
 
+  // Group-level configuration registers: group g owns one word at GroupCfgBase + g * GroupCfgStride.
+  // Only the cluster peripheral writes them, over the L2 mesh; cores never access them.
+  localparam logic [31:0] GroupCfgBase    = `ifdef GROUP_CFG_BASE 32'd `GROUP_CFG_BASE `else 32'hD000_0000 `endif;
+  localparam int unsigned GroupCfgStride  = `ifdef GROUP_CFG_STRIDE `GROUP_CFG_STRIDE `else 32'h100 `endif;
+
+  // Reset values shared by the cluster peripheral and the group-level configuration registers.
+  localparam int unsigned L1dXbarOffsetRst  = `ifdef L1D_XBAR_OFFSET_RST `L1D_XBAR_OFFSET_RST `else 14 `endif;
+  localparam int unsigned L1dPrivateRst     = `ifdef L1D_PRIVATE_RST `L1D_PRIVATE_RST `else 0 `endif;
+  localparam logic [31:0] L1dPrivateAddrRst = `ifdef L1D_PRIVATE_ADDR_RST 32'd `L1D_PRIVATE_ADDR_RST `else 32'hA000_0000 `endif;
+  localparam bit          ICachePrefetchRst = `ifdef ICACHE_PREFETCH_RST `ICACHE_PREFETCH_RST `else 1'b1 `endif;
+
   ///////////////////////
   //  CACHEPOOL L1 CFG  //
   ///////////////////////
@@ -394,18 +405,44 @@ package cachepool_pkg;
   } burst_req_t;
 
   // style-waive: COMMENT_BLOCK: instruction encoding table
-  // Cache flush/invalidation instruction issued by the peripheral flush controller.
+  // Cache flush/invalidation instruction issued by the group configuration register.
   // insn encoding:
   //   2'b00 : flush private banks only
   //   2'b01 : flush shared  banks only
   //   2'b10 : flush all banks
   //   2'b11 : invalidate (init) all banks
-  // tile_sel: one-hot mask over NumTiles. For insn != 2'b00 the peripheral
-  //           sets tile_sel to '1 (all tiles) for consistency.
+  // tile_sel: one-hot mask over the tiles of the group. For insn != 2'b00 the
+  //           cluster peripheral sets tile_sel to '1 (all tiles) for consistency.
   typedef struct packed {
-    logic [1:0]          insn;
-    logic [NumTiles-1:0] tile_sel;
+    logic [1:0]                  insn;
+    logic [NumTilesPerGroup-1:0] tile_sel;
   } cache_insn_t;
+
+  // Bit position of the address selecting the cache bank (cache xbar offset).
+  typedef logic [$clog2(SpatzAxiAddrWidth)-1:0] xbar_offset_t;
+
+  // Committed L1D/xbar configuration, identical in every group.
+  typedef struct packed {
+    logic [L1PrivWidth-1:0] l1d_private;
+    axi_addr_t              private_addr;
+    xbar_offset_t           xbar_offset;
+    logic                   prefetch_en;
+  } l1d_cfg_t;
+
+  localparam l1d_cfg_t L1dCfgRst = '{
+    l1d_private:  L1dPrivateRst,
+    private_addr: L1dPrivateAddrRst,
+    xbar_offset:  L1dXbarOffsetRst,
+    prefetch_en:  ICachePrefetchRst
+  };
+
+  // Payload of one group configuration write: the configuration is applied on every write,
+  // issue additionally starts insn in the tiles of this group selected by insn.tile_sel.
+  typedef struct packed {
+    logic        issue;
+    cache_insn_t insn;
+    l1d_cfg_t    cfg;
+  } group_cfg_t;
 
   typedef struct packed {
     logic                  for_write_pend;
@@ -731,5 +768,32 @@ package cachepool_pkg;
       return addr;
     end
   endfunction
+
+  // L2 mesh route config and SAM of the cluster peripheral's manager port. It only ever targets
+  // group configuration words, so its SAM holds just those rules; they stay out of the generated
+  // Sam so core requests can never be routed to a group configuration register.
+  localparam int unsigned PeriSamNumRules = NumGroups;
+  typedef floo_cachepool_noc_pkg::sam_rule_t [PeriSamNumRules-1:0] peri_sam_t;
+
+  function automatic floo_pkg::route_cfg_t gen_peri_route_cfg();
+    floo_pkg::route_cfg_t cfg;
+    cfg             = floo_cachepool_noc_pkg::RouteCfg;
+    cfg.NumSamRules = PeriSamNumRules;
+    return cfg;
+  endfunction
+
+  function automatic peri_sam_t gen_peri_sam();
+    peri_sam_t sam;
+    for (int unsigned g = 0; g < NumGroups; g++) begin
+      // Group index g is row-major (gy * NumGroupsX + gx); L2 mesh endpoint IDs are column-major.
+      sam[g].idx        = floo_cachepool_noc_pkg::id_t'((g % NumGroupsX) * NumGroupsY + g / NumGroupsX);
+      sam[g].start_addr = GroupCfgBase + g * GroupCfgStride;
+      sam[g].end_addr   = GroupCfgBase + (g + 1) * GroupCfgStride;
+    end
+    return sam;
+  endfunction
+
+  localparam floo_pkg::route_cfg_t PeriRouteCfg = gen_peri_route_cfg();
+  localparam peri_sam_t            PeriSam      = gen_peri_sam();
 
 endpackage : cachepool_pkg
