@@ -91,7 +91,7 @@ snitch_max_trans ?= 16
 #####################
 ##  L2 Main Memory ##
 #####################
-# DRAM type (selects DRAMSys config and sets default refill_data_width)
+# DRAM type (selects DRAMSys config)
 dram_type ?= HBM2
 
 # L2 number of channels

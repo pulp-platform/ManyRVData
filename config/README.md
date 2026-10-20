@@ -108,13 +108,13 @@ subset; the "Define" column gives the SystemVerilog macro the `Makefile` emits
 | `addr_width` | `32` | `ADDR_WIDTH` | Core address width |
 | `bootrom_data_width` | `32` | — | Bootrom word width (used by `generate_bootrom.py`) |
 | `num_barrier_slots` | `2` | `NUM_BARRIER_SLOTS` | Independent hardware barrier slots |
-| `dram_type` | `HBM2` | `DRAM_TYPE` | DRAMSys model. One of `DDR3`, `DDR4`, `LPDDR4`, `HBM2`. Also sets the default `refill_data_width` |
+| `dram_type` | `HBM2` | `DRAM_TYPE` | DRAMSys model. One of `DDR3`, `DDR4`, `LPDDR4`, `HBM2` |
 
 ### Tile and L1 data cache
 
 | Parameter | Default | Define | Description |
 | --- | --- | --- | --- |
-| `refill_data_width` | auto from `dram_type` | `REFILL_DATA_WIDTH` | Refill interconnect data width. Default is 512 (HBM2), 256 (LPDDR4), 128 (otherwise) |
+| `refill_data_width` | 512 | `REFILL_DATA_WIDTH` | Refill interconnect data width. Must equal `l1d_cacheline_width`: refills are single beats (checked in `cachepool_cluster.sv`) |
 | `l1d_cacheline_width` | `512` | `L1D_CACHELINE_WIDTH` | Cache line width in bits |
 | `l1d_bank_factor` | `1` | — | Banks per core (derives `l1d_num_banks`) |
 | `l1d_coal_window` | `2` | `L1D_COAL_WINDOW` | Coalescing window of the request coalescer |

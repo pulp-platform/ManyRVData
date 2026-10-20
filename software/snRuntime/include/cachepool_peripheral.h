@@ -125,8 +125,13 @@ extern "C" {
 // no
 #define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x48
 
+// L1D bypass: requests from L1D_ADDR up (below the stack) skip the L1 data
+// cache.
+#define CACHEPOOL_PERIPHERAL_L1D_BYPASS_REG_OFFSET 0x4c
+#define CACHEPOOL_PERIPHERAL_L1D_BYPASS_EN_BIT 0
+
 // Cache xbar offset setting. Applied when the value changes, no commit
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x4c
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x50
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK 0x1f
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_FIELD                          \

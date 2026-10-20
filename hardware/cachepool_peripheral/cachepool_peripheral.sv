@@ -129,6 +129,7 @@ module cachepool_peripheral
   assign reg_cfg.private_addr = reg2hw.l1d_addr.q;
   assign reg_cfg.xbar_offset  = reg2hw.xbar_offset.q;
   assign reg_cfg.prefetch_en  = reg2hw.icache_prefetch_enable.q;
+  assign reg_cfg.bypass_en    = reg2hw.l1d_bypass.q;
 
   // Committed settings, the copy every group-level register holds once a batch is done
   l1d_cfg_t            cfg_d,      cfg_q;
@@ -143,13 +144,14 @@ module cachepool_peripheral
 
   // A setting differing from its committed copy is a pending update; only the L1D instruction
   // waits for an explicit commit
-  logic l1d_insn_commit, xbar_update, private_update, addr_update, prefetch_update;
+  logic l1d_insn_commit, xbar_update, private_update, addr_update, prefetch_update, bypass_update;
 
   assign l1d_insn_commit = reg2hw.l1d_insn_commit.q;
   assign xbar_update     = (reg_cfg.xbar_offset  != cfg_q.xbar_offset);
   assign private_update  = (reg_cfg.l1d_private  != cfg_q.l1d_private);
   assign addr_update     = (reg_cfg.private_addr != cfg_q.private_addr);
   assign prefetch_update = (reg_cfg.prefetch_en  != cfg_q.prefetch_en);
+  assign bypass_update   = (reg_cfg.bypass_en    != cfg_q.bypass_en);
 
   // A batch carries one register and is only started while no batch is in flight; anything
   // else stays pending until the previous batch is done. INSN first.
@@ -208,6 +210,13 @@ module cachepool_peripheral
       data_d[0]         = reg_cfg.prefetch_en;
       busy_d            = 1'b1;
       start_d           = 1'b1;
+    end else if (bypass_update) begin
+      cfg_d.bypass_en   = reg_cfg.bypass_en;
+      reg_d             = GroupCfgL1dBypass;
+      data_d            = '0;
+      data_d[0]         = reg_cfg.bypass_en;
+      busy_d            = 1'b1;
+      start_d           = 1'b1;
     end
   end
 
@@ -229,7 +238,7 @@ module cachepool_peripheral
   // Busy from the cycle a commit or a changed setting is visible, so a status read right behind
   // the write never sees idle before the batch has started.
   assign hw2reg.l1d_flush_status.d = busy_q | l1d_insn_commit | xbar_update | private_update |
-                                     addr_update | prefetch_update;
+                                     addr_update | prefetch_update | bypass_update;
 
   // One 32-bit register per barrier slot; single register is enough at
   // group granularity (max 32 groups).
