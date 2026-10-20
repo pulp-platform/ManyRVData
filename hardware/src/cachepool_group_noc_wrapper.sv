@@ -76,6 +76,7 @@ module cachepool_group_noc_wrapper
     input  logic              [TileIDWidth-1:0]                           tile_base_id_i,
     input  axi_addr_t                                                     cluster_base_addr_i,
     input  axi_addr_t                                                     private_start_addr_i,
+    input  logic                                                          l1d_bypass_i,
     // L2 refill TCDM mesh: 4 directions (North=0, East=1, South=2, West=3)
     output l2_noc_req_t [3:0] l2_req_o,
     output logic        [3:0] l2_req_valid_o,
@@ -166,6 +167,7 @@ module cachepool_group_noc_wrapper
   logic       [NumTilesPerGroup-1:0]      l1d_insn_ready_d, l1d_insn_ready_q;
   logic       [NumTilesPerGroup-1:0]      l1d_busy_d,       l1d_busy_q;
   axi_addr_t                              private_start_addr_d, private_start_addr_q;
+  logic                                   l1d_bypass_d,     l1d_bypass_q;
 
   `FF(dynamic_offset_q, dynamic_offset_d, '0, clk_i, rst_ni)
   `FF(l1d_private_q,    l1d_private_d,    '0, clk_i, rst_ni)
@@ -174,6 +176,7 @@ module cachepool_group_noc_wrapper
   `FF(l1d_insn_ready_q, l1d_insn_ready_d, '0, clk_i, rst_ni)
   `FF(l1d_busy_q,       l1d_busy_d,       '0, clk_i, rst_ni)
   `FF(private_start_addr_q, private_start_addr_d, '0, clk_i, rst_ni)
+  `FF(l1d_bypass_q,     l1d_bypass_d,     '0, clk_i, rst_ni)
 
   assign dynamic_offset_d      = dynamic_offset_i;
   assign l1d_private_d         = l1d_private_i;
@@ -182,6 +185,7 @@ module cachepool_group_noc_wrapper
   assign l1d_insn_ready_o      = l1d_insn_ready_q;
   assign l1d_busy_d            = l1d_busy_i;
   assign private_start_addr_d  = private_start_addr_i;
+  assign l1d_bypass_d          = l1d_bypass_i;
 
   // -------------------------------------------------------------------------
   // Mesh signals [tile][ch][dir=3:0] and transposition to/from ports
@@ -778,6 +782,7 @@ module cachepool_group_noc_wrapper
     .tile_base_id_i           ( tile_base_id_i              ),
     .cluster_base_addr_i      ( cluster_base_addr_i         ),
     .private_start_addr_i     ( private_start_addr_q        ),
+    .l1d_bypass_i             ( l1d_bypass_q                ),
     .l2_req_o                 ( l2_group_req                ),
     .l2_rsp_i                 ( l2_group_rsp                ),
     .l2_group_id_i            ( l2_id_i                     ),
