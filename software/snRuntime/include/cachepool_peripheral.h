@@ -19,7 +19,7 @@ extern "C" {
 
 // Number of independent hardware barrier round trackers (must match
 // hardware/src/cachepool_pkg.sv NumBarrierSlots).
-#define CACHEPOOL_PERIPHERAL_PARAM_NUM_BARRIER_SLOTS 4
+#define CACHEPOOL_PERIPHERAL_PARAM_NUM_BARRIER_SLOTS 2
 
 // Register width
 #define CACHEPOOL_PERIPHERAL_PARAM_REG_WIDTH 32
@@ -90,7 +90,7 @@ extern "C" {
 #define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_GROUP_FIELD_WIDTH 32
 #define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_GROUP_FIELDS_PER_REG \
   1
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_MULTIREG_COUNT 4
+#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_MULTIREG_COUNT 2
 
 // Per-slot group participation mask for the cluster-level hardware
 #define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_0_REG_OFFSET 0x30
@@ -98,27 +98,21 @@ extern "C" {
 // Per-slot group participation mask for the cluster-level hardware
 #define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_1_REG_OFFSET 0x34
 
-// Per-slot group participation mask for the cluster-level hardware
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_2_REG_OFFSET 0x38
-
-// Per-slot group participation mask for the cluster-level hardware
-#define CACHEPOOL_PERIPHERAL_HW_BARRIER_PARTICIPATION_MASK_3_REG_OFFSET 0x3c
-
 // Controls the L1 DCache flushing and invalidation.
-#define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET 0x40
+#define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET 0x38
 #define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_COMMIT_BIT 0
 
 // Starts the L1D instruction in CFG_L1D_INSN on the tiles selected by
-#define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x44
+#define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x3c
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_COMMIT_BIT 0
 
 // Busy while a committed L1D instruction or a changed setting is still being
-#define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x48
+#define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x40
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_BIT 0
 
 // L1D partitioning: private bank count and how it is folded. Applied when
 // the
-#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x4c
+#define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x44
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_MASK 0x7
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_FIELD                       \
@@ -129,10 +123,10 @@ extern "C" {
 
 // Starting address of private L1D partition. Applied when the value changes,
 // no
-#define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x50
+#define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x48
 
 // Cache xbar offset setting. Applied when the value changes, no commit
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x54
+#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x4c
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK 0x1f
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET 0
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_FIELD                          \

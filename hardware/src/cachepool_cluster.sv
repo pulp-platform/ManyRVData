@@ -955,7 +955,6 @@ module cachepool_cluster
           .AddrWidth     ( AxiAddrWidth          ),
           .DataWidth     ( AxiDataWidth          ),
           .UserWidth     ( $bits(refill_user_t)  ),
-          .FifoDepth     ( 2                     ),
           .ShiftResponse ( 1'b0                  ),
           .user_t        ( refill_user_t         ),
           .reqrsp_req_t  ( cache_trans_req_t     ),
@@ -980,7 +979,9 @@ module cachepool_cluster
           .addr_i  ( addr_t'(bootrom_reg_req.addr) ),
           .rdata_o ( bootrom_reg_rsp.rdata         )
         );
-        `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+        // The ROM registers its address: ready one cycle after each new address, so
+        // back-to-back requests get a setup cycle each.
+        `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid & ~bootrom_reg_rsp.ready, 1'b0)
         assign bootrom_reg_rsp.error = 1'b0;
 
         `ASSERT_INIT(CheckBootromWidth, BootromDataWidth == AxiDataWidth,
@@ -1680,7 +1681,6 @@ module cachepool_cluster
     .AddrWidth    ( AxiAddrWidth              ),
     .DataWidth    ( 32                        ),
     .UserWidth    ( $bits(peri_xbar_user_t)   ),
-    .FifoDepth    ( 2                         ),
     .ShiftResponse( 1'b0                      ),
     .user_t       ( peri_xbar_user_t          ),
     .reqrsp_req_t ( peri_xbar_req_t           ),
