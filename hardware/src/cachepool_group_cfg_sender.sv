@@ -6,11 +6,12 @@
 `include "common_cells/assertions.svh"
 
 /// style-waive: COMMENT_BLOCK: function description
-/// Forwards one committed configuration batch of the cluster peripheral to every group-level
-/// configuration register (cachepool_group_cfg) as sequential unicast writes over the L2 mesh,
-/// and pulses done_o once all NumGroups responses are back. Group g is written at
-/// GroupCfgBase + g * GroupCfgStride with its own tile_sel slice. The batch inputs must stay
-/// stable from start_i until done_o (the peripheral blocks new commits meanwhile).
+/// Forwards one configuration batch of the cluster peripheral, a single group-level register, to
+/// every group-level configuration register (cachepool_group_cfg) as sequential unicast writes
+/// over the narrow L2 mesh, and pulses done_o once all NumGroups responses are back. Group g is written
+/// at GroupCfgBase + g * GroupCfgStride + 4 * reg_i; an L1D instruction carries the group's own
+/// tile_sel slice. The batch inputs must stay stable from start_i until done_o (the peripheral
+/// blocks new batches meanwhile).
 module cachepool_group_cfg_sender
   import cachepool_pkg::*;
 #(
@@ -24,10 +25,9 @@ module cachepool_group_cfg_sender
   input  logic                rst_ni,
   // Batch from the cluster peripheral
   input  logic                start_i,
-  input  logic                issue_i,
-  input  logic [1:0]          insn_i,
+  input  group_cfg_reg_e      reg_i,
+  input  logic [31:0]         data_i,
   input  logic [NumTiles-1:0] tile_sel_i,
-  input  l1d_cfg_t            cfg_i,
   output logic                done_o,
   // Manager port into the L2 mesh chimney
   output req_chan_t           req_o,
@@ -48,31 +48,32 @@ module cachepool_group_cfg_sender
   // Tile selection of the remaining groups; the current group's slice sits at the LSBs
   logic [NumTiles-1:0] tile_sel_d, tile_sel_q;
 
-  logic                        req_fire;
-  logic [NumTilesPerGroup-1:0] group_tile_sel;
-  group_cfg_t                  group_cfg;
+  logic        req_fire;
+  cache_insn_t group_insn;
+  logic [31:0] group_data;
 
-  assign req_valid_o    = busy_q && (send_cnt_q != NumGroups);
-  assign req_fire       = req_valid_o && req_ready_i;
-  assign rsp_ready_o    = 1'b1;
-  assign group_tile_sel = tile_sel_q[NumTilesPerGroup-1:0];
+  assign req_valid_o = busy_q && (send_cnt_q != NumGroups);
+  assign req_fire    = req_valid_o && req_ready_i;
+  assign rsp_ready_o = 1'b1;
 
-  // A private flush only issues in groups with at least one selected tile
-  always_comb begin : group_cfg_pack
-    group_cfg.issue         = issue_i && ((insn_i != 2'b00) || (group_tile_sel != '0));
-    group_cfg.insn.insn     = insn_i;
-    group_cfg.insn.tile_sel = group_tile_sel;
-    group_cfg.cfg           = cfg_i;
+  // An L1D instruction carries the tile selection of the group it is sent to
+  always_comb begin : group_data_pack
+    group_insn.insn     = data_i[1:0];
+    group_insn.tile_sel = tile_sel_q[NumTilesPerGroup-1:0];
+    group_data          = data_i;
+    if (reg_i == GroupCfgL1dInsn) begin
+      group_data                          = '0;
+      group_data[$bits(cache_insn_t)-1:0] = group_insn;
+    end
   end
 
   always_comb begin : req_pack
-    req_o                              = '0;
-    req_o.addr                         = addr_q;
-    req_o.write                        = 1'b1;
-    req_o.amo                          = reqrsp_pkg::AMONone;
-    req_o.data[$bits(group_cfg_t)-1:0] = group_cfg;
-    req_o.strb                         = '1;
-    req_o.user                         = ReqUser;
+    req_o            = '0;
+    req_o.addr       = addr_q;
+    req_o.write      = 1'b1;
+    req_o.data[31:0] = group_data;
+    req_o.strb       = '1;
+    req_o.user       = ReqUser;
   end
 
   always_comb begin : batch_ctrl
@@ -88,7 +89,7 @@ module cachepool_group_cfg_sender
         busy_d     = 1'b1;
         send_cnt_d = '0;
         rsp_cnt_d  = '0;
-        addr_d     = GroupCfgBase;
+        addr_d     = GroupCfgBase + {reg_i, 2'b00};
         tile_sel_d = tile_sel_i;
       end
     end else begin
@@ -114,8 +115,8 @@ module cachepool_group_cfg_sender
   `FF(tile_sel_q, tile_sel_d, '0,   clk_i, rst_ni)
 
   `ASSERT_INIT(CheckNumGroups, NumGroups > 1, "cachepool_group_cfg_sender: NumGroups must be > 1")
-  `ASSERT_INIT(CheckCfgFitsData, $bits(group_cfg_t) <= $bits(req_o.data),
-      "cachepool_group_cfg_sender: group_cfg_t does not fit into the request data")
+  `ASSERT_INIT(CheckInsnFitsWord, $bits(cache_insn_t) <= 32,
+      "cachepool_group_cfg_sender: cache_insn_t does not fit into one 32-bit register")
   `ASSERT(NoRspWhenIdle, rsp_valid_i |-> busy_q, clk_i, !rst_ni,
       "cachepool_group_cfg_sender: response without an outstanding batch")
   `ASSERT(NoExtraRsp, rsp_valid_i |-> (rsp_cnt_q < NumGroups), clk_i, !rst_ni,

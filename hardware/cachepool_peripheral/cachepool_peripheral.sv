@@ -4,9 +4,10 @@
 
 /// style-waive: COMMENT_BLOCK: function description
 /// Exposes cluster confugration and information as memory mapped information.
-/// The L1D/xbar configuration is not wired to the groups: every commit is handed to
-/// cachepool_group_cfg_sender as one batch, which writes it into each group's
-/// cachepool_group_cfg over the L2 mesh. L1D_FLUSH_STATUS stays busy until the batch is done.
+/// The L1D/xbar configuration is not wired to the groups: every changed setting and every
+/// L1D instruction commit is handed to cachepool_group_cfg_sender as one batch, which writes
+/// that register into each group's cachepool_group_cfg over the L2 mesh. L1D_FLUSH_STATUS
+/// stays busy until no batch is pending or in flight.
 
 `include "common_cells/assertions.svh"
 `include "common_cells/registers.svh"
@@ -49,10 +50,9 @@ module cachepool_peripheral
   output logic [NumTiles-1:0]        l1d_busy_o,
   // Configuration batch towards cachepool_group_cfg_sender, stable until cfg_done_i
   output logic                       cfg_start_o,
-  output logic                       cfg_issue_o,
-  output logic [1:0]                 cfg_insn_o,
+  output group_cfg_reg_e             cfg_reg_o,
+  output logic [31:0]                cfg_data_o,
   output logic [NumTiles-1:0]        cfg_tile_sel_o,
-  output l1d_cfg_t                   cfg_o,
   input  logic                       cfg_done_i,
   // One group-participation mask per barrier slot (see HW_BARRIER_PARTICIPATION_MASK multireg)
   output logic [NumBarrierSlots-1:0][NumGroups-1:0] barrier_part_mask_o
@@ -123,39 +123,47 @@ module cachepool_peripheral
     end
   end
 
-  // Committed configuration, the copy every group-level register holds once a batch is done
+  // Settings as currently written by software
+  l1d_cfg_t reg_cfg;
+  assign reg_cfg.l1d_private  = {reg2hw.l1d_private.group_fold.q, reg2hw.l1d_private.partition.q};
+  assign reg_cfg.private_addr = reg2hw.l1d_addr.q;
+  assign reg_cfg.xbar_offset  = reg2hw.xbar_offset.q;
+  assign reg_cfg.prefetch_en  = reg2hw.icache_prefetch_enable.q;
+
+  // Committed settings, the copy every group-level register holds once a batch is done
   l1d_cfg_t            cfg_d,      cfg_q;
-  // A batch is in flight from its commit until all groups have answered
+  // A batch is in flight from its start until all groups have answered
   logic                busy_d,     busy_q;
   logic                start_d,    start_q;
-  logic                issue_d,    issue_q;
-  logic [1:0]          insn_d,     insn_q;
+  group_cfg_reg_e      reg_d,      reg_q;
+  logic [31:0]         data_d,     data_q;
   logic [NumTiles-1:0] tile_sel_d, tile_sel_q;
   // L1 is running flush/invalidation
   logic [NumTiles-1:0] l1d_lock_d, l1d_lock_q;
 
-  logic l1d_insn_commit, xbar_offset_commit, prefetch_update;
+  // A setting differing from its committed copy is a pending update; only the L1D instruction
+  // waits for an explicit commit
+  logic l1d_insn_commit, xbar_update, private_update, addr_update, prefetch_update;
 
-  assign l1d_insn_commit    = reg2hw.l1d_insn_commit.q;
-  assign xbar_offset_commit = reg2hw.xbar_offset_commit.q;
-  // ICACHE_PREFETCH_ENABLE has no commit register, a changed value starts a batch
-  assign prefetch_update    = (reg2hw.icache_prefetch_enable.q != cfg_q.prefetch_en);
+  assign l1d_insn_commit = reg2hw.l1d_insn_commit.q;
+  assign xbar_update     = (reg_cfg.xbar_offset  != cfg_q.xbar_offset);
+  assign private_update  = (reg_cfg.l1d_private  != cfg_q.l1d_private);
+  assign addr_update     = (reg_cfg.private_addr != cfg_q.private_addr);
+  assign prefetch_update = (reg_cfg.prefetch_en  != cfg_q.prefetch_en);
 
-  // A commit is only taken while no batch is in flight; otherwise its commit bit
-  // stays set until the previous batch is done. One commit per batch, INSN first.
+  // A batch carries one register and is only started while no batch is in flight; anything
+  // else stays pending until the previous batch is done. INSN first.
   always_comb begin : cfg_ctrl
     cfg_d      = cfg_q;
     busy_d     = busy_q;
     start_d    = 1'b0;
-    issue_d    = issue_q;
-    insn_d     = insn_q;
+    reg_d      = reg_q;
+    data_d     = data_q;
     tile_sel_d = tile_sel_q;
     l1d_lock_d = l1d_lock_q;
 
-    hw2reg.l1d_insn_commit.d     = 1'b0;
-    hw2reg.l1d_insn_commit.de    = 1'b0;
-    hw2reg.xbar_offset_commit.d  = 1'b0;
-    hw2reg.xbar_offset_commit.de = 1'b0;
+    hw2reg.l1d_insn_commit.d  = 1'b0;
+    hw2reg.l1d_insn_commit.de = 1'b0;
 
     if (busy_q) begin
       if (cfg_done_i) begin
@@ -163,54 +171,65 @@ module cachepool_peripheral
         l1d_lock_d = '0;
       end
     end else if (l1d_insn_commit) begin
-      // An L1D instruction also commits the partition and its start address
-      cfg_d.l1d_private  = {reg2hw.l1d_private.group_fold.q,
-                            reg2hw.l1d_private.partition.q};
-      cfg_d.private_addr = reg2hw.l1d_addr.q;
-      issue_d            = 1'b1;
-      insn_d             = reg2hw.cfg_l1d_insn.q;
+      reg_d       = GroupCfgL1dInsn;
+      data_d      = '0;
+      data_d[1:0] = reg2hw.cfg_l1d_insn.q;
       // For non-private modes (shared/all/init), tile_sel is forced to '1.
-      tile_sel_d         = (reg2hw.cfg_l1d_insn.q == 2'b00) ? tile_sel_raw[NumTiles-1:0]
-                                                            : '1;
+      tile_sel_d  = (reg2hw.cfg_l1d_insn.q == 2'b00) ? tile_sel_raw[NumTiles-1:0] : '1;
       // Lock only the tiles that will receive the instruction.
-      l1d_lock_d         = tile_sel_d;
-      busy_d             = 1'b1;
-      start_d            = 1'b1;
+      l1d_lock_d  = tile_sel_d;
+      busy_d      = 1'b1;
+      start_d     = 1'b1;
       hw2reg.l1d_insn_commit.de = 1'b1;
-    end else if (xbar_offset_commit) begin
-      cfg_d.xbar_offset  = reg2hw.xbar_offset.q;
-      issue_d            = 1'b0;
+    end else if (xbar_update) begin
+      cfg_d.xbar_offset = reg_cfg.xbar_offset;
+      reg_d             = GroupCfgXbarOffset;
+      data_d            = '0;
+      data_d[$bits(xbar_offset_t)-1:0] = reg_cfg.xbar_offset;
+      busy_d            = 1'b1;
+      start_d           = 1'b1;
+    end else if (private_update) begin
+      cfg_d.l1d_private = reg_cfg.l1d_private;
+      reg_d             = GroupCfgL1dPrivate;
+      data_d            = '0;
+      data_d[L1PrivWidth-1:0] = reg_cfg.l1d_private;
+      busy_d            = 1'b1;
+      start_d           = 1'b1;
+    end else if (addr_update) begin
+      cfg_d.private_addr = reg_cfg.private_addr;
+      reg_d              = GroupCfgL1dAddr;
+      data_d             = reg_cfg.private_addr;
       busy_d             = 1'b1;
       start_d            = 1'b1;
-      hw2reg.xbar_offset_commit.de = 1'b1;
     end else if (prefetch_update) begin
-      cfg_d.prefetch_en  = reg2hw.icache_prefetch_enable.q;
-      issue_d            = 1'b0;
-      busy_d             = 1'b1;
-      start_d            = 1'b1;
+      cfg_d.prefetch_en = reg_cfg.prefetch_en;
+      reg_d             = GroupCfgPrefetch;
+      data_d            = '0;
+      data_d[0]         = reg_cfg.prefetch_en;
+      busy_d            = 1'b1;
+      start_d           = 1'b1;
     end
   end
 
-  `FF(cfg_q,      cfg_d,      L1dCfgRst, clk_i, rst_ni)
-  `FF(busy_q,     busy_d,     1'b0,      clk_i, rst_ni)
-  `FF(start_q,    start_d,    1'b0,      clk_i, rst_ni)
-  `FF(issue_q,    issue_d,    1'b0,      clk_i, rst_ni)
-  `FF(insn_q,     insn_d,     '0,        clk_i, rst_ni)
-  `FF(tile_sel_q, tile_sel_d, '0,        clk_i, rst_ni)
-  `FF(l1d_lock_q, l1d_lock_d, '0,        clk_i, rst_ni)
+  `FF(cfg_q,      cfg_d,      L1dCfgRst,          clk_i, rst_ni)
+  `FF(busy_q,     busy_d,     1'b0,               clk_i, rst_ni)
+  `FF(start_q,    start_d,    1'b0,               clk_i, rst_ni)
+  `FF(reg_q,      reg_d,      GroupCfgXbarOffset, clk_i, rst_ni)
+  `FF(data_q,     data_d,     '0,                 clk_i, rst_ni)
+  `FF(tile_sel_q, tile_sel_d, '0,                 clk_i, rst_ni)
+  `FF(l1d_lock_q, l1d_lock_d, '0,                 clk_i, rst_ni)
 
-  // The batch starts one cycle after its commit, so the sender sees the updated values
+  // The batch starts one cycle after it is taken, so the sender sees the updated values
   assign cfg_start_o    = start_q;
-  assign cfg_issue_o    = issue_q;
-  assign cfg_insn_o     = insn_q;
+  assign cfg_reg_o      = reg_q;
+  assign cfg_data_o     = data_q;
   assign cfg_tile_sel_o = tile_sel_q;
-  assign cfg_o          = cfg_q;
 
   assign l1d_busy_o     = l1d_lock_q;
-  // Busy from the cycle the commit is visible, so a status read right behind the commit write
-  // never sees idle before the batch has started.
-  assign hw2reg.l1d_flush_status.d = busy_q | l1d_insn_commit | xbar_offset_commit |
-                                     prefetch_update;
+  // Busy from the cycle a commit or a changed setting is visible, so a status read right behind
+  // the write never sees idle before the batch has started.
+  assign hw2reg.l1d_flush_status.d = busy_q | l1d_insn_commit | xbar_update | private_update |
+                                     addr_update | prefetch_update;
 
   // One 32-bit register per barrier slot; single register is enough at
   // group granularity (max 32 groups).

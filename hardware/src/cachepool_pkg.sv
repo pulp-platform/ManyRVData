@@ -64,6 +64,8 @@ package cachepool_pkg;
   ///////////////////
   // How many cores for each tile?
   localparam int unsigned NumCoresTile        = NumCC / NumTiles;
+  // Harts per tile (NumScalarPerCC harts share one CC)
+  localparam int unsigned NumHartsTile        = NumCoresTile * NumScalarPerCC;
 
   // Intra-group remote ports per core (to other tiles in the same group).
   localparam int unsigned NumLGPortCore   = `ifdef LG_PORT_PER_CORE `LG_PORT_PER_CORE `else 0 `endif;
@@ -124,11 +126,15 @@ package cachepool_pkg;
 
   localparam int unsigned PeriStartAddr   = 32'hC000_0000;
   localparam int unsigned BootAddr        = 32'h1000;
+  // Bootrom word width, equal to the L2 refill width (checked in cachepool_cluster)
+  localparam int unsigned BootromDataWidth = `ifdef BOOTROM_DATA_WIDTH `BOOTROM_DATA_WIDTH `else 0 `endif;
+  // Bootrom address window
+  localparam int unsigned BootromSize     = 32'h1_0000;
 
   // UART Configuration
   localparam int unsigned UartAddr        = 32'hC001_0000;
 
-  // Group-level configuration registers: group g owns one word at GroupCfgBase + g * GroupCfgStride.
+  // Group-level configuration registers: group g owns the block at GroupCfgBase + g * GroupCfgStride.
   // Only the cluster peripheral writes them, over the L2 mesh; cores never access them.
   localparam logic [31:0] GroupCfgBase    = `ifdef GROUP_CFG_BASE 32'd `GROUP_CFG_BASE `else 32'hD000_0000 `endif;
   localparam int unsigned GroupCfgStride  = `ifdef GROUP_CFG_STRIDE `GROUP_CFG_STRIDE `else 32'h100 `endif;
@@ -191,8 +197,8 @@ package cachepool_pkg;
   // Core id width within a tile => tile ID will be calculated separatly
   localparam int unsigned CoreIDWidth         = idx_width(NumCoresTile);
   localparam int unsigned TileIDWidth         = idx_width(NumTiles);
-  // Each bank inside a tile needs an unique id, plus two reserved for iCache and peripheral
-  localparam int unsigned BankIDWidth         = idx_width(NumL1CtrlTile + 2);
+  // Each bank inside a tile needs an unique id, plus one reserved for the iCache
+  localparam int unsigned BankIDWidth         = idx_width(NumL1CtrlTile + 1);
 
   localparam int unsigned RefillDataWidth     = `ifdef REFILL_DATA_WIDTH `REFILL_DATA_WIDTH `else 0 `endif;
   localparam int unsigned RefillStrbWidth     = RefillDataWidth / 8;
@@ -224,12 +230,11 @@ package cachepool_pkg;
   // AXI ID field structure
   // -----------------------
   // ClusterAxiIdWidth = [cluster_route_bits][tile_index_bits][tile_local_bits]
-  // Per-tile xbar ports: NumL1CtrlTile refill + 1 peripheral + 1 iCache
-  localparam int unsigned NumClusterMst           = 2 + NumL1CtrlTile;
+  // Per-tile xbar ports: NumL1CtrlTile refill + 1 iCache (peripherals are on the narrow mesh)
+  localparam int unsigned NumClusterMst           = 1 + NumL1CtrlTile;
   // Bank ID constants for the refill xbar response demux
-  // Layout per tile: [0..NumL1CtrlTile-1] = refill, NumL1CtrlTile = peripheral, NumL1CtrlTile+1 = iCache
-  localparam int unsigned BankIdPeriph             = NumL1CtrlTile;
-  localparam int unsigned BankIdICache             = NumL1CtrlTile + 1;
+  // Layout per tile: [0..NumL1CtrlTile-1] = refill, NumL1CtrlTile = iCache
+  localparam int unsigned BankIdICache             = NumL1CtrlTile;
 
   localparam int unsigned ClusterRouteIdWidth     = $clog2(NumClusterMst);
 
@@ -436,13 +441,15 @@ package cachepool_pkg;
     prefetch_en:  ICachePrefetchRst
   };
 
-  // Payload of one group configuration write: the configuration is applied on every write,
-  // issue additionally starts insn in the tiles of this group selected by insn.tile_sel.
-  typedef struct packed {
-    logic        issue;
-    cache_insn_t insn;
-    l1d_cfg_t    cfg;
-  } group_cfg_t;
+  // Registers of a group-level configuration register block, one 32-bit word each at
+  // GroupCfgBase + g * GroupCfgStride + 4 * index. Every write carries one register.
+  typedef enum logic [2:0] {
+    GroupCfgXbarOffset = 3'd0,
+    GroupCfgL1dPrivate = 3'd1,
+    GroupCfgL1dAddr    = 3'd2,
+    GroupCfgPrefetch   = 3'd3,
+    GroupCfgL1dInsn    = 3'd4
+  } group_cfg_reg_e;
 
   typedef struct packed {
     logic                  for_write_pend;
@@ -554,6 +561,16 @@ package cachepool_pkg;
   } l2_noc_hdr_t;
   // l2_noc_req_t / l2_noc_rsp_t defined after REQRSP_TYPEDEF_ALL macros below.
 
+  // User field of the narrow (peripheral) L2 mesh: only what routes a response back to its hart.
+  // tile_id is the tile inside the source group, hart_id the hart inside that tile.
+  typedef struct packed {
+    floo_cachepool_noc_pkg::id_t            l2_src_id;
+    logic [idx_width(NumTilesPerGroup)-1:0] tile_id;
+    logic [idx_width(NumHartsTile)-1:0]     hart_id;
+    logic                                   is_fpu;
+    reqid_t                                 req_id;
+  } peri_narrow_user_t;
+
   // Group ICache (L2 read-only cache control)
   // 2 rules: DRAM (cacheable) + BootROM (cacheable, avoids Bypass path)
   localparam int unsigned ROCacheNumAddrRules = 2;
@@ -620,16 +637,33 @@ package cachepool_pkg;
     l2_noc_hdr_t          hdr;
   } l2_noc_rsp_t;
 
-  // REQRSP: peripheral path (narrow 32b, tcdm_user_t)
-  `REQRSP_TYPEDEF_ALL (periph, axi_addr_t, narrow_data_t, narrow_strb_t, tcdm_user_t)
+  // REQRSP: narrow 32b peripheral path (core accesses to CSR/UART, group configuration writes)
+  `REQRSP_TYPEDEF_ALL (peri_narrow, axi_addr_t, narrow_data_t, narrow_strb_t, peri_narrow_user_t)
 
-  // REQRSP: narrow 32b with refill_user_t (DW converter output, peripheral path)
-  `REQRSP_TYPEDEF_ALL (peri_narrow, axi_addr_t, narrow_data_t, narrow_strb_t, refill_user_t)
-
-  // Peripheral xbar user: refill_user_t + 1-bit source ID (0=NoC, 1=TB)
+  // Narrow L2 mesh flit types. The request carries no AMO: atomics never target the peripherals.
   typedef struct packed {
-    logic          src_id;
-    refill_user_t  refill;
+    axi_addr_t         addr;
+    logic              write;
+    narrow_data_t      data;
+    narrow_strb_t      strb;
+    reqrsp_pkg::size_t size;
+    peri_narrow_user_t user;
+  } peri_noc_req_chan_t;
+
+  typedef struct packed {
+    peri_noc_req_chan_t payload;
+    l2_noc_hdr_t        hdr;
+  } peri_noc_req_t;
+
+  typedef struct packed {
+    peri_narrow_rsp_chan_t payload;
+    l2_noc_hdr_t           hdr;
+  } peri_noc_rsp_t;
+
+  // Peripheral xbar user: narrow user + 1-bit source ID (0=NoC, 1=TB)
+  typedef struct packed {
+    logic              src_id;
+    peri_narrow_user_t narrow;
   } peri_xbar_user_t;
 
   // REQRSP: peripheral xbar path (narrow 32b, peri_xbar_user_t)
@@ -769,7 +803,33 @@ package cachepool_pkg;
     end
   endfunction
 
-  // L2 mesh route config and SAM of the cluster peripheral's manager port. It only ever targets
+  // L2 mesh endpoint of the cluster peripheral: the West chimney at gy=0, next to group 0. Its
+  // channel ID follows the HBM placement (see gen_hbm_west in cachepool_cluster).
+  localparam int unsigned NumHbmAllSides  = 2 * NumGroupsY + 2 * NumGroupsX;
+  localparam int unsigned HbmPerSide      = NumHbmAllSides / 4;
+  localparam int unsigned L2PeriphChannel = (NumL2Channel == NumHbmAllSides) ? HbmPerSide : 0;
+  localparam int unsigned PeriEndpointId  = NumGroups + L2PeriphChannel;
+
+  // Narrow L2 mesh route config and SAM of the group side: every core access goes to the cluster
+  // peripheral endpoint, which decodes CSR/UART itself.
+  localparam int unsigned PeriCoreSamNumRules = 1;
+  typedef floo_cachepool_noc_pkg::sam_rule_t [PeriCoreSamNumRules-1:0] peri_core_sam_t;
+
+  function automatic floo_pkg::route_cfg_t gen_peri_core_route_cfg();
+    floo_pkg::route_cfg_t cfg;
+    cfg             = floo_cachepool_noc_pkg::RouteCfg;
+    cfg.NumSamRules = PeriCoreSamNumRules;
+    return cfg;
+  endfunction
+
+  localparam floo_pkg::route_cfg_t PeriCoreRouteCfg = gen_peri_core_route_cfg();
+  localparam peri_core_sam_t       PeriCoreSam      = '{
+    '{idx:        floo_cachepool_noc_pkg::id_t'(PeriEndpointId),
+      start_addr: 32'h0000_0000,
+      end_addr:   32'hFFFF_FFFF}
+  };
+
+  // Narrow L2 mesh route config and SAM of the cluster peripheral's manager port. It only ever targets
   // group configuration words, so its SAM holds just those rules; they stay out of the generated
   // Sam so core requests can never be routed to a group configuration register.
   localparam int unsigned PeriSamNumRules = NumGroups;

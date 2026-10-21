@@ -137,8 +137,10 @@ across groups.
 // Requires a flush before changing while valid data is cached.
 void l1d_addr(uint32_t addr);
 
-// Poll the peripheral until the last committed flush instruction or configuration
-// (partition, address boundary, xbar offset) has been applied by every group.
+// Poll the peripheral until the last committed flush instruction and every changed
+// configuration (partition, address boundary, xbar offset, iCache prefetch) has been
+// applied by every group. Configuration registers need no commit: a changed value is
+// applied on its own, only flush/invalidate instructions are committed.
 // Used by the low-level flush and configuration functions; not normally needed in
 // application code.
 void l1d_wait();

@@ -21,26 +21,18 @@ void l1d_xbar_config(uint32_t offset) {
   asm volatile("fence" ::: "memory");
   snrt_cluster_hw_barrier();
   if (snrt_cluster_core_idx() == 0) {
+    // Flush cache before changing the xbar offset: a changed offset is applied as soon as it
+    // is written, no commit needed
+    l1d_flush();
+    l1d_wait();
     uint32_t *cfg =
         (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                      CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET);
     *cfg = offset;
-    // Flush cache before committing xbar changes
-    l1d_flush();
+    // Wait until every group has applied the new offset
     l1d_wait();
-    l1d_xbar_commit();
   }
   snrt_cluster_hw_barrier();
-}
-
-
-void l1d_xbar_commit() {
-  uint32_t *commit =
-      (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
-                   CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET);
-  *commit = 1;
-  // Wait until every group has applied the new offset
-  l1d_wait();
 }
 
 void l1d_commit() {
@@ -163,8 +155,8 @@ void l1d_part_folded (uint32_t size, uint32_t fold) {
     volatile uint32_t *cfg_private =
         (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                      CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET);
+    // Applied as soon as the value changes, no commit needed
     *cfg_private = (size & 0x7u) | ((fold & 0x1u) << 3);
-    l1d_commit();
     // Wait until every group has applied the new partition
     l1d_wait();
   }
@@ -186,8 +178,8 @@ void l1d_addr (uint32_t addr) {
     volatile uint32_t *cfg_private =
         (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
                      CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET);
+    // Applied as soon as the value changes, no commit needed
     *cfg_private = addr;
-    l1d_commit();
     // Wait until every group has applied the new start address
     l1d_wait();
   }

@@ -27,7 +27,6 @@ export_include_dirs:
 sources:
   # Level 0
   - hardware/src/reqrsp_to_reg.sv
-  - hardware/src/reqrsp_w2n_converter.sv
   - hardware/src/reqrsp_xbar.sv
   - hardware/src/tcdm_cache_interco.sv
   - hardware/src/tcdm_id_remapper.sv

@@ -172,19 +172,23 @@ module cachepool_cluster
   axi_slv_cache_req_t  [ClusterWideOutAxiPorts-1:0] wide_axi_slv_req;
   axi_slv_cache_resp_t [ClusterWideOutAxiPorts-1:0] wide_axi_slv_rsp;
 
-  // HBM0 peripheral demux port: narrowed 32b REQRSP with refill_user_t (same user as wide side).
-  peri_narrow_req_t  hbm0_peri_narrow_req;
-  peri_narrow_rsp_t  hbm0_peri_narrow_rsp;
+  // Narrow L2 mesh endpoint of the cluster peripheral, subordinate side: core accesses to the
+  // CSRs and the UART.
+  peri_noc_req_chan_t    peri_sbr_req;
+  logic                  peri_sbr_req_valid;
+  logic                  peri_sbr_req_ready;
+  peri_narrow_rsp_chan_t peri_sbr_rsp;
+  logic                  peri_sbr_rsp_valid;
+  logic                  peri_sbr_rsp_ready;
 
   // 2. Peripherals
   logic         [NumTiles-1:0]                l1d_busy;
 
   // Configuration batch from the peripheral to the group configuration sender
   logic                                       cfg_start;
-  logic                                       cfg_issue;
-  logic         [1:0]                         cfg_insn;
+  group_cfg_reg_e                             cfg_reg;
+  logic         [31:0]                        cfg_data;
   logic         [NumTiles-1:0]                cfg_tile_sel;
-  l1d_cfg_t                                   cfg_l1d;
   logic                                       cfg_done;
 
   // Per-group error signals.
@@ -250,6 +254,20 @@ module cachepool_cluster
   l2_noc_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in;
   logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in_valid;
   logic        [NumGroupsX-1:0][NumGroupsY-1:0][3:0] l2_rsp_in_ready;
+
+  // Per-group narrow L2 mesh signals [NumGroupsX][NumGroupsY][direction 0..3]
+  peri_noc_req_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_out;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_out_valid;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_out_ready;
+  peri_noc_req_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_in;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_in_valid;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_req_in_ready;
+  peri_noc_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_out;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_out_valid;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_out_ready;
+  peri_noc_rsp_t [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_in;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_in_valid;
+  logic          [NumGroupsX-1:0][NumGroupsY-1:0][3:0] peri_rsp_in_ready;
 
   assign error_o = |group_error;
 
@@ -320,6 +338,19 @@ module cachepool_cluster
         .l2_rsp_i                 ( l2_rsp_in         [gx][gy]                      ),
         .l2_rsp_valid_i           ( l2_rsp_in_valid   [gx][gy]                      ),
         .l2_rsp_ready_o           ( l2_rsp_in_ready   [gx][gy]                      ),
+        // Narrow L2 mesh (4 directions)
+        .peri_req_o               ( peri_req_out       [gx][gy]                     ),
+        .peri_req_valid_o         ( peri_req_out_valid [gx][gy]                     ),
+        .peri_req_ready_i         ( peri_req_out_ready [gx][gy]                     ),
+        .peri_req_i               ( peri_req_in        [gx][gy]                     ),
+        .peri_req_valid_i         ( peri_req_in_valid  [gx][gy]                     ),
+        .peri_req_ready_o         ( peri_req_in_ready  [gx][gy]                     ),
+        .peri_rsp_o               ( peri_rsp_out       [gx][gy]                     ),
+        .peri_rsp_valid_o         ( peri_rsp_out_valid [gx][gy]                     ),
+        .peri_rsp_ready_i         ( peri_rsp_out_ready [gx][gy]                     ),
+        .peri_rsp_i               ( peri_rsp_in        [gx][gy]                     ),
+        .peri_rsp_valid_i         ( peri_rsp_in_valid  [gx][gy]                     ),
+        .peri_rsp_ready_o         ( peri_rsp_in_ready  [gx][gy]                     ),
         .l2_id_i                  ( floo_cachepool_noc_pkg::id_t'(gx * NumGroupsY + gy)         ),
         .l2_route_table_i         ( floo_cachepool_noc_pkg::RoutingTables[gx * NumGroupsY + gy] ),
         // Peripherals
@@ -589,13 +620,79 @@ module cachepool_cluster
     end
 
     // --------------------------------------------------
+    // Narrow L2 mesh: same interior links as the wide mesh
+    // --------------------------------------------------
+
+    for (genvar gx = 0; gx < NumGroupsX - 1; gx++) begin : gen_peri_ew
+      for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_peri_ew_y
+        // East(1) output of (gx,gy) <-> West(3) input of (gx+1,gy), both ways
+        assign peri_req_in       [gx+1][gy][3] = peri_req_out       [gx]  [gy][1];
+        assign peri_req_in_valid [gx+1][gy][3] = peri_req_out_valid [gx]  [gy][1];
+        assign peri_req_out_ready[gx]  [gy][1] = peri_req_in_ready  [gx+1][gy][3];
+        assign peri_rsp_in       [gx+1][gy][3] = peri_rsp_out       [gx]  [gy][1];
+        assign peri_rsp_in_valid [gx+1][gy][3] = peri_rsp_out_valid [gx]  [gy][1];
+        assign peri_rsp_out_ready[gx]  [gy][1] = peri_rsp_in_ready  [gx+1][gy][3];
+        assign peri_req_in       [gx]  [gy][1] = peri_req_out       [gx+1][gy][3];
+        assign peri_req_in_valid [gx]  [gy][1] = peri_req_out_valid [gx+1][gy][3];
+        assign peri_req_out_ready[gx+1][gy][3] = peri_req_in_ready  [gx]  [gy][1];
+        assign peri_rsp_in       [gx]  [gy][1] = peri_rsp_out       [gx+1][gy][3];
+        assign peri_rsp_in_valid [gx]  [gy][1] = peri_rsp_out_valid [gx+1][gy][3];
+        assign peri_rsp_out_ready[gx+1][gy][3] = peri_rsp_in_ready  [gx]  [gy][1];
+      end
+    end
+
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_peri_ns
+      for (genvar gy = 0; gy < NumGroupsY - 1; gy++) begin : gen_peri_ns_y
+        // North(0) output of (gx,gy) <-> South(2) input of (gx,gy+1), both ways
+        assign peri_req_in       [gx][gy+1][2] = peri_req_out       [gx][gy]  [0];
+        assign peri_req_in_valid [gx][gy+1][2] = peri_req_out_valid [gx][gy]  [0];
+        assign peri_req_out_ready[gx][gy]  [0] = peri_req_in_ready  [gx][gy+1][2];
+        assign peri_rsp_in       [gx][gy+1][2] = peri_rsp_out       [gx][gy]  [0];
+        assign peri_rsp_in_valid [gx][gy+1][2] = peri_rsp_out_valid [gx][gy]  [0];
+        assign peri_rsp_out_ready[gx][gy]  [0] = peri_rsp_in_ready  [gx][gy+1][2];
+        assign peri_req_in       [gx][gy]  [0] = peri_req_out       [gx][gy+1][2];
+        assign peri_req_in_valid [gx][gy]  [0] = peri_req_out_valid [gx][gy+1][2];
+        assign peri_req_out_ready[gx][gy+1][2] = peri_req_in_ready  [gx][gy]  [0];
+        assign peri_rsp_in       [gx][gy]  [0] = peri_rsp_out       [gx][gy+1][2];
+        assign peri_rsp_in_valid [gx][gy]  [0] = peri_rsp_out_valid [gx][gy+1][2];
+        assign peri_rsp_out_ready[gx][gy+1][2] = peri_rsp_in_ready  [gx][gy]  [0];
+      end
+    end
+
+    // Narrow mesh boundary: only the West port of group (0,0) has an endpoint (i_peri_chimney
+    // below). Every other edge port is tied off and never sees a flit.
+    for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_peri_bnd_x
+      for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_peri_bnd_y
+        for (genvar d = 0; d < 4; d++) begin : gen_peri_bnd_d
+          localparam bit IsEdge = ((d == 0) && (gy == NumGroupsY - 1)) ||
+                                  ((d == 1) && (gx == NumGroupsX - 1)) ||
+                                  ((d == 2) && (gy == 0))              ||
+                                  ((d == 3) && (gx == 0));
+          localparam bit IsPeriPort = (d == 3) && (gx == 0) && (gy == 0);
+          if (IsEdge && !IsPeriPort) begin : gen_tieoff
+            assign peri_req_in       [gx][gy][d] = '0;
+            assign peri_req_in_valid [gx][gy][d] = 1'b0;
+            assign peri_req_out_ready[gx][gy][d] = 1'b1;
+            assign peri_rsp_in       [gx][gy][d] = '0;
+            assign peri_rsp_in_valid [gx][gy][d] = 1'b0;
+            assign peri_rsp_out_ready[gx][gy][d] = 1'b1;
+            `ASSERT(PeriEdgeNoReq, !peri_req_out_valid[gx][gy][d], clk_i, !rst_ni,
+                "cachepool_cluster: narrow request lost at a mesh edge")
+            `ASSERT(PeriEdgeNoRsp, !peri_rsp_out_valid[gx][gy][d], clk_i, !rst_ni,
+                "cachepool_cluster: narrow response lost at a mesh edge")
+          end
+        end
+      end
+    end
+
+    // --------------------------------------------------
     // North/South boundary: tied off (8ch) or hosts extra HBM chimneys for
     // more refill bandwidth (16ch). Assertion catches a mismatched mesh
     // shape/channel count.
     // --------------------------------------------------
 
+    // NumHbmAllSides, HbmPerSide and L2PeriphChannel come from cachepool_pkg.
     localparam int unsigned NumHbmWestEast = 2 * NumGroupsY;
-    localparam int unsigned NumHbmAllSides = 2 * NumGroupsY + 2 * NumGroupsX;
 `ifndef TARGET_SYNTHESIS
     initial assert (NumL2Channel == NumHbmWestEast || NumL2Channel == NumHbmAllSides)
       else $fatal(1, "NumL2Channel must equal the West/East or all-sides chimney count.");
@@ -605,17 +702,9 @@ module cachepool_cluster
     // group reaches its own-ID channel in 1 hop. All-sides uses the side-contiguous scheme
     // below instead. SAM and address scrambling are unaffected either way.
     localparam bit L2SameIdPlacement = (NumL2Channel == NumGroups);
-    // All-sides placement packs one aligned block of channels per mesh edge:
-    // four adjacent channels share one controller IP and cannot be split
-    // across edges. Order within a side follows the floorplan.
-    localparam int unsigned HbmPerSide = NumHbmAllSides / 4;
-    // The peripheral demux stays on the West chimney at gy=0 -- the corner
-    // next to group 0 -- so its channel ID follows the placement.
-    localparam int unsigned L2PeriphChannel =
-      (NumL2Channel == NumHbmAllSides) ? HbmPerSide : 0;
-    // The side-contiguous IDs below assume four channels per edge on a 4x4
-    // mesh, so reject any other mesh shape asking for all-sides chimneys
-    // rather than mis-wiring it.
+    // All-sides placement: one aligned block of HbmPerSide channels per edge (one controller IP,
+    // in floorplan order). The side-contiguous IDs below assume a 4x4 mesh, so reject any other
+    // mesh shape asking for all-sides chimneys rather than mis-wiring it.
 `ifndef TARGET_SYNTHESIS
     initial assert (NumL2Channel != NumHbmAllSides || (NumGroupsX == 4 && NumGroupsY == 4))
       else $fatal(1, "All-sides HBM placement is only implemented for a 4x4 group mesh.");
@@ -653,7 +742,7 @@ module cachepool_cluster
     // --------------------------------------------------
     // West HBM ejection points, one per mesh row: floo_tcdm_chimney (SbrPort, no router)
     // unpacks req flits -> reqrsp_to_axi -> DRAM and source-routes responses back.
-    // HBM0 also splits off peripheral traffic (reqrsp_xbar, see gen_hbm0_demux).
+    // HBM0 also serves the BootROM (reqrsp_xbar, see gen_hbm0_demux).
     // --------------------------------------------------
 
     for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_hbm_west
@@ -673,20 +762,9 @@ module cachepool_cluster
       logic                 hbm_sbr_rsp_valid;
       logic                 hbm_sbr_rsp_ready;
 
-      // Only the peripheral chimney (HBM0) also injects requests: the cluster peripheral's writes
-      // to the group configuration registers. Its SAM holds just the group configuration words.
-      localparam bit HbmPeriphMgr = (HbmIdx == L2PeriphChannel);
-
-      cache_trans_req_chan_t hbm_mgr_req;
-      logic                  hbm_mgr_req_valid;
-      logic                  hbm_mgr_req_ready;
-      cache_trans_rsp_chan_t hbm_mgr_rsp;
-      logic                  hbm_mgr_rsp_valid;
-      logic                  hbm_mgr_rsp_ready;
-
       floo_tcdm_chimney #(
-        .RouteCfg    ( PeriRouteCfg                        ),
-        .EnMgrPort   ( HbmPeriphMgr                        ),
+        .RouteCfg    ( floo_cachepool_noc_pkg::RouteCfg    ),
+        .EnMgrPort   ( 1'b0                                ),
         .EnSbrPort   ( 1'b1                                ),
         .id_t        ( floo_cachepool_noc_pkg::id_t        ),
         .route_t     ( floo_cachepool_noc_pkg::route_t     ),
@@ -698,18 +776,18 @@ module cachepool_cluster
         .floo_rsp_t  ( l2_noc_rsp_t                        ),
         .addr_t      ( axi_addr_t                          ),
         .sam_rule_t  ( floo_cachepool_noc_pkg::sam_rule_t  ),
-        .Sam         ( PeriSam                             )
+        .Sam         ( floo_cachepool_noc_pkg::Sam         )
       ) i_hbm_chimney (
         .clk_i            ( clk_i                                         ),
         .rst_ni           ( rst_ni                                        ),
         .test_enable_i    ( 1'b0                                          ),
-        // Manager port: group configuration writes (HBM0 only)
-        .mgr_req_i        ( hbm_mgr_req                                   ),
-        .mgr_req_valid_i  ( hbm_mgr_req_valid                             ),
-        .mgr_req_ready_o  ( hbm_mgr_req_ready                             ),
-        .mgr_rsp_o        ( hbm_mgr_rsp                                   ),
-        .mgr_rsp_valid_o  ( hbm_mgr_rsp_valid                             ),
-        .mgr_rsp_ready_i  ( hbm_mgr_rsp_ready                             ),
+        // Manager port: unused
+        .mgr_req_i        ( '0                                            ),
+        .mgr_req_valid_i  ( 1'b0                                          ),
+        .mgr_req_ready_o  (                                               ),
+        .mgr_rsp_o        (                                               ),
+        .mgr_rsp_valid_o  (                                               ),
+        .mgr_rsp_ready_i  ( 1'b0                                          ),
         // Subordinate port: drives reqrsp_to_axi
         .sbr_req_o        ( hbm_sbr_req                                   ),
         .sbr_req_valid_o  ( hbm_sbr_req_valid                             ),
@@ -751,42 +829,25 @@ module cachepool_cluster
       assign hbm_sbr_rsp       = hbm_reqrsp_rsp.p;
       assign hbm_sbr_rsp_valid = hbm_reqrsp_rsp.p_valid;
 
-      // HBM0: split DRAM vs peripheral with reqrsp_xbar, not reqrsp_demux, whose shared in-order
+      // HBM0: split DRAM vs BootROM with reqrsp_xbar, not reqrsp_demux, whose shared in-order
       // ID FIFO capped outstanding refills. Cross-path reordering is safe (miss info is in
-      // refill_user_t); a reqrsp_to_axi per path keeps each user-field FIFO in order.
+      // refill_user_t).
       if (HbmIdx == L2PeriphChannel) begin : gen_hbm0_demux
 
-        // Manager port: the cluster peripheral's configuration batches, one write per group.
-        // Requests carry this endpoint's ID so the groups route their responses back here.
-        cachepool_group_cfg_sender #(
-          .req_chan_t ( cache_trans_req_chan_t ),
-          .rsp_chan_t ( cache_trans_rsp_chan_t ),
-          .user_t     ( refill_user_t          ),
-          .ReqUser    ( '{l2_src_id: floo_cachepool_noc_pkg::id_t'(HbmEndpointId), default: '0} )
-        ) i_group_cfg_sender (
-          .clk_i       ( clk_i             ),
-          .rst_ni      ( rst_ni            ),
-          .start_i     ( cfg_start         ),
-          .issue_i     ( cfg_issue         ),
-          .insn_i      ( cfg_insn          ),
-          .tile_sel_i  ( cfg_tile_sel      ),
-          .cfg_i       ( cfg_l1d           ),
-          .done_o      ( cfg_done          ),
-          .req_o       ( hbm_mgr_req       ),
-          .req_valid_o ( hbm_mgr_req_valid ),
-          .req_ready_i ( hbm_mgr_req_ready ),
-          .rsp_i       ( hbm_mgr_rsp       ),
-          .rsp_valid_i ( hbm_mgr_rsp_valid ),
-          .rsp_ready_o ( hbm_mgr_rsp_ready )
-        );
-
-        // Address-based select: DRAM = port 0, Peripheral = port 1. The
-        // window is this chimney's own channel slice: under all-sides
-        // placement that is channel L2PeriphChannel, not channel 0.
+        // Select DRAM = port 0, BootROM = port 1. The DRAM window is this chimney's channel slice
+        // (channel L2PeriphChannel under all-sides placement); the interconnect carries scrambled
+        // addresses, revertAddr recovers the physical one.
         localparam int unsigned HbmChBase = DramAddr + HbmIdx * DramPerChSize;
-        logic hbm0_reqrsp_sel;
+        addr_t hbm0_pa;
+        logic  hbm0_reqrsp_sel;
+        assign hbm0_pa         = revertAddr(hbm_reqrsp_req.q.addr);
         assign hbm0_reqrsp_sel = !((hbm_reqrsp_req.q.addr >= HbmChBase) &&
-                                    (hbm_reqrsp_req.q.addr <  HbmChBase + DramPerChSize));
+                                   (hbm_reqrsp_req.q.addr <  HbmChBase + DramPerChSize));
+
+        // Everything outside the DRAM slice must be an iCache refill of the BootROM
+        `ASSERT(Hbm0BootromOnly, (hbm_reqrsp_req.q_valid && hbm0_reqrsp_sel) |->
+            ((hbm0_pa >= BootAddr) && (hbm0_pa < BootAddr + BootromSize)), clk_i, !rst_ni,
+            $sformatf("cachepool_cluster: wide L2 access to unmapped address 0x%08x", hbm0_pa))
 
         cache_trans_req_t  [1:0] hbm0_demux_req;
         cache_trans_rsp_t  [1:0] hbm0_demux_rsp;
@@ -878,54 +939,57 @@ module cachepool_cluster
         assign wide_axi_slv_req[HbmIdx] = hbm0_dram_axi_req;
         assign hbm0_dram_axi_rsp        = wide_axi_slv_rsp[HbmIdx];
 
+        // Port 1: BootROM, one full-width word per iCache line refill
+        `REG_BUS_TYPEDEF_ALL(reg_bootrom, addr_t, data_cache_t, strb_cache_t)
 
-        // Port 1: Non-DRAM — revert VA back to PA, then DW convert to 32b
-        // All paths through the interconnect use scrambled (VA) addresses.
-        // revertAddr recovers the physical address for the peripheral endpoint.
-        cache_trans_req_t hbm0_peri_reqrsp_req;
+        cache_trans_req_t   hbm0_bootrom_req;
+        reg_bootrom_req_t   bootrom_reg_req;
+        reg_bootrom_rsp_t   bootrom_reg_rsp;
+
         always_comb begin
-          hbm0_peri_reqrsp_req        = hbm0_demux_req[1];
-          hbm0_peri_reqrsp_req.q.addr = revertAddr(hbm0_demux_req[1].q.addr);
+          hbm0_bootrom_req        = hbm0_demux_req[1];
+          hbm0_bootrom_req.q.addr = revertAddr(hbm0_demux_req[1].q.addr);
         end
 
-        cache_trans_rsp_t hbm0_peri_reqrsp_rsp;
-        assign hbm0_demux_rsp[1] = hbm0_peri_reqrsp_rsp;
-
-        // W2N converter: 512b REQRSP → 32b REQRSP
-        // Same user type (refill_user_t) on both sides.
-        // We add a small 1-entry buffer with MSHR inside to reduce boot time
-        reqrsp_w2n_converter #(
-          .SlvDataWidth   ( AxiDataWidth              ),
-          .MstDataWidth   ( 32                        ),
-          .AddrWidth      ( AxiAddrWidth              ),
-          .SlvUserWidth   ( $bits(refill_user_t)      ),
-          .MstUserWidth   ( $bits(refill_user_t)      ),
-          .MaxTrans       ( 4                         ),
-          .EnRdBuf        ( 1'b1                      ),
-          .CacheableBase  ( BootAddr                  ),
-          .CacheableSize  ( 32'h1_0000                ),
-          .slv_req_t      ( cache_trans_req_t         ),
-          .slv_rsp_t      ( cache_trans_rsp_t         ),
-          .mst_req_t      ( peri_narrow_req_t         ),
-          .mst_rsp_t      ( peri_narrow_rsp_t         ),
-          .slv_user_t     ( refill_user_t             )
-        ) i_hbm0_peri_dw  (
-          .clk_i          ( clk_i                     ),
-          .rst_ni         ( rst_ni                    ),
-          .slv_req_i      ( hbm0_peri_reqrsp_req      ),
-          .slv_rsp_o      ( hbm0_peri_reqrsp_rsp      ),
-          .mst_req_o      ( hbm0_peri_narrow_req      ),
-          .mst_rsp_i      ( hbm0_peri_narrow_rsp      )
+        reqrsp_to_reg #(
+          .AddrWidth     ( AxiAddrWidth          ),
+          .DataWidth     ( AxiDataWidth          ),
+          .UserWidth     ( $bits(refill_user_t)  ),
+          .FifoDepth     ( 2                     ),
+          .ShiftResponse ( 1'b0                  ),
+          .user_t        ( refill_user_t         ),
+          .reqrsp_req_t  ( cache_trans_req_t     ),
+          .reqrsp_rsp_t  ( cache_trans_rsp_t     ),
+          .reg_req_t     ( reg_bootrom_req_t     ),
+          .reg_rsp_t     ( reg_bootrom_rsp_t     )
+        ) i_reqrsp_to_reg_bootrom (
+          .clk_i         ( clk_i                 ),
+          .rst_ni        ( rst_ni                ),
+          .reqrsp_req_i  ( hbm0_bootrom_req      ),
+          .reqrsp_rsp_o  ( hbm0_demux_rsp[1]     ),
+          .reg_req_o     ( bootrom_reg_req       ),
+          .reg_rsp_i     ( bootrom_reg_rsp       )
         );
 
+        bootrom #(
+          .DataWidth ( AxiDataWidth ),
+          .AddrWidth ( AxiAddrWidth )
+        ) i_bootrom (
+          .clk_i   ( clk_i                         ),
+          .req_i   ( bootrom_reg_req.valid         ),
+          .addr_i  ( addr_t'(bootrom_reg_req.addr) ),
+          .rdata_o ( bootrom_reg_rsp.rdata         )
+        );
+        `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
+        assign bootrom_reg_rsp.error = 1'b0;
+
+        `ASSERT_INIT(CheckBootromWidth, BootromDataWidth == AxiDataWidth,
+            "cachepool_cluster: bootrom_data_width must equal the L2 refill width")
+
       end else begin : gen_hbm_direct
-        // Non-HBM0: single reqrsp_to_axi → DRAM, manager port unused
+        // Non-HBM0: single reqrsp_to_axi → DRAM
         axi_slv_cache_req_t  hbm_axi_req;
         axi_slv_cache_resp_t hbm_axi_rsp;
-
-        assign hbm_mgr_req       = '0;
-        assign hbm_mgr_req_valid = 1'b0;
-        assign hbm_mgr_rsp_ready = 1'b1;
 
         reqrsp_to_axi #(
           .MaxTrans     ( L2RefillMaxTrans      ),
@@ -954,6 +1018,94 @@ module cachepool_cluster
         assign hbm_axi_rsp              = wide_axi_slv_rsp[HbmIdx];
       end
     end
+
+    // --------------------------------------------------
+    // Narrow L2 mesh endpoint of the cluster peripheral, West of group (0,0) with HBM0's ID and
+    // routes. Subordinate port: core CSR/UART accesses; manager port: configuration batches,
+    // one register write per group.
+    // --------------------------------------------------
+
+    peri_noc_req_chan_t    peri_mgr_req;
+    logic                  peri_mgr_req_valid;
+    logic                  peri_mgr_req_ready;
+    peri_narrow_rsp_chan_t peri_mgr_rsp;
+    logic                  peri_mgr_rsp_valid;
+    logic                  peri_mgr_rsp_ready;
+
+    // Requests carry this endpoint's ID so the groups route their responses back here.
+    cachepool_group_cfg_sender #(
+      .req_chan_t ( peri_noc_req_chan_t    ),
+      .rsp_chan_t ( peri_narrow_rsp_chan_t ),
+      .user_t     ( peri_narrow_user_t     ),
+      .ReqUser    ( '{l2_src_id: floo_cachepool_noc_pkg::id_t'(PeriEndpointId), default: '0} )
+    ) i_group_cfg_sender (
+      .clk_i       ( clk_i              ),
+      .rst_ni      ( rst_ni             ),
+      .start_i     ( cfg_start          ),
+      .reg_i       ( cfg_reg            ),
+      .data_i      ( cfg_data           ),
+      .tile_sel_i  ( cfg_tile_sel       ),
+      .done_o      ( cfg_done           ),
+      .req_o       ( peri_mgr_req       ),
+      .req_valid_o ( peri_mgr_req_valid ),
+      .req_ready_i ( peri_mgr_req_ready ),
+      .rsp_i       ( peri_mgr_rsp       ),
+      .rsp_valid_i ( peri_mgr_rsp_valid ),
+      .rsp_ready_o ( peri_mgr_rsp_ready )
+    );
+
+    floo_tcdm_chimney #(
+      .RouteCfg   ( PeriRouteCfg                        ),
+      .EnMgrPort  ( 1'b1                                ),
+      .EnSbrPort  ( 1'b1                                ),
+      .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+      .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+      .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+      .hdr_t      ( l2_noc_hdr_t                        ),
+      .req_chan_t ( peri_noc_req_chan_t                 ),
+      .rsp_chan_t ( peri_narrow_rsp_chan_t              ),
+      .floo_req_t ( peri_noc_req_t                      ),
+      .floo_rsp_t ( peri_noc_rsp_t                      ),
+      .addr_t     ( axi_addr_t                          ),
+      .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+      .Sam        ( PeriSam                             )
+    ) i_peri_chimney (
+      .clk_i            ( clk_i                                                  ),
+      .rst_ni           ( rst_ni                                                 ),
+      .test_enable_i    ( 1'b0                                                   ),
+      // Manager port: group configuration writes
+      .mgr_req_i        ( peri_mgr_req                                           ),
+      .mgr_req_valid_i  ( peri_mgr_req_valid                                     ),
+      .mgr_req_ready_o  ( peri_mgr_req_ready                                     ),
+      .mgr_rsp_o        ( peri_mgr_rsp                                           ),
+      .mgr_rsp_valid_o  ( peri_mgr_rsp_valid                                     ),
+      .mgr_rsp_ready_i  ( peri_mgr_rsp_ready                                     ),
+      // Subordinate port: core accesses to the peripheral xbar
+      .sbr_req_o        ( peri_sbr_req                                           ),
+      .sbr_req_valid_o  ( peri_sbr_req_valid                                     ),
+      .sbr_req_ready_i  ( peri_sbr_req_ready                                     ),
+      .sbr_rsp_i        ( peri_sbr_rsp                                           ),
+      .sbr_rsp_valid_i  ( peri_sbr_rsp_valid                                     ),
+      .sbr_rsp_ready_o  ( peri_sbr_rsp_ready                                     ),
+      .sbr_txn_id_i     ( peri_sbr_rsp.user.l2_src_id                            ),
+      // Routing
+      .id_i             ( floo_cachepool_noc_pkg::id_t'(PeriEndpointId)          ),
+      .route_table_i    ( floo_cachepool_noc_pkg::RoutingTables[PeriEndpointId]  ),
+      // Request flits on the narrow mesh West(3) edge of group (0,0)
+      .floo_req_o       ( peri_req_in[0][0][3]                                   ),
+      .floo_req_valid_o ( peri_req_in_valid[0][0][3]                             ),
+      .floo_req_ready_i ( peri_req_in_ready[0][0][3]                             ),
+      .floo_req_i       ( peri_req_out[0][0][3]                                  ),
+      .floo_req_valid_i ( peri_req_out_valid[0][0][3]                            ),
+      .floo_req_ready_o ( peri_req_out_ready[0][0][3]                            ),
+      // Response flits on the narrow mesh West(3) edge of group (0,0)
+      .floo_rsp_o       ( peri_rsp_in[0][0][3]                                   ),
+      .floo_rsp_valid_o ( peri_rsp_in_valid[0][0][3]                             ),
+      .floo_rsp_ready_i ( peri_rsp_in_ready[0][0][3]                             ),
+      .floo_rsp_i       ( peri_rsp_out[0][0][3]                                  ),
+      .floo_rsp_valid_i ( peri_rsp_out_valid[0][0][3]                            ),
+      .floo_rsp_ready_o ( peri_rsp_out_ready[0][0][3]                            )
+    );
 
     // --------------------------------------------------
     // East HBM ejection points (one per mesh row, channel ID per HbmIdx below)
@@ -1350,26 +1502,26 @@ module cachepool_cluster
 
   // style-waive: COMMENT_BLOCK: peripheral fabric data path diagram
   // --------------------------------------------------
-  // Peripheral Fabric (REQRSP-based 2×3 xbar)
+  // Peripheral Fabric (REQRSP-based 2×2 xbar)
   // --------------------------------------------------
   //
   // Data path (all 32b REQRSP):
-  //   Source [0]: HBM0 demux port 1 -> reqrsp_w2n_converter (512b-32b) -> pad src_id=0
-  //   Source [1]: peri_ext_req_i (TB/SoC, already 32b REQRSP)          -> pad src_id=1
+  //   Source [0]: narrow L2 mesh (i_peri_chimney subordinate port)   -> pad src_id=0
+  //   Source [1]: peri_ext_req_i (TB/SoC, already 32b REQRSP)        -> pad src_id=1
   //
-  //   Target [0]: BootROM   -> reqrsp_to_reg -> bootrom
-  //   Target [1]: CSR       -> reqrsp_to_reg -> cachepool_peripheral
-  //   Target [2]: UART      -> reqrsp_to_axi -> axi_narrow_req_o
+  //   Target [0]: CSR       -> reqrsp_to_reg -> cachepool_peripheral
+  //   Target [1]: UART      -> reqrsp_to_axi -> axi_narrow_req_o
+  //
+  // The BootROM is not reachable here: it sits on the wide mesh (HBM0 demux port 1).
   //
   // Response routing: mst_sel_i = mst_rsp.user.src_id (1-bit, 0=NoC, 1=TB)
 
   localparam int unsigned PeriXbarNumSrc = 2;
-  localparam int unsigned PeriXbarNumTgt = 3;
+  localparam int unsigned PeriXbarNumTgt = 2;
 
   typedef enum int unsigned {
-    PeriTgtBootROM = 0,
-    PeriTgtCSR     = 1,
-    PeriTgtUART    = 2
+    PeriTgtCSR     = 0,
+    PeriTgtUART    = 1
   } peri_tgt_e;
 
   // Calculate the peripheral base address (needed for xbar rules).
@@ -1383,15 +1535,13 @@ module cachepool_cluster
 
   // style-waive: AUTOMATIC: boundary checks
   function automatic peri_tgt_sel_t peri_addr_decode(input addr_t addr);
-    if (addr >= BootAddr && addr < BootAddr + 32'h1_0000)
-      return peri_tgt_sel_t'(PeriTgtBootROM);
-    else if (addr >= UartAddr && addr < UartAddr + 32'h1_0000)
+    if (addr >= UartAddr && addr < UartAddr + 32'h1_0000)
       return peri_tgt_sel_t'(PeriTgtUART);
     else
       return peri_tgt_sel_t'(PeriTgtCSR);
   endfunction
 
-  // ---- Inline src_id packing: peri_narrow → peri_xbar (add 1-bit src_id) ----
+  // ---- Inline src_id packing: narrow mesh / peri_narrow → peri_xbar (add 1-bit src_id) ----
 
   peri_xbar_req_chan_t [PeriXbarNumSrc-1:0] peri_xbar_src_req;
   logic                [PeriXbarNumSrc-1:0] peri_xbar_src_req_valid;
@@ -1407,26 +1557,28 @@ module cachepool_cluster
   logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_valid;
   logic                [PeriXbarNumTgt-1:0] peri_xbar_tgt_rsp_ready;
 
-  // Source [0]: HBM0 (src_id = 0)
+  // Source [0]: narrow L2 mesh (src_id = 0). The flit has no AMO field.
   always_comb begin
     peri_xbar_src_req[0]       = '0;
-    peri_xbar_src_req[0].addr  = hbm0_peri_narrow_req.q.addr;
-    peri_xbar_src_req[0].write = hbm0_peri_narrow_req.q.write;
-    peri_xbar_src_req[0].amo   = hbm0_peri_narrow_req.q.amo;
-    peri_xbar_src_req[0].data  = hbm0_peri_narrow_req.q.data;
-    peri_xbar_src_req[0].strb  = hbm0_peri_narrow_req.q.strb;
-    peri_xbar_src_req[0].size  = hbm0_peri_narrow_req.q.size;
-    peri_xbar_src_req[0].user  = '{src_id: 1'b0, refill: hbm0_peri_narrow_req.q.user};
+    peri_xbar_src_req[0].addr  = peri_sbr_req.addr;
+    peri_xbar_src_req[0].write = peri_sbr_req.write;
+    peri_xbar_src_req[0].amo   = reqrsp_pkg::AMONone;
+    peri_xbar_src_req[0].data  = peri_sbr_req.data;
+    peri_xbar_src_req[0].strb  = peri_sbr_req.strb;
+    peri_xbar_src_req[0].size  = peri_sbr_req.size;
+    peri_xbar_src_req[0].user  = '{src_id: 1'b0, narrow: peri_sbr_req.user};
   end
-  assign peri_xbar_src_req_valid[0] = hbm0_peri_narrow_req.q_valid;
-  assign peri_xbar_src_rsp_ready[0] = hbm0_peri_narrow_req.p_ready;
+  assign peri_xbar_src_req_valid[0] = peri_sbr_req_valid;
+  assign peri_xbar_src_rsp_ready[0] = peri_sbr_rsp_ready;
 
-  assign hbm0_peri_narrow_rsp.q_ready = peri_xbar_src_req_ready[0];
-  assign hbm0_peri_narrow_rsp.p.data  = peri_xbar_src_rsp[0].data;
-  assign hbm0_peri_narrow_rsp.p.error = peri_xbar_src_rsp[0].error;
-  assign hbm0_peri_narrow_rsp.p.write = peri_xbar_src_rsp[0].write;
-  assign hbm0_peri_narrow_rsp.p.user  = peri_xbar_src_rsp[0].user.refill;
-  assign hbm0_peri_narrow_rsp.p_valid = peri_xbar_src_rsp_valid[0];
+  assign peri_sbr_req_ready = peri_xbar_src_req_ready[0];
+  assign peri_sbr_rsp       = '{
+    data:  peri_xbar_src_rsp[0].data,
+    error: peri_xbar_src_rsp[0].error,
+    write: peri_xbar_src_rsp[0].write,
+    user:  peri_xbar_src_rsp[0].user.narrow
+  };
+  assign peri_sbr_rsp_valid = peri_xbar_src_rsp_valid[0];
 
   // Source [1]: TB/SoC external (src_id = 1)
   always_comb begin
@@ -1437,7 +1589,7 @@ module cachepool_cluster
     peri_xbar_src_req[1].data  = peri_ext_req_i.q.data;
     peri_xbar_src_req[1].strb  = peri_ext_req_i.q.strb;
     peri_xbar_src_req[1].size  = peri_ext_req_i.q.size;
-    peri_xbar_src_req[1].user  = '{src_id: 1'b1, refill: peri_ext_req_i.q.user};
+    peri_xbar_src_req[1].user  = '{src_id: 1'b1, narrow: peri_ext_req_i.q.user};
   end
   assign peri_xbar_src_req_valid[1] = peri_ext_req_i.q_valid;
   assign peri_xbar_src_rsp_ready[1] = peri_ext_req_i.p_ready;
@@ -1446,19 +1598,35 @@ module cachepool_cluster
   assign peri_ext_rsp_o.p.data  = peri_xbar_src_rsp[1].data;
   assign peri_ext_rsp_o.p.error = peri_xbar_src_rsp[1].error;
   assign peri_ext_rsp_o.p.write = peri_xbar_src_rsp[1].write;
-  assign peri_ext_rsp_o.p.user  = peri_xbar_src_rsp[1].user.refill;
+  assign peri_ext_rsp_o.p.user  = peri_xbar_src_rsp[1].user.narrow;
   assign peri_ext_rsp_o.p_valid = peri_xbar_src_rsp_valid[1];
 
   // ---- Address decode per source ----
   peri_tgt_sel_t [PeriXbarNumSrc-1:0] peri_slv_sel;
-  assign peri_slv_sel[0] = peri_addr_decode(hbm0_peri_narrow_req.q.addr);
+  assign peri_slv_sel[0] = peri_addr_decode(peri_sbr_req.addr);
   assign peri_slv_sel[1] = peri_addr_decode(peri_ext_req_i.q.addr);
+
+  // Core accesses only reach the CSRs and the UART; anything else is a software bug (stray
+  // pointer) that would silently read 0 from the CSR target, so flag it with its source.
+  `ifndef TARGET_SYNTHESIS
+  logic peri_core_addr_ok;
+  assign peri_core_addr_ok =
+      ((peri_sbr_req.addr >= tcdm_end_address) &&
+       (peri_sbr_req.addr <  tcdm_end_address + ClusterPeriphSize * 1024)) ||
+      ((peri_sbr_req.addr >= UartAddr) &&
+       (peri_sbr_req.addr <  UartAddr + 32'h1_0000));
+  `ASSERT(PeriCoreAddrMapped, peri_sbr_req_valid |-> peri_core_addr_ok, clk_i, !rst_ni,
+      $sformatf("cachepool_cluster: core access to unmapped address 0x%08x from L2 endpoint %0d tile %0d hart %0d",
+                peri_sbr_req.addr, peri_sbr_req.user.l2_src_id, peri_sbr_req.user.tile_id,
+                peri_sbr_req.user.hart_id))
+  `ASSERT(PeriSingleWord, peri_sbr_req_valid |-> (peri_sbr_req.size <= reqrsp_pkg::size_t'(2)),
+      clk_i, !rst_ni, "cachepool_cluster: peripheral access wider than 32 bits")
+  `endif
 
   // ---- Response routing per target: use src_id from user field ----
   peri_src_sel_t [PeriXbarNumTgt-1:0] peri_mst_sel;
   assign peri_mst_sel[0] = peri_xbar_tgt_rsp[0].user.src_id;
   assign peri_mst_sel[1] = peri_xbar_tgt_rsp[1].user.src_id;
-  assign peri_mst_sel[2] = peri_xbar_tgt_rsp[2].user.src_id;
 
   // ---- 2×3 REQRSP Xbar ----
   reqrsp_xbar #(
@@ -1490,57 +1658,7 @@ module cachepool_cluster
     .mst_sel_i       ( peri_mst_sel             )
   );
 
-  // ---- Target [0]: BootROM → reqrsp_to_reg → bootrom ----
-
-  `REG_BUS_TYPEDEF_ALL(reg_bootrom, addr_t, narrow_data_t, narrow_strb_t)
-
-  peri_xbar_req_t peri_bootrom_req;
-  peri_xbar_rsp_t peri_bootrom_rsp;
-
-  // Bundle xbar split channels into REQRSP struct
-  assign peri_bootrom_req.q       = peri_xbar_tgt_req[PeriTgtBootROM];
-  assign peri_bootrom_req.q_valid = peri_xbar_tgt_req_valid[PeriTgtBootROM];
-  assign peri_bootrom_req.p_ready = peri_xbar_tgt_rsp_ready[PeriTgtBootROM];
-  assign peri_xbar_tgt_req_ready[PeriTgtBootROM] = peri_bootrom_rsp.q_ready;
-  assign peri_xbar_tgt_rsp[PeriTgtBootROM]       = peri_bootrom_rsp.p;
-  assign peri_xbar_tgt_rsp_valid[PeriTgtBootROM] = peri_bootrom_rsp.p_valid;
-
-  reg_bootrom_req_t bootrom_reg_req;
-  reg_bootrom_rsp_t bootrom_reg_rsp;
-
-  reqrsp_to_reg #(
-    .AddrWidth    ( AxiAddrWidth              ),
-    .DataWidth    ( 32                        ),
-    .UserWidth    ( $bits(peri_xbar_user_t)   ),
-    .FifoDepth    ( 2                         ),
-    .ShiftResponse( 1'b0                      ),
-    .user_t       ( peri_xbar_user_t          ),
-    .reqrsp_req_t ( peri_xbar_req_t           ),
-    .reqrsp_rsp_t ( peri_xbar_rsp_t           ),
-    .reg_req_t    ( reg_bootrom_req_t         ),
-    .reg_rsp_t    ( reg_bootrom_rsp_t         )
-  ) i_reqrsp_to_reg_bootrom (
-    .clk_i      ( clk_i            ),
-    .rst_ni     ( rst_ni           ),
-    .reqrsp_req_i ( peri_bootrom_req ),
-    .reqrsp_rsp_o ( peri_bootrom_rsp ),
-    .reg_req_o  ( bootrom_reg_req  ),
-    .reg_rsp_i  ( bootrom_reg_rsp  )
-  );
-
-  bootrom #(
-    .DataWidth ( 32          ),
-    .AddrWidth ( AxiAddrWidth )
-  ) i_bootrom (
-    .clk_i   ( clk_i                           ),
-    .req_i   ( bootrom_reg_req.valid           ),
-    .addr_i  ( addr_t'(bootrom_reg_req.addr)   ),
-    .rdata_o ( bootrom_reg_rsp.rdata           )
-  );
-  `FF(bootrom_reg_rsp.ready, bootrom_reg_req.valid, 1'b0)
-  assign bootrom_reg_rsp.error = 1'b0;
-
-  // ---- Target [1]: CSR → reqrsp_to_reg → cachepool_peripheral ----
+  // ---- Target [0]: CSR → reqrsp_to_reg → cachepool_peripheral ----
 
   `REG_BUS_TYPEDEF_ALL(reg_csr, addr_t, narrow_data_t, narrow_strb_t)
 
@@ -1600,15 +1718,14 @@ module cachepool_cluster
     .l1d_spm_size_o           (                        ),
     .l1d_busy_o               ( l1d_busy               ),
     .cfg_start_o              ( cfg_start              ),
-    .cfg_issue_o              ( cfg_issue              ),
-    .cfg_insn_o               ( cfg_insn               ),
+    .cfg_reg_o                ( cfg_reg                ),
+    .cfg_data_o               ( cfg_data               ),
     .cfg_tile_sel_o           ( cfg_tile_sel           ),
-    .cfg_o                    ( cfg_l1d                ),
     .cfg_done_i               ( cfg_done               ),
     .barrier_part_mask_o      ( barrier_part_mask      )
   );
 
-  // ---- Target [2]: UART → reqrsp_to_axi → axi_narrow_req_o ----
+  // ---- Target [1]: UART → reqrsp_to_axi → axi_narrow_req_o ----
 
   peri_xbar_req_t peri_uart_req;
   peri_xbar_rsp_t peri_uart_rsp;

@@ -316,6 +316,7 @@ CACHEPOOL_DEFS += -DL1D_XBAR_OFFSET_RST=$(l1d_xbar_offset_rst)
 CACHEPOOL_DEFS += -DL1D_PRIVATE_RST=$(l1d_private_rst)
 CACHEPOOL_DEFS += -DL1D_PRIVATE_ADDR_RST=$(l1d_private_addr_rst)
 CACHEPOOL_DEFS += -DICACHE_PREFETCH_RST=$(icache_prefetch_rst)
+CACHEPOOL_DEFS += -DBOOTROM_DATA_WIDTH=$(bootrom_data_width)
 
 # Tile configuration
 CACHEPOOL_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)

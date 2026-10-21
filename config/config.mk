@@ -74,8 +74,9 @@ data_width ?= 32
 # Core addrwidth
 addr_width ?= 32
 
-# Bootrom datawidth
-bootrom_data_width ?= 32
+# Bootrom datawidth: must equal the L2 refill width, the bootrom is only read by full-line
+# iCache refills on the wide L2 path
+bootrom_data_width ?= $(refill_data_width)
 
 
 ######################
