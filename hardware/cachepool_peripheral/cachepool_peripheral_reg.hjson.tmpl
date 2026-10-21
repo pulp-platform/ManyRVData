@@ -69,11 +69,11 @@
         desc: '''Controls prefetching of the instruction cache.'''
         swaccess: "wo",
         hwaccess: "hro",
-        resval: "1",
+        resval: "${icache_prefetch_rst}",
         fields: [{
             bits: "0:0",
             name: "ICACHE_PREFETCH_ENABLE",
-            desc: "Hardware barrier register."
+            desc: "Enable instruction cache prefetching."
         }]
     },
     {
@@ -208,7 +208,9 @@
     },
     {
         name: "L1D_INSN_COMMIT",
-        desc: '''Controls the L1 DCache flushing and invalidation.'''
+        desc: '''Starts the L1D instruction in CFG_L1D_INSN on the tiles selected by
+        CFG_L1D_TILE_SEL. L1D_PRIVATE, L1D_ADDR, XBAR_OFFSET and ICACHE_PREFETCH_ENABLE need
+        no commit: a changed value is applied on its own.'''
         // hwext: "true",
         // hwqe: "true",
         swaccess: "rw",
@@ -217,12 +219,13 @@
         fields: [{
             bits: "0",
             name: "COMMIT",
-            desc: "Commit the configurations for instructions."
+            desc: "Commit the L1D instruction."
         }]
     },
     {
         name: "L1D_FLUSH_STATUS",
-        desc: '''Indicate the status of flushing '''
+        desc: '''Busy while a committed L1D instruction or a changed setting is still being
+        applied by the group-level configuration registers.'''
         hwext: "true",
         swaccess: "ro",
         hwaccess: "hwo",
@@ -235,10 +238,11 @@
     },
     {
         name: "L1D_PRIVATE",
-        desc: '''L1D partitioning: private bank count and how it is folded '''
+        desc: '''L1D partitioning: private bank count and how it is folded. Applied when the
+        value changes, no commit needed.'''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "0",
+        resval: "${l1d_private_rst}",
         fields: [{
             bits: "2:0",
             name: "PARTITION",
@@ -251,10 +255,11 @@
     },
     {
         name: "L1D_ADDR",
-        desc: '''Starting address of private L1D partition '''
+        desc: '''Starting address of private L1D partition. Applied when the value changes, no
+        commit needed.'''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "2684354560",
+        resval: "${l1d_private_addr_rst}",
         fields: [{
             bits: "31:0",
             name: "ADDR",
@@ -263,26 +268,15 @@
     },
     {
         name: "XBAR_OFFSET",
-        desc: '''Cache xbar offset setting '''
+        desc: '''Cache xbar offset setting. Applied when the value changes, no commit
+        needed.'''
         swaccess: "rw",
         hwaccess: "hro",
-        resval: "0",
+        resval: "${l1d_xbar_offset_rst}",
         fields: [{
             bits: "4:0",
             name: "OFFSET",
             desc: "range: 0-31"
-        }]
-    },
-    {
-        name: "XBAR_OFFSET_COMMIT",
-        desc: '''Cache xbar offset setting '''
-        swaccess: "rw",
-        hwaccess: "hrw",
-        resval: "0",
-        fields: [{
-            bits: "0",
-            name: "COMMIT",
-            desc: "Commit the xbar offset configurations."
         }]
     }
   ]

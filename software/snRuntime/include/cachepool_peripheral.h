@@ -102,15 +102,16 @@ extern "C" {
 #define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_REG_OFFSET 0x38
 #define CACHEPOOL_PERIPHERAL_L1D_SPM_COMMIT_COMMIT_BIT 0
 
-// Controls the L1 DCache flushing and invalidation.
+// Starts the L1D instruction in CFG_L1D_INSN on the tiles selected by
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_REG_OFFSET 0x3c
 #define CACHEPOOL_PERIPHERAL_L1D_INSN_COMMIT_COMMIT_BIT 0
 
-// Indicate the status of flushing
+// Busy while a committed L1D instruction or a changed setting is still being
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_REG_OFFSET 0x40
 #define CACHEPOOL_PERIPHERAL_L1D_FLUSH_STATUS_STATUS_BIT 0
 
-// L1D partitioning: private bank count and how it is folded
+// L1D partitioning: private bank count and how it is folded. Applied when
+// the
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_REG_OFFSET 0x44
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_MASK 0x7
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_OFFSET 0
@@ -120,10 +121,11 @@ extern "C" {
       .index = CACHEPOOL_PERIPHERAL_L1D_PRIVATE_PARTITION_OFFSET})
 #define CACHEPOOL_PERIPHERAL_L1D_PRIVATE_GROUP_FOLD_BIT 3
 
-// Starting address of private L1D partition
+// Starting address of private L1D partition. Applied when the value changes,
+// no
 #define CACHEPOOL_PERIPHERAL_L1D_ADDR_REG_OFFSET 0x48
 
-// Cache xbar offset setting
+// Cache xbar offset setting. Applied when the value changes, no commit
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_REG_OFFSET 0x4c
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK 0x1f
 #define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET 0
@@ -131,10 +133,6 @@ extern "C" {
   ((bitfield_field32_t){.mask = CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_MASK,  \
                         .index =                                               \
                             CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET_OFFSET})
-
-// Cache xbar offset setting
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_REG_OFFSET 0x50
-#define CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_COMMIT_BIT 0
 
 #ifdef __cplusplus
 } // extern "C"

@@ -120,8 +120,9 @@ def read_bin():
     with open(filename + ".bin", "rb") as f:
         rom = bytes.hex(f.read())
         rom = list(map("".join, zip(rom[::2], rom[1::2])))
-    # align to 64 bit
-    align = (int((len(rom) + 7) / 8)) * 8
+    # align to 64 bit and to the bootrom word
+    word = max(8, int(DataWidth / 8))
+    align = (int((len(rom) + word - 1) / word)) * word
     for i in range(len(rom), align):
         rom.append("00")
     return rom
