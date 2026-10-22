@@ -40,6 +40,7 @@ module cachepool_peripheral
   input  addr_t                      tcdm_start_address_i,
   input  addr_t                      tcdm_end_address_i,
   output addr_t                      private_start_addr_o,
+  output logic                       l1d_bypass_o,
   output logic                       icache_prefetch_enable_o,
   output logic                       cluster_probe_o,
   input  logic [9:0]                 cluster_hart_base_id_i,
@@ -103,6 +104,7 @@ module cachepool_peripheral
   logic [9:0]              l1d_spm_size_d, l1d_spm_size_q;
   logic [PrivateWidth-1:0] l1d_private_d, l1d_private_q;
   addr_t                   private_start_addr_d, private_start_addr_q;
+  logic                    l1d_bypass_d, l1d_bypass_q;
   // L1 is running flush/invalidation
   logic [NumTiles-1:0]     l1d_lock_d, l1d_lock_q;
   logic                    l1d_spm_commit, l1d_insn_commit;
@@ -135,6 +137,7 @@ module cachepool_peripheral
 
   assign l1d_private_o        = l1d_private_q[PrivateWidth-1:0];
   assign private_start_addr_o = private_start_addr_q;
+  assign l1d_bypass_o         = l1d_bypass_q;
 
   // Concatenate all tile-select register words into one wide vector and slice
   // to NumTiles.  Unused upper bits (for small configs) are optimised away.
@@ -163,6 +166,7 @@ module cachepool_peripheral
     l1d_lock_d            = l1d_lock_q;
     l1d_private_d         = l1d_private_q;
     private_start_addr_d  = private_start_addr_q;
+    l1d_bypass_d          = l1d_bypass_q;
 
     hw2reg.l1d_insn_commit.d  = 1'b0;
     hw2reg.l1d_insn_commit.de = 1'b0;
@@ -171,6 +175,7 @@ module cachepool_peripheral
       l1d_private_d         = {reg2hw.l1d_private.group_fold.q,
                                reg2hw.l1d_private.partition.q};
       private_start_addr_d  = reg2hw.l1d_addr.q;
+      l1d_bypass_d          = reg2hw.l1d_bypass.q;
       // User issues a flush/invalidation
       if (|l1d_lock_q == '0) begin
         // We are ready to accept a new instruction.
@@ -200,6 +205,7 @@ module cachepool_peripheral
 
   `FF(private_start_addr_q, private_start_addr_d, 32'hA000_0000, clk_i, rst_ni)
   `FF(l1d_private_q, l1d_private_d, 0, clk_i, rst_ni)
+  `FF(l1d_bypass_q, l1d_bypass_d, 1'b0, clk_i, rst_ni)
   `FF(l1d_lock_q, l1d_lock_d, '0, clk_i, rst_ni)
   // To show if the current flush/invalidation is complete
   assign hw2reg.l1d_flush_status.d = (l1d_lock_q != '0);

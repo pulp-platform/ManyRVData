@@ -33,4 +33,8 @@ void l1d_part (uint32_t size);
 void l1d_part_folded (uint32_t size, uint32_t fold);
 void l1d_addr (uint32_t addr);
 
+// 1: the private range [L1D_ADDR, stack) bypasses the L1 data cache and goes
+// straight to DRAM. Does not flush: flush first if that range may be cached.
+void l1d_bypass (uint32_t en);
+
 void set_eoc (uint32_t eoc_value);

@@ -262,6 +262,18 @@
         }]
     },
     {
+        name: "L1D_BYPASS",
+        desc: '''L1D bypass: requests from L1D_ADDR up (below the stack) skip the L1 data cache '''
+        swaccess: "rw",
+        hwaccess: "hro",
+        resval: "0",
+        fields: [{
+            bits: "0:0",
+            name: "EN",
+            desc: "1: the private range (L1D_ADDR up to the stack) bypasses the L1D and goes to DRAM. Applied on L1D_INSN_COMMIT."
+        }]
+    },
+    {
         name: "XBAR_OFFSET",
         desc: '''Cache xbar offset setting '''
         swaccess: "rw",
