@@ -209,6 +209,8 @@ module cachepool_monitor
   // a request waited for q_ready, read responses received, and the time
   // integral of reads in flight. avg round trip = in-flight integral / reads,
   // i.e. the refill latency seen at the controller boundary (Little's law).
+  // L1 bypass transactions (user.bypass) share the port; they are counted
+  // separately (reads and writes, both get a response) and excluded above.
   // ---------------------------------------------------------------------
   for (genvar gy = 0; gy < NumGroupsY; gy++) begin : gen_refill_gy
     for (genvar gx = 0; gx < NumGroupsX; gx++) begin : gen_refill_gx
@@ -226,16 +228,37 @@ module cachepool_monitor
         `FF(inflight_q,  inflight_d,  '0)
         `FF(area_q,      area_d,      '0)
 
+        // L1 bypass transactions on the same port
+        cnt_t [NumL1CtrlTile-1:0] byp_rd_d,  byp_rd_q;
+        cnt_t [NumL1CtrlTile-1:0] byp_wr_d,  byp_wr_q;
+        cnt_t [NumL1CtrlTile-1:0] byp_rsp_d, byp_rsp_q;
+        cnt_t [NumL1CtrlTile-1:0] byp_inflight_d, byp_inflight_q;
+        logic [NumL1CtrlTile-1:0][63:0] byp_area_d, byp_area_q;
+        `FF(byp_rd_q,       byp_rd_d,       '0)
+        `FF(byp_wr_q,       byp_wr_d,       '0)
+        `FF(byp_rsp_q,      byp_rsp_d,      '0)
+        `FF(byp_inflight_q, byp_inflight_d, '0)
+        `FF(byp_area_q,     byp_area_d,     '0)
+
         for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin : gen_refill_ctrl
+          logic req_any, req_byp, rsp_any, rsp_byp;
           logic req_hs, req_wait, rsp_hs;
-          assign req_hs   = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q_valid
-                          & `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].q_ready
+          logic byp_rd_hs, byp_wr_hs, byp_rsp_hs;
+          assign req_any  = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q_valid
+                          & `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].q_ready;
+          assign req_byp  = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q.user.bypass;
+          assign rsp_any  = `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p_valid
+                          & `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].p_ready;
+          assign rsp_byp  = `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p.user.bypass;
+          assign req_hs   = req_any & ~req_byp
                           & ~`TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q.write;
           assign req_wait = `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q_valid
                           & ~`TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].q_ready;
-          assign rsp_hs   = `TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p_valid
-                          & `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].p_ready
+          assign rsp_hs   = rsp_any & ~rsp_byp
                           & ~`TILE_PATH(gy, gx, t).cache_refill_rsp_i[cb].p.write;
+          assign byp_rd_hs  = req_any & req_byp & ~`TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q.write;
+          assign byp_wr_hs  = req_any & req_byp &  `TILE_PATH(gy, gx, t).cache_refill_req_o[cb].q.write;
+          assign byp_rsp_hs = rsp_any & rsp_byp;
 
           always_comb begin
             // In-flight count spans sessions; only the per-session totals reset
@@ -244,6 +267,11 @@ module cachepool_monitor
             req_stall_d[cb] = session_edge ? '0 : req_stall_q[cb] + cnt_t'(req_wait);
             rd_rsp_d[cb]    = session_edge ? '0 : rd_rsp_q[cb]    + cnt_t'(rsp_hs);
             area_d[cb]      = session_edge ? '0 : area_q[cb]      + 64'(inflight_q[cb]);
+            byp_inflight_d[cb] = byp_inflight_q[cb] + cnt_t'(byp_rd_hs | byp_wr_hs) - cnt_t'(byp_rsp_hs);
+            byp_rd_d[cb]       = session_edge ? '0 : byp_rd_q[cb]   + cnt_t'(byp_rd_hs);
+            byp_wr_d[cb]       = session_edge ? '0 : byp_wr_q[cb]   + cnt_t'(byp_wr_hs);
+            byp_rsp_d[cb]      = session_edge ? '0 : byp_rsp_q[cb]  + cnt_t'(byp_rsp_hs);
+            byp_area_d[cb]     = session_edge ? '0 : byp_area_q[cb] + 64'(byp_inflight_q[cb]);
           end
         end
 
@@ -263,8 +291,12 @@ module cachepool_monitor
             automatic real span = cycle_q - session_start_cycle_q;
             automatic real rt   = rd_rsp_q[cb] == 0 ? 0 : real'(area_q[cb]) / real'(rd_rsp_q[cb]);
             automatic real avg  = span == 0 ? 0 : real'(area_q[cb]) / span;
+            automatic real brt  = byp_rsp_q[cb] == 0 ? 0 : real'(byp_area_q[cb]) / real'(byp_rsp_q[cb]);
+            automatic real bavg = span == 0 ? 0 : real'(byp_area_q[cb]) / span;
             $fwrite(refill_f, "   Ctrl %0d: reads=%0d  rsp=%0d  req stall cyc=%0d  avg in flight=%0.2f  avg round trip=%0.2f\n",
                     cb, rd_req_q[cb], rd_rsp_q[cb], req_stall_q[cb], avg, rt);
+            $fwrite(refill_f, "   Ctrl %0d bypass: reads=%0d  writes=%0d  rsp=%0d  avg in flight=%0.2f  avg round trip=%0.2f\n",
+                    cb, byp_rd_q[cb], byp_wr_q[cb], byp_rsp_q[cb], bavg, brt);
           end
           $fwrite(refill_f, "\n");
         endfunction

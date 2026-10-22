@@ -1196,6 +1196,14 @@ module cachepool_tile
       cache_refill_req_o[cb].q.addr = cache_refill_addr_unrot;
     end
 
+    // Guard: while the L1 bypass is on, the cache never refills a line of the bypass range
+    // (writebacks may: lines dirty from before the bypass was switched on, no flush in hw).
+    `ASSERT(L1BypassNoCacheRefill,
+            cache_refill_req_valid[cb] && !cache_refill_req[cb].write &&
+            !cache_refill_req[cb].bypass && L1BypassEn && l1d_bypass_i |->
+            !((cache_refill_addr_unrot >= private_start_addr_i) &&
+              (cache_refill_addr_unrot <  L1BypassEnd)))
+
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
       tc_sram_impl #(
