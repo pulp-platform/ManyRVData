@@ -173,6 +173,7 @@ test:
           - rlc-multi_producer_single_consumer_double_linked_list_M1_N1350_K10
           - rlc-multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
           - rlc-multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci
+          - l1-bypass
   script:
     # The vsim script writes a .rtlbinary marker here; monitor logs need the
     # core/noc/others subfolders. Build artifacts exclude sim/bin/logs/, so
@@ -207,6 +208,7 @@ test-dual:
           - gemv_M512_N128_K32
           - fmatmul-32b_M64_N64_K64
           - fft-32b_M1024_N16
+          - l1-bypass
   script:
     - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
