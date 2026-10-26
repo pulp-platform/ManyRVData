@@ -1,0 +1,7 @@
+// Odd sizes: partial strip, rows not divisible by the core count
+{
+    M: 63,
+    N: 37,
+    J: 12,
+    seed: 2
+}

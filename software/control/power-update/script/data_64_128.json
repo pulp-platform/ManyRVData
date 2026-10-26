@@ -1,0 +1,8 @@
+// Benchmark size (see ../../README.md): updates at early, middle and late
+// iterations, and the finalization
+{
+    M: 64,
+    N: 128,
+    seed: 1,
+    cases: [0, 1, 2, 40, 41, 90, 126, 127]
+}

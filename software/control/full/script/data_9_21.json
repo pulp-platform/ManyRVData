@@ -1,0 +1,6 @@
+// Small case for quick runs
+{
+    M: 9,
+    N: 21,
+    seed: 1
+}

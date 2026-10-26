@@ -1,0 +1,7 @@
+// vl = 24 (a multiple of the 4 lanes), against data_9_21 (vl = 21)
+{
+    M: 9,
+    N: 24,
+    seed: 2,
+    cases: [0, 1, 7, 19, 20]
+}

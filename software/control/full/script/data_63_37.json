@@ -1,0 +1,6 @@
+// Rows and columns that do not split evenly
+{
+    M: 63,
+    N: 37,
+    seed: 2
+}

@@ -1,0 +1,6 @@
+// Odd sizes: exercises the one-row tail and a partial vector strip
+{
+    M: 9,
+    N: 21,
+    seed: 2
+}
