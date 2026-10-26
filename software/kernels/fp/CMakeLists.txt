@@ -33,3 +33,21 @@ add_spatz_test_threeParam(fmatmul-32b fmatmul-32b/main.c 1024 64 64)
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 256 4)
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 1024 4)
 add_spatz_test_twoParam(fft-32b fft-32b/main.c 1024 16)
+# TMP-DOTP-SWEEP begin
+add_spatz_test_oneParam(fdotp-iso-b0 fdotp-32b/tmp_iso/main.c 8192)
+target_include_directories(test-fdotp-iso-b0_M8192 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/fdotp-32b)
+add_spatz_test_oneParam(fdotp-iso-b1 fdotp-32b/tmp_iso/main.c 8192)
+target_include_directories(test-fdotp-iso-b1_M8192 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/fdotp-32b)
+target_compile_definitions(test-fdotp-iso-b1_M8192 PUBLIC ISO_PART)
+foreach(v
+    "n1:DOTP_VRED=0;FDOTP_SEED=2;DOTP_XRED=1;ISO_NO_PART"
+    "n2:DOTP_VRED=0;FDOTP_SEED=1;DOTP_XRED=0;ISO_NO_PART"
+    "n3:DOTP_VRED=0;FDOTP_SEED=1;DOTP_XRED=1;ISO_NO_PART"
+    "n4:DOTP_VRED=0;FDOTP_SEED=2;DOTP_XRED=0")
+  string(REPLACE ":" ";" vl "${v}")
+  list(GET vl 0 tag)
+  list(REMOVE_AT vl 0)
+  add_spatz_test_oneParam(fdotp-iso-${tag} fdotp-32b/main.c 8192)
+  target_compile_definitions(test-fdotp-iso-${tag}_M8192 PUBLIC ${vl})
+endforeach()
+# TMP-DOTP-SWEEP end

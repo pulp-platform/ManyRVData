@@ -30,7 +30,10 @@ make sw config=<config-name>          # build all registered tests
 ```
 
 Binaries land in `software/build/CachePoolTests/`, named
-`test-<test-name>`. Run one against the RTL simulator with:
+`test-<test-name>`, except the RLC and control-algorithm groups, named
+`rlc-<test-name>` and `ctrl-<test-name>` (each group sets
+`SNITCH_TEST_BIN_PREFIX` in its `CMakeLists.txt`). Run one against the RTL
+simulator with:
 
 ```
 ./sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/test-<test-name>

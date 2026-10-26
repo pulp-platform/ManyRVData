@@ -22,6 +22,17 @@ enable_testing()
 set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
 add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
 
+# Memory system shape from config.mk, for kernels that lay data out for it
+set(L2_CHANNEL "4" CACHE STRING "Number of HBM channels")
+set(L2_INTERLEAVE "16" CACHE STRING "HBM channel interleave, in L2 bank words")
+set(L2_BANK_WIDTH "512" CACHE STRING "L2 bank word width in bits")
+set(L1D_CACHELINE_WIDTH "512" CACHE STRING "L1D cacheline width in bits")
+add_compile_definitions(
+  SNRT_L2_CHANNEL=${L2_CHANNEL}
+  SNRT_L2_INTERLEAVE=${L2_INTERLEAVE}
+  SNRT_L2_BANK_WIDTH=${L2_BANK_WIDTH}
+  SNRT_L1D_CACHELINE_WIDTH=${L1D_CACHELINE_WIDTH})
+
 add_subdirectory(${SNITCH_SOFTWARE_DIR}/snRuntime snRuntime)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/riscvTests riscvTests)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/spatzBenchmarks spatzBenchmarks)
@@ -38,6 +49,7 @@ if (ENABLE_CACHEPOOL_TESTS)
     add_subdirectory(${CACHEPOOL_DIR}/software/sync sync)
     add_subdirectory(${CACHEPOOL_DIR}/software/kernels/fp kernels_fp)
     add_subdirectory(${CACHEPOOL_DIR}/software/kernels/int kernels_int)
+    add_subdirectory(${CACHEPOOL_DIR}/software/control control)
     add_subdirectory(${CACHEPOOL_DIR}/software/rlc rlc)
     add_subdirectory(${CACHEPOOL_DIR}/software/tests CachePoolTests)
 endif()

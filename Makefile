@@ -404,7 +404,7 @@ include sim/sim.mk
 TESTS_DIR := $(SOFTWARE_DIR)/tests
 
 # Test-group roots (relative to SOFTWARE_DIR) scanned for data-generated tests.
-TEST_ROOTS := cache sync kernels/fp kernels/int rlc tests
+TEST_ROOTS := cache sync kernels/fp kernels/int rlc control tests
 
 # Auto-discover every test that has a script/gen_data.py.
 # Convention: script/data_<params>.json → data/data_<params>.h
@@ -477,7 +477,11 @@ SW_CMAKE_FLAGS = \
   -DGCC_PATH=${GCC_INSTALL_DIR} \
   -DPYTHON=${PYTHON} \
   -DBUILD_TESTS=ON \
-  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core)
+  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core) \
+  -DL2_CHANNEL=$(l2_channel) \
+  -DL2_INTERLEAVE=$(l2_interleave) \
+  -DL2_BANK_WIDTH=$(l2_bank_width) \
+  -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
 
 .PHONY: sw
 sw: generate bootrom gen-data
