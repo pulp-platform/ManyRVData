@@ -10,6 +10,9 @@ set(LLVM_PATH "/home/spatz" CACH PATH "Path to the LLVM RISCV installation")
 set(GCC_PATH "/home/spatz" CACHE PATH "Path to the GCC RISCV installation")
 set(RUNTIME_TRACE OFF CACHE BOOL "Enable runtime trace output")
 set(SNITCH_TEST_PREFIX "")
+# Leading part of every test binary name; a test group may replace it (e.g.
+# rlc-, ctrl-) in its own directory scope
+set(SNITCH_TEST_BIN_PREFIX "test-")
 if (SNITCH_SIMULATOR)
     message(STATUS "Using RTL simulator: ${SNITCH_SIMULATOR}")
 endif()
@@ -48,7 +51,7 @@ endmacro()
 
 macro(add_snitch_test_executable name)
     if (BUILD_TESTS)
-        add_snitch_executable(test-${SNITCH_TEST_PREFIX}${name} ${ARGN})
+        add_snitch_executable(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name} ${ARGN})
     endif()
 endmacro()
 
@@ -62,7 +65,7 @@ macro(add_snitch_raw_test_rtl test_name target_name)
 endmacro()
 
 macro(add_snitch_test_rtl name)
-  add_snitch_raw_test_rtl(${SNITCH_TEST_PREFIX}rtl-${name} test-${SNITCH_TEST_PREFIX}${name})
+  add_snitch_raw_test_rtl(${SNITCH_TEST_PREFIX}rtl-${name} ${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name})
 endmacro()
 
 macro(add_snitch_test name)

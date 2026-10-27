@@ -15,19 +15,24 @@
 // limitations under the License.
 
 // Author: Matteo Perotti <mperotti@iis.ee.ethz.ch>
+// Author: Diyou Shen     <dishen@iis.ee.ethz.ch>
 
 #ifndef _FDOTPROD_H_
 #define _FDOTPROD_H_
 
-inline float fdotp_v32b_lmul8(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
-    __attribute__((always_inline));
+#include <stdint.h>
 
-inline float fdotp_v32b_lmul4(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
-    __attribute__((always_inline));
+// In-vector reduction of the accumulator (FDOTP_VRED):
+// 0: one vfredusum over the whole accumulator
+// 1: fold to LMUL 1 with vfadd, then vfredusum
+// 2: fold to one element with vfadd and vslidedown
+#define FDOTP_VRED_FULL  0
+#define FDOTP_VRED_FOLD  1
+#define FDOTP_VRED_SLIDE 2
 
-inline float fdotp_v32b_lmul2(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
-    __attribute__((always_inline));
+float fdotp_v32b(const float *a, const float *b, const uint32_t vl,
+                 const uint32_t offset, const uint32_t rounds,
+                 const uint32_t lmul, const uint32_t unroll,
+                 const uint32_t vred);
 
-inline float fdotp_v32b_lmul1(const float *a, const float *b, const unsigned int offset, const unsigned int avl, const unsigned int rounds)
-    __attribute__((always_inline));
 #endif

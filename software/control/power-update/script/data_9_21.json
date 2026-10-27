@@ -1,0 +1,7 @@
+// Odd sizes: partial vector strip
+{
+    M: 9,
+    N: 21,
+    seed: 2,
+    cases: [0, 1, 7, 19, 20]
+}

@@ -125,9 +125,6 @@ module cachepool_peripheral_reg_top #(
   logic [4:0] xbar_offset_qs;
   logic [4:0] xbar_offset_wd;
   logic xbar_offset_we;
-  logic xbar_offset_commit_qs;
-  logic xbar_offset_commit_wd;
-  logic xbar_offset_commit_we;
 
   // Register instances
   // R[hw_barrier]: V(True)
@@ -633,7 +630,7 @@ module cachepool_peripheral_reg_top #(
   prim_subreg #(
     .DW      (5),
     .SWACCESS("RW"),
-    .RESVAL  (5'h0)
+    .RESVAL  (5'he)
   ) u_xbar_offset (
     .clk_i   (clk_i    ),
     .rst_ni  (rst_ni  ),
@@ -655,36 +652,9 @@ module cachepool_peripheral_reg_top #(
   );
 
 
-  // R[xbar_offset_commit]: V(False)
-
-  prim_subreg #(
-    .DW      (1),
-    .SWACCESS("RW"),
-    .RESVAL  (1'h0)
-  ) u_xbar_offset_commit (
-    .clk_i   (clk_i    ),
-    .rst_ni  (rst_ni  ),
-
-    // from register interface
-    .we     (xbar_offset_commit_we),
-    .wd     (xbar_offset_commit_wd),
-
-    // from internal hardware
-    .de     (hw2reg.xbar_offset_commit.de),
-    .d      (hw2reg.xbar_offset_commit.d ),
-
-    // to internal hardware
-    .qe     (),
-    .q      (reg2hw.xbar_offset_commit.q ),
-
-    // to register interface (read)
-    .qs     (xbar_offset_commit_qs)
-  );
 
 
-
-
-  logic [20:0] addr_hit;
+  logic [19:0] addr_hit;
   always_comb begin
     addr_hit = '0;
     addr_hit[ 0] = (reg_addr == CACHEPOOL_PERIPHERAL_HW_BARRIER_OFFSET);
@@ -707,7 +677,6 @@ module cachepool_peripheral_reg_top #(
     addr_hit[17] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_PRIVATE_OFFSET);
     addr_hit[18] = (reg_addr == CACHEPOOL_PERIPHERAL_L1D_ADDR_OFFSET);
     addr_hit[19] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_OFFSET);
-    addr_hit[20] = (reg_addr == CACHEPOOL_PERIPHERAL_XBAR_OFFSET_COMMIT_OFFSET);
   end
 
   assign addrmiss = (reg_re || reg_we) ? ~|addr_hit : 1'b0 ;
@@ -734,8 +703,7 @@ module cachepool_peripheral_reg_top #(
                (addr_hit[16] & (|(CACHEPOOL_PERIPHERAL_PERMIT[16] & ~reg_be))) |
                (addr_hit[17] & (|(CACHEPOOL_PERIPHERAL_PERMIT[17] & ~reg_be))) |
                (addr_hit[18] & (|(CACHEPOOL_PERIPHERAL_PERMIT[18] & ~reg_be))) |
-               (addr_hit[19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[19] & ~reg_be))) |
-               (addr_hit[20] & (|(CACHEPOOL_PERIPHERAL_PERMIT[20] & ~reg_be)))));
+               (addr_hit[19] & (|(CACHEPOOL_PERIPHERAL_PERMIT[19] & ~reg_be)))));
   end
 
   assign hw_barrier_re = addr_hit[0] & reg_re & !reg_error;
@@ -796,9 +764,6 @@ module cachepool_peripheral_reg_top #(
 
   assign xbar_offset_we = addr_hit[19] & reg_we & !reg_error;
   assign xbar_offset_wd = reg_wdata[4:0];
-
-  assign xbar_offset_commit_we = addr_hit[20] & reg_we & !reg_error;
-  assign xbar_offset_commit_wd = reg_wdata[0];
 
   // Read data return
   always_comb begin
@@ -883,10 +848,6 @@ module cachepool_peripheral_reg_top #(
 
       addr_hit[19]: begin
         reg_rdata_next[4:0] = xbar_offset_qs;
-      end
-
-      addr_hit[20]: begin
-        reg_rdata_next[0] = xbar_offset_commit_qs;
       end
 
       default: begin

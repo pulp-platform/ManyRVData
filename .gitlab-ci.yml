@@ -19,6 +19,7 @@ variables:
   CI_CONFIG_DUAL: 'cachepool_dual_fpu_4g'
   CI_CONFIG_16G: 'cachepool_fpu_16g'
   CI_CONFIG_DUAL_16G: 'cachepool_dual_fpu_16g'
+  # Binary prefix of the tests whose KERNEL has no group prefix (rlc-, ctrl-)
   SW_PREFIX: 'test-'
 
 default:
@@ -169,16 +170,16 @@ test:
           - fmatmul-32b_M64_N64_K64
           - fft-32b_M1024_N16
           - byte-enable
-          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
-          - multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
-          - multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci
+          - rlc-multi_producer_single_consumer_double_linked_list_M1_N1350_K10
+          - rlc-multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
+          - rlc-multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci
   script:
     # The vsim script writes a .rtlbinary marker here; monitor logs need the
     # core/noc/others subfolders. Build artifacts exclude sim/bin/logs/, so
     # these must be recreated in the test job too.
     - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
-    - BIN="${SW_PREFIX}${KERNEL}"
+    - case "$KERNEL" in rlc-*|ctrl-*) BIN="$KERNEL" ;; *) BIN="${SW_PREFIX}${KERNEL}" ;; esac
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_${KERNEL}.log
     - python3 util/auto-benchmark/check-ci.py test_${KERNEL}.log
   artifacts:
@@ -209,7 +210,7 @@ test-dual:
   script:
     - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
-    - BIN="${SW_PREFIX}${KERNEL}"
+    - case "$KERNEL" in rlc-*|ctrl-*) BIN="$KERNEL" ;; *) BIN="${SW_PREFIX}${KERNEL}" ;; esac
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_dual_${KERNEL}.log
     - python3 util/auto-benchmark/check-ci.py test_dual_${KERNEL}.log
   artifacts:
@@ -235,11 +236,11 @@ test-16g:
           - fmatmul-32b_M128_N128_K128
           - fft-32b_M1024_N16
           - byte-enable
-          - multi_producer_single_consumer_double_linked_list_M1_N1350_K10
+          - rlc-multi_producer_single_consumer_double_linked_list_M1_N1350_K10
   script:
     - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
-    - BIN="${SW_PREFIX}${KERNEL}"
+    - case "$KERNEL" in rlc-*|ctrl-*) BIN="$KERNEL" ;; *) BIN="${SW_PREFIX}${KERNEL}" ;; esac
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_16g_${KERNEL}.log
     - python3 util/auto-benchmark/check-ci.py test_16g_${KERNEL}.log
   artifacts:
@@ -268,7 +269,7 @@ test-dual-16g:
   script:
     - mkdir -p sim/bin/logs sim/bin/logs/core sim/bin/logs/noc sim/bin/logs/others
     - chmod +x sim/bin/cachepool_cluster.vsim
-    - BIN="${SW_PREFIX}${KERNEL}"
+    - case "$KERNEL" in rlc-*|ctrl-*) BIN="$KERNEL" ;; *) BIN="${SW_PREFIX}${KERNEL}" ;; esac
     - sim/bin/cachepool_cluster.vsim software/build/CachePoolTests/$BIN 2>&1 | tee test_dual_16g_${KERNEL}.log
     - python3 util/auto-benchmark/check-ci.py test_dual_16g_${KERNEL}.log
   artifacts:

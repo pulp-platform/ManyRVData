@@ -152,9 +152,9 @@ module cachepool_tile
     /// Cache Refill ports
     output cache_trans_req_t  [NumL1CtrlTile-1:0]         cache_refill_req_o,
     input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]         cache_refill_rsp_i,
-    /// Peripheral REQRSP port (narrow, 32b, bypasses wide AXI xbar)
-    output periph_req_t                                    periph_req_o,
-    input  periph_rsp_t                                    periph_rsp_i,
+    /// Peripheral REQRSP port (narrow, 32b, to the narrow L2 mesh)
+    output peri_narrow_req_t                               periph_req_o,
+    input  peri_narrow_rsp_t                               periph_rsp_i,
     /// Wide AXI port: iCache L2 refill only (BootROM at cluster level)
     output axi_out_req_t      [TileWideAxiPorts-1:0]      axi_wide_req_o,
     input  axi_out_resp_t     [TileWideAxiPorts-1:0]      axi_wide_rsp_i,
@@ -972,12 +972,12 @@ module cachepool_tile
   // l1d_insn_ready_o pulses as cache_flush_d hits zero (no loop: it only feeds a peripheral reg).
 
   // Determine whether this tile should act on the incoming instruction.
-  // Private flush (insn==00): only if our tile_id bit is set in tile_sel.
+  // Private flush (insn==00): only if our bit within the group is set in tile_sel.
   // All other modes: always act.
   logic tile_insn_active;
   always_comb begin : gen_tile_active
     if (l1d_insn_i.insn == 2'b00)
-      tile_insn_active = l1d_insn_i.tile_sel[tile_id_i];
+      tile_insn_active = l1d_insn_i.tile_sel[TileIdxInGroup];
     else
       tile_insn_active = 1'b1;
   end
@@ -1688,30 +1688,76 @@ module cachepool_tile
     .cluster_periph_start_address_i (cluster_periph_start_address)
   );
 
-  reqrsp_req_t core_to_periph_req;
-  reqrsp_rsp_t core_to_periph_rsp;
+  // Peripheral accesses of all harts merge into one narrow port. Every request carries its hart
+  // index so the response is routed back by user.hart_id; the harts accept out-of-order
+  // responses by user.req_id, so no ordering is kept here.
+  typedef logic [cf_math_pkg::idx_width(NrHarts)-1:0] periph_hart_sel_t;
 
-  reqrsp_mux #(
-    .NrPorts   (NrHarts           ),
-    .AddrWidth (AxiAddrWidth      ),
-    .DataWidth (NarrowDataWidth   ),
-    .UserWidth ($bits(tcdm_user_t)),
-    .req_t     (reqrsp_req_t      ),
-    .rsp_t     (reqrsp_rsp_t      ),
-    .RespDepth (2                 )
-  ) i_reqrsp_mux_core (
-    .clk_i     (clk_i              ),
-    .rst_ni    (rst_ni             ),
-    .slv_req_i (filtered_core_req  ),
-    .slv_rsp_o (filtered_core_rsp  ),
-    .mst_req_o (core_to_periph_req ),
-    .mst_rsp_i (core_to_periph_rsp ),
-    .idx_o     (/*unused*/         )
+  peri_narrow_req_chan_t [NrHarts-1:0] periph_hart_req;
+  logic                  [NrHarts-1:0] periph_hart_req_valid, periph_hart_req_ready;
+  peri_narrow_rsp_chan_t [NrHarts-1:0] periph_hart_rsp;
+  logic                  [NrHarts-1:0] periph_hart_rsp_valid, periph_hart_rsp_ready;
+  periph_hart_sel_t                    periph_rsp_sel;
+
+  for (genvar i = 0; i < NrHarts; i++) begin : gen_periph_hart
+    always_comb begin
+      periph_hart_req[i]              = '0;
+      periph_hart_req[i].addr         = filtered_core_req[i].q.addr;
+      periph_hart_req[i].write        = filtered_core_req[i].q.write;
+      periph_hart_req[i].amo          = filtered_core_req[i].q.amo;
+      periph_hart_req[i].data         = filtered_core_req[i].q.data;
+      periph_hart_req[i].strb         = filtered_core_req[i].q.strb;
+      periph_hart_req[i].size         = filtered_core_req[i].q.size;
+      periph_hart_req[i].user.hart_id = i;
+      periph_hart_req[i].user.is_fpu  = filtered_core_req[i].q.user.is_fpu;
+      periph_hart_req[i].user.req_id  = filtered_core_req[i].q.user.req_id;
+
+      filtered_core_rsp[i]               = '0;
+      filtered_core_rsp[i].q_ready       = periph_hart_req_ready[i];
+      filtered_core_rsp[i].p.data        = periph_hart_rsp[i].data;
+      filtered_core_rsp[i].p.error       = periph_hart_rsp[i].error;
+      filtered_core_rsp[i].p.write       = periph_hart_rsp[i].write;
+      filtered_core_rsp[i].p.user.is_fpu = periph_hart_rsp[i].user.is_fpu;
+      filtered_core_rsp[i].p.user.req_id = periph_hart_rsp[i].user.req_id;
+      filtered_core_rsp[i].p_valid       = periph_hart_rsp_valid[i];
+    end
+    assign periph_hart_req_valid[i] = filtered_core_req[i].q_valid;
+    assign periph_hart_rsp_ready[i] = filtered_core_req[i].p_ready;
+  end
+
+  assign periph_rsp_sel = periph_rsp_i.p.user.hart_id;
+
+  reqrsp_xbar #(
+    .NumInp          ( NrHarts                ),
+    .NumOut          ( 1                      ),
+    .PipeReg         ( 1'b0                   ),
+    .tcdm_req_chan_t ( peri_narrow_req_chan_t ),
+    .tcdm_rsp_chan_t ( peri_narrow_rsp_chan_t ),
+    .mst_sel_t       ( periph_hart_sel_t      )
+  ) i_periph_xbar (
+    .clk_i           ( clk_i                  ),
+    .rst_ni          ( rst_ni                 ),
+    .slv_req_i       ( periph_hart_req        ),
+    .slv_rr_i        ( '0                     ),
+    .slv_req_valid_i ( periph_hart_req_valid  ),
+    .slv_req_ready_o ( periph_hart_req_ready  ),
+    .slv_rsp_o       ( periph_hart_rsp        ),
+    .slv_rsp_valid_o ( periph_hart_rsp_valid  ),
+    .slv_rsp_ready_i ( periph_hart_rsp_ready  ),
+    .slv_sel_i       ( '0                     ),
+    .slv_selected_o  ( /* unused */           ),
+    .mst_req_o       ( periph_req_o.q         ),
+    .mst_req_valid_o ( periph_req_o.q_valid   ),
+    .mst_req_ready_i ( periph_rsp_i.q_ready   ),
+    .mst_rsp_i       ( periph_rsp_i.p         ),
+    .mst_rr_i        ( '0                     ),
+    .mst_rsp_valid_i ( periph_rsp_i.p_valid   ),
+    .mst_rsp_ready_o ( periph_req_o.p_ready   ),
+    .mst_sel_i       ( periph_rsp_sel         )
   );
 
-  // Peripheral REQRSP: directly exposed to group level (no AXI conversion)
-  assign periph_req_o       = core_to_periph_req;
-  assign core_to_periph_rsp = periph_rsp_i;
+  `ASSERT_INIT(CheckPeriphHartWidth, NrHarts == NumHartsTile,
+      "cachepool_tile: hart count does not match cachepool_pkg::NumHartsTile")
 
   // -------------
   // Sanity Checks

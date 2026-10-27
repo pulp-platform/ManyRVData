@@ -1,0 +1,6 @@
+// Benchmark size: M = 64 users, N = 128 subcarriers (see ../../README.md)
+{
+    M: 64,
+    N: 128,
+    seed: 1
+}

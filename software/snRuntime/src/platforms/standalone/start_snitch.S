@@ -32,6 +32,9 @@ _snrt_exit:
     mv        s0, t0
     # call      l1d_flush
     mv        a0, s0
+    # Earlier UART/CSR writes may still be in flight: they reach different targets and are not
+    # ordered with the EOC write, so wait for all of them first.
+    fence
     call      set_eoc
 1:  ret
 

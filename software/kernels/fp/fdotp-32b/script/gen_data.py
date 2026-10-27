@@ -49,7 +49,7 @@ def emit_header_file(layer_type: str, **kwargs):
         + "// This file was generated automatically.\n\n"
     )
 
-    file = file_path / ("data_" + str(kwargs["M"]) + ".h")
+    file = file_path / (kwargs["cfg_name"] + ".h")
     emit_str += emit_dotp_layer(**kwargs)
     with file.open("w") as f:
         f.write(emit_str)
@@ -86,11 +86,6 @@ def emit_dotp_layer(name="dotp", **kwargs):
         layer_str += (
             f'static {dtype} {name}_result __attribute__((section(".data"))) = '
             + array_to_cstr(result)
-            + ";\n\n\n"
-        )
-        layer_str += '// Global memory location to hold reduction results for each core\n'
-        layer_str += (
-            f'{dtype} result [64] __attribute__((section(".data"))) = {{0}}'
             + ";\n\n\n"
         )
     else:
@@ -164,8 +159,16 @@ def main():
     with args.cfg.open() as f:
         param = hjson.loads(f.read())
 
-    vec_A, bits_A = rand_data_generator((param["M"], 1), param["prec"])
-    vec_B, bits_B = rand_data_generator((param["M"], 1), param["prec"])
+    if param.get("init", "rand") == "const":
+        # Small integers: every partial sum is exact in fp32, so the result
+        # must match exactly, and a dropped or doubled chunk shows up.
+        idx = torch.arange(param["M"]).reshape(param["M"], 1)
+        vec_A = (idx % 4 + 1).to(torch.float32)
+        vec_B = (idx % 3 + 1).to(torch.float32)
+        bits_A, bits_B = {}, {}
+    else:
+        vec_A, bits_A = rand_data_generator((param["M"], 1), param["prec"])
+        vec_B, bits_B = rand_data_generator((param["M"], 1), param["prec"])
     result = dotp(vec_A, vec_B)
 
     kwargs = {
@@ -177,6 +180,7 @@ def main():
         "expand": param["expand"],
         "bits_A": bits_A,
         "bits_B": bits_B,
+        "cfg_name": args.cfg.stem,
     }
 
     emit_header_file("dotp", **kwargs)

@@ -10,6 +10,9 @@
 # The shared test macros and the benchmark/spin_lock/mcs_lock libraries come
 # from software/cmake/CachePoolTests.cmake.
 
+# Binaries of this group are named rlc-<name> instead of test-<name>.
+set(SNITCH_TEST_BIN_PREFIX "rlc-")
+
 # add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 2044 100)
@@ -28,13 +31,13 @@ add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list mult
 macro(add_spatz_test_rlc_am_wq name file param1 param2 param3 pcore ccore grant verify)
     set(target_name ${name}_M${param1}_N${param2}_K${param3}_P${pcore}_C${ccore}_am_G${grant}_wq)
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+    target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
         DATAHEADER="data/data_${param1}_${param2}_${param3}.h"
         PRODUCER_CORE_NUM=${pcore} CONSUMER_CORE_NUM=${ccore}
         RLC_TB_MODE=1 RLC_GRANT_BYTES=${grant} RLC_AM_WORKQ=1)
     if(${verify})
-        target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+        target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
             RLC_PLAN_VERIFY=1 RLC_SELF_CHECK=1)
     endif()
 endmacro()
@@ -42,15 +45,15 @@ endmacro()
 macro(add_spatz_test_rlc_am name file param1 param2 param3 pcore ccore grant verify)
     set(target_name ${name}_M${param1}_N${param2}_K${param3}_P${pcore}_C${ccore}_am_G${grant})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+    target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
         DATAHEADER="data/data_${param1}_${param2}_${param3}.h"
         PRODUCER_CORE_NUM=${pcore} CONSUMER_CORE_NUM=${ccore}
         RLC_TB_MODE=1 RLC_GRANT_BYTES=${grant})
     if(${verify})
         # Diff the vectorised planner against the scalar reference, and decode
         # every assembled transport block back to check the execute stage.
-        target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+        target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
             RLC_PLAN_VERIFY=1 RLC_SELF_CHECK=1)
     endif()
 endmacro()
@@ -58,8 +61,8 @@ endmacro()
 macro(add_spatz_test_rlc name file param1 param2 param3 pcore ccore)
     set(target_name ${name}_M${param1}_N${param2}_K${param3}_P${pcore}_C${ccore})
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+    target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
         DATAHEADER="data/data_${param1}_${param2}_${param3}.h"
         PRODUCER_CORE_NUM=${pcore} CONSUMER_CORE_NUM=${ccore})
 endmacro()
@@ -88,8 +91,8 @@ add_spatz_test_rlc_am(multi_producer_single_consumer_double_linked_list multi_pr
 macro(add_spatz_test_rlc_probe suffix name file param1 param2 param3)
     set(target_name ${name}_M${param1}_N${param2}_K${param3}${suffix}_probe)
     add_snitch_test(${target_name} ${file})
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+    target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
         DATAHEADER="data/data_${param1}_${param2}_${param3}.h" RLC_PROBE=1 ${ARGN})
 endmacro()
 add_spatz_test_rlc_probe("" multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
@@ -116,8 +119,8 @@ macro(add_spatz_test_rlc_full layout variant name file param1 param2 param3)
             set(target_name ${name}_M${param1}_N${param2}_K${param3}_${layout}${variant})
         endif()
         add_snitch_test(${target_name} ${file})
-        target_link_libraries(test-${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-        target_compile_definitions(test-${SNITCH_TEST_PREFIX}${target_name} PUBLIC
+        target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+        target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${target_name} PUBLIC
             DATAHEADER="data/data_${param1}_${param2}_${param3}_${layout_lc}.h"
             MM_POOL_PAGES=${param3} RLC_PROBE=${probe} ${ARGN})
     endforeach()
@@ -202,9 +205,9 @@ endforeach()
 # in one run.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_novec
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_novec
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_novec
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_novec PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_novec PUBLIC
     DATAHEADER="data/data_1_1350_100.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PLAN_IMPL=0 RLC_SELF_CHECK=1)
@@ -216,8 +219,8 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 macro(add_rlc_am_bisect suffix vecmask)
     set(tn multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_${suffix})
     add_snitch_test(${tn} multi_producer_single_consumer_double_linked_list/main.c)
-    target_link_libraries(test-${SNITCH_TEST_PREFIX}${tn} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-    target_compile_definitions(test-${SNITCH_TEST_PREFIX}${tn} PUBLIC
+    target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${tn} benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+    target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${tn} PUBLIC
         DATAHEADER="data/data_1_1350_100.h"
         PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
         RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1
@@ -239,9 +242,9 @@ add_rlc_am_bisect(v4    4)   # + first-crossing only
 # GVSoC can no longer answer, since its cross-core shared-data path is unsound.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K10_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K10_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K10_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K10_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K10_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_1_1350_10.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -252,9 +255,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # of TC2's work. RLC_SELF_CHECK only, for the same reason as the tbchk target.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M8_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_8_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -265,9 +268,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # entity count; if it also wedges, entity count is implicated on its own.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M48_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_48_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -278,9 +281,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # byte-compares in the verifier -- minutes, not hours.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_1_1350_4.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -292,18 +295,18 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # entirely -- so F5 is the enabler here, not an optimisation.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_wqchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_wqchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_wqchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_wqchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_wqchk PUBLIC
     DATAHEADER="data/data_8_1350_8.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_AM_WORKQ=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_wqchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_wqchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_wqchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_wqchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_wqchk PUBLIC
     DATAHEADER="data/data_48_1350_8.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_AM_WORKQ=1)
@@ -314,18 +317,18 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # GVSoC ladder's axis, at a workload RTL can actually finish.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M8_N1350_K8_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_8_1350_8.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N1350_K8_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_48_1350_8.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -337,9 +340,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # so_next chaining becomes the thing under test.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk PUBLIC
     DATAHEADER="data/data_1_1350_4.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=1024 RLC_SELF_CHECK=1)
@@ -352,18 +355,18 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 #   M32 fails under either       -> success is layout-contingent
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_padshift
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_padshift
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_padshift
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_padshift PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_padshift PUBLIC
     DATAHEADER="data/data_32_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_LAYOUT_PAD=320)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_entpad
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_entpad
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_entpad
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_entpad PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_entpad PUBLIC
     DATAHEADER="data/data_32_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_AM_ENT_PADDED=1)
@@ -374,27 +377,27 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 #   both fail                      -> neither; look elsewhere
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_pad0
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_pad0
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_pad0
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_pad0 PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_pad0 PUBLIC
     DATAHEADER="data/data_16_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_padshift
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_padshift
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_padshift
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_padshift PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_padshift PUBLIC
     DATAHEADER="data/data_16_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_LAYOUT_PAD=320)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_entpad
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_entpad
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_entpad
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_entpad PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_entpad PUBLIC
     DATAHEADER="data/data_16_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_AM_ENT_PADDED=1)
@@ -404,36 +407,36 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # gradual one implies accumulation. Those are different bugs.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M12_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M12_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M12_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M12_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M12_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_12_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M16_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_16_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M24_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M24_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M24_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M24_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M24_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_24_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_tbchk
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_tbchk
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_tbchk
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M32_N1350_K24_P2_C2_am_G8192_tbchk PUBLIC
     DATAHEADER="data/data_32_1350_24.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
@@ -443,9 +446,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # alignment-sensitive vector copy from wrong offset arithmetic.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_scpy
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_scpy
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_scpy
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_scpy PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P2_C2_am_G8192_scpy PUBLIC
     DATAHEADER="data/data_1_1350_100.h"
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_DL_COPY_SCALAR=1)
@@ -455,9 +458,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 # shrink the list). Anything that reproduces here is not a concurrency bug.
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P1_C1_am_G8192
                 multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P1_C1_am_G8192
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P1_C1_am_G8192
                       benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P1_C1_am_G8192 PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K100_P1_C1_am_G8192 PUBLIC
     DATAHEADER="data/data_1_1350_100_p1c1.h"
     PRODUCER_CORE_NUM=1 CONSUMER_CORE_NUM=1
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_PLAN_VERIFY=1 RLC_SELF_CHECK=1)
@@ -472,9 +475,9 @@ target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consu
 foreach(M 8 16 24 32)
   add_snitch_test(multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy
                   multi_producer_single_consumer_double_linked_list/main.c)
-  target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy
+  target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy
                         benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-  target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy PUBLIC
+  target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M${M}_N1350_K24_P2_C2_am_G8192_scpy PUBLIC
       DATAHEADER="data/data_${M}_1350_24.h"
       PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
       RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_DL_COPY_SCALAR=1)
@@ -493,9 +496,9 @@ endforeach()
 # ---------------------------------------------------------------------------
 macro(add_rlc_ul name source dataheader prod cons exec tc tb suffix)
   add_snitch_test(${name}_P${prod}_C${cons}_ul_${suffix} ${source})
-  target_link_libraries(test-${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix}
+  target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix}
                         benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-  target_compile_definitions(test-${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix} PUBLIC
+  target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix} PUBLIC
       DATAHEADER="${dataheader}"
       PRODUCER_CORE_NUM=${prod} CONSUMER_CORE_NUM=${cons}
       RLC_UL_MODE=1 RLC_UL_EXEC=${exec} RLC_UL_TC=${tc} RLC_UL_TB_BYTES=${tb}
@@ -533,7 +536,7 @@ add_rlc_ul(multi_producer_single_consumer_double_linked_list
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
            "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 ci)
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci PUBLIC
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci PUBLIC
     RLC_UL_SDUS=256)
 
 # Same cases with the bitmap work queue (RLC_AM_WORKQ=1), so the scan-free path
@@ -548,5 +551,5 @@ add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_produ
 add_spatz_test_rlc(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 256 800 300 128 128)
 # TC2 with the payload self-check enabled (src vs tgt compare after the barrier)
 add_snitch_test(multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(test-${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc PUBLIC DATAHEADER="data/data_48_800_300.h" RLC_SELF_CHECK=1)
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M48_N800_K300_sc PUBLIC DATAHEADER="data/data_48_800_300.h" RLC_SELF_CHECK=1)

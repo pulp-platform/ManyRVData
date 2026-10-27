@@ -309,6 +309,15 @@ CACHEPOOL_DEFS += -DDATA_WIDTH=$(data_width)
 CACHEPOOL_DEFS += -DADDR_WIDTH=$(addr_width)
 CACHEPOOL_DEFS += -DNUM_BARRIER_SLOTS=$(num_barrier_slots)
 
+# Group-level configuration registers and the reset values shared with the cluster peripheral
+CACHEPOOL_DEFS += -DGROUP_CFG_BASE=$(group_cfg_base)
+CACHEPOOL_DEFS += -DGROUP_CFG_STRIDE=$(group_cfg_stride)
+CACHEPOOL_DEFS += -DL1D_XBAR_OFFSET_RST=$(l1d_xbar_offset_rst)
+CACHEPOOL_DEFS += -DL1D_PRIVATE_RST=$(l1d_private_rst)
+CACHEPOOL_DEFS += -DL1D_PRIVATE_ADDR_RST=$(l1d_private_addr_rst)
+CACHEPOOL_DEFS += -DICACHE_PREFETCH_RST=$(icache_prefetch_rst)
+CACHEPOOL_DEFS += -DBOOTROM_DATA_WIDTH=$(bootrom_data_width)
+
 # Tile configuration
 CACHEPOOL_DEFS += -DREFILL_DATA_WIDTH=$(refill_data_width)
 
@@ -395,7 +404,7 @@ include sim/sim.mk
 TESTS_DIR := $(SOFTWARE_DIR)/tests
 
 # Test-group roots (relative to SOFTWARE_DIR) scanned for data-generated tests.
-TEST_ROOTS := cache sync kernels/fp kernels/int rlc tests
+TEST_ROOTS := cache sync kernels/fp kernels/int rlc control tests
 
 # Auto-discover every test that has a script/gen_data.py.
 # Convention: script/data_<params>.json → data/data_<params>.h
@@ -468,7 +477,11 @@ SW_CMAKE_FLAGS = \
   -DGCC_PATH=${GCC_INSTALL_DIR} \
   -DPYTHON=${PYTHON} \
   -DBUILD_TESTS=ON \
-  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core)
+  -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core) \
+  -DL2_CHANNEL=$(l2_channel) \
+  -DL2_INTERLEAVE=$(l2_interleave) \
+  -DL2_BANK_WIDTH=$(l2_bank_width) \
+  -DL1D_CACHELINE_WIDTH=$(l1d_cacheline_width)
 
 .PHONY: sw
 sw: generate bootrom gen-data

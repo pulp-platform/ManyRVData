@@ -12,7 +12,6 @@ extern __thread struct snrt_team *_snrt_team_current;
 // Used to configure cache xbar's arbitration algorithm
 // Size in Bytes
 void l1d_xbar_config(uint32_t offset);
-void l1d_xbar_commit();
 
 void l1d_commit();
 void l1d_init(uint32_t size);

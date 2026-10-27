@@ -302,7 +302,8 @@ The default boundary is `0xA000_0000`. This means data in `.pdcp_src` (at `0xA00
 
 Flush instructions are issued through the cluster peripheral and dispatched to cache controllers via a two-level controller:
 
-- **Cluster level** (`cachepool_peripheral`): holds the instruction and a per-tile one-hot tile-select mask. Issues the instruction to all tiles simultaneously and tracks completion at tile granularity.
+- **Cluster level** (`cachepool_peripheral`): holds the instruction and a per-tile one-hot tile-select mask. On `L1D_INSN_COMMIT` it sends the instruction, with each group's slice of the mask, to the group-level configuration register of every group over the L2 mesh (`cachepool_group_cfg_sender`), and stays busy until every group has answered.
+- **Group level** (`cachepool_group_cfg`): starts the instruction in its selected tiles and answers only once all of them have finished.
 - **Tile level** (`cachepool_tile`): receives the instruction, determines which of its local cache controllers to activate based on the partition field, and returns a single ready pulse to the cluster controller when all targeted controllers finish.
 
 ### Flush instruction encoding
@@ -342,7 +343,7 @@ l1d_xbar_config(uint32_t offset);
 
 Lower-level, single-shot primitives (`l1d_flush()`, `l1d_private_flush()`, `l1d_shared_flush()`, `l1d_commit()`, `l1d_wait()`) exist for building custom sequences but issue only the register write — the caller is responsible for cluster-wide fence/barrier synchronization around them.
 
-`l1d_addr()` has no hardware completion status bit (unlike flush, which polls `L1D_FLUSH_STATUS` via `l1d_wait()`); its peripheral register write is posted over the interconnect, so it bridges the gap with a fixed-cycle delay on core 0 before the final barrier.
+Only flush/invalidate instructions are committed. The configuration registers (`L1D_PRIVATE`, `L1D_ADDR`, `XBAR_OFFSET`, `ICACHE_PREFETCH_ENABLE`) need no commit: when a value changes, the peripheral sends it to every group on its own. `L1D_FLUSH_STATUS` stays busy until every group has applied it, so `l1d_part()`, `l1d_addr()` and `l1d_xbar_config()` end with `l1d_wait()`. Writing the value a register already holds sends nothing.
 
 > Changing the partition mode, boundary address, or crossbar offset while the cache contains valid data requires a flush first — `l1d_xbar_config()` and `l1d_part()` flush internally; `l1d_addr()` does not (call a cluster flush before it if needed).
 

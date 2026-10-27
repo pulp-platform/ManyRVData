@@ -10,6 +10,7 @@
 
 
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 `include "axi/typedef.svh"
 
 module cachepool_group_noc_wrapper
@@ -75,7 +76,6 @@ module cachepool_group_noc_wrapper
     input  logic              [9:0]                                       hart_base_id_i,
     input  logic              [TileIDWidth-1:0]                           tile_base_id_i,
     input  axi_addr_t                                                     cluster_base_addr_i,
-    input  axi_addr_t                                                     private_start_addr_i,
     // L2 refill TCDM mesh: 4 directions (North=0, East=1, South=2, West=3)
     output l2_noc_req_t [3:0] l2_req_o,
     output logic        [3:0] l2_req_valid_o,
@@ -89,16 +89,25 @@ module cachepool_group_noc_wrapper
     input  l2_noc_rsp_t [3:0] l2_rsp_i,
     input  logic        [3:0] l2_rsp_valid_i,
     output logic        [3:0] l2_rsp_ready_o,
-    // L2 mesh: endpoint ID and source-routing table from floogen
+    // Narrow L2 mesh (peripheral accesses, group configuration): same 4 directions
+    output peri_noc_req_t [3:0] peri_req_o,
+    output logic          [3:0] peri_req_valid_o,
+    input  logic          [3:0] peri_req_ready_i,
+    input  peri_noc_req_t [3:0] peri_req_i,
+    input  logic          [3:0] peri_req_valid_i,
+    output logic          [3:0] peri_req_ready_o,
+    output peri_noc_rsp_t [3:0] peri_rsp_o,
+    output logic          [3:0] peri_rsp_valid_o,
+    input  logic          [3:0] peri_rsp_ready_i,
+    input  peri_noc_rsp_t [3:0] peri_rsp_i,
+    input  logic          [3:0] peri_rsp_valid_i,
+    output logic          [3:0] peri_rsp_ready_o,
+    // L2 mesh (wide and narrow): endpoint ID and source-routing table from floogen
     input  floo_cachepool_noc_pkg::id_t                                                     l2_id_i,
     input  floo_cachepool_noc_pkg::route_t [floo_cachepool_noc_pkg::RouteCfg.NumRoutes-1:0] l2_route_table_i,
     output icache_l1_events_t [NumCC-1:0]                                 icache_events_o,
-    input  logic                                                          icache_prefetch_enable_i,
-    input  logic              [$clog2(AxiAddrWidth)-1:0]                  dynamic_offset_i,
-    input  logic              [L1PrivWidth-1:0]                           l1d_private_i,
-    input  cache_insn_t                                                   l1d_insn_i,
-    input  logic                                                          l1d_insn_valid_i,
-    output logic              [NumTilesPerGroup-1:0]                      l1d_insn_ready_o,
+    // Flush interlock from the cluster peripheral; the rest of the L1D/xbar configuration
+    // arrives over the narrow L2 mesh at the group configuration register.
     input  logic              [NumTilesPerGroup-1:0]                      l1d_busy_i,
     input  impl_in_t          [NrSramCfg-1:0]                             impl_i,
     output logic                                                          error_o,
@@ -156,32 +165,24 @@ module cachepool_group_noc_wrapper
   remote_group_rsp_t [NumRemoteGroupPortGroup-1:0] remote_group_rsp_to_group;
 
 
-  // Input cuts on some registered signals. The barrier link is not cut
+  // Input cut on the flush interlock. The barrier link is not cut
   // here -- it is optionally cut inside cachepool_group itself, controlled
   // by RegisterBarrier, on top of the group_barrier FSM's own registered state.
-  logic       [$clog2(AxiAddrWidth)-1:0]  dynamic_offset_d, dynamic_offset_q;
-  logic       [L1PrivWidth-1:0]           l1d_private_d,    l1d_private_q;
-  cache_insn_t                            l1d_insn_d,       l1d_insn_q;
-  logic                                   l1d_insn_valid_d, l1d_insn_valid_q;
-  logic       [NumTilesPerGroup-1:0]      l1d_insn_ready_d, l1d_insn_ready_q;
   logic       [NumTilesPerGroup-1:0]      l1d_busy_d,       l1d_busy_q;
-  axi_addr_t                              private_start_addr_d, private_start_addr_q;
 
-  `FF(dynamic_offset_q, dynamic_offset_d, '0, clk_i, rst_ni)
-  `FF(l1d_private_q,    l1d_private_d,    '0, clk_i, rst_ni)
-  `FF(l1d_insn_q,       l1d_insn_d,       '0, clk_i, rst_ni)
-  `FF(l1d_insn_valid_q, l1d_insn_valid_d, '0, clk_i, rst_ni)
-  `FF(l1d_insn_ready_q, l1d_insn_ready_d, '0, clk_i, rst_ni)
   `FF(l1d_busy_q,       l1d_busy_d,       '0, clk_i, rst_ni)
-  `FF(private_start_addr_q, private_start_addr_d, '0, clk_i, rst_ni)
 
-  assign dynamic_offset_d      = dynamic_offset_i;
-  assign l1d_private_d         = l1d_private_i;
-  assign l1d_insn_d            = l1d_insn_i;
-  assign l1d_insn_valid_d      = l1d_insn_valid_i;
-  assign l1d_insn_ready_o      = l1d_insn_ready_q;
   assign l1d_busy_d            = l1d_busy_i;
-  assign private_start_addr_d  = private_start_addr_i;
+
+  // L1D/xbar configuration of the tiles, held by the group configuration register (i_group_cfg)
+  // and written by the cluster peripheral over the narrow L2 mesh.
+  xbar_offset_t                           dynamic_offset_q;
+  logic       [L1PrivWidth-1:0]           l1d_private_q;
+  axi_addr_t                              private_start_addr_q;
+  logic                                   icache_prefetch_enable;
+  cache_insn_t                            l1d_insn_q;
+  logic                                   l1d_insn_valid_q;
+  logic       [NumTilesPerGroup-1:0]      l1d_insn_ready;
 
   // -------------------------------------------------------------------------
   // Mesh signals [tile][ch][dir=3:0] and transposition to/from ports
@@ -567,8 +568,8 @@ module cachepool_group_noc_wrapper
   // -------------------------------------------------------------------------
   // L2 path: floo_tcdm_chimney (MgrPort) + floo_router (source routing)
   // -------------------------------------------------------------------------
-  // The chimney maps addresses to destination IDs (SAM), looks up source routes and
-  // packs/unpacks flits; two floo_routers (req + rsp) form the 5-port source-routed mesh.
+  // Chimney: address -> destination ID (SAM) -> source route; two floo_routers form the mesh.
+  // It only carries the group's own refills (no subordinate port); peripherals use the narrow mesh.
 
   // Internal L2 reqrsp between group and chimney
   l2_req_t l2_group_req;
@@ -589,7 +590,7 @@ module cachepool_group_noc_wrapper
   logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_valid_out;
   logic        [floo_pkg::Eject:floo_pkg::North] l2_router_rsp_ready_in;
 
-  // Manager chimney: group REQRSP ↔ flit inject/eject at router Eject port
+  // Chimney at the router Eject port: manager for the group's REQRSP.
   floo_tcdm_chimney #(
     .RouteCfg   ( floo_cachepool_noc_pkg::RouteCfg    ),
     .EnMgrPort  ( 1'b1                                ),
@@ -631,11 +632,11 @@ module cachepool_group_noc_wrapper
     .floo_req_o       ( l2_router_req_in[floo_pkg::Eject]        ),
     .floo_req_valid_o ( l2_router_req_valid_in[floo_pkg::Eject]  ),
     .floo_req_ready_i ( l2_router_req_ready_out[floo_pkg::Eject] ),
-    // Request flit: eject from request router (unused for MgrPort)
+    // Request flit: eject from request router (none expected, drained)
     .floo_req_i       ( l2_router_req_out[floo_pkg::Eject]       ),
     .floo_req_valid_i ( l2_router_req_valid_out[floo_pkg::Eject] ),
     .floo_req_ready_o ( l2_router_req_ready_in[floo_pkg::Eject]  ),
-    // Response flit: inject into response router (unused for MgrPort)
+    // Response flit: no subordinate port, nothing injected
     .floo_rsp_o       ( l2_router_rsp_in[floo_pkg::Eject]        ),
     .floo_rsp_valid_o ( l2_router_rsp_valid_in[floo_pkg::Eject]  ),
     .floo_rsp_ready_i ( l2_router_rsp_ready_out[floo_pkg::Eject] ),
@@ -644,6 +645,9 @@ module cachepool_group_noc_wrapper
     .floo_rsp_valid_i ( l2_router_rsp_valid_out[floo_pkg::Eject] ),
     .floo_rsp_ready_o ( l2_router_rsp_ready_in[floo_pkg::Eject]  )
   );
+
+  `ASSERT(L2NoReqEject, !l2_router_req_valid_out[floo_pkg::Eject], clk_i, !rst_ni,
+      "cachepool_group_noc_wrapper: request ejected on the wide L2 mesh")
 
   // Request router (source routing, 5 ports: N/E/S/W/Eject)
   floo_router #(
@@ -725,6 +729,204 @@ module cachepool_group_noc_wrapper
   end
 
   // -------------------------------------------------------------------------
+  // Narrow L2 path: floo_tcdm_chimney (MgrPort + SbrPort) + floo_router pair
+  // -------------------------------------------------------------------------
+  // Same topology, IDs and routes as the wide mesh. Manager port: the group's core accesses to
+  // the cluster peripheral; subordinate port: its writes to the group configuration register.
+
+  // Narrow reqrsp between group and chimney
+  peri_narrow_req_t   periph_group_req;
+  peri_narrow_rsp_t   periph_group_rsp;
+  peri_noc_req_chan_t periph_mgr_req;
+
+  // Router port signals [Eject:North] = [4:0]
+  peri_noc_req_t [floo_pkg::Eject:floo_pkg::North] peri_router_req_in;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_req_valid_in;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_req_ready_out;
+  peri_noc_req_t [floo_pkg::Eject:floo_pkg::North] peri_router_req_out;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_req_valid_out;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_req_ready_in;
+
+  peri_noc_rsp_t [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_in;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_valid_in;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_ready_out;
+  peri_noc_rsp_t [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_out;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_valid_out;
+  logic          [floo_pkg::Eject:floo_pkg::North] peri_router_rsp_ready_in;
+
+  // Group configuration register on the chimney's subordinate port
+  peri_noc_req_chan_t    cfg_sbr_req;
+  logic                  cfg_sbr_req_valid;
+  logic                  cfg_sbr_req_ready;
+  peri_narrow_rsp_chan_t cfg_sbr_rsp;
+  logic                  cfg_sbr_rsp_valid;
+  logic                  cfg_sbr_rsp_ready;
+
+  // The flit has no AMO field (checked in cachepool_group)
+  assign periph_mgr_req = '{
+    addr:  periph_group_req.q.addr,
+    write: periph_group_req.q.write,
+    data:  periph_group_req.q.data,
+    strb:  periph_group_req.q.strb,
+    size:  periph_group_req.q.size,
+    user:  periph_group_req.q.user
+  };
+
+  floo_tcdm_chimney #(
+    .RouteCfg   ( PeriCoreRouteCfg                    ),
+    .EnMgrPort  ( 1'b1                                ),
+    .EnSbrPort  ( 1'b1                                ),
+    .id_t       ( floo_cachepool_noc_pkg::id_t        ),
+    .route_t    ( floo_cachepool_noc_pkg::route_t     ),
+    .dst_t      ( floo_cachepool_noc_pkg::route_t     ),
+    .hdr_t      ( l2_noc_hdr_t                        ),
+    .req_chan_t ( peri_noc_req_chan_t                 ),
+    .rsp_chan_t ( peri_narrow_rsp_chan_t              ),
+    .floo_req_t ( peri_noc_req_t                      ),
+    .floo_rsp_t ( peri_noc_rsp_t                      ),
+    .addr_t     ( axi_addr_t                          ),
+    .sam_rule_t ( floo_cachepool_noc_pkg::sam_rule_t  ),
+    .Sam        ( PeriCoreSam                         )
+  ) i_peri_chimney (
+    .clk_i            ( clk_i                                      ),
+    .rst_ni           ( rst_ni                                     ),
+    .test_enable_i    ( 1'b0                                       ),
+    // Manager port: group core accesses
+    .mgr_req_i        ( periph_mgr_req                             ),
+    .mgr_req_valid_i  ( periph_group_req.q_valid                   ),
+    .mgr_req_ready_o  ( periph_group_rsp.q_ready                   ),
+    .mgr_rsp_o        ( periph_group_rsp.p                         ),
+    .mgr_rsp_valid_o  ( periph_group_rsp.p_valid                   ),
+    .mgr_rsp_ready_i  ( periph_group_req.p_ready                   ),
+    // Subordinate port: group configuration register, responses return to the requester
+    .sbr_req_o        ( cfg_sbr_req                                ),
+    .sbr_req_valid_o  ( cfg_sbr_req_valid                          ),
+    .sbr_req_ready_i  ( cfg_sbr_req_ready                          ),
+    .sbr_rsp_i        ( cfg_sbr_rsp                                ),
+    .sbr_rsp_valid_i  ( cfg_sbr_rsp_valid                          ),
+    .sbr_rsp_ready_o  ( cfg_sbr_rsp_ready                          ),
+    .sbr_txn_id_i     ( cfg_sbr_rsp.user.l2_src_id                 ),
+    // Routing
+    .id_i             ( l2_id_i                                    ),
+    .route_table_i    ( l2_route_table_i                           ),
+    // Request flits
+    .floo_req_o       ( peri_router_req_in[floo_pkg::Eject]        ),
+    .floo_req_valid_o ( peri_router_req_valid_in[floo_pkg::Eject]  ),
+    .floo_req_ready_i ( peri_router_req_ready_out[floo_pkg::Eject] ),
+    .floo_req_i       ( peri_router_req_out[floo_pkg::Eject]       ),
+    .floo_req_valid_i ( peri_router_req_valid_out[floo_pkg::Eject] ),
+    .floo_req_ready_o ( peri_router_req_ready_in[floo_pkg::Eject]  ),
+    // Response flits
+    .floo_rsp_o       ( peri_router_rsp_in[floo_pkg::Eject]        ),
+    .floo_rsp_valid_o ( peri_router_rsp_valid_in[floo_pkg::Eject]  ),
+    .floo_rsp_ready_i ( peri_router_rsp_ready_out[floo_pkg::Eject] ),
+    .floo_rsp_i       ( peri_router_rsp_out[floo_pkg::Eject]       ),
+    .floo_rsp_valid_i ( peri_router_rsp_valid_out[floo_pkg::Eject] ),
+    .floo_rsp_ready_o ( peri_router_rsp_ready_in[floo_pkg::Eject]  )
+  );
+
+  cachepool_group_cfg #(
+    .req_chan_t ( peri_noc_req_chan_t    ),
+    .rsp_chan_t ( peri_narrow_rsp_chan_t ),
+    .user_t     ( peri_narrow_user_t     )
+  ) i_group_cfg (
+    .clk_i                    ( clk_i                  ),
+    .rst_ni                   ( rst_ni                 ),
+    .req_i                    ( cfg_sbr_req            ),
+    .req_valid_i              ( cfg_sbr_req_valid      ),
+    .req_ready_o              ( cfg_sbr_req_ready      ),
+    .rsp_o                    ( cfg_sbr_rsp            ),
+    .rsp_valid_o              ( cfg_sbr_rsp_valid      ),
+    .rsp_ready_i              ( cfg_sbr_rsp_ready      ),
+    .dynamic_offset_o         ( dynamic_offset_q       ),
+    .l1d_private_o            ( l1d_private_q          ),
+    .private_start_addr_o     ( private_start_addr_q   ),
+    .icache_prefetch_enable_o ( icache_prefetch_enable ),
+    .l1d_insn_o               ( l1d_insn_q             ),
+    .l1d_insn_valid_o         ( l1d_insn_valid_q       ),
+    .l1d_insn_ready_i         ( l1d_insn_ready         )
+  );
+
+  // Narrow request router (source routing, 5 ports: N/E/S/W/Eject)
+  floo_router #(
+    .NumRoutes      ( 5                           ),
+    .NumVirtChannels( 1                           ),
+    .InFifoDepth    ( 2                           ),
+    .OutFifoDepth   ( 2                           ),
+    .RouteAlgo      ( floo_pkg::SourceRouting     ),
+    .id_t           ( floo_cachepool_noc_pkg::id_t),
+    .flit_t         ( peri_noc_req_t              ),
+    .hdr_t          ( l2_noc_hdr_t                ),
+    .addr_rule_t    ( logic                       ),
+    .red_req_t      ( logic                       ),
+    .red_rsp_t      ( logic                       )
+  ) i_peri_req_router (
+    .clk_i          ( clk_i                       ),
+    .rst_ni         ( rst_ni                      ),
+    .test_enable_i  ( 1'b0                        ),
+    .xy_id_i        ( '0                          ),
+    .id_route_map_i ( '0                          ),
+    .valid_i        ( peri_router_req_valid_in    ),
+    .ready_o        ( peri_router_req_ready_out   ),
+    .data_i         ( peri_router_req_in          ),
+    .credit_o       (                             ),
+    .valid_o        ( peri_router_req_valid_out   ),
+    .ready_i        ( peri_router_req_ready_in    ),
+    .data_o         ( peri_router_req_out         ),
+    .credit_i       ( '0                          ),
+    .offload_req_o  (                             ),
+    .offload_rsp_i  ( '0                          )
+  );
+
+  // Narrow response router (source routing, 5 ports: N/E/S/W/Eject)
+  floo_router #(
+    .NumRoutes      ( 5                           ),
+    .NumVirtChannels( 1                           ),
+    .InFifoDepth    ( 2                           ),
+    .OutFifoDepth   ( 2                           ),
+    .RouteAlgo      ( floo_pkg::SourceRouting     ),
+    .id_t           ( floo_cachepool_noc_pkg::id_t),
+    .flit_t         ( peri_noc_rsp_t              ),
+    .hdr_t          ( l2_noc_hdr_t                ),
+    .addr_rule_t    ( logic                       ),
+    .red_req_t      ( logic                       ),
+    .red_rsp_t      ( logic                       )
+  ) i_peri_rsp_router (
+    .clk_i          ( clk_i                       ),
+    .rst_ni         ( rst_ni                      ),
+    .test_enable_i  ( 1'b0                        ),
+    .xy_id_i        ( '0                          ),
+    .id_route_map_i ( '0                          ),
+    .valid_i        ( peri_router_rsp_valid_in    ),
+    .ready_o        ( peri_router_rsp_ready_out   ),
+    .data_i         ( peri_router_rsp_in          ),
+    .credit_o       (                             ),
+    .valid_o        ( peri_router_rsp_valid_out   ),
+    .ready_i        ( peri_router_rsp_ready_in    ),
+    .data_o         ( peri_router_rsp_out         ),
+    .credit_i       ( '0                          ),
+    .offload_req_o  (                             ),
+    .offload_rsp_i  ( '0                          )
+  );
+
+  // Expose [West:North] narrow router ports (indices 3:0) to cluster for mesh wiring
+  for (genvar d = 0; d < 4; d++) begin : gen_peri_mesh_ports
+    assign peri_req_o[d]                = peri_router_req_out[d];
+    assign peri_req_valid_o[d]          = peri_router_req_valid_out[d];
+    assign peri_router_req_ready_in[d]  = peri_req_ready_i[d];
+    assign peri_router_req_in[d]        = peri_req_i[d];
+    assign peri_router_req_valid_in[d]  = peri_req_valid_i[d];
+    assign peri_req_ready_o[d]          = peri_router_req_ready_out[d];
+
+    assign peri_rsp_o[d]                = peri_router_rsp_out[d];
+    assign peri_rsp_valid_o[d]          = peri_router_rsp_valid_out[d];
+    assign peri_router_rsp_ready_in[d]  = peri_rsp_ready_i[d];
+    assign peri_router_rsp_in[d]        = peri_rsp_i[d];
+    assign peri_router_rsp_valid_in[d]  = peri_rsp_valid_i[d];
+    assign peri_rsp_ready_o[d]          = peri_router_rsp_ready_out[d];
+  end
+
+  // -------------------------------------------------------------------------
   // Group instantiation
   // -------------------------------------------------------------------------
   cachepool_group #(
@@ -781,6 +983,8 @@ module cachepool_group_noc_wrapper
     .l2_req_o                 ( l2_group_req                ),
     .l2_rsp_i                 ( l2_group_rsp                ),
     .l2_group_id_i            ( l2_id_i                     ),
+    .periph_req_o             ( periph_group_req            ),
+    .periph_rsp_i             ( periph_group_rsp            ),
     .remote_group_req_o       ( remote_group_req_from_group ),
     .remote_group_rsp_i       ( remote_group_rsp_to_group   ),
     .remote_group_req_i       ( remote_group_req_to_group   ),
@@ -788,12 +992,12 @@ module cachepool_group_noc_wrapper
     .group_barrier_o          ( group_barrier_o             ),
     .barrier_done_i           ( barrier_done_i              ),
     .icache_events_o          ( icache_events_o             ),
-    .icache_prefetch_enable_i ( icache_prefetch_enable_i    ),
+    .icache_prefetch_enable_i ( icache_prefetch_enable      ),
     .dynamic_offset_i         ( dynamic_offset_q            ),
     .l1d_private_i            ( l1d_private_q               ),
     .l1d_insn_i               ( l1d_insn_q                  ),
     .l1d_insn_valid_i         ( l1d_insn_valid_q            ),
-    .l1d_insn_ready_o         ( l1d_insn_ready_d            ),
+    .l1d_insn_ready_o         ( l1d_insn_ready              ),
     .l1d_busy_i               ( l1d_busy_q                  )
   );
 

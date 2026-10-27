@@ -6,6 +6,7 @@
 
 `include "axi/typedef.svh"
 `include "common_cells/registers.svh"
+`include "common_cells/assertions.svh"
 `include "register_interface/typedef.svh"
 
 /// Group implementation for CachePool
@@ -136,9 +137,12 @@ module cachepool_group
     input  axi_addr_t                                   cluster_base_addr_i,
     /// Partitioning address
     input  axi_addr_t                                   private_start_addr_i,
-    /// L2 refill reqrsp port (single merged output: cache refill + iCache/peripheral)
+    /// L2 refill reqrsp port (single merged output: cache refill + iCache)
     output l2_req_t                                     l2_req_o,
     input  l2_rsp_t                                     l2_rsp_i,
+    /// Narrow peripheral reqrsp port (single merged output of the tiles' core accesses)
+    output peri_narrow_req_t                            periph_req_o,
+    input  peri_narrow_rsp_t                            periph_rsp_i,
     /// This group's L2 refill mesh endpoint ID, stamped into refill_user_t.l2_src_id so the
     /// HBM chimney routes responses back without an in-order src_id FIFO.
     input  floo_cachepool_noc_pkg::id_t                 l2_group_id_i,
@@ -268,8 +272,8 @@ module cachepool_group
   cache_trans_rsp_t [NumL1CacheCtrlLocal-1:0] cache_refill_rsp;
 
   // Per-tile peripheral REQRSP (narrow 32b, from tile core mux)
-  periph_req_t         [NumTilesPerGroup-1:0] tile_periph_req;
-  periph_rsp_t         [NumTilesPerGroup-1:0] tile_periph_rsp;
+  peri_narrow_req_t    [NumTilesPerGroup-1:0] tile_periph_req;
+  peri_narrow_rsp_t    [NumTilesPerGroup-1:0] tile_periph_rsp;
 
   // L2 Group ICache AXI master output (from axi_hier_interco)
   axi_mst_cache_req_t  axi_l2icache_mst_req;
@@ -364,12 +368,11 @@ module cachepool_group
 
   // style-waive: COMMENT_BLOCK: port layout table
   // ---------------------
-  // Wiring: assemble flat xbar input from refill + peripheral + iCache paths
+  // Wiring: assemble flat xbar input from refill + iCache paths
   // ---------------------
-  // Port layout per tile (NumClusterMst = NumL1CtrlTile + 2):
+  // Port layout per tile (NumClusterMst = NumL1CtrlTile + 1):
   //   p = 0..NumL1CtrlTile-1  → refill (bank_id = p, set by tile)
-  //   p = NumL1CtrlTile       → peripheral (bank_id = BankIdPeriph)
-  //   p = NumL1CtrlTile+1     → iCache (bank_id = BankIdICache, only tile 0)
+  //   p = NumL1CtrlTile       → iCache (bank_id = BankIdICache, only tile 0)
   always_comb begin
     for (int t = 0; t < NumTilesPerGroup; t++) begin
       for (int p = 0; p < NumClusterMst; p++) begin
@@ -388,32 +391,6 @@ module cachepool_group
           tile_rsp_ready [xbar_idx]                  = cache_refill_req[refill_idx].p_ready;
           tile_req_chan  [xbar_idx].user.tile_id     = t;
           tile_req_chan  [xbar_idx].user.l2_src_id   = l2_group_id_i;
-
-        end else if (p == BankIdPeriph) begin
-          // Peripheral path: narrow REQRSP directly connected (data width mismatch — placeholder)
-          tile_req_chan  [xbar_idx]                  = '0;
-          tile_req_chan  [xbar_idx].addr             = scrambleAddr(tile_periph_req[t].q.addr);
-          tile_req_chan  [xbar_idx].write            = tile_periph_req[t].q.write;
-          tile_req_chan  [xbar_idx].amo              = tile_periph_req[t].q.amo;
-          tile_req_chan  [xbar_idx].size             = tile_periph_req[t].q.size;
-          tile_req_chan  [xbar_idx].data             = axi_wide_data_t'(tile_periph_req[t].q.data);
-          tile_req_chan  [xbar_idx].strb             = axi_wide_strb_t'(tile_periph_req[t].q.strb);
-          tile_req_chan  [xbar_idx].user.tile_id     = t;
-          tile_req_chan  [xbar_idx].user.bank_id     = BankIdPeriph;
-          tile_req_chan  [xbar_idx].user.l2_src_id   = l2_group_id_i;
-          // Borrow the info field to carry req_id through the mesh
-          tile_req_chan  [xbar_idx].user.info        = cache_info_t'(tile_periph_req[t].q.user.req_id);
-          tile_req_valid [xbar_idx]                  = tile_periph_req[t].q_valid;
-          tile_periph_rsp[t].q_ready                 = tile_req_ready[xbar_idx];
-
-          tile_periph_rsp[t].p.data                  = tile_rsp_chan[xbar_idx].data[31:0];
-          tile_periph_rsp[t].p.error                 = tile_rsp_chan[xbar_idx].error;
-          tile_periph_rsp[t].p.write                 = tile_rsp_chan[xbar_idx].write;
-          // Restore req_id from the info field; zero other tcdm_user fields
-          tile_periph_rsp[t].p.user                  = '0;
-          tile_periph_rsp[t].p.user.req_id           = reqid_t'(tile_rsp_chan[xbar_idx].user.info);
-          tile_periph_rsp[t].p_valid                 = tile_rsp_valid[xbar_idx];
-          tile_rsp_ready [xbar_idx]                  = tile_periph_req[t].p_ready;
 
         end else begin
           // iCache path: only tile 0 active
@@ -512,6 +489,67 @@ module cachepool_group
                      + l2_rsp_i.p.user.bank_id;
   end
 
+
+  // ---------------------
+  // Peripheral mux: tiles' narrow core accesses -> one narrow port. Each request is stamped with
+  // its tile and this group's endpoint ID; responses are routed back by user.tile_id.
+  // ---------------------
+  typedef logic [cf_math_pkg::idx_width(NumTilesPerGroup)-1:0] periph_tile_sel_t;
+
+  peri_narrow_req_chan_t [NumTilesPerGroup-1:0] periph_tile_req;
+  logic                  [NumTilesPerGroup-1:0] periph_tile_req_valid, periph_tile_req_ready;
+  peri_narrow_rsp_chan_t [NumTilesPerGroup-1:0] periph_tile_rsp;
+  logic                  [NumTilesPerGroup-1:0] periph_tile_rsp_valid, periph_tile_rsp_ready;
+  periph_tile_sel_t                             periph_rsp_sel;
+
+  for (genvar t = 0; t < NumTilesPerGroup; t++) begin : gen_periph_tile
+    always_comb begin
+      periph_tile_req[t]                = tile_periph_req[t].q;
+      periph_tile_req[t].user.tile_id   = t;
+      periph_tile_req[t].user.l2_src_id = l2_group_id_i;
+    end
+    assign periph_tile_req_valid[t]   = tile_periph_req[t].q_valid;
+    assign periph_tile_rsp_ready[t]   = tile_periph_req[t].p_ready;
+    assign tile_periph_rsp[t].q_ready = periph_tile_req_ready[t];
+    assign tile_periph_rsp[t].p       = periph_tile_rsp[t];
+    assign tile_periph_rsp[t].p_valid = periph_tile_rsp_valid[t];
+  end
+
+  assign periph_rsp_sel = periph_rsp_i.p.user.tile_id;
+
+  reqrsp_xbar #(
+    .NumInp          ( NumTilesPerGroup       ),
+    .NumOut          ( 1                      ),
+    .PipeReg         ( 1'b1                   ),
+    .tcdm_req_chan_t ( peri_narrow_req_chan_t ),
+    .tcdm_rsp_chan_t ( peri_narrow_rsp_chan_t ),
+    .mst_sel_t       ( periph_tile_sel_t      )
+  ) i_periph_xbar (
+    .clk_i           ( clk_i                  ),
+    .rst_ni          ( rst_ni                 ),
+    .slv_req_i       ( periph_tile_req        ),
+    .slv_rr_i        ( '0                     ),
+    .slv_req_valid_i ( periph_tile_req_valid  ),
+    .slv_req_ready_o ( periph_tile_req_ready  ),
+    .slv_rsp_o       ( periph_tile_rsp        ),
+    .slv_rsp_valid_o ( periph_tile_rsp_valid  ),
+    .slv_rsp_ready_i ( periph_tile_rsp_ready  ),
+    .slv_sel_i       ( '0                     ),
+    .slv_selected_o  ( /* unused */           ),
+    .mst_req_o       ( periph_req_o.q         ),
+    .mst_req_valid_o ( periph_req_o.q_valid   ),
+    .mst_req_ready_i ( periph_rsp_i.q_ready   ),
+    .mst_rsp_i       ( periph_rsp_i.p         ),
+    .mst_rr_i        ( '0                     ),
+    .mst_rsp_valid_i ( periph_rsp_i.p_valid   ),
+    .mst_rsp_ready_o ( periph_req_o.p_ready   ),
+    .mst_sel_i       ( periph_rsp_sel         )
+  );
+
+  // The narrow L2 mesh carries no AMO field: atomics to the peripherals are a software bug.
+  `ASSERT(PeriphNoAmo, periph_req_o.q_valid |-> (periph_req_o.q.amo == reqrsp_pkg::AMONone),
+      clk_i, !rst_ni, $sformatf("cachepool_group: atomic to peripheral address 0x%08x",
+      periph_req_o.q.addr))
 
   // Tile remote access signals
   // In/Out relative to the tile (out--leave a tile; in--enter a tile)

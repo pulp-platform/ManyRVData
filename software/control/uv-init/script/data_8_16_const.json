@@ -1,0 +1,6 @@
+// Small constant-data smoke test: U = M everywhere, V = N * M
+{
+    M: 8,
+    N: 16,
+    init: "const"
+}

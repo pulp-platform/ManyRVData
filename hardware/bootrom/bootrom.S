@@ -9,10 +9,13 @@
   .global BOOTDATA
 
 _start:
-  la      t1, exception
+  // lla, not la: la loads the address from the GOT, a 32-bit data read of the bootrom.
+  // The bootrom is only served on the wide L2 path (instruction refills), so it must
+  // never see data loads.
+  lla     t1, exception
   csrw    mtvec, t1
   csrr    a0, mhartid
-  la      a1, BOOTDATA
+  lla     a1, BOOTDATA
 
   // Enable MSI interrupt
   csrw mie, 0xF

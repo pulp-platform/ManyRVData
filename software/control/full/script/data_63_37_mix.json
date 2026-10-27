@@ -1,0 +1,8 @@
+// Odd sizes with clamping in half of the U rows: the update pass skips the
+// others, and the column fix-up rebuilds their U
+{
+    M: 63,
+    N: 37,
+    seed: 2,
+    init: "mix"
+}

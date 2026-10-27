@@ -1,0 +1,7 @@
+// Benchmark size (see ../../README.md), state at the start of iteration 40
+{
+    M: 64,
+    N: 128,
+    J: 40,
+    seed: 1
+}
