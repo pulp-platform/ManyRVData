@@ -1782,7 +1782,7 @@ module cachepool_tile
   `ASSERT_INIT(CheckLineSplit, (NumWordPerLine % PartSplit) == 0);
   // Check that the cluster base address aligns to the TCDMSize.
   // While the L1 bypass is on, its range starts inside DRAM (only DRAM converters handle it)
-  `ASSERT(L1BypassStartInDram, l1d_bypass_i |->
+  `ASSERT(L1BypassStartInDram, L1BypassEn && l1d_bypass_i |->
           ((private_start_addr_i >= DramAddr) && (private_start_addr_i < DramAddr + DramSize)))
   `ASSERT(ClusterBaseAddrAlign, ((TCDMSize - 1) & cluster_base_addr_i) == 0)
 

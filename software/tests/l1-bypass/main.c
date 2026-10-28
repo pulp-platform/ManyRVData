@@ -23,6 +23,7 @@
 // The buffer sits at the start of .l1_bypass and every word is preloaded with
 // its own address, so a word returned from the wrong slot, part or line is
 // caught by value. Each core works on its own slice:
+//   0. switching the bypass keeps dirty cached data (no implicit invalidate)
 //   1. scalar read of the preloaded pattern
 //   2. vector unit-stride and strided read of the preloaded pattern
 //   3. scalar word/halfword/byte writes, read-after-write
@@ -79,6 +80,16 @@ static uint32_t prv_buf[T_WORDS] __attribute__((section(".pdcp_src"), used)) = {
 #define MAX_SLICE_WORDS (BYP_WORDS / 16u)
 static uint32_t vbuf[MAX_CORES][MAX_SLICE_WORDS] __attribute__((section(".data")));
 static int      error_cnt[MAX_CORES] __attribute__((section(".data")));
+
+// Part 0: a cached value that is dirty when the bypass is switched
+#define CANARY_INIT 0xDEADBEEFu
+#define CANARY_NEW  0x1234ABCDu
+static volatile uint32_t canary __attribute__((section(".data"))) = CANARY_INIT;
+
+// Self-check of the reporting: 1 makes the last core report one error in part 1
+#ifndef LBYP_INJECT_ERR
+#define LBYP_INJECT_ERR 0
+#endif
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -184,9 +195,26 @@ int main() {
   const int      is_primary = snrt_cluster_is_primary();
   int num_fails = 0;
 
+  // Buffers are sized for MAX_CORES: reject larger clusters on every hart, before
+  // any collective call, so nothing runs out of bounds or waits in a barrier.
+  if (num_cores > MAX_CORES) {
+    if (snrt_cluster_core_idx() == 0) {
+      printf("FATAL: l1-bypass supports at most %u VPUs (got %u)\n", MAX_CORES, num_cores);
+    }
+    snrt_cluster_hw_barrier();
+    return -1;
+  }
+
+  // 0. Dirty cached data survives switching the bypass on and off
+  if (snrt_cluster_core_idx() == 0) {
+    canary = CANARY_NEW;
+  }
+  l1d_bypass(1);
+  l1d_bypass(0);
+  const int canary_ok = (canary == CANARY_NEW);
+
   // All banks tile-private, private range from BYP_BASE up, bypass on. Every hart
-  // calls the l1d_* helpers (they use the cluster barrier). l1d_part() goes first:
-  // a commit re-issues the last L1D instruction, which l1d_part() leaves at flush.
+  // calls the l1d_* helpers (they use the cluster barrier).
   l1d_part(snrt_cluster_vpu_per_tile());
   l1d_addr(BYP_BASE);
   l1d_bypass(1);
@@ -206,9 +234,11 @@ int main() {
 
   if (cid == 0) {
     printf("*** L1 bypass test ***\n");
+    printf("0  bypass switch keeps dirty data: %s\n", canary_ok ? "PASS" : "FAIL");
+    num_fails += !canary_ok;
     printf("Cores:%u  buffer:0x%x  slice:%u words\n", num_cores, (uint32_t)byp_buf, slice);
-    if ((uint32_t)byp_buf != BYP_BASE || (uint32_t)prv_buf != PRV_BASE || num_cores > MAX_CORES) {
-      printf("FATAL: buffers not at 0x%x / 0x%x or too many cores\n", BYP_BASE, PRV_BASE);
+    if ((uint32_t)byp_buf != BYP_BASE || (uint32_t)prv_buf != PRV_BASE) {
+      printf("FATAL: buffers not at 0x%x / 0x%x\n", BYP_BASE, PRV_BASE);
       num_fails++;
     }
   }
@@ -226,6 +256,7 @@ int main() {
   for (uint32_t i = 0; i < slice; i++) {
     err += (ro[i] != A1(ro_base + i));
   }
+  err += (LBYP_INJECT_ERR && cid == num_cores - 1);
   error_cnt[cid] = err;
   num_fails += report("1  scalar read", cid, num_cores);
 

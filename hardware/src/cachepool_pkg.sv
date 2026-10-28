@@ -340,10 +340,9 @@ package cachepool_pkg;
   localparam int unsigned DramSize       = 32'h4000_0000;
   localparam int unsigned DramPerChSize  = DramSize / NumL2Channel;
 
-  // L1 bypass (built if L1BypassEn; enabled at runtime by L1D_BYPASS): the private range
-  // [L1D_ADDR, L1BypassEnd) goes around the L1 cache straight to DRAM. The fixed end keeps a
-  // stack overflowing the stack SPM cached.
-  localparam bit          L1BypassEn     = 1'b1;
+  // L1 bypass (enabled at runtime by L1D_BYPASS): the private range [L1D_ADDR, L1BypassEnd)
+  // goes around the L1 cache straight to DRAM. The fixed end keeps a stack overflowing the
+  // stack SPM cached. Built only where it fits a refill beat (L1BypassEn, below).
   localparam int unsigned L1BypassEnd    = TCDMStartAddr;
 
   // Currently set to 16 for now
@@ -498,6 +497,9 @@ package cachepool_pkg;
   localparam int unsigned L1BypassInfoWidth  = L1PartIdxWidth + 2
                                              + L1CoalPorts * (1 + $clog2(L1CoalDataWidth / $bits(narrow_data_t))
                                                               + $bits(tcdm_user_t));
+  // The bypass hardware exists only if data and xbar info fit one refill beat (folded banks);
+  // otherwise L1D_BYPASS has no effect and the range stays cached.
+  localparam bit          L1BypassEn         = (L1CoalDataWidth + L1BypassInfoWidth <= RefillDataWidth);
 
   typedef struct packed {
     // L1 bypass transaction: refill data carries the cache controller xbar payload

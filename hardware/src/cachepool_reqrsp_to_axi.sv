@@ -46,6 +46,9 @@ module cachepool_reqrsp_to_axi #(
   localparam int unsigned CounterWidth   = cf_math_pkg::idx_width(MaxTrans);
   localparam int unsigned BypassStrbWidth = BypassDataWidth / 8;
   localparam bit          BypassSupported = (BypassDataWidth + BypassInfoWidth <= DataWidth);
+  // Info position in the data word; folded to 0 where unsupported so the slices stay legal
+  localparam int unsigned BypassInfoLsb   = BypassSupported ? BypassDataWidth : 0;
+  localparam int unsigned BeatOfstWidth   = $clog2(DataWidth/8);
 
   typedef logic [CounterWidth-1:0]  cnt_t;
   typedef logic [AxiUserWidth-1:0]  axi_user_t;
@@ -106,6 +109,7 @@ module cachepool_reqrsp_to_axi #(
   logic                       q_bypass;
   logic [BypassPartWidth-1:0] q_part;
   logic [AxiIdWidth-1:0]      q_id;
+  logic [$bits(reqrsp_req_i.q.addr)-1:0] q_addr;
   axi_user_t                  q_axi_user;
   data_t                      q_wdata;
   strb_t                      q_wstrb;
@@ -113,6 +117,11 @@ module cachepool_reqrsp_to_axi #(
   assign q_bypass = reqrsp_req_i.q.user.bypass;
   assign q_part   = reqrsp_req_i.q.addr[$clog2(BypassStrbWidth) +: BypassPartWidth];
   assign q_id     = reqrsp_req_i.q.user.uniq_id ? id_cnt_q : AxiIdWidth'($unsigned(ID));
+  // A bypass address points into the beat (word offset); AXI wants it beat aligned, the
+  // part index above keeps the original offset for data placement and routing.
+  assign q_addr   = (BypassSupported && q_bypass)
+                  ? (reqrsp_req_i.q.addr & ({$bits(q_addr){1'b1}} << BeatOfstWidth))
+                  : reqrsp_req_i.q.addr;
 
   always_comb begin
     q_axi_user                  = '0;
@@ -122,7 +131,7 @@ module cachepool_reqrsp_to_axi #(
     if (BypassSupported && q_bypass) begin
       q_axi_user[BaseUserWidth +: BypassPartWidth] = q_part;
       q_axi_user[BaseUserWidth + BypassPartWidth +: BypassInfoWidth] =
-        reqrsp_req_i.q.data[BypassDataWidth +: BypassInfoWidth];
+        reqrsp_req_i.q.data[BypassInfoLsb +: BypassInfoWidth];
       q_wdata = '0;
       q_wstrb = '0;
       q_wdata[q_part * BypassDataWidth +: BypassDataWidth] =
@@ -136,7 +145,7 @@ module cachepool_reqrsp_to_axi #(
   // Read Channel
   // -------------
   assign axi_req_o.ar.id     = q_id;
-  assign axi_req_o.ar.addr   = reqrsp_req_i.q.addr;
+  assign axi_req_o.ar.addr   = q_addr;
   assign axi_req_o.ar.len    = '0;
   assign axi_req_o.ar.size   = {1'b0, reqrsp_req_i.q.size};
   assign axi_req_o.ar.burst  = axi_pkg::BURST_INCR;
@@ -153,7 +162,7 @@ module cachepool_reqrsp_to_axi #(
   // Write Channel
   // -------------
   assign axi_req_o.aw.id     = q_id;
-  assign axi_req_o.aw.addr   = reqrsp_req_i.q.addr;
+  assign axi_req_o.aw.addr   = q_addr;
   assign axi_req_o.aw.len    = '0;
   assign axi_req_o.aw.size   = {1'b0, reqrsp_req_i.q.size};
   assign axi_req_o.aw.burst  = axi_pkg::BURST_INCR;
@@ -212,7 +221,7 @@ module cachepool_reqrsp_to_axi #(
         reqrsp_rsp_o.p.data[BypassDataWidth-1:0] =
           axi_rsp_i.r.data[p_part * BypassDataWidth +: BypassDataWidth];
       end
-      reqrsp_rsp_o.p.data[BypassDataWidth +: BypassInfoWidth] =
+      reqrsp_rsp_o.p.data[BypassInfoLsb +: BypassInfoWidth] =
         p_axi_user[BaseUserWidth + BypassPartWidth +: BypassInfoWidth];
     end
   end
@@ -230,6 +239,11 @@ module cachepool_reqrsp_to_axi #(
   `ASSERT(WriteStable, q_valid_write && !q_ready_write |=> q_valid_write)
   `ASSERT(NoReadWriteRspOverlap, !(r_valid && b_valid))
   `ASSERT(SingleBeatRead, r_valid |-> axi_rsp_i.r.last)
+  // AXI: the start address of a transfer is aligned to its size (reported, not fatal)
+  `ASSERT(ArAddrAligned, axi_req_o.ar_valid |->
+          ((axi_req_o.ar.addr & ((1 << axi_req_o.ar.size) - 1)) == '0))
+  `ASSERT(AwAddrAligned, axi_req_o.aw_valid |->
+          ((axi_req_o.aw.addr & ((1 << axi_req_o.aw.size) - 1)) == '0))
   `ASSERT(NoUnsupportedBypass,
           reqrsp_req_i.q_valid |-> (BypassSupported || !reqrsp_req_i.q.user.bypass))
 
