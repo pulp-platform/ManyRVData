@@ -32,8 +32,9 @@
 //   6. timing, two visits each: a cached region gets faster after its cold
 //      visit, the bypass region does not (DRAM refresh makes a third visit noisy)
 //   7. bypass switched off: the same region now gets faster on its second visit
-// All banks are tile-private, so every request is served by the local tile;
-// private caches are not coherent across tiles, so part 5 needs the bypass.
+// Half of each tile's banks are private: the private/bypass range is served by
+// the local tile, everything below L1D_ADDR (counters, scratch, the cached
+// timing region) is shared and coherent across tiles.
 //
 // Strides of 12 B and unaligned e8 copies are left out: they hang on the cached
 // path as well (pre-existing, independent of the bypass).
@@ -213,9 +214,9 @@ int main() {
   l1d_bypass(0);
   const int canary_ok = (canary == CANARY_NEW);
 
-  // All banks tile-private, private range from BYP_BASE up, bypass on. Every hart
-  // calls the l1d_* helpers (they use the cluster barrier).
-  l1d_part(snrt_cluster_vpu_per_tile());
+  // Half the banks tile-private, private range from BYP_BASE up, bypass on. Every
+  // hart calls the l1d_* helpers (they use the cluster barrier).
+  l1d_part(snrt_cluster_vpu_per_tile() / 2);
   l1d_addr(BYP_BASE);
   l1d_bypass(1);
 
