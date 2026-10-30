@@ -398,7 +398,7 @@ module tb_cachepool;
       .AxiAddrWidth ( SpatzAxiAddrWidth                  ),
       .AxiDataWidth ( SpatzAxiDataWidth                  ),
       .AxiIdWidth   ( WrapperAxiIdOutWidth               ),
-      .AxiUserWidth ( SpatzAxiUserWidth                  ),
+      .AxiUserWidth ( DramAxiUserWidth                   ),
       .axi_req_t    ( spatz_axi_wrapper_out_req_t        ),
       .axi_resp_t   ( spatz_axi_wrapper_out_resp_t       ),
       .axi_ar_t     ( spatz_axi_wrapper_out_ar_chan_t    ),

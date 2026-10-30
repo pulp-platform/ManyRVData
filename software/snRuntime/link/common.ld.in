@@ -9,6 +9,8 @@ MEMORY
 {
     DRAM (rwxa)  : ORIGIN = @MEM_DRAM_ORIGIN@, LENGTH = @MEM_DRAM_SIZE@
     UNCACHED_REGION (rwxa) : ORIGIN = @UNCACHED_REGION_ORIGIN@,    LENGTH = @UNCACHED_REGION_SIZE@
+    /* Data for the L1 bypass range, up to L1BypassEnd (cachepool_pkg); own region, so its own load segment */
+    L1_BYPASS (rwa) : ORIGIN = 0xB0000000, LENGTH = 0x0FFFF800
 }
 
 SECTIONS
@@ -145,4 +147,11 @@ SECTIONS
     KEEP(*(.pdcp_src))
     _epdcp_src = .;    /* optional: mark end of pdcp_src */
   } > UNCACHED_REGION
+
+  /* Preloaded data in [0xB000_0000, 0xBFFF_F800). It bypasses the L1 data cache only when
+     L1D_BYPASS is set and L1D_ADDR is at or below it (bypass range [L1D_ADDR, L1BypassEnd)) */
+  .l1_bypass :
+  {
+    KEEP(*(.l1_bypass))
+  } > L1_BYPASS
 }

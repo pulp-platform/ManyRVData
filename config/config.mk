@@ -26,20 +26,14 @@ include $(CACHEPOOL_DIR)/config/$(config).mk
 ##  DRAM Type       ##
 #####################
 
-# DRAM type used by DRAMSys and to auto-set refill_data_width.
+# DRAM type used by DRAMSys.
 # Supported values: DDR3, DDR4, LPDDR4, HBM2
 dram_type ?= HBM2
 
-# Auto-derive default refill data width from dram_type.
-# HBM variants: 512b (3600*16/1000 = 57.6B/cyc)
-# DDR variants: 128b (1866*8/1000 = 15B/cyc)
-ifeq ($(dram_type),HBM2)
-  refill_data_width_default := 512
-else ifeq ($(dram_type),LPDDR4)
-  refill_data_width_default := 256
-else
-  refill_data_width_default := 128
-endif
+# Refill data width: always one full 512b cache line per beat. The DRAM converters send
+# single beats only, and the L1 bypass path packs data + routing info into one beat.
+# DDR variants waste part of the width (1866*8/1000 = 15B/cyc of real bandwidth).
+refill_data_width_default := 512
 
 #########################
 ##  CachePool Cluster  ##
@@ -149,8 +143,8 @@ num_barrier_slots ?= 2
 # in cachepool_cluster.sv, and the cluster zero-extends refill_user_t onto the
 # (wider) AXI user port at the reqrsp_to_axi call site.
 #
-#   refill_user_t = bank_id(BankIDWidth) + tile_id(TileIDWidth)
-#                 + cache_info_t + burst_req_t
+#   refill_user_t = bypass(1) + bank_id(BankIDWidth) + tile_id(TileIDWidth)
+#                 + l2_src_id + cache_info_t + burst_req_t
 #   cache_info_t  = {for_write_pend, depth, way}   -- NOTE: NO tile_id inside.
 #
 # BankIDWidth depends only on cores-per-tile (constant across a tile-count
@@ -158,7 +152,7 @@ num_barrier_slots ?= 2
 # only tile-count-dependent term in refill_user_t is TileIDWidth =
 # clog2(NumTiles), and that's already added exactly once, downstream, by
 # cachepool_pkg.sv (SpatzAxiUserWidth = AXI_USER_WIDTH + clog2(NumTiles) +
-# bits(l2_id_t)) -- no need to also grow axi_user_width with NumTiles here.
+# bits(l2_id_t) + 1 for bypass) -- no need to also grow axi_user_width with NumTiles here.
 #
 # axi_user_base below is the width needed at NumTiles=1 (TileIDWidth=0),
 # i.e. bank_id + cache_info_t + burst_req_t only.

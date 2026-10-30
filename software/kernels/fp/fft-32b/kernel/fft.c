@@ -250,5 +250,11 @@ void fft_p2(float *s, float *buf, const float *twi, float *out,
         asm volatile("vsuxei16.v v28, (%0), v12" ::"r"(im_l_o));
       }
     }
+#if SNRT_NUM_SCALAR_PER_CORE == 2
+    // The next stage loads these indexed stores through other Spatz ports, whose path to the
+    // L1 (NoC channel) is not ordered against the stores' path: drain the stores first.
+    if (bf != log2_nfft - 1)
+      snrt_fence_spatz();
+#endif
   }
 }

@@ -137,6 +137,8 @@ module cachepool_group
     input  axi_addr_t                                   cluster_base_addr_i,
     /// Partitioning address
     input  axi_addr_t                                   private_start_addr_i,
+    /// L1 bypass enable: the private range skips the L1 data cache
+    input  logic                                        l1d_bypass_i,
     /// L2 refill reqrsp port (single merged output: cache refill + iCache)
     output l2_req_t                                     l2_req_o,
     input  l2_rsp_t                                     l2_rsp_i,
@@ -406,10 +408,11 @@ module cachepool_group
             tile_req_chan  [xbar_idx].user.tile_id   = '0;
             tile_req_chan  [xbar_idx].user.bank_id   = BankIdICache;
             tile_req_chan  [xbar_idx].user.l2_src_id = l2_group_id_i;
-            // axi_to_reqrsp puts the AXI ID in the user LSBs (burst + info). Move it into info
-            // and zero burst, so reqrsp_to_axi sees is_burst=0 and keeps ID=0 for iCache.
+            // axi_to_reqrsp puts the AXI ID in the user LSBs (uniq_id + info). Move it into info
+            // and clear uniq_id, so the DRAM converter keeps the fixed ID 0 for iCache.
             tile_req_chan  [xbar_idx].user.info     = cache_info_t'(cache_l2icache_req.q.user);
-            tile_req_chan  [xbar_idx].user.burst    = '0;
+            tile_req_chan  [xbar_idx].user.uniq_id  = 1'b0;
+            tile_req_chan  [xbar_idx].user.bypass   = 1'b0;
           end else begin
             tile_req_chan  [xbar_idx]  = '0;
             tile_req_valid [xbar_idx]  = 1'b0;
@@ -682,6 +685,7 @@ module cachepool_group
         .cluster_base_addr_i      ( cluster_base_addr_i                              ),
         .tile_id_i                ( tile_id                                          ),
         .private_start_addr_i     ( private_start_addr_i                             ),
+        .l1d_bypass_i             ( l1d_bypass_i                                     ),
         // Remote Access Ports
         .remote_req_o             ( tile_remote_out_req  [t]                         ),
         .remote_req_dst_o         ( remote_out_sel_tile  [t]                         ),
@@ -775,6 +779,7 @@ module cachepool_group
         .cluster_base_addr_i      ( cluster_base_addr_i                                         ),
         .tile_id_i                ( tile_id                                                     ),
         .private_start_addr_i     ( private_start_addr_i                                        ),
+        .l1d_bypass_i             ( l1d_bypass_i                                                ),
         // Remote Access Ports
         .remote_req_o             ( tile_remote_out_req  [t]                                    ),
         .remote_req_dst_o         ( remote_out_sel_tile  [t]                                    ),

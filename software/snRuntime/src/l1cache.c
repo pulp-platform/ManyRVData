@@ -186,6 +186,22 @@ void l1d_addr (uint32_t addr) {
   snrt_cluster_hw_barrier();
 }
 
+// Enable/disable the L1 bypass of the private range [L1D_ADDR, stack).
+// Applied as soon as the value changes, no commit needed. Does not flush.
+void l1d_bypass (uint32_t en) {
+  asm volatile("fence" ::: "memory");
+  snrt_cluster_hw_barrier();
+  if (snrt_cluster_core_idx() == 0) {
+    volatile uint32_t *cfg_bypass =
+        (uint32_t *)(_snrt_team_current->root->cluster_mem.end +
+                     CACHEPOOL_PERIPHERAL_L1D_BYPASS_REG_OFFSET);
+    *cfg_bypass = en & 0x1u;
+    // Wait until every group has applied the new setting
+    l1d_wait();
+  }
+  snrt_cluster_hw_barrier();
+}
+
 void set_eoc (uint32_t eoc_value) {
     volatile uint32_t *eoc_reg =
         (uint32_t *)(_snrt_team_current->root->cluster_mem.end +

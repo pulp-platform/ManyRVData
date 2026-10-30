@@ -149,6 +149,8 @@ module cachepool_tile
     input  remote_tile_sel_t                              tile_id_i,
     /// Partitioning address
     input  axi_addr_t                                     private_start_addr_i,
+    /// L1 bypass enable: the private range skips the L1 data cache
+    input  logic                                          l1d_bypass_i,
     /// Cache Refill ports
     output cache_trans_req_t  [NumL1CtrlTile-1:0]         cache_refill_req_o,
     input  cache_trans_rsp_t  [NumL1CtrlTile-1:0]         cache_refill_rsp_i,
@@ -955,12 +957,7 @@ module cachepool_tile
   end
 `endif
 
-  // CL-offset mask: bits below dynamic_offset_q, verbatim in both directions.
-  logic [SpatzAxiAddrWidth-1:0] bitmask_lo;
-  assign bitmask_lo = (SpatzAxiAddrWidth'(1) << dynamic_offset_q) - 1;
-
   cache_refill_req_chan_t [NumL1CtrlTile-1 : 0] cache_refill_req;
-  burst_req_t             [NumL1CtrlTile-1 : 0] cache_refill_burst;
   logic                   [NumL1CtrlTile-1 : 0] cache_refill_req_valid, cache_refill_req_ready;
   cache_refill_rsp_chan_t [NumL1CtrlTile-1 : 0] cache_refill_rsp;
   logic                   [NumL1CtrlTile-1 : 0] cache_refill_rsp_valid, cache_refill_rsp_ready;
@@ -1052,6 +1049,18 @@ module cachepool_tile
   assign l1d_insn_ready_o = flush_pending_q && (cache_flush_d == '0);
 
   for (genvar cb = 0; cb < NumL1CtrlTile; cb++) begin: gen_l1_cache_ctrl
+    // Address rotation applied by tcdm_cache_interco (routing bits moved to the MSBs).
+    // N = refill_bits_to_rotate, per bank like gen_scramble; num_private_cache is runtime.
+    logic [RefillRotWidth-1:0] refill_bits_to_rotate;
+
+    // Mirrors gen_scramble in tcdm_cache_interco: banks below the boundary are
+    // private and rotate BankSel only, the rest also rotate TileID. cb is a
+    // genvar constant, so this covers all-private and all-shared as well.
+    assign refill_bits_to_rotate = (cb < int'(num_private_cache))
+          ? (group_fold ? RefillRotWidth'(RefillCacheBankBits + RefillLocalTileBits)
+                        : RefillRotWidth'(RefillCacheBankBits))
+          : RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
+
     cachepool_cache_ctrl #(
       // Core
       .NumPorts         (NrTCDMPortsPerCore ),
@@ -1070,6 +1079,11 @@ module cachepool_tile
       .BankFactor       (L1BankFactor       ),
       // .LogDebug         (0                  ),
       .RefillDataWidth  (RefillDataWidth    ),
+      .L1BypassEn       (L1BypassEn         ),
+      .L1BypassEnd      (L1BypassEnd        ),
+      .AddrRotWidth     (RefillRotWidth     ),
+      .L1BypassInfoWidth(L1BypassInfoWidth  ),
+      .AddrRotOfstWidth ($bits(dynamic_offset_q)),
       // Type
       .core_meta_t      (tcdm_user_t        ),
       .impl_in_t        (impl_in_t          ),
@@ -1086,6 +1100,12 @@ module cachepool_tile
       .cache_sync_insn_i     (ctrl_sync_insn[cb]             ),
       // SPM size: computed differently from other modules (times 2); assumes a full cache
       .bank_depth_for_SPM_i  ('0                             ),
+      // L1 bypass: [private_start_addr_i, L1BypassEnd) when enabled
+      .l1_bypass_en_i        (l1d_bypass_i                   ),
+      .l1_bypass_start_i     (private_start_addr_i           ),
+      // Interco address rotation of this controller
+      .addr_rot_bits_i       (refill_bits_to_rotate          ),
+      .addr_rot_ofst_i       (dynamic_offset_q               ),
       // Request
       .core_req_valid_i      (cache_req_valid[cb]            ),
       .core_req_ready_o      (cache_req_ready[cb]            ),
@@ -1102,7 +1122,8 @@ module cachepool_tile
       .core_resp_meta_o      (cache_rsp_meta [cb]            ),
       // TCDM Refill
       .refill_req_o          (cache_refill_req      [cb]     ),
-      .refill_burst_o        (cache_refill_burst    [cb]     ),
+      // Refills are single beats (RefillDataWidth == L1LineWidth): no burst info needed
+      .refill_burst_o        (                               ),
       .refill_req_valid_o    (cache_refill_req_valid[cb]     ),
       .refill_req_ready_i    (cache_refill_req_ready[cb]     ),
       .refill_rsp_i          (cache_refill_rsp      [cb]     ),
@@ -1125,19 +1146,19 @@ module cachepool_tile
       .tcdm_data_bank_gnt_i  (l1_data_bank_gnt  [cb]         )
     );
 
-    // Inverse rotation for the refill address: the controller stores the address rotated by
-    // tcdm_cache_interco (routing bits at the MSB), so restore it before issuing to the NoC.
-    // N = refill_bits_to_rotate, per bank like gen_scramble; num_private_cache is runtime.
+    // The controller stores the rotated address, so restore it before issuing to the NoC.
+    logic [SpatzAxiAddrWidth-1:0] cache_refill_addr_unrot;
 
-    logic [RefillRotWidth-1:0] refill_bits_to_rotate;
-
-    // Mirrors gen_scramble in tcdm_cache_interco: banks below the boundary are
-    // private and rotate BankSel only, the rest also rotate TileID. cb is a
-    // genvar constant, so this covers all-private and all-shared as well.
-    assign refill_bits_to_rotate = (cb < int'(num_private_cache))
-          ? (group_fold ? RefillRotWidth'(RefillCacheBankBits + RefillLocalTileBits)
-                        : RefillRotWidth'(RefillCacheBankBits))
-          : RefillRotWidth'(RefillCacheBankBits + RefillTileBits);
+    cachepool_addr_unrotate #(
+      .AddrWidth (SpatzAxiAddrWidth       ),
+      .RotWidth  (RefillRotWidth          ),
+      .OfstWidth ($bits(dynamic_offset_q) )
+    ) i_refill_addr_unrotate (
+      .addr_i     (cache_refill_req[cb].addr),
+      .rot_bits_i (refill_bits_to_rotate    ),
+      .ofst_i     (dynamic_offset_q         ),
+      .addr_o     (cache_refill_addr_unrot  )
+    );
 
     always_comb begin : bank_addr_scramble
       cache_refill_req_o[cb].q = '{
@@ -1151,9 +1172,11 @@ module cachepool_tile
       };
 
       cache_refill_req_o[cb].q.user = '{
+        bypass  : cache_refill_req[cb].bypass,
         bank_id : cb,
         info    : cache_refill_req[cb].info,
-        burst   : cache_refill_burst[cb],
+        // Refills match responses by user, so any AXI ID will do
+        uniq_id : 1'b1,
         default : '0
       };
       cache_refill_req_o[cb].q_valid = cache_refill_req_valid[cb];
@@ -1163,31 +1186,23 @@ module cachepool_tile
         data  : cache_refill_rsp_i[cb].p.data,
         write : cache_refill_rsp_i[cb].p.write,
         info  : cache_refill_rsp_i[cb].p.user.info,
+        bypass: cache_refill_rsp_i[cb].p.user.bypass,
         default   :'0
       };
       cache_refill_rsp_valid[cb] = cache_refill_rsp_i[cb].p_valid;
       cache_refill_req_ready[cb] = cache_refill_rsp_i[cb].q_ready;
 
       // Inverse rotation: recover original address from the rotated form.
-      begin
-        logic [SpatzAxiAddrWidth-1:0] addr_rot, lower, rot_field, upper;
-        addr_rot  = cache_refill_req[cb].addr;
-
-        lower     = addr_rot & bitmask_lo;
-
-        rot_field = addr_rot >> (SpatzAxiAddrWidth - refill_bits_to_rotate);
-
-        upper     = (addr_rot >> dynamic_offset_q)
-                  & ((SpatzAxiAddrWidth'(1) << (SpatzAxiAddrWidth
-                                                - dynamic_offset_q
-                                                - refill_bits_to_rotate)) - 1);
-
-        cache_refill_req_o[cb].q.addr = lower
-                                      | (rot_field << dynamic_offset_q)
-                                      | (upper     << (dynamic_offset_q
-                                                       + refill_bits_to_rotate));
-      end
+      cache_refill_req_o[cb].q.addr = cache_refill_addr_unrot;
     end
+
+    // Guard: while the L1 bypass is on, the cache never refills a line of the bypass range
+    // (writebacks may: lines dirty from before the bypass was switched on, no flush in hw).
+    `ASSERT(L1BypassNoCacheRefill,
+            cache_refill_req_valid[cb] && !cache_refill_req[cb].write &&
+            !cache_refill_req[cb].bypass && L1BypassEn && l1d_bypass_i |->
+            !((cache_refill_addr_unrot >= private_start_addr_i) &&
+              (cache_refill_addr_unrot <  L1BypassEnd)))
 
 
     for (genvar j = 0; j < NumTagBankPerCtrl; j++) begin
@@ -1766,6 +1781,9 @@ module cachepool_tile
     ((L1AssoPerCtrl % EffectiveFoldWayGroup) == 0));
   `ASSERT_INIT(CheckLineSplit, (NumWordPerLine % PartSplit) == 0);
   // Check that the cluster base address aligns to the TCDMSize.
+  // While the L1 bypass is on, its range starts inside DRAM (only DRAM converters handle it)
+  `ASSERT(L1BypassStartInDram, L1BypassEn && l1d_bypass_i |->
+          ((private_start_addr_i >= DramAddr) && (private_start_addr_i < DramAddr + DramSize)))
   `ASSERT(ClusterBaseAddrAlign, ((TCDMSize - 1) & cluster_base_addr_i) == 0)
 
 

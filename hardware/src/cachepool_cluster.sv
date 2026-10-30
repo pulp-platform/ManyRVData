@@ -160,10 +160,20 @@ module cachepool_cluster
   typedef logic [AxiDataWidth-1:0]      data_cache_t;
   typedef logic [AxiDataWidth/8-1:0]    strb_cache_t;
   typedef logic [WideIdWidthOut-1:0]    id_cache_slv_t;
-  typedef logic [AxiUserWidth-1:0]      user_cache_t;
+  // DRAM AXI user: refill user, plus the part index and xbar info of L1 bypass transactions
+  typedef logic [AxiUserWidth+L1PartIdxWidth+L1BypassInfoWidth-1:0] user_cache_t;
 
   // Post-chimney AXI types (used for axi_cut and DRAM output).
   `AXI_TYPEDEF_ALL(axi_slv_cache,    addr_t, id_cache_slv_t,    data_cache_t, strb_cache_t, user_cache_t)
+
+  // refill_user_t is carried in the DRAM AXI user field; it must not be truncated there.
+  `ASSERT_INIT(CheckAxiUserFitsRefillUser, AxiUserWidth >= $bits(refill_user_t))
+  // The DRAM converters send single beats: a refill must cover a full cache line.
+  `ASSERT_INIT(CheckRefillIsFullLine, RefillDataWidth == L1LineWidth)
+  // L1 bypass range [L1D_ADDR, L1BypassEnd): fixed end inside DRAM, start set at runtime
+  // (checked in cachepool_tile).
+  `ASSERT_INIT(CheckL1BypassEndInDram, !L1BypassEn ||
+               ((L1BypassEnd <= DramAddr + DramSize) && (L1BypassEnd <= TCDMStartAddr)))
 
   // ----------------
   // Wire Definitions
@@ -913,23 +923,23 @@ module cachepool_cluster
         axi_slv_cache_req_t  hbm0_dram_axi_req;
         axi_slv_cache_resp_t hbm0_dram_axi_rsp;
 
-        reqrsp_to_axi #(
-          .MaxTrans     ( L2RefillMaxTrans ),
-          .ID           ( 0                     ),
-          .EnBurst      ( 1                     ),
-          .ShuffleId    ( 1                     ),
-          .AxiIdWidth   ( WideIdWidthOut        ),
-          .DataWidth    ( AxiDataWidth          ),
-          .UserWidth    ( $bits(refill_user_t)  ),
-          .AxiUserWidth ( AxiUserWidth          ),
-          .reqrsp_req_t ( cache_trans_req_t     ),
-          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
-          .axi_req_t    ( axi_slv_cache_req_t   ),
-          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        cachepool_reqrsp_to_axi #(
+          .MaxTrans        ( L2RefillMaxTrans     ),
+          .ID              ( 0                    ),
+          .AxiIdWidth      ( WideIdWidthOut       ),
+          .DataWidth       ( AxiDataWidth         ),
+          .UserWidth       ( $bits(refill_user_t) ),
+          .BaseUserWidth   ( AxiUserWidth         ),
+          .BypassDataWidth ( L1CoalDataWidth      ),
+          .BypassPartWidth ( L1PartIdxWidth       ),
+          .BypassInfoWidth ( L1BypassInfoWidth    ),
+          .reqrsp_req_t    ( cache_trans_req_t    ),
+          .reqrsp_rsp_t    ( cache_trans_rsp_t    ),
+          .axi_req_t       ( axi_slv_cache_req_t  ),
+          .axi_rsp_t       ( axi_slv_cache_resp_t )
         ) i_hbm0_dram_reqrsp_to_axi (
           .clk_i        ( clk_i              ),
           .rst_ni       ( rst_ni             ),
-          .user_i       ( '0                 ),
           .reqrsp_req_i ( hbm0_demux_req[0]  ),
           .reqrsp_rsp_o ( hbm0_demux_rsp[0]  ),
           .axi_req_o    ( hbm0_dram_axi_req  ),
@@ -950,6 +960,10 @@ module cachepool_cluster
           hbm0_bootrom_req        = hbm0_demux_req[1];
           hbm0_bootrom_req.q.addr = revertAddr(hbm0_demux_req[1].q.addr);
         end
+
+        // L1 bypass addresses are in DRAM; the BootROM port must never see one.
+        `ASSERT(NoL1BypassToBootrom,
+                hbm0_demux_req[1].q_valid |-> !hbm0_demux_req[1].q.user.bypass)
 
         reqrsp_to_reg #(
           .AddrWidth     ( AxiAddrWidth          ),
@@ -992,23 +1006,23 @@ module cachepool_cluster
         axi_slv_cache_req_t  hbm_axi_req;
         axi_slv_cache_resp_t hbm_axi_rsp;
 
-        reqrsp_to_axi #(
-          .MaxTrans     ( L2RefillMaxTrans      ),
-          .ID           ( 0                     ),
-          .EnBurst      ( 1                     ),
-          .ShuffleId    ( 1                     ),
-          .AxiIdWidth   ( WideIdWidthOut        ),
-          .DataWidth    ( AxiDataWidth          ),
-          .UserWidth    ( $bits(refill_user_t)  ),
-          .AxiUserWidth ( AxiUserWidth          ),
-          .reqrsp_req_t ( cache_trans_req_t     ),
-          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
-          .axi_req_t    ( axi_slv_cache_req_t   ),
-          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        cachepool_reqrsp_to_axi #(
+          .MaxTrans        ( L2RefillMaxTrans     ),
+          .ID              ( 0                    ),
+          .AxiIdWidth      ( WideIdWidthOut       ),
+          .DataWidth       ( AxiDataWidth         ),
+          .UserWidth       ( $bits(refill_user_t) ),
+          .BaseUserWidth   ( AxiUserWidth         ),
+          .BypassDataWidth ( L1CoalDataWidth      ),
+          .BypassPartWidth ( L1PartIdxWidth       ),
+          .BypassInfoWidth ( L1BypassInfoWidth    ),
+          .reqrsp_req_t    ( cache_trans_req_t    ),
+          .reqrsp_rsp_t    ( cache_trans_rsp_t    ),
+          .axi_req_t       ( axi_slv_cache_req_t  ),
+          .axi_rsp_t       ( axi_slv_cache_resp_t )
         ) i_hbm_reqrsp_to_axi (
           .clk_i        ( clk_i                 ),
           .rst_ni       ( rst_ni                ),
-          .user_i       ( '0                    ),
           .reqrsp_req_i ( hbm_reqrsp_req        ),
           .reqrsp_rsp_o ( hbm_reqrsp_rsp        ),
           .axi_req_o    ( hbm_axi_req           ),
@@ -1205,23 +1219,23 @@ module cachepool_cluster
       axi_slv_cache_req_t  hbm_axi_req;
       axi_slv_cache_resp_t hbm_axi_rsp;
 
-      reqrsp_to_axi #(
-        .MaxTrans     ( L2RefillMaxTrans ),
-        .ID           ( 0                     ),
-        .EnBurst      ( 1                     ),
-        .ShuffleId    ( 1                     ),
-        .AxiIdWidth   ( WideIdWidthOut        ),
-        .DataWidth    ( AxiDataWidth          ),
-        .UserWidth    ( $bits(refill_user_t)  ),
-        .AxiUserWidth ( AxiUserWidth          ),
-        .reqrsp_req_t ( cache_trans_req_t     ),
-        .reqrsp_rsp_t ( cache_trans_rsp_t     ),
-        .axi_req_t    ( axi_slv_cache_req_t   ),
-        .axi_rsp_t    ( axi_slv_cache_resp_t  )
+      cachepool_reqrsp_to_axi #(
+        .MaxTrans        ( L2RefillMaxTrans     ),
+        .ID              ( 0                    ),
+        .AxiIdWidth      ( WideIdWidthOut       ),
+        .DataWidth       ( AxiDataWidth         ),
+        .UserWidth       ( $bits(refill_user_t) ),
+        .BaseUserWidth   ( AxiUserWidth         ),
+        .BypassDataWidth ( L1CoalDataWidth      ),
+        .BypassPartWidth ( L1PartIdxWidth       ),
+        .BypassInfoWidth ( L1BypassInfoWidth    ),
+        .reqrsp_req_t    ( cache_trans_req_t    ),
+        .reqrsp_rsp_t    ( cache_trans_rsp_t    ),
+        .axi_req_t       ( axi_slv_cache_req_t  ),
+        .axi_rsp_t       ( axi_slv_cache_resp_t )
       ) i_hbm_reqrsp_to_axi (
         .clk_i        ( clk_i            ),
         .rst_ni       ( rst_ni           ),
-        .user_i       ( '0               ),
         .reqrsp_req_i ( hbm_reqrsp_req   ),
         .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
         .axi_req_o    ( hbm_axi_req      ),
@@ -1329,23 +1343,23 @@ module cachepool_cluster
         axi_slv_cache_req_t  hbm_axi_req;
         axi_slv_cache_resp_t hbm_axi_rsp;
 
-        reqrsp_to_axi #(
-          .MaxTrans     ( L2RefillMaxTrans ),
-          .ID           ( 0                     ),
-          .EnBurst      ( 1                     ),
-          .ShuffleId    ( 1                     ),
-          .AxiIdWidth   ( WideIdWidthOut        ),
-          .DataWidth    ( AxiDataWidth          ),
-          .UserWidth    ( $bits(refill_user_t)  ),
-          .AxiUserWidth ( AxiUserWidth          ),
-          .reqrsp_req_t ( cache_trans_req_t     ),
-          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
-          .axi_req_t    ( axi_slv_cache_req_t   ),
-          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        cachepool_reqrsp_to_axi #(
+          .MaxTrans        ( L2RefillMaxTrans     ),
+          .ID              ( 0                    ),
+          .AxiIdWidth      ( WideIdWidthOut       ),
+          .DataWidth       ( AxiDataWidth         ),
+          .UserWidth       ( $bits(refill_user_t) ),
+          .BaseUserWidth   ( AxiUserWidth         ),
+          .BypassDataWidth ( L1CoalDataWidth      ),
+          .BypassPartWidth ( L1PartIdxWidth       ),
+          .BypassInfoWidth ( L1BypassInfoWidth    ),
+          .reqrsp_req_t    ( cache_trans_req_t    ),
+          .reqrsp_rsp_t    ( cache_trans_rsp_t    ),
+          .axi_req_t       ( axi_slv_cache_req_t  ),
+          .axi_rsp_t       ( axi_slv_cache_resp_t )
         ) i_hbm_reqrsp_to_axi (
           .clk_i        ( clk_i            ),
           .rst_ni       ( rst_ni           ),
-          .user_i       ( '0               ),
           .reqrsp_req_i ( hbm_reqrsp_req   ),
           .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
           .axi_req_o    ( hbm_axi_req      ),
@@ -1446,23 +1460,23 @@ module cachepool_cluster
         axi_slv_cache_req_t  hbm_axi_req;
         axi_slv_cache_resp_t hbm_axi_rsp;
 
-        reqrsp_to_axi #(
-          .MaxTrans     ( L2RefillMaxTrans ),
-          .ID           ( 0                     ),
-          .EnBurst      ( 1                     ),
-          .ShuffleId    ( 1                     ),
-          .AxiIdWidth   ( WideIdWidthOut        ),
-          .DataWidth    ( AxiDataWidth          ),
-          .UserWidth    ( $bits(refill_user_t)  ),
-          .AxiUserWidth ( AxiUserWidth          ),
-          .reqrsp_req_t ( cache_trans_req_t     ),
-          .reqrsp_rsp_t ( cache_trans_rsp_t     ),
-          .axi_req_t    ( axi_slv_cache_req_t   ),
-          .axi_rsp_t    ( axi_slv_cache_resp_t  )
+        cachepool_reqrsp_to_axi #(
+          .MaxTrans        ( L2RefillMaxTrans     ),
+          .ID              ( 0                    ),
+          .AxiIdWidth      ( WideIdWidthOut       ),
+          .DataWidth       ( AxiDataWidth         ),
+          .UserWidth       ( $bits(refill_user_t) ),
+          .BaseUserWidth   ( AxiUserWidth         ),
+          .BypassDataWidth ( L1CoalDataWidth      ),
+          .BypassPartWidth ( L1PartIdxWidth       ),
+          .BypassInfoWidth ( L1BypassInfoWidth    ),
+          .reqrsp_req_t    ( cache_trans_req_t    ),
+          .reqrsp_rsp_t    ( cache_trans_rsp_t    ),
+          .axi_req_t       ( axi_slv_cache_req_t  ),
+          .axi_rsp_t       ( axi_slv_cache_resp_t )
         ) i_hbm_reqrsp_to_axi (
           .clk_i        ( clk_i            ),
           .rst_ni       ( rst_ni           ),
-          .user_i       ( '0               ),
           .reqrsp_req_i ( hbm_reqrsp_req   ),
           .reqrsp_rsp_o ( hbm_reqrsp_rsp   ),
           .axi_req_o    ( hbm_axi_req      ),

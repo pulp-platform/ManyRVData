@@ -33,6 +33,7 @@ module cachepool_group_cfg
   output logic [L1PrivWidth-1:0]      l1d_private_o,
   output axi_addr_t                   private_start_addr_o,
   output logic                        icache_prefetch_enable_o,
+  output logic                        l1d_bypass_o,
   output cache_insn_t                 l1d_insn_o,
   output logic                        l1d_insn_valid_o,
   input  logic [NumTilesPerGroup-1:0] l1d_insn_ready_i
@@ -84,6 +85,7 @@ module cachepool_group_cfg
             GroupCfgL1dPrivate: cfg_d.l1d_private  = req_data[L1PrivWidth-1:0];
             GroupCfgL1dAddr:    cfg_d.private_addr = req_data;
             GroupCfgPrefetch:   cfg_d.prefetch_en  = req_data[0];
+            GroupCfgL1dBypass:  cfg_d.bypass_en    = req_data[0];
             GroupCfgL1dInsn: begin
               insn_d       = req_insn;
               insn_valid_d = 1'b1;
@@ -123,6 +125,7 @@ module cachepool_group_cfg
   assign l1d_private_o            = cfg_q.l1d_private;
   assign private_start_addr_o     = cfg_q.private_addr;
   assign icache_prefetch_enable_o = cfg_q.prefetch_en;
+  assign l1d_bypass_o             = cfg_q.bypass_en;
   assign l1d_insn_o               = insn_q;
   assign l1d_insn_valid_o         = insn_valid_q;
 
@@ -135,7 +138,7 @@ module cachepool_group_cfg
   `ASSERT(CfgAddrInRange, req_valid_i |-> (req_i.addr >= GroupCfgBase), clk_i, !rst_ni,
       "cachepool_group_cfg: request address below GroupCfgBase")
   `ASSERT(KnownCfgReg, req_valid_i |-> (req_reg inside {GroupCfgXbarOffset, GroupCfgL1dPrivate,
-      GroupCfgL1dAddr, GroupCfgPrefetch, GroupCfgL1dInsn}), clk_i, !rst_ni,
+      GroupCfgL1dAddr, GroupCfgPrefetch, GroupCfgL1dInsn, GroupCfgL1dBypass}), clk_i, !rst_ni,
       "cachepool_group_cfg: write to an unknown register")
 
 endmodule

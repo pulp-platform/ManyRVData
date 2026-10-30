@@ -179,6 +179,7 @@ module cachepool_group_noc_wrapper
   xbar_offset_t                           dynamic_offset_q;
   logic       [L1PrivWidth-1:0]           l1d_private_q;
   axi_addr_t                              private_start_addr_q;
+  logic                                   l1d_bypass_q;
   logic                                   icache_prefetch_enable;
   cache_insn_t                            l1d_insn_q;
   logic                                   l1d_insn_valid_q;
@@ -841,6 +842,7 @@ module cachepool_group_noc_wrapper
     .dynamic_offset_o         ( dynamic_offset_q       ),
     .l1d_private_o            ( l1d_private_q          ),
     .private_start_addr_o     ( private_start_addr_q   ),
+    .l1d_bypass_o             ( l1d_bypass_q           ),
     .icache_prefetch_enable_o ( icache_prefetch_enable ),
     .l1d_insn_o               ( l1d_insn_q             ),
     .l1d_insn_valid_o         ( l1d_insn_valid_q       ),
@@ -980,6 +982,7 @@ module cachepool_group_noc_wrapper
     .tile_base_id_i           ( tile_base_id_i              ),
     .cluster_base_addr_i      ( cluster_base_addr_i         ),
     .private_start_addr_i     ( private_start_addr_q        ),
+    .l1d_bypass_i             ( l1d_bypass_q                ),
     .l2_req_o                 ( l2_group_req                ),
     .l2_rsp_i                 ( l2_group_rsp                ),
     .l2_group_id_i            ( l2_id_i                     ),

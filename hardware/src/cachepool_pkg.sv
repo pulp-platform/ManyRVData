@@ -224,7 +224,9 @@ package cachepool_pkg;
   // per-config axi_user_width define: that breaks silently whenever NumEndpoints changes width.
   localparam int unsigned SpatzAxiUserWidth       = `ifdef AXI_USER_WIDTH `AXI_USER_WIDTH `else 0 `endif
                                                      + $clog2(NumTiles)
-                                                     + $bits(floo_cachepool_noc_pkg::id_t);
+                                                     + $bits(floo_cachepool_noc_pkg::id_t)
+                                                     // refill_user_t.bypass
+                                                     + 1;
 
   // -----------------------
   // AXI ID field structure
@@ -338,6 +340,11 @@ package cachepool_pkg;
   localparam int unsigned DramSize       = 32'h4000_0000;
   localparam int unsigned DramPerChSize  = DramSize / NumL2Channel;
 
+  // L1 bypass (enabled at runtime by L1D_BYPASS): the private range [L1D_ADDR, L1BypassEnd)
+  // goes around the L1 cache straight to DRAM. The fixed end keeps a stack overflowing the
+  // stack SPM cached. Built only where it fits a refill beat (L1BypassEn, below).
+  localparam int unsigned L1BypassEnd    = TCDMStartAddr;
+
   // Currently set to 16 for now
   parameter int unsigned Interleave      = `ifdef L2_INTERLEAVE `L2_INTERLEAVE `else 0 `endif;
 
@@ -404,6 +411,7 @@ package cachepool_pkg;
   typedef logic [L1AddrWidth-1:0]                         narrow_addr_t;
   typedef logic [SPMAddrWidth-1:0]                        spm_addr_t;
 
+  // Burst port type of cachepool_cache_ctrl (refill_burst_o); not carried on the refill path.
   typedef struct packed {
     logic        is_burst;
     burst_len_t  burst_len;
@@ -432,13 +440,16 @@ package cachepool_pkg;
     axi_addr_t              private_addr;
     xbar_offset_t           xbar_offset;
     logic                   prefetch_en;
+    // L1 bypass of the private range (see L1BypassEnd)
+    logic                   bypass_en;
   } l1d_cfg_t;
 
   localparam l1d_cfg_t L1dCfgRst = '{
     l1d_private:  L1dPrivateRst,
     private_addr: L1dPrivateAddrRst,
     xbar_offset:  L1dXbarOffsetRst,
-    prefetch_en:  ICachePrefetchRst
+    prefetch_en:  ICachePrefetchRst,
+    bypass_en:    1'b0
   };
 
   // Registers of a group-level configuration register block, one 32-bit word each at
@@ -448,7 +459,8 @@ package cachepool_pkg;
     GroupCfgL1dPrivate = 3'd1,
     GroupCfgL1dAddr    = 3'd2,
     GroupCfgPrefetch   = 3'd3,
-    GroupCfgL1dInsn    = 3'd4
+    GroupCfgL1dInsn    = 3'd4,
+    GroupCfgL1dBypass  = 3'd5
   } group_cfg_reg_e;
 
   typedef struct packed {
@@ -468,16 +480,45 @@ package cachepool_pkg;
     logic                   sc_fail;
   } tcdm_user_t;
 
+  // Width of the cache controller xbar info (coalescer_xbar_info_union_t in cachepool_cache_ctrl),
+  // which an L1 bypass transaction carries in the refill data and in the DRAM AXI user.
+  // Mirrors the folding setup of cachepool_tile; the controller checks it at elaboration.
+  localparam bit          L1UseFolded        = `ifdef L1D_USE_FOLDED `L1D_USE_FOLDED `else 1'b1 `endif;
+  localparam int unsigned L1FoldWayGroup     = `ifdef L1D_FOLD_WAY_GROUP `L1D_FOLD_WAY_GROUP `else 0 `endif;
+  localparam bit          L1SkewedFolded     = L1UseFolded && (L1AssoPerCtrl > 1);
+  localparam int unsigned L1PartSplit        = !L1SkewedFolded    ? 1 :
+                                               (L1FoldWayGroup != 0) ? L1FoldWayGroup :
+                                               (L1AssoPerCtrl >= 4)  ? 4 : 2;
+  localparam int unsigned L1CoalDataWidth    = L1LineWidth / L1PartSplit;
+  localparam int unsigned L1CoalPorts        = (NrTCDMPortsPerCore - 1)
+                                             * (L1SkewedFolded ? 1 : L1CoalFactor);
+  localparam int unsigned L1PartIdxWidth     = (L1PartSplit > 1) ? $clog2(L1PartSplit) : 1;
+  // part_idx + id + bypass_coalescer + per port {hitmap, ofsts, infos}
+  localparam int unsigned L1BypassInfoWidth  = L1PartIdxWidth + 2
+                                             + L1CoalPorts * (1 + $clog2(L1CoalDataWidth / $bits(narrow_data_t))
+                                                              + $bits(tcdm_user_t));
+  // The bypass hardware exists only if data and xbar info fit one refill beat (folded banks);
+  // otherwise L1D_BYPASS has no effect and the range stays cached.
+  localparam bit          L1BypassEn         = (L1CoalDataWidth + L1BypassInfoWidth <= RefillDataWidth);
+
   typedef struct packed {
+    // L1 bypass transaction: refill data carries the cache controller xbar payload
+    logic                        bypass;
     logic [BankIDWidth-1:0]      bank_id;
     logic [TileIDWidth-1:0]      tile_id;
     // L2 mesh source endpoint, used by the HBM chimney to route the response (unlike the
-    // group-local tile_id). Must stay above info/burst: the iCache EnUserIdPassthrough path in
+    // group-local tile_id). Must stay above info/uniq_id: the iCache EnUserIdPassthrough path in
     // cachepool_group.sv truncates this struct to cache_info_t and needs them at the LSBs.
     floo_cachepool_noc_pkg::id_t l2_src_id;
     cache_info_t                 info;
-    burst_req_t                  burst;
+    // 1: send with a fresh AXI ID (response may return out of order); 0: fixed ID, in order
+    logic                        uniq_id;
   } refill_user_t;
+
+  // DRAM AXI user: refill_user_t (zero-extended to SpatzAxiUserWidth), plus the part index and
+  // xbar info of an L1 bypass transaction, so they return with the DRAM response.
+  localparam int unsigned DramAxiUserWidth   = SpatzAxiUserWidth + L1PartIdxWidth + L1BypassInfoWidth;
+  typedef logic [DramAxiUserWidth-1:0]          dram_axi_user_t;
 
   ///////////////////
   //  GROUP TYPES  //
@@ -599,12 +640,14 @@ package cachepool_pkg;
     logic           write;
     refill_data_t   wdata;
     refill_strb_t   wstrb;
+    logic           bypass;
   } cache_refill_req_chan_t;
 
   typedef struct packed {
     logic           write;
     refill_data_t   data;
     cache_info_t    info;
+    logic           bypass;
   } cache_refill_rsp_chan_t;
 
   //////////////////
@@ -676,9 +719,9 @@ package cachepool_pkg;
   // AXI typedef bundles
   `AXI_TYPEDEF_ALL(spatz_axi_narrow,  axi_addr_t, axi_narrow_id_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
   `AXI_TYPEDEF_ALL(spatz_axi_in,      axi_addr_t, axi_id_in_t,      axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
-  `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_out,     axi_addr_t, axi_id_out_t,       axi_wide_data_t,   axi_wide_strb_t,   dram_axi_user_t)
   // Wrapper-level external output type: ID from SpatzAxiIdOutWidth to WrapperAxiIdOutWidth.
-  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_out,         axi_addr_t, axi_id_wrapper_out_t,         axi_wide_data_t,   axi_wide_strb_t,   axi_user_t)
+  `AXI_TYPEDEF_ALL(spatz_axi_wrapper_out,         axi_addr_t, axi_id_wrapper_out_t,         axi_wide_data_t,   axi_wide_strb_t,   dram_axi_user_t)
   // Wrapper-level external narrow output type: ID compressed from SpatzAxiUartIdWidth to WrapperAxiNarrowIdOutWidth.
   `AXI_TYPEDEF_ALL(spatz_axi_wrapper_narrow_out,  axi_addr_t, axi_id_wrapper_narrow_out_t,  axi_narrow_data_t, axi_narrow_strb_t, axi_user_t)
 
