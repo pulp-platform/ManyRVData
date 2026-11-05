@@ -34,7 +34,8 @@
 //   7. bypass switched off: the same region now gets faster on its second visit
 // Half of each tile's banks are private: the private/bypass range is served by
 // the local tile, everything below L1D_ADDR (counters, scratch, the cached
-// timing region) is shared and coherent across tiles.
+// timing region) is shared and coherent across tiles. The cache xbar interleaves
+// at cache-line granularity, so the shared data spreads over all controllers.
 //
 // Strides of 12 B and unaligned e8 copies are left out: they hang on the cached
 // path as well (pre-existing, independent of the bypass).
@@ -205,6 +206,10 @@ int main() {
     snrt_cluster_hw_barrier();
     return -1;
   }
+
+  // Cache-line interleaving (log2(512/8)): with the coarse reset offset the shared
+  // timing region of part 6 lands on two controllers of one tile and thrashes.
+  l1d_xbar_config(6);
 
   // 0. Dirty cached data survives switching the bypass on and off
   if (snrt_cluster_core_idx() == 0) {
