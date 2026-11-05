@@ -509,7 +509,9 @@ module cachepool_group_noc_wrapper
 
         assign slv_xbar_mst_sel[port] = MstXbarSelW'(
             remote_group_rsp_from_group[port].p.user.tile_id[NocGroupOffset-1:0]
-          * NumNoCPortsPerTile);
+          * NumNoCPortsPerTile
+          + (remote_group_rsp_from_group[port].p.user.port_id % NumNoCPortsPerTile)
+        );
 
         always_comb begin : proc_req_unpack
           remote_group_req_to_group[port].q                  = slv_xbar_mst_req[port].payload;
