@@ -81,8 +81,10 @@ The flavour is resolved in the `Makefile` in this order:
    recorded as the last used one: `config/LRU.mk` becomes a symlink to
    `<flavour>.mk` (git-ignored).
 2. The last used flavour, from `config/LRU.mk`, so later runs can drop
-   `config=`. The `Makefile` prints which flavour it picked.
-3. `cachepool_fpu_4g` if there is no `config/LRU.mk`.
+   `config=`. The `Makefile` prints which flavour it picked. `make clean`
+   removes the link.
+3. `cachepool_fpu_4g` if there is no `config/LRU.mk`. A stale `config/LRU.mk`,
+   whose flavour no longer exists (e.g. after a branch switch), is removed.
 
 **Override precedence** (highest first):
 

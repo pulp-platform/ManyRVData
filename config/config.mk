@@ -9,17 +9,7 @@
 ##  CachePool flavor  ##
 ########################
 
-# Choose a CachePool flavor.
-# Check the README for more details
-ifndef config
-  ifdef CACHEPOOL_CONFIGURATION
-    config := $(CACHEPOOL_CONFIGURATION)
-  else
-    # Default configuration, if neither `config` nor `CACHEPOOL_CONFIGURATION` was found
-    config := cachepool
-  endif
-endif
-
+# The flavour `config` is resolved in the top-level Makefile, see the README
 include $(CACHEPOOL_DIR)/config/$(config).mk
 
 #####################

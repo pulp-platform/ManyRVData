@@ -65,25 +65,32 @@ BENDER                ?= ${BENDER_INSTALL_DIR}/bender
 CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cache || true)
 
 # Configurations
-CFG_DIR               ?= ${CACHEPOOL_DIR}/config
+# Fixed: config/config.mk always includes the flavours from here
+override CFG_DIR      := ${CACHEPOOL_DIR}/config
 config_default        := cachepool_fpu_4g
 
 # Last used configuration: an explicit `config` is recorded as the symlink LRU.mk -> <config>.mk,
 # and a run without `config` reuses it, falling back to config_default if there is none.
+# A stale link (its flavour no longer exists, e.g. after a branch switch) is removed.
 LRU_MK                := $(CFG_DIR)/LRU.mk
+LRU_TARGET            := $(shell readlink $(LRU_MK) 2>/dev/null)
 ifneq ($(filter command line environment,$(origin config)),)
   config_source := $(origin config)
   ifneq ($(wildcard $(CFG_DIR)/$(config).mk),)
-    ifneq ($(shell readlink $(LRU_MK) 2>/dev/null),$(config).mk)
+    ifneq ($(LRU_TARGET),$(config).mk)
       $(shell ln -sfn $(config).mk $(LRU_MK))
     endif
   endif
-else ifneq ($(wildcard $(LRU_MK)),)
-  config        := $(basename $(notdir $(shell readlink $(LRU_MK))))
+else ifneq ($(realpath $(LRU_MK)),)
+  config        := $(basename $(notdir $(LRU_TARGET)))
   config_source := last used, from $(LRU_MK)
 else
   config        := $(config_default)
   config_source := default
+  ifneq ($(LRU_TARGET),)
+    $(shell rm -f $(LRU_MK))
+    config_source := default, removed stale $(LRU_MK) -> $(LRU_TARGET)
+  endif
 endif
 
 ifeq ($(MAKELEVEL),0)
@@ -473,7 +480,7 @@ clean.sw: clean.data
 
 .PHONY: clean.generate
 clean.generate:
-	rm -rf $(HJSON_OUT) $(PERIPH_HJSON_OUT) $(BOOTROM_DIR)/bootdata.cc \
+	rm -rf $(HJSON_OUT) $(PERIPH_HJSON_OUT) $(LRU_MK) $(BOOTROM_DIR)/bootdata.cc \
 	                    $(BOOTROM_DIR)/bootdata_bootrom.cc \
 	                    $(BOOTROM_DIR)/bootrom.sv \
 	                    $(BOOTROM_DIR)/bootrom.dump \
@@ -673,7 +680,7 @@ help:
 	@echo "*all*:            shortcut for hw + sw"
 	@echo "*clean.vsim*:     remove the hardware simulation build [from sim/sim.mk]"
 	@echo "*clean.data*:     remove generated data files (gen-data outputs)"
-	@echo "*clean.generate*: remove generated HJSON/bootrom/wlf/noc_profiling files [from 'generate'/'bootrom']"
+	@echo "*clean.generate*: remove generated HJSON/LRU.mk/bootrom/wlf/noc_profiling files [from 'generate'/'bootrom']"
 	@echo "*clean.hw*:       clean.vsim + clean.generate"
 	@echo "*clean*:          clean.hw + clean.sw (remove SW build, vsim build, and all generated HW files)"
 	@echo ""
