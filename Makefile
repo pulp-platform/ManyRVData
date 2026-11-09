@@ -66,7 +66,29 @@ CACHE_PATH            := $(shell [ -x "$(BENDER)" ] && $(BENDER) path insitu-cac
 
 # Configurations
 CFG_DIR               ?= ${CACHEPOOL_DIR}/config
-config                ?= cachepool_fpu_4g
+config_default        := cachepool_fpu_4g
+
+# Last used configuration: an explicit `config` is recorded as the symlink LRU.mk -> <config>.mk,
+# and a run without `config` reuses it, falling back to config_default if there is none.
+LRU_MK                := $(CFG_DIR)/LRU.mk
+ifneq ($(filter command line environment,$(origin config)),)
+  config_source := $(origin config)
+  ifneq ($(wildcard $(CFG_DIR)/$(config).mk),)
+    ifneq ($(shell readlink $(LRU_MK) 2>/dev/null),$(config).mk)
+      $(shell ln -sfn $(config).mk $(LRU_MK))
+    endif
+  endif
+else ifneq ($(wildcard $(LRU_MK)),)
+  config        := $(basename $(notdir $(shell readlink $(LRU_MK))))
+  config_source := last used, from $(LRU_MK)
+else
+  config        := $(config_default)
+  config_source := default
+endif
+
+ifeq ($(MAKELEVEL),0)
+  $(info Using config $(config) ($(config_source)))
+endif
 
 # Compiler choice for SW cmake
 COMPILER              ?= llvm
@@ -683,7 +705,7 @@ help:
 	@echo ""
 	@echo "--------------------------------------------------------------------------------------------------------"
 	@echo "Settings:"
-	@echo "*config*:         cluster configuration name (default: $(config))"
+	@echo "*config*:         cluster configuration name (default: last used one in config/LRU.mk, else $(config_default))"
 	@echo "*CMAKE*:          CMake binary (default: $(CMAKE)); must be >= 3.28 for DRAMSys"
 	@echo "*DEBUG*:          enable +acc for waveform visibility in vsim (default: $(DEBUG))"
 	@echo "*LOGS_DIR*:       logs directory used by avg-log (default: $(LOGS_DIR))"

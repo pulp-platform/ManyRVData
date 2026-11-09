@@ -75,10 +75,14 @@ template lives with the peripheral RTL, in
 make generate bootrom vsim sw config=cachepool_fpu_16g
 ```
 
-The flavour is resolved in `config.mk` in this order: the `config` Make
-variable, then the `CACHEPOOL_CONFIGURATION` environment variable. Always pass
-one — the final fallback is `config := cachepool`, and there is no
-`cachepool.mk`, so a build with neither set fails at the `include`.
+The flavour is resolved in the `Makefile` in this order:
+
+1. `config` on the command line or in the environment. An existing flavour is
+   recorded as the last used one: `config/LRU.mk` becomes a symlink to
+   `<flavour>.mk` (git-ignored).
+2. The last used flavour, from `config/LRU.mk`, so later runs can drop
+   `config=`. The `Makefile` prints which flavour it picked.
+3. `cachepool_fpu_4g` if there is no `config/LRU.mk`.
 
 **Override precedence** (highest first):
 
