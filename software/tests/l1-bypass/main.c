@@ -32,7 +32,6 @@
 //   6. timing, two visits each: a cached region gets faster after its cold
 //      visit, the bypass region does not (DRAM refresh makes a third visit noisy)
 //   7. bypass switched off: the same region now gets faster on its second visit
-//      (timing currently waived, see part 7)
 // Half of each tile's banks are private: the private/bypass range is served by
 // the local tile, everything below L1D_ADDR (counters, scratch, the cached
 // timing region) is shared and coherent across tiles. The cache xbar interleaves
@@ -399,7 +398,8 @@ int main() {
     // not speed up on its second visit. Restore the count once the hash is fixed.
     const int c_ok = (10 * tc[1] < 7 * tc[0]);
     printf("7  cycles same region, bypass off: %u %u -> %s\n", tc[0], tc[1],
-           c_ok ? "PASS" : "WAIVED (known way-hash collision)");
+           c_ok ? "PASS" : "FAILED");
+    num_fails += !(c_ok);
   }
 
   if (cid == 0) {
