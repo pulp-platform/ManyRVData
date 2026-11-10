@@ -26,12 +26,12 @@ export_include_dirs:
 
 sources:
   # Level 0
-  - hardware/src/cachepool_reqrsp_to_axi.sv
-  - hardware/src/reqrsp_to_reg.sv
-  - hardware/src/reqrsp_xbar.sv
-  - hardware/src/tcdm_cache_interco.sv
-  - hardware/src/tcdm_id_remapper.sv
-  - hardware/src/spatz_cache_amo.sv
+  - hardware/src/interconnect/cachepool_reqrsp_to_axi.sv
+  - hardware/src/interconnect/reqrsp_to_reg.sv
+  - hardware/src/interconnect/reqrsp_xbar.sv
+  - hardware/src/interconnect/tcdm_cache_interco.sv
+  - hardware/src/interconnect/tcdm_id_remapper.sv
+  - hardware/src/interconnect/spatz_cache_amo.sv
   # Memory-mapped register
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_pkg.sv
   - hardware/cachepool_peripheral/cachepool_peripheral_reg_top.sv
@@ -42,19 +42,19 @@ sources:
   - hardware/src/cachepool_pkg.sv
   - hardware/cachepool_peripheral/cachepool_peripheral.sv
   # Group configuration registers (cluster sender + group-level register)
-  - hardware/src/cachepool_group_cfg_sender.sv
-  - hardware/src/cachepool_group_cfg.sv
-  - hardware/src/cachepool_acc_cut.sv
+  - hardware/src/peripheral/cachepool_group_cfg_sender.sv
+  - hardware/src/peripheral/cachepool_group_cfg.sv
+  - hardware/src/core/cachepool_acc_cut.sv
   - hardware/src/cachepool_cc.sv
-  - hardware/src/cachepool_spatz_lock.sv
-  - hardware/src/acc_mux.sv
+  - hardware/src/core/cachepool_spatz_lock.sv
+  - hardware/src/core/acc_mux.sv
   - hardware/src/cachepool_cc_dual.sv
   # Barrier
-  - hardware/src/cachepool_tile_barrier.sv
-  - hardware/src/cachepool_group_barrier.sv
-  - hardware/src/cachepool_cluster_barrier.sv
+  - hardware/src/peripheral/cachepool_tile_barrier.sv
+  - hardware/src/peripheral/cachepool_group_barrier.sv
+  - hardware/src/peripheral/cachepool_cluster_barrier.sv
   # ICache
-  - hardware/src/axi_hier_interco.sv
+  - hardware/src/interconnect/axi_hier_interco.sv
   # Level 2
   - hardware/src/cachepool_tile.sv
   # Level 3
