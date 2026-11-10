@@ -29,26 +29,28 @@
 //   3. scalar word/halfword/byte writes, read-after-write
 //   4. vector unit-stride and strided writes (strided: partial strobes per slot)
 //   5. read of the neighbour core's slice (visibility through DRAM)
-//   6. timing, two visits each: a cached region gets faster after its cold
-//      visit, the bypass region does not (DRAM refresh makes a third visit noisy)
-//   7. bypass switched off: the same region now gets faster on its second visit
-// Half of each tile's banks are private: the private/bypass range is served by
-// the local tile, everything below L1D_ADDR (counters, scratch, the cached
-// timing region) is shared and coherent across tiles. The cache xbar interleaves
-// at cache-line granularity, so the shared data spreads over all controllers.
+//   6. timing, core 0 only: a latency-bound pointer chase over a region, five
+//      visits, one outlier dropped (DRAM refresh makes single visits noisy). With
+//      the bypass off the region hits after its cold visit; with it on another
+//      region never does and stays far above the hit time.
+// In parts 0-5 half of each tile's banks are private: the private/bypass range is
+// served by the local tile, everything below L1D_ADDR (counters, scratch) is
+// shared and coherent across tiles. The cache xbar interleaves at cache-line
+// granularity, so the shared data spreads over all controllers. Part 6 makes every
+// bank private and tile-folded, so core 0 only reaches its own tile's banks and the
+// timing is free of other cores and remote tiles.
 //
 // Strides of 12 B and unaligned e8 copies are left out: they hang on the cached
 // path as well (pre-existing, independent of the bypass).
 
 #include <benchmark.h>
+#include <l1cache.h>
 #include <snrt.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <spatz_lock.h>
 
 #define BYP_BASE  0xB0000000u
-// Cached region (.pdcp_src), below the private/bypass boundary
-#define PRV_BASE  0xA0000000u
 // Words per half: 16 KiB, so each half spans every DRAM channel (1 KiB interleave).
 #define BYP_WORDS 4096u
 
@@ -60,21 +62,20 @@
 #define P256(b, i)  P64(b, i), P64(b, (i) + 64), P64(b, (i) + 128), P64(b, (i) + 192)
 #define P1024(b, i) P256(b, i), P256(b, (i) + 256), P256(b, (i) + 512), P256(b, (i) + 768)
 #define P4096(b, i) P1024(b, i), P1024(b, (i) + 1024), P1024(b, (i) + 2048), P1024(b, (i) + 3072)
-#define P16384(b, i) P4096(b, i), P4096(b, (i) + 4096), P4096(b, (i) + 8192), P4096(b, (i) + 12288)
 #define A1(i)       P1(BYP_BASE, i)
 
-// Part 6 timing regions: 16 lines per core, small enough to never evict.
-#define T_CORE_WORDS 256u
-#define T_WORDS      (64u * T_CORE_WORDS)
+// Part 6 timing regions: 16 lines each, C (cached) then B (bypassed), after the two halves.
+#define T_REG_WORDS  256u
+#define T_BASE_WORD  (2u * BYP_WORDS)
+#define T_VISITS     5u
+#define T_LINE_BYTES 64u
+#define T_LINES      (T_REG_WORDS * 4u / T_LINE_BYTES)
 
-// Read-only half, read/write half, then the bypass timing region.
-static uint32_t byp_buf[2 * BYP_WORDS + T_WORDS] __attribute__((section(".l1_bypass"), used)) = {
-  P4096(BYP_BASE, 0), P4096(BYP_BASE, BYP_WORDS), P16384(BYP_BASE, 2 * BYP_WORDS)
-};
-
-// Cached timing region (below the private/bypass boundary).
-static uint32_t prv_buf[T_WORDS] __attribute__((section(".pdcp_src"), used)) = {
-  P16384(PRV_BASE, 0)
+// Read-only half, read/write half, then the two timing regions.
+static uint32_t byp_buf[T_BASE_WORD + 2 * T_REG_WORDS]
+    __attribute__((section(".l1_bypass"), used)) = {
+  P4096(BYP_BASE, 0), P4096(BYP_BASE, BYP_WORDS),
+  P256(BYP_BASE, T_BASE_WORD), P256(BYP_BASE, T_BASE_WORD + T_REG_WORDS)
 };
 
 // Cached scratch, one slice per core.
@@ -146,26 +147,92 @@ static inline void vec_scatter_strided(uint32_t *dst, const uint32_t *src,
 // each other: drain the scalar stores before Spatz reads the same buffer.
 static inline void scalar_to_vector_fence(void) { asm volatile("fence" ::: "memory"); }
 
-// Stream count words through the vector unit (loads only).
-static inline void vec_load(const uint32_t *src, uint32_t count) {
-  uint32_t avl = count;
-  uint32_t vl;
-  do {
-    asm volatile("vsetvli %0, %1, e32, m8, ta, ma" : "=r"(vl) : "r"(avl));
-    asm volatile("vle32.v v0, (%0)" : : "r"(src) : "memory");
-    src += vl;
-    avl -= vl;
-  } while (avl > 0);
+// One timed visit of a part 6 region: a pointer chase over its lines. Every word holds its own
+// address, so each load returns the address of its line and the next load depends on it; the
+// visit is latency-bound, T_LINES times the load latency.
+static uint32_t timed_visit(const uint32_t *ptr) {
+  uint32_t a = (uint32_t)ptr;
+  uint32_t t0 = benchmark_get_cycle();
+  for (uint32_t l = 0; l < T_LINES; l++) {
+    a = *(volatile uint32_t *)a + T_LINE_BYTES;
+  }
+  // Use the last loaded value before reading the cycle counter, so its latency is counted
+  asm volatile("mv %0, %0" : "+r"(a));
+  return benchmark_get_cycle() - t0;
 }
 
-// One timed visit of every core's slice; cycles measured on core 0.
-static uint32_t timed_visit(const uint32_t *slice_ptr, uint32_t count, uint32_t cid) {
-  snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
-  uint32_t t0 = benchmark_get_cycle();
-  vec_load(slice_ptr, count);
-  snrt_fence_spatz();
-  snrt_cluster_host0_barrier(SNRT_HOST_BARRIER_SLOT);
-  return (cid == 0) ? benchmark_get_cycle() - t0 : 0;
+// Words of a part 6 region that do not hold their own address
+static uint32_t region_errors(const uint32_t *ptr, uint32_t base_word) {
+  uint32_t err = 0;
+  for (uint32_t i = 0; i < T_REG_WORDS; i++) {
+    err += (ptr[i] != A1(base_word + i));
+  }
+  return err;
+}
+
+// Index of the visit farthest from the mean of t[0..n): the one outlier that is dropped
+static uint32_t outlier_idx(const uint32_t *t, uint32_t n) {
+  uint32_t sum = 0;
+  for (uint32_t i = 0; i < n; i++) sum += t[i];
+  const uint32_t mean = sum / n;
+  uint32_t idx = 0, dmax = 0;
+  for (uint32_t i = 0; i < n; i++) {
+    const uint32_t d = (t[i] > mean) ? t[i] - mean : mean - t[i];
+    if (d > dmax) {
+      dmax = d;
+      idx  = i;
+    }
+  }
+  return idx;
+}
+
+// Mean of t[0..n) without t[skip]
+static uint32_t mean_skip(const uint32_t *t, uint32_t n, uint32_t skip) {
+  uint32_t sum = 0;
+  for (uint32_t i = 0; i < n; i++) sum += (i == skip) ? 0 : t[i];
+  return sum / (n - 1);
+}
+
+// 6. Timing on core 0 alone, T_VISITS visits per region, one outlier dropped (DRAM refresh
+// and the like make single visits noisy). Every hart calls it, since the l1d_* helpers use
+// the cluster barrier. Returns the number of failed checks (core 0 only).
+static int bypass_timing(int is_core0) {
+  int fails = 0;
+  uint32_t tc[T_VISITS], tb[T_VISITS];
+  uint32_t hot = 0;
+  const uint32_t c_word = T_BASE_WORD;
+  const uint32_t b_word = T_BASE_WORD + T_REG_WORDS;
+
+  // Every bank private and tile-folded; this flushes, so both regions start cold
+  l1d_part_folded(snrt_cluster_vpu_per_tile(), L1D_FOLD_TILE);
+
+  // Bypass off: region C is cached in core 0's own tile and hits on the second visit
+  l1d_bypass(0);
+  if (is_core0) {
+    for (uint32_t v = 0; v < T_VISITS; v++) tc[v] = timed_visit(&byp_buf[c_word]);
+    const uint32_t err = region_errors(&byp_buf[c_word], c_word);
+    // Hot: mean of the visits after the cold one, outlier dropped; < 0.7x the cold visit
+    hot = mean_skip(&tc[1], T_VISITS - 1, outlier_idx(&tc[1], T_VISITS - 1));
+    const int ok = (10 * hot < 7 * tc[0]);
+    printf("6  cached, bypass off: %u %u %u %u %u, hot %u -> %s (%u data errors)\n",
+           tc[0], tc[1], tc[2], tc[3], tc[4], hot, ok ? "PASS" : "FAIL", err);
+    fails += !ok + (err != 0);
+  }
+
+  // Bypass on: region B was never cached and goes to DRAM on every visit
+  l1d_bypass(1);
+  if (is_core0) {
+    for (uint32_t v = 0; v < T_VISITS; v++) tb[v] = timed_visit(&byp_buf[b_word]);
+    const uint32_t err = region_errors(&byp_buf[b_word], b_word);
+    // Never a hit: the repeated visits (outlier dropped) stay above 2x the cached hot visits
+    const uint32_t warm = mean_skip(&tb[1], T_VISITS - 1, outlier_idx(&tb[1], T_VISITS - 1));
+    const int ok = (warm > 2 * hot);
+    printf("6  bypass on:          %u %u %u %u %u, warm %u -> %s (%u data errors)\n",
+           tb[0], tb[1], tb[2], tb[3], tb[4], warm, ok ? "PASS" : "FAIL", err);
+    fails += !ok + (err != 0);
+  }
+  l1d_bypass(0);
+  return fails;
 }
 
 static inline uint32_t pat_a(uint32_t cid, uint32_t i) { return 0xA0000000u | (cid << 16) | i; }
@@ -207,8 +274,7 @@ int main() {
     return -1;
   }
 
-  // Cache-line interleaving (log2(512/8)): with the coarse reset offset the shared
-  // timing region of part 6 lands on two controllers of one tile and thrashes.
+  // Cache-line interleaving (log2(512/8)), so the shared data spreads over all controllers
   l1d_xbar_config(6);
 
   // 0. Dirty cached data survives switching the bypass on and off
@@ -226,8 +292,8 @@ int main() {
   l1d_bypass(1);
 
   if (!is_primary) {
-    // Matches the primaries' l1d_bypass(0) before part 7
-    l1d_bypass(0);
+    // Matches the primaries' part 6 (l1d_* calls) and final barrier
+    bypass_timing(0);
     snrt_cluster_hw_barrier();
     return 0;
   }
@@ -243,8 +309,8 @@ int main() {
     printf("0  bypass switch keeps dirty data: %s\n", canary_ok ? "PASS" : "FAIL");
     num_fails += !canary_ok;
     printf("Cores:%u  buffer:0x%x  slice:%u words\n", num_cores, (uint32_t)byp_buf, slice);
-    if ((uint32_t)byp_buf != BYP_BASE || (uint32_t)prv_buf != PRV_BASE) {
-      printf("FATAL: buffers not at 0x%x / 0x%x\n", BYP_BASE, PRV_BASE);
+    if ((uint32_t)byp_buf != BYP_BASE) {
+      printf("FATAL: buffer not at 0x%x\n", BYP_BASE);
       num_fails++;
     }
   }
@@ -357,50 +423,8 @@ int main() {
   error_cnt[cid] = err;
   num_fails += report("5  neighbour read", cid, num_cores);
 
-  // 6. Timing: two visits of a cached region (B, cold first) and of the bypass
-  // region (A). B must speed up after the cold visit, A must not.
-  const uint32_t t_base = cid * T_CORE_WORDS;
-  const uint32_t *b_ptr = &prv_buf[t_base];
-  const uint32_t *a_ptr = &byp_buf[2 * BYP_WORDS + t_base];
-  uint32_t tb[2], ta[2];
-  for (uint32_t t = 0; t < 2; t++) tb[t] = timed_visit(b_ptr, T_CORE_WORDS, cid);
-  for (uint32_t t = 0; t < 2; t++) ta[t] = timed_visit(a_ptr, T_CORE_WORDS, cid);
-  err = 0;
-  for (uint32_t i = 0; i < T_CORE_WORDS; i++) {
-    err += (b_ptr[i] != P1(PRV_BASE, t_base + i));
-  }
-  error_cnt[cid] = err;
-  num_fails += report("6  cached region data", cid, num_cores);
-  if (cid == 0) {
-    printf("6  cycles cached B: %u %u | bypass A: %u %u\n", tb[0], tb[1], ta[0], ta[1]);
-    // cached: second visit < 0.7x cold; bypass: second visit within +-20% of the first
-    const int b_ok = (10 * tb[1] < 7 * tb[0]);
-    const int a_ok = (10 * ta[1] > 8 * ta[0]) && (10 * ta[1] < 12 * ta[0]);
-    printf("6  timing: cached speeds up %s, bypass stays flat %s\n",
-           b_ok ? "PASS" : "FAIL", a_ok ? "PASS" : "FAIL");
-    num_fails += !(b_ok && a_ok);
-  }
-
-  // 7. Bypass off: the same bypass-range region is cacheable again (cold, then hit).
-  // It was never cached, so no flush is needed.
-  l1d_bypass(0);
-  uint32_t tc[2];
-  for (uint32_t t = 0; t < 2; t++) tc[t] = timed_visit(a_ptr, T_CORE_WORDS, cid);
-  err = 0;
-  for (uint32_t i = 0; i < T_CORE_WORDS; i++) {
-    err += (a_ptr[i] != P1(BYP_BASE, 2 * BYP_WORDS + t_base + i));
-  }
-  error_cnt[cid] = err;
-  num_fails += report("7  bypass off, data", cid, num_cores);
-  if (cid == 0) {
-    // Timing waived, not counted: with a partial private partition, lines differing only in an
-    // unused bank bit collide in the same set and way (controller way hash), so this region does
-    // not speed up on its second visit. Restore the count once the hash is fixed.
-    const int c_ok = (10 * tc[1] < 7 * tc[0]);
-    printf("7  cycles same region, bypass off: %u %u -> %s\n", tc[0], tc[1],
-           c_ok ? "PASS" : "FAILED");
-    num_fails += !(c_ok);
-  }
+  // 6. Timing on core 0 alone, with every bank private
+  num_fails += bypass_timing(cid == 0);
 
   if (cid == 0) {
     printf("*** L1 bypass test %s ***\n", num_fails ? "FAILED" : "PASSED");
