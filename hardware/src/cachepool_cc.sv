@@ -155,6 +155,14 @@ module cachepool_cc
   logic acc_pvalid, acc_pready;
   logic acc_demux_snitch_valid, acc_demux_snitch_ready;
 
+  // Offload request cut output, and the mul/div unit it feeds next to Spatz
+  logic           cut_qvalid, cut_qready;
+  acc_issue_rsp_t cut_qrsp;
+  logic           muldiv_sel;
+  logic           muldiv_qvalid, muldiv_qready;
+  acc_rsp_t       muldiv_rsp;
+  logic           muldiv_pvalid, muldiv_pready;
+
   fpnew_pkg::roundmode_e fpu_rnd_mode;
   fpnew_pkg::fmt_mode_t fpu_fmt_mode;
   fpnew_pkg::status_t fpu_status;
@@ -294,23 +302,71 @@ module cachepool_cc
     .snitch_mem_str_finished_o ( snitch_mem_str_finished ),
     .snitch_st_rsp_done_o      ( snitch_st_rsp_done      ),
     .spatz_qreq_o              ( spatz_acc_req           ),
-    .spatz_qvalid_o            ( acc_qvalid              ),
-    .spatz_qready_i            ( acc_qready              ),
-    .spatz_qrsp_i              ( acc_snitch_resp         ),
+    .spatz_qvalid_o            ( cut_qvalid              ),
+    .spatz_qready_i            ( cut_qready              ),
+    .spatz_qrsp_i              ( cut_qrsp                ),
     .spatz_mem_finished_i      ( spatz_mem_finished      ),
     .spatz_mem_str_finished_i  ( spatz_mem_str_finished  ),
     .spatz_st_rsp_done_i       ( spatz_st_rsp_done       ),
     .pending_o                 ( /* Unused */            )
   );
 
-  // There is no shared muldiv in this configuration
+  // Offloads leaving the cut go to the core's own mul/div unit or to Spatz
+  assign muldiv_sel = (acc_snitch_req.addr == snitch_pkg::IPU);
+
+  stream_demux #(
+    .N_OUP ( 2 )
+  ) i_acc_demux (
+    .inp_valid_i ( cut_qvalid                  ),
+    .inp_ready_o ( cut_qready                  ),
+    .oup_sel_i   ( muldiv_sel                  ),
+    .oup_valid_o ( {muldiv_qvalid, acc_qvalid} ),
+    .oup_ready_i ( {muldiv_qready, acc_qready} )
+  );
+
+  // A mul/div is neither a Spatz memory op nor a Spatz writeback
+  always_comb begin
+    cut_qrsp = acc_snitch_resp;
+    if (muldiv_sel) begin
+      cut_qrsp.loadstore = 1'b0;
+      cut_qrsp.writeback = 1'b0;
+    end
+  end
+
+  cachepool_muldiv #(
+    .DataWidth       ( DataWidth       ),
+    .acc_issue_req_t ( acc_issue_req_t ),
+    .acc_rsp_t       ( acc_rsp_t       )
+  ) i_muldiv (
+    .clk_i,
+    .rst_ni,
+    .acc_req_i       ( acc_snitch_req ),
+    .acc_req_valid_i ( muldiv_qvalid  ),
+    .acc_req_ready_o ( muldiv_qready  ),
+    .acc_rsp_o       ( muldiv_rsp     ),
+    .acc_rsp_valid_o ( muldiv_pvalid  ),
+    .acc_rsp_ready_i ( muldiv_pready  )
+  );
+
+  // The mul/div unit is per core, the hive one is unused
   assign hive_req_o.acc_qvalid = 1'b0;
   assign hive_req_o.acc_pready = 1'b0;
   assign hive_req_o.acc_req    = '0;
 
-  assign acc_demux_snitch = acc_resp;
-  assign acc_demux_snitch_valid = acc_pvalid;
-  assign acc_pready = acc_demux_snitch_ready;
+  // Results of the mul/div unit and Spatz share the core's response port
+  stream_arbiter #(
+    .DATA_T ( acc_rsp_t ),
+    .N_INP  ( 2         )
+  ) i_acc_rsp_arbiter (
+    .clk_i,
+    .rst_ni,
+    .inp_data_i  ( {muldiv_rsp, acc_resp}      ),
+    .inp_valid_i ( {muldiv_pvalid, acc_pvalid} ),
+    .inp_ready_o ( {muldiv_pready, acc_pready} ),
+    .oup_data_o  ( acc_demux_snitch            ),
+    .oup_valid_o ( acc_demux_snitch_valid      ),
+    .oup_ready_i ( acc_demux_snitch_ready      )
+  );
 
   dreq_t fp_lsu_mem_req;
   drsp_t fp_lsu_mem_rsp;
