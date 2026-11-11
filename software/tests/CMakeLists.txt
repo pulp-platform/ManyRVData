@@ -8,3 +8,4 @@ add_spatz_test_zeroParam(partial_barrier_benchmark partial_barrier_benchmark/mai
 add_spatz_test_zeroParam(bandwidth bandwidth/main.c)
 add_spatz_test_zeroParam(l1-bypass l1-bypass/main.c)
 add_spatz_test_zeroParam(spatz-vrf-mode spatz-vrf-mode/main.c)
+add_spatz_test_zeroParam(spatz-dual-thread spatz-dual-thread/main.c)

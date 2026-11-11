@@ -155,6 +155,9 @@ module cachepool_cc_dual
   logic [1:0] spatz_mem_finished;
   logic [1:0] spatz_mem_str_finished;
   logic       spatz_st_rsp_done;
+  // Thread of the finished VLSU instruction, and of the Spatz response
+  logic       spatz_mem_fin_thid;
+  logic       spatz_rsp_thid;
 
   logic [1:0][1:0] acc_mem_finished_h;
   logic [1:0][1:0] acc_mem_str_finished_h;
@@ -384,9 +387,10 @@ module cachepool_cc_dual
   // Acc mux: real round-robin access to Spatz for both hosts while
   // unlocked, exclusive owner access while locked. See acc_mux.sv.
   acc_mux #(
-    .acc_issue_req_t (acc_req_mode_t ),
-    .acc_issue_rsp_t (acc_issue_rsp_t),
-    .acc_rsp_t       (acc_rsp_t      )
+    .acc_issue_req_t (acc_req_mode_t                ),
+    .acc_issue_rsp_t (acc_issue_rsp_t               ),
+    .acc_rsp_t       (acc_rsp_t                     ),
+    .DualThread      (cachepool_pkg::SpatzDualThread)
   ) i_acc_mux (
     .clk_i                   (clk_i                  ),
     .rst_ni                  (rst_ni                 ),
@@ -408,7 +412,9 @@ module cachepool_cc_dual
     .spatz_rsp_i             (spatz_rsp              ),
     .spatz_rsp_valid_i       (spatz_rsp_valid        ),
     .spatz_rsp_ready_o       (spatz_rsp_ready        ),
+    .spatz_rsp_thid_i        (spatz_rsp_thid         ),
     .spatz_mem_finished_i    (spatz_mem_finished     ),
+    .spatz_mem_fin_thid_i    (spatz_mem_fin_thid     ),
     .spatz_mem_str_finished_i(spatz_mem_str_finished ),
     .spatz_st_rsp_done_i     (spatz_st_rsp_done      ),
     .issue_host_o            (issue_host             ),
@@ -463,6 +469,7 @@ module cachepool_cc_dual
     .rsp_valid_o             (spatz_rsp_valid       ),
     .rsp_ready_i             (spatz_rsp_ready       ),
     .rsp_o                   (spatz_rsp             ),
+    .rsp_thid_o              (spatz_rsp_thid        ),
     .spatz_mem_req_o         (spatz_mem_req         ),
     .spatz_mem_req_valid_o   (spatz_mem_req_valid   ),
     .spatz_mem_req_ready_i   (spatz_mem_req_ready   ),
@@ -471,6 +478,7 @@ module cachepool_cc_dual
     .spatz_mem_rsp_ready_o   (spatz_mem_rsp_ready   ),
     .spatz_mem_finished_o    (spatz_mem_finished    ),
     .spatz_mem_str_finished_o(spatz_mem_str_finished),
+    .spatz_mem_fin_thid_o    (spatz_mem_fin_thid    ),
     .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
     .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
     .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),

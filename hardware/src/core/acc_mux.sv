@@ -19,10 +19,14 @@
 /// Also demuxes Spatz's LSU-consistency signals (mem_finished/mem_str_finished/
 /// st_rsp_done) to the issuing host, attributed by current-cycle owner so a
 /// same-cycle issue+finish (e.g. stores) is never misrouted to a stale owner.
+/// With a dual-thread Spatz (DualThread), Spatz tags responses and memory completions with
+/// their thread (host): Free mode is then a plain round-robin without the one-outstanding
+/// guard, responses and completions are routed by thread, and st_rsp_done goes to both hosts.
 module acc_mux #(
   parameter type acc_issue_req_t = logic,
   parameter type acc_issue_rsp_t = logic,
-  parameter type acc_rsp_t       = logic
+  parameter type acc_rsp_t       = logic,
+  parameter bit  DualThread      = 1'b0
 ) (
   input  logic            clk_i,
   input  logic            rst_ni,
@@ -49,11 +53,15 @@ module acc_mux #(
   input  acc_rsp_t        spatz_rsp_i,
   input  logic            spatz_rsp_valid_i,
   output logic            spatz_rsp_ready_o,
+  // Thread (host) the Spatz response belongs to
+  input  logic            spatz_rsp_thid_i,
 
   // Spatz's raw LSU-consistency signals, demuxed to the per-host outputs below.
   input  logic            [1:0] spatz_mem_finished_i,
   input  logic            [1:0] spatz_mem_str_finished_i,
   input  logic                  spatz_st_rsp_done_i,
+  // Thread (host) of the VLSU instruction finishing on spatz_mem_finished_i[1]
+  input  logic                  spatz_mem_fin_thid_i,
 
   // Host of the request offered to Spatz: the owner when locked, else the Free-mode winner
   output logic            issue_host_o,
@@ -99,7 +107,10 @@ module acc_mux #(
 
   `FF(lsu_busy_q, lsu_busy_d, 1'b0, clk_i, rst_ni)
 
-  assign free_req_i = (!locked_i && !waiting_i && route_fifo_empty && !lsu_busy_q) ? acc_snitch_qvalid_i : 2'b00;
+  // A dual-thread Spatz routes by thread, so nothing outstanding needs to hold off a grant
+  assign free_req_i = (!locked_i && !waiting_i &&
+                       (DualThread ? !owner_active_i : route_fifo_empty && !lsu_busy_q)) ?
+                      acc_snitch_qvalid_i : 2'b00;
   assign free_gnt_i = spatz_issue_ready_i;
 
   rr_arb_tree #(
@@ -122,8 +133,9 @@ module acc_mux #(
   );
 
   // Only track requests with a real completion coming: non-writeback ops never produce a later acc_rsp_t.
-  assign route_fifo_push = free_req_o && free_gnt_i && spatz_issue_rsp_i.writeback;
-  assign route_fifo_pop  = rsp_fire_o && !owner_active_i;
+  // Unused with a dual-thread Spatz, whose responses carry their thread.
+  assign route_fifo_push = !DualThread && free_req_o && free_gnt_i && spatz_issue_rsp_i.writeback;
+  assign route_fifo_pop  = !DualThread && rsp_fire_o && !owner_active_i;
 
   // Depth 2 for safety margin; only 1 entry is ever pushed at a time.
   fifo_v3 #(
@@ -154,10 +166,15 @@ module acc_mux #(
 
   `FF(last_req_host_q, cur_owner, 1'b0, clk_i, rst_ni)
 
+  // Host of a finishing memory op: its thread with a dual-thread Spatz, else the current owner
+  logic mem_fin_host;
+  assign mem_fin_host = DualThread ? spatz_mem_fin_thid_i : cur_owner;
+
   for (genvar h = 0; h < 2; h++) begin : gen_lsu_consistency_demux
-    assign acc_mem_finished_o[h]     = (cur_owner == h[0]) ? spatz_mem_finished_i     : '0;
-    assign acc_mem_str_finished_o[h] = (cur_owner == h[0]) ? spatz_mem_str_finished_i : '0;
-    assign acc_st_rsp_done_o[h]      = (cur_owner == h[0]) ? spatz_st_rsp_done_i      : 1'b1;
+    assign acc_mem_finished_o[h]     = (mem_fin_host == h[0]) ? spatz_mem_finished_i     : '0;
+    assign acc_mem_str_finished_o[h] = (mem_fin_host == h[0]) ? spatz_mem_str_finished_i : '0;
+    // Store acks are not tagged: a dual-thread Spatz reports them to both hosts (shared fence)
+    assign acc_st_rsp_done_o[h]      = (DualThread || cur_owner == h[0]) ? spatz_st_rsp_done_i : 1'b1;
   end
 
   always_comb begin
@@ -170,7 +187,25 @@ module acc_mux #(
     acc_snitch_prsp_o   = '0;
     acc_snitch_pvalid_o = '0;
 
-    if (owner_active_i) begin
+    if (DualThread) begin
+      // Responses go to the thread Spatz tags them with, independently of issuing
+      spatz_rsp_ready_o                     = acc_snitch_pready_i[spatz_rsp_thid_i];
+      acc_snitch_prsp_o[spatz_rsp_thid_i]   = spatz_rsp_i;
+      acc_snitch_pvalid_o[spatz_rsp_thid_i] = spatz_rsp_valid_i;
+
+      if (locked_i) begin
+        spatz_issue_req_o   = acc_snitch_req_i[owner_id_i];
+        spatz_issue_valid_o = acc_snitch_qvalid_i[owner_id_i];
+
+        acc_snitch_qready_o[owner_id_i] = spatz_issue_ready_i;
+        acc_snitch_rsp_o[owner_id_i]    = spatz_issue_rsp_i;
+      end else if (!owner_active_i && !waiting_i) begin
+        spatz_issue_req_o                = free_data_o;
+        spatz_issue_valid_o              = free_req_o;
+        acc_snitch_qready_o[free_winner] = free_req_o && spatz_issue_ready_i;
+        acc_snitch_rsp_o[free_winner]    = spatz_issue_rsp_i;
+      end
+    end else if (owner_active_i) begin
       // Draining runs through Locked/RelWait; new-issue forwarding is steady-state-Locked only.
       spatz_rsp_ready_o               = acc_snitch_pready_i[owner_id_i];
       acc_snitch_prsp_o[owner_id_i]   = spatz_rsp_i;
@@ -199,6 +234,12 @@ module acc_mux #(
   end
 
 `ifndef TARGET_SYNTHESIS
+  // While locked, a dual-thread Spatz only runs the owner's thread
+  `ASSERT(LockedRspIsOwner, (DualThread && owner_active_i && spatz_rsp_valid_i) |->
+          spatz_rsp_thid_i == owner_id_i, clk_i, !rst_ni)
+  `ASSERT(LockedMemFinIsOwner, (DualThread && owner_active_i && spatz_mem_finished_i[1]) |->
+          spatz_mem_fin_thid_i == owner_id_i, clk_i, !rst_ni)
+
   // Debug-only: verbose per-event log (+acc_mux_verbose plusarg) and a
   // stuck-transaction watchdog. Added to debug the FPU-enabled dual-CC
   // boot hang; temporary instrumentation, safe to strip once resolved.
@@ -232,12 +273,12 @@ module acc_mux #(
                  $time, owner_active_i, locked_i, owner_id_i, spatz_issue_rsp_i.writeback);
       end
       if (rsp_fire_o) begin
-        $display("[ACC-MUX %0t %m] RSP-FIRE  owner_active=%0b route_host=%0d",
-                 $time, owner_active_i, route_fifo_route_q);
+        $display("[ACC-MUX %0t %m] RSP-FIRE  owner_active=%0b route_host=%0d thid=%0d",
+                 $time, owner_active_i, route_fifo_route_q, spatz_rsp_thid_i);
       end
       if (spatz_mem_finished_i[0] || spatz_mem_finished_i[1]) begin
-        $display("[ACC-MUX %0t %m] LSU-FINISH cur_owner=%0d mem_finished=%0b",
-                 $time, cur_owner, spatz_mem_finished_i);
+        $display("[ACC-MUX %0t %m] LSU-FINISH cur_owner=%0d thid=%0d mem_finished=%0b",
+                 $time, cur_owner, spatz_mem_fin_thid_i, spatz_mem_finished_i);
       end
       // Edge-triggered: which side of the p-channel handshake (valid vs.
       // ready) is actually stuck once route_fifo has something owed.
