@@ -7,3 +7,4 @@ add_spatz_test_zeroParam(load-store load-store/main.c)
 add_spatz_test_zeroParam(partial_barrier_benchmark partial_barrier_benchmark/main.c)# SOCMIPO
 add_spatz_test_zeroParam(bandwidth bandwidth/main.c)
 add_spatz_test_zeroParam(l1-bypass l1-bypass/main.c)
+add_spatz_test_zeroParam(spatz-vrf-mode spatz-vrf-mode/main.c)

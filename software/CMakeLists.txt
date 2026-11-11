@@ -21,6 +21,8 @@ enable_testing()
 # is a directory property and does not propagate to sibling add_subdirectory trees.
 set(NUM_SCALAR_PER_CORE "1" CACHE STRING "Snitch harts sharing one Spatz per Core Complex")
 add_compile_definitions(SNRT_NUM_SCALAR_PER_CORE=${NUM_SCALAR_PER_CORE})
+set(SPATZ_DUAL_THREAD "0" CACHE STRING "Dual-thread Spatz: split VRF while the Spatz lock is free")
+add_compile_definitions(SNRT_SPATZ_DUAL_THREAD=${SPATZ_DUAL_THREAD})
 
 # Memory system shape from config.mk, for kernels that lay data out for it
 set(L2_CHANNEL "4" CACHE STRING "Number of HBM channels")
