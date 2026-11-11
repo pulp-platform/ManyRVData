@@ -49,6 +49,10 @@ package cachepool_pkg;
   // Whole-build choice, not per-tile; default 1 until config.mk wires a real value through.
   localparam int unsigned NumScalarPerCC = `ifdef NUM_SCALAR_PER_CC `NUM_SCALAR_PER_CC `else 1 `endif;
 
+  // Dual-thread Spatz in cachepool_cc_dual: the VRF is split between the two harts while the
+  // Spatz lock is free
+  localparam bit SpatzDualThread = `ifdef SPATZ_DUAL_THREAD `SPATZ_DUAL_THREAD `else 0 `endif;
+
   // Total hart count (NumCC CC-slots x NumScalarPerCC harts each) -- use for
   // per-hart addressing; use NumCC for CC/Spatz-slot units (tile/group size).
   localparam int unsigned NumCores = NumCC * NumScalarPerCC;

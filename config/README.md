@@ -147,6 +147,7 @@ them explicitly.
 | `spatz_max_trans` | `32` | `SPATZ_MAX_TRANS` | Spatz outstanding transactions |
 | `snitch_max_trans` | `16` | `SNITCH_MAX_TRANS` | Snitch/FPU outstanding transactions |
 | `num_scalar_per_core` | `1` | `NUM_SCALAR_PER_CC` | Snitch scalar harts sharing one Spatz per CC. `1` or `2`; `2` also emits `CACHEPOOL_DUAL_CC` |
+| `spatz_dual_thread` | `0` | `SPATZ_DUAL_THREAD` | Dual-thread Spatz (only with `num_scalar_per_core=2`): while the Spatz lock is free, the VRF is split between the two harts and each gets half-length vector registers (`vlenb` halves) |
 
 ### AXI
 

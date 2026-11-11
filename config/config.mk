@@ -119,6 +119,10 @@ snitch_max_trans ?= 16
 # Number of Snitch scalar harts sharing one Spatz per Core Complex (1 or 2)
 num_scalar_per_core ?= 1
 
+# Dual-thread Spatz (1 or 0), only with num_scalar_per_core=2: while the Spatz lock is free, the
+# VRF is split between the two harts, each getting half-length vector registers
+spatz_dual_thread ?= 0
+
 # Number of independent hardware barrier slots
 num_barrier_slots ?= 2
 

@@ -55,6 +55,9 @@ module acc_mux #(
   input  logic            [1:0] spatz_mem_str_finished_i,
   input  logic                  spatz_st_rsp_done_i,
 
+  // Host of the request offered to Spatz: the owner when locked, else the Free-mode winner
+  output logic            issue_host_o,
+
   // Drain feed for the lock's outstanding counter (owner and Free-mode paths both count).
   output logic            req_fire_o,
   output logic            rsp_fire_o,
@@ -143,6 +146,8 @@ module acc_mux #(
   // Current owner for this cycle's LSU-consistency demux: the just-issued host when a
   // grant is firing right now (covers same-cycle issue+finish, e.g. stores), else the
   // latched host from whichever grant is still draining (covers delayed completions).
+  assign issue_host_o = locked_i ? owner_id_i : free_winner;
+
   logic last_req_host_q;
   logic cur_owner;
   assign cur_owner = req_fire_any ? (locked_i ? owner_id_i : free_winner) : last_req_host_q;

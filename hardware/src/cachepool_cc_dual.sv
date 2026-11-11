@@ -130,6 +130,8 @@ module cachepool_cc_dual
   `REQRSP_TYPEDEF_ALL(reqrsp, addr_t, data_t, strb_t, tcdm_user_t)
 
   logic owner_id, locked, waiting, owner_active;
+  // Host whose request is offered to Spatz (its thread in the dual-thread VRF layout)
+  logic issue_host;
   logic req_fire, rsp_fire;
   assign owner_id_o = owner_id;
 
@@ -409,6 +411,7 @@ module cachepool_cc_dual
     .spatz_mem_finished_i    (spatz_mem_finished     ),
     .spatz_mem_str_finished_i(spatz_mem_str_finished ),
     .spatz_st_rsp_done_i     (spatz_st_rsp_done      ),
+    .issue_host_o            (issue_host             ),
     .req_fire_o              (req_fire               ),
     .rsp_fire_o              (rsp_fire               ),
     .acc_mem_finished_o      (acc_mem_finished_h     ),
@@ -443,12 +446,16 @@ module cachepool_cc_dual
     .spatz_mem_rsp_t    (tcdm_rsp_chan_t         ),
     .spatz_issue_req_t  (acc_issue_req_t         ),
     .spatz_issue_rsp_t  (acc_issue_rsp_t         ),
-    .spatz_rsp_t        (acc_rsp_t               )
+    .spatz_rsp_t        (acc_rsp_t               ),
+    .DualThread         (cachepool_pkg::SpatzDualThread)
   ) i_spatz (
     .clk_i                   (clk_i                 ),
     .rst_ni                  (rst_ni                ),
     .testmode_i              (testmode_i            ),
     .hart_id_i               (hart_id_i[owner_id]   ),
+    // Split VRF while the lock is free; locked (and draining a release) uses the full VRF
+    .dual_mode_i             (!owner_active         ),
+    .issue_thid_i            (issue_host            ),
     .issue_valid_i           (spatz_issue_valid     ),
     .issue_ready_o           (spatz_issue_ready     ),
     .issue_req_i             (spatz_issue_req.req   ),

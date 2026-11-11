@@ -399,6 +399,9 @@ module cachepool_cc
     .rst_ni                  (rst_ni                ),
     .testmode_i              (testmode_i            ),
     .hart_id_i               (hart_id_i             ),
+    // Single hart: always the single-thread VRF layout
+    .dual_mode_i             (1'b0                  ),
+    .issue_thid_i            (1'b0                  ),
     .issue_valid_i           (acc_qvalid            ),
     .issue_ready_o           (acc_qready            ),
     .issue_req_i             (acc_snitch_req        ),

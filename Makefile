@@ -370,6 +370,7 @@ CACHEPOOL_DEFS += -DSPATZ_NUM_IPU=$(spatz_num_ipu)
 CACHEPOOL_DEFS += -DSPATZ_MAX_TRANS=$(spatz_max_trans)
 CACHEPOOL_DEFS += -DSNITCH_MAX_TRANS=$(snitch_max_trans)
 CACHEPOOL_DEFS += -DNUM_SCALAR_PER_CC=$(num_scalar_per_core)
+CACHEPOOL_DEFS += -DSPATZ_DUAL_THREAD=$(spatz_dual_thread)
 ifeq ($(num_scalar_per_core),2)
 CACHEPOOL_DEFS += -DCACHEPOOL_DUAL_CC
 endif
@@ -507,6 +508,7 @@ SW_CMAKE_FLAGS = \
   -DPYTHON=${PYTHON} \
   -DBUILD_TESTS=ON \
   -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core) \
+  -DSPATZ_DUAL_THREAD=$(spatz_dual_thread) \
   -DL2_CHANNEL=$(l2_channel) \
   -DL2_INTERLEAVE=$(l2_interleave) \
   -DL2_BANK_WIDTH=$(l2_bank_width) \
