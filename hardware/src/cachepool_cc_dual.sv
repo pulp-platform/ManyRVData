@@ -147,6 +147,20 @@ module cachepool_cc_dual
   acc_rsp_t       [1:0] acc_snitch_prsp;
   logic           [1:0] acc_snitch_pvalid, acc_snitch_pready;
 
+  // Each core owns an FPU sequencer (scalar FP registers, FP loads/stores) between its offload
+  // demux and acc_mux; mux_acc_* is its acc_mux side
+  acc_issue_req_t [1:0] seq_acc_req;
+  acc_req_mode_t  [1:0] mux_acc_req;
+  acc_issue_rsp_t [1:0] mux_acc_rsp;
+  logic           [1:0] mux_acc_qvalid, mux_acc_qready;
+  acc_rsp_t       [1:0] mux_acc_prsp;
+  logic           [1:0] mux_acc_pvalid, mux_acc_pready;
+  dreq_t          [1:0] fp_lsu_req_h;
+  drsp_t          [1:0] fp_lsu_rsp_h;
+  logic           [1:0] fp_lsu_fin_h, fp_lsu_str_fin_h;
+  // Memory ops finished per core: {Spatz vector (routed by acc_mux), own FPU sequencer}
+  logic      [1:0][1:0] cut_mem_fin_h, cut_mem_str_fin_h;
+
   fpnew_pkg::roundmode_e [1:0] fpu_rnd_mode_h;
   fpnew_pkg::fmt_mode_t  [1:0] fpu_fmt_mode_h;
   fpnew_pkg::status_t          fpu_status;
@@ -278,8 +292,8 @@ module cachepool_cc_dual
       .spatz_qvalid_o            ( cut_qvalid[h]                ),
       .spatz_qready_i            ( cut_qready[h]                ),
       .spatz_qrsp_i              ( cut_qrsp[h]                  ),
-      .spatz_mem_finished_i      ( acc_mem_finished_h[h]        ),
-      .spatz_mem_str_finished_i  ( acc_mem_str_finished_h[h]    ),
+      .spatz_mem_finished_i      ( cut_mem_fin_h[h]             ),
+      .spatz_mem_str_finished_i  ( cut_mem_str_fin_h[h]         ),
       .spatz_st_rsp_done_i       ( acc_st_rsp_done_h[h]         ),
       .pending_o                 ( acc_pending[h]               )
     );
@@ -320,6 +334,65 @@ module cachepool_cc_dual
       .acc_rsp_valid_o ( muldiv_pvalid[h]      ),
       .acc_rsp_ready_i ( muldiv_pready[h]      )
     );
+
+    if (spatz_pkg::FPU) begin : gen_fpu_sequencer
+      spatz_fpu_sequencer #(
+        .dreq_t             ( dreq_t                   ),
+        .drsp_t             ( drsp_t                   ),
+        .spatz_issue_req_t  ( acc_issue_req_t          ),
+        .spatz_issue_rsp_t  ( acc_issue_rsp_t          ),
+        .spatz_rsp_t        ( acc_rsp_t                ),
+        .NumOutstandingLoads( NumSpatzOutstandingLoads )
+      ) i_fpu_sequencer (
+        .clk_i,
+        .rst_ni,
+        // Core side
+        .issue_req_i              ( acc_snitch_req[h].req        ),
+        .issue_valid_i            ( acc_snitch_qvalid[h]         ),
+        .issue_ready_o            ( acc_snitch_qready[h]         ),
+        .issue_rsp_o              ( acc_snitch_rsp[h]            ),
+        .resp_o                   ( acc_snitch_prsp[h]           ),
+        .resp_valid_o             ( acc_snitch_pvalid[h]         ),
+        .resp_ready_i             ( acc_snitch_pready[h]         ),
+        // acc_mux side
+        .issue_req_o              ( seq_acc_req[h]               ),
+        .issue_valid_o            ( mux_acc_qvalid[h]            ),
+        .issue_ready_i            ( mux_acc_qready[h]            ),
+        .issue_rsp_i              ( mux_acc_rsp[h]               ),
+        .resp_i                   ( mux_acc_prsp[h]              ),
+        .resp_valid_i             ( mux_acc_pvalid[h]            ),
+        .resp_ready_o             ( mux_acc_pready[h]            ),
+        // FP memory interface, on the core's own crossbar port
+        .fp_lsu_mem_req_o         ( fp_lsu_req_h[h]              ),
+        .fp_lsu_mem_rsp_i         ( fp_lsu_rsp_h[h]              ),
+        .fp_lsu_mem_finished_o    ( fp_lsu_fin_h[h]              ),
+        .fp_lsu_mem_str_finished_o( fp_lsu_str_fin_h[h]          ),
+        // This core's Spatz vector memory ops
+        .spatz_mem_finished_i     ( acc_mem_finished_h[h][1]     ),
+        .spatz_mem_str_finished_i ( acc_mem_str_finished_h[h][1] )
+      );
+    end else begin : gen_no_fpu_sequencer
+      assign seq_acc_req[h]       = acc_snitch_req[h].req;
+      assign mux_acc_qvalid[h]    = acc_snitch_qvalid[h];
+      assign acc_snitch_qready[h] = mux_acc_qready[h];
+      assign acc_snitch_rsp[h]    = mux_acc_rsp[h];
+      assign acc_snitch_prsp[h]   = mux_acc_prsp[h];
+      assign acc_snitch_pvalid[h] = mux_acc_pvalid[h];
+      assign mux_acc_pready[h]    = acc_snitch_pready[h];
+      assign fp_lsu_req_h[h]      = '0;
+      assign fp_lsu_fin_h[h]      = 1'b0;
+      assign fp_lsu_str_fin_h[h]  = 1'b0;
+    end
+
+    assign cut_mem_fin_h[h]     = {acc_mem_finished_h[h][1], fp_lsu_fin_h[h]};
+    assign cut_mem_str_fin_h[h] = {acc_mem_str_finished_h[h][1], fp_lsu_str_fin_h[h]};
+
+    // The FPU mode travels with the request to Spatz
+    assign mux_acc_req[h] = '{
+      req:      seq_acc_req[h],
+      rnd_mode: acc_snitch_req[h].rnd_mode,
+      fmt_mode: acc_snitch_req[h].fmt_mode
+    };
 
     // Results of the mul/div unit and Spatz (routed by acc_mux) share the core's response port
     stream_arbiter #(
@@ -398,13 +471,13 @@ module cachepool_cc_dual
     .locked_i                (locked                 ),
     .waiting_i               (waiting                ),
     .owner_active_i          (owner_active           ),
-    .acc_snitch_req_i        (acc_snitch_req         ),
-    .acc_snitch_rsp_o        (acc_snitch_rsp         ),
-    .acc_snitch_qvalid_i     (acc_snitch_qvalid      ),
-    .acc_snitch_qready_o     (acc_snitch_qready      ),
-    .acc_snitch_prsp_o       (acc_snitch_prsp        ),
-    .acc_snitch_pvalid_o     (acc_snitch_pvalid      ),
-    .acc_snitch_pready_i     (acc_snitch_pready      ),
+    .acc_snitch_req_i        (mux_acc_req            ),
+    .acc_snitch_rsp_o        (mux_acc_rsp            ),
+    .acc_snitch_qvalid_i     (mux_acc_qvalid         ),
+    .acc_snitch_qready_o     (mux_acc_qready         ),
+    .acc_snitch_prsp_o       (mux_acc_prsp           ),
+    .acc_snitch_pvalid_o     (mux_acc_pvalid         ),
+    .acc_snitch_pready_i     (mux_acc_pready         ),
     .spatz_issue_req_o       (spatz_issue_req        ),
     .spatz_issue_rsp_i       (spatz_issue_rsp        ),
     .spatz_issue_valid_o     (spatz_issue_valid      ),
@@ -426,9 +499,6 @@ module cachepool_cc_dual
   );
 
   // FPU status from Spatz's one FPU broadcasts back to both hosts.
-
-  dreq_t fp_lsu_mem_req;
-  drsp_t fp_lsu_mem_rsp;
 
   tcdm_req_chan_t [NumMemPortsPerSpatz-1:0] spatz_mem_req;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_req_valid;
@@ -453,7 +523,8 @@ module cachepool_cc_dual
     .spatz_issue_req_t  (acc_issue_req_t         ),
     .spatz_issue_rsp_t  (acc_issue_rsp_t         ),
     .spatz_rsp_t        (acc_rsp_t               ),
-    .DualThread         (cachepool_pkg::SpatzDualThread)
+    .DualThread         (cachepool_pkg::SpatzDualThread),
+    .ExtFpuSequencer    (1'b1                    )
   ) i_spatz (
     .clk_i                   (clk_i                 ),
     .rst_ni                  (rst_ni                ),
@@ -480,8 +551,8 @@ module cachepool_cc_dual
     .spatz_mem_str_finished_o(spatz_mem_str_finished),
     .spatz_mem_fin_thid_o    (spatz_mem_fin_thid    ),
     .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
-    .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
-    .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
+    .fp_lsu_mem_req_o        (/* Unused */          ),
+    .fp_lsu_mem_rsp_i        ('0                    ),
     .fpu_rnd_mode_i          (spatz_issue_req.rnd_mode),
     .fpu_fmt_mode_i          (spatz_issue_req.fmt_mode),
     .fpu_status_o            (fpu_status            )
@@ -556,13 +627,8 @@ module cachepool_cc_dual
     logic       write;
   } stack_meta_t;
 
-  drsp_t [1:0] fpu_rsp_per_host;
-
-  assign fp_lsu_mem_rsp = fpu_rsp_per_host[owner_id];
-
   // Per-host signals, hoisted out of gen_host as 2D arrays (indexed [host][...])
   // for debug visibility, rather than living inside separate generate scopes.
-  dreq_t [1:0] fpu_req_gated;
 
   dreq_chan_t [1:0][NrScalarXbarMst-1:0] core_req_chan;
   drsp_chan_t [1:0][NrScalarXbarMst-1:0] core_rsp_chan;
@@ -591,13 +657,6 @@ module cachepool_cc_dual
   tcdm_rsp_t         [1:0] stack_rsp;
 
   for (genvar h = 0; h < 2; h++) begin : gen_host
-    // FPU's request only ever contends on the crossbar matching the current owner.
-    assign fpu_req_gated[h] = '{
-      q      : fp_lsu_mem_req.q,
-      q_valid: fp_lsu_mem_req.q_valid && (owner_id == h[0]),
-      p_ready: fp_lsu_mem_req.p_ready
-    };
-
     assign core_req_chan  [h][SnitchMst] = lock_out_req[h].q;
     assign core_req_valid [h][SnitchMst] = lock_out_req[h].q_valid;
     assign core_rsp_ready [h][SnitchMst] = lock_out_req[h].p_ready;
@@ -607,10 +666,11 @@ module cachepool_cc_dual
       q_ready: core_req_ready [h][SnitchMst]
     };
 
-    assign core_req_chan  [h][FpuMst] = fpu_req_gated[h].q;
-    assign core_req_valid [h][FpuMst] = fpu_req_gated[h].q_valid;
-    assign core_rsp_ready [h][FpuMst] = fpu_req_gated[h].p_ready;
-    assign fpu_rsp_per_host[h] = '{
+    // The core's own FPU sequencer
+    assign core_req_chan  [h][FpuMst] = fp_lsu_req_h[h].q;
+    assign core_req_valid [h][FpuMst] = fp_lsu_req_h[h].q_valid;
+    assign core_rsp_ready [h][FpuMst] = fp_lsu_req_h[h].p_ready;
+    assign fp_lsu_rsp_h[h] = '{
       p      : core_rsp_chan  [h][FpuMst],
       p_valid: core_rsp_valid [h][FpuMst],
       q_ready: core_req_ready [h][FpuMst]
@@ -665,7 +725,7 @@ module cachepool_cc_dual
     );
 
     // TotStack hits get patched with host h's own id regardless of which
-    // master won, since the FPU only ever wins here when already gated to owner_id==h.
+    // master won: both masters (Snitch and its FPU sequencer) belong to host h.
     assign is_totstack[h] = (tcdm_addr_base_i <= mem_req_chan[h][CacheMem].addr)
                           && (mem_req_chan[h][CacheMem].addr < tcdm_addr_base_i + cachepool_pkg::TotStackSize);
 

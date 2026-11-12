@@ -40,6 +40,7 @@ add_subdirectory(${SNITCH_SOFTWARE_DIR}/snRuntime snRuntime)
 # add_subdirectory(${SPATZ_SOFTWARE_DIR}/spatzBenchmarks spatzBenchmarks)
 
 option(ENABLE_CACHEPOOL_TESTS "Enable CachePool tests for spatz" OFF)
+option(RLC_ALL "Build all RLC tests, not only the CI regressions" OFF)
 if (ENABLE_CACHEPOOL_TESTS)
     message(STATUS "Adding CachePool tests")
     # Shared macros (add_spatz_test_*) and common libraries (benchmark,

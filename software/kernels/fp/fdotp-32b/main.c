@@ -70,6 +70,8 @@ static volatile uint32_t dotp_slot[MAX_CORES]
     __attribute__((section(".data"))) = {[0 ... MAX_CORES - 1] = SLOT_EMPTY};
 // Partials of the two-level reduction
 static float dotp_part[MAX_CORES] __attribute__((section(".data")));
+// VLEN in bytes as seen under the Spatz lock, published by each core's primary hart
+static uint32_t vlenb_locked[MAX_CORES] __attribute__((section(".data")));
 
 static int num_errors __attribute__((section(".data")));
 
@@ -148,10 +150,16 @@ int main() {
   const uint32_t cid            = snrt_cluster_vpu_idx();
   const int      is_primary     = snrt_cluster_is_primary();
 
-  // VLEN in floats
-  uint32_t vlenb;
-  asm volatile("csrr %0, vlenb" : "=r"(vlenb));
-  const uint32_t vlen_elem = vlenb / sizeof(float);
+  // VLEN in floats. A dual-thread Spatz halves VLEN while its lock is free, so the primary hart
+  // takes the lock it runs the kernel with before reading vlenb, and shares it with the other hart
+  // (which cannot offload while the lock is held).
+  if (is_primary) {
+    spatz_lock_acquire();
+    asm volatile("csrr %0, vlenb" : "=r"(vlenb_locked[cid]));
+    snrt_fence_snitch();
+  }
+  snrt_cluster_hw_barrier();
+  const uint32_t vlen_elem = vlenb_locked[cid] / sizeof(float);
 
   const uint32_t elem_per_core = dotp_l.M / num_cores;
 
@@ -166,6 +174,8 @@ int main() {
     if (is_primary && cid == 0)
       printf("FATAL: M %u does not split into %u cores x %u elements\n",
              dotp_l.M, num_cores, elem_per_round);
+    if (is_primary)
+      spatz_lock_release();
     return -2;
   }
 
@@ -206,9 +216,8 @@ int main() {
              lmul, unroll, DOTP_VRED, DOTP_XRED, L1D_PART, L1D_FOLD,
              xbar_offset, elem_per_round, offset, rounds);
 
-    // LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
+    // The lock taken above: LOCKED mode gives host 0 unarbitrated Spatz access; FREE mode would
     // round-robin-arbitrate with host 1 even though it never issues here.
-    spatz_lock_acquire();
 
     for (uint32_t iter = 0; iter < MEASURE_ITER; iter++) {
       if (cid == 0)

@@ -371,6 +371,68 @@ module cachepool_cc
   dreq_t fp_lsu_mem_req;
   drsp_t fp_lsu_mem_rsp;
 
+  // The core's FPU sequencer (scalar FP registers, FP loads/stores) sits between the offload
+  // demux and Spatz; Spatz only reports its vector memory ops
+  acc_issue_req_t spatz_issue_req;
+  acc_issue_rsp_t spatz_issue_rsp;
+  logic           spatz_issue_valid, spatz_issue_ready;
+  acc_rsp_t       spatz_rsp;
+  logic           spatz_rsp_valid, spatz_rsp_ready;
+  logic [1:0]     spatz_vlsu_fin, spatz_vlsu_str_fin;
+  logic           fp_lsu_finished, fp_lsu_str_finished;
+
+  if (spatz_pkg::FPU) begin : gen_fpu_sequencer
+    spatz_fpu_sequencer #(
+      .dreq_t             ( dreq_t                   ),
+      .drsp_t             ( drsp_t                   ),
+      .spatz_issue_req_t  ( acc_issue_req_t          ),
+      .spatz_issue_rsp_t  ( acc_issue_rsp_t          ),
+      .spatz_rsp_t        ( acc_rsp_t                ),
+      .NumOutstandingLoads( NumSpatzOutstandingLoads )
+    ) i_fpu_sequencer (
+      .clk_i,
+      .rst_ni,
+      // Core side
+      .issue_req_i              ( acc_snitch_req        ),
+      .issue_valid_i            ( acc_qvalid            ),
+      .issue_ready_o            ( acc_qready            ),
+      .issue_rsp_o              ( acc_snitch_resp       ),
+      .resp_o                   ( acc_resp              ),
+      .resp_valid_o             ( acc_pvalid            ),
+      .resp_ready_i             ( acc_pready            ),
+      // Spatz side
+      .issue_req_o              ( spatz_issue_req       ),
+      .issue_valid_o            ( spatz_issue_valid     ),
+      .issue_ready_i            ( spatz_issue_ready     ),
+      .issue_rsp_i              ( spatz_issue_rsp       ),
+      .resp_i                   ( spatz_rsp             ),
+      .resp_valid_i             ( spatz_rsp_valid       ),
+      .resp_ready_o             ( spatz_rsp_ready       ),
+      // FP memory interface
+      .fp_lsu_mem_req_o         ( fp_lsu_mem_req        ),
+      .fp_lsu_mem_rsp_i         ( fp_lsu_mem_rsp        ),
+      .fp_lsu_mem_finished_o    ( fp_lsu_finished       ),
+      .fp_lsu_mem_str_finished_o( fp_lsu_str_finished   ),
+      // Spatz VLSU side channel
+      .spatz_mem_finished_i     ( spatz_vlsu_fin[1]     ),
+      .spatz_mem_str_finished_i ( spatz_vlsu_str_fin[1] )
+    );
+  end else begin : gen_no_fpu_sequencer
+    assign spatz_issue_req     = acc_snitch_req;
+    assign spatz_issue_valid   = acc_qvalid;
+    assign acc_qready          = spatz_issue_ready;
+    assign acc_snitch_resp     = spatz_issue_rsp;
+    assign acc_resp            = spatz_rsp;
+    assign acc_pvalid          = spatz_rsp_valid;
+    assign spatz_rsp_ready     = acc_pready;
+    assign fp_lsu_mem_req      = '0;
+    assign fp_lsu_finished     = 1'b0;
+    assign fp_lsu_str_finished = 1'b0;
+  end
+
+  assign spatz_mem_finished     = {spatz_vlsu_fin[1], fp_lsu_finished};
+  assign spatz_mem_str_finished = {spatz_vlsu_str_fin[1], fp_lsu_str_finished};
+
   tcdm_req_chan_t [NumMemPortsPerSpatz-1:0] spatz_mem_req;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_req_valid;
   logic           [NumMemPortsPerSpatz-1:0] spatz_mem_req_ready;
@@ -393,7 +455,8 @@ module cachepool_cc
     .spatz_mem_rsp_t    (tcdm_rsp_chan_t         ),
     .spatz_issue_req_t  (acc_issue_req_t         ),
     .spatz_issue_rsp_t  (acc_issue_rsp_t         ),
-    .spatz_rsp_t        (acc_rsp_t               )
+    .spatz_rsp_t        (acc_rsp_t               ),
+    .ExtFpuSequencer    (1'b1                    )
   ) i_spatz (
     .clk_i                   (clk_i                 ),
     .rst_ni                  (rst_ni                ),
@@ -402,13 +465,13 @@ module cachepool_cc
     // Single hart: always the single-thread VRF layout
     .dual_mode_i             (1'b0                  ),
     .issue_thid_i            (1'b0                  ),
-    .issue_valid_i           (acc_qvalid            ),
-    .issue_ready_o           (acc_qready            ),
-    .issue_req_i             (acc_snitch_req        ),
-    .issue_rsp_o             (acc_snitch_resp       ),
-    .rsp_valid_o             (acc_pvalid            ),
-    .rsp_ready_i             (acc_pready            ),
-    .rsp_o                   (acc_resp              ),
+    .issue_valid_i           (spatz_issue_valid     ),
+    .issue_ready_o           (spatz_issue_ready     ),
+    .issue_req_i             (spatz_issue_req       ),
+    .issue_rsp_o             (spatz_issue_rsp       ),
+    .rsp_valid_o             (spatz_rsp_valid       ),
+    .rsp_ready_i             (spatz_rsp_ready       ),
+    .rsp_o                   (spatz_rsp             ),
     .rsp_thid_o              (/* Unused */          ),
     .spatz_mem_req_o         (spatz_mem_req         ),
     .spatz_mem_req_valid_o   (spatz_mem_req_valid   ),
@@ -416,12 +479,12 @@ module cachepool_cc
     .spatz_mem_rsp_i         (spatz_mem_rsp         ),
     .spatz_mem_rsp_valid_i   (spatz_mem_rsp_valid   ),
     .spatz_mem_rsp_ready_o   (spatz_mem_rsp_ready   ),
-    .spatz_mem_finished_o    (spatz_mem_finished    ),
-    .spatz_mem_str_finished_o(spatz_mem_str_finished),
+    .spatz_mem_finished_o    (spatz_vlsu_fin        ),
+    .spatz_mem_str_finished_o(spatz_vlsu_str_fin    ),
     .spatz_mem_fin_thid_o    (/* Unused */          ),
     .spatz_st_rsp_done_o     (spatz_st_rsp_done     ),
-    .fp_lsu_mem_req_o        (fp_lsu_mem_req        ),
-    .fp_lsu_mem_rsp_i        (fp_lsu_mem_rsp        ),
+    .fp_lsu_mem_req_o        (/* Unused */          ),
+    .fp_lsu_mem_rsp_i        ('0                    ),
     .fpu_rnd_mode_i          (spatz_acc_req.rnd_mode),
     .fpu_fmt_mode_i          (spatz_acc_req.fmt_mode),
     .fpu_status_o            (fpu_status            )

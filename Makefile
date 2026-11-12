@@ -418,6 +418,9 @@ endif
 
 ENABLE_CACHEPOOL_TESTS ?= 1
 
+# Build every RLC test (software/rlc); by default only the CI regressions are built
+rlc_all ?= 0
+
 # Bender targets
 VSIM_BENDER += -t test -t rtl -t simulation -t spatz -t cachepool_test -t cachepool
 
@@ -509,6 +512,7 @@ SW_CMAKE_FLAGS = \
   -DBUILD_TESTS=ON \
   -DNUM_SCALAR_PER_CORE=$(num_scalar_per_core) \
   -DSPATZ_DUAL_THREAD=$(spatz_dual_thread) \
+  -DRLC_ALL=$(rlc_all) \
   -DL2_CHANNEL=$(l2_channel) \
   -DL2_INTERLEAVE=$(l2_interleave) \
   -DL2_BANK_WIDTH=$(l2_bank_width) \

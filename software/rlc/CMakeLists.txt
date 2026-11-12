@@ -13,12 +13,65 @@
 # Binaries of this group are named rlc-<name> instead of test-<name>.
 set(SNITCH_TEST_BIN_PREFIX "rlc-")
 
+# ---------------------------------------------------------------------------
+# CI regressions (.gitlab-ci.yml): always built.
+# ---------------------------------------------------------------------------
+add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)
+
+# Segmentation under test. The K4/G8192 payload check passed on RTL but
+# reported segments=0: four 1360 B SDUs fit inside one 8192 B grant, so the
+# whole SI / SO / partial-cursor / cross-grant-so_next path never ran. At
+# G1024 a 1360 B SDU cannot fit any grant whole, so every SDU must split and
+# so_next chaining becomes the thing under test.
+add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
+                multi_producer_single_consumer_double_linked_list/main.c)
+target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
+                      benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk PUBLIC
+    DATAHEADER="data/data_1_1350_4.h"
+    PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
+    RLC_TB_MODE=1 RLC_GRANT_BYTES=1024 RLC_SELF_CHECK=1)
+
+# ---------------------------------------------------------------------------
+# Uplink (RLC_UL_MODE=1): receive -> scan -> reassemble -> deliver.
+#
+# The consumer set runs uplink slots instead of downlink assembly, so these are
+# a separate ELF rather than a flag on the DL tests. The C1/C2/C3 ladder is the
+# measurement that matters: the scan is serial by construction (an AMD header
+# is 3 or 5 bytes depending on SI, so PDU i+1's offset needs PDU i parsed),
+# reassembly is not, and the ratio bounds what more cores can buy. Consumers
+# stay inside one tile because the TB arena is above the l1d_addr boundary and
+# therefore tile-private.
+# ---------------------------------------------------------------------------
+macro(add_rlc_ul name source dataheader prod cons exec tc tb suffix)
+  add_snitch_test(${name}_P${prod}_C${cons}_ul_${suffix} ${source})
+  target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix}
+                        benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
+  target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix} PUBLIC
+      DATAHEADER="${dataheader}"
+      PRODUCER_CORE_NUM=${prod} CONSUMER_CORE_NUM=${cons}
+      RLC_UL_MODE=1 RLC_UL_EXEC=${exec} RLC_UL_TC=${tc} RLC_UL_TB_BYTES=${tb}
+      RLC_SELF_CHECK=1)
+endmacro()
+
+# CI regression size: tc1_smallblk cut to 256 SDUs (~20 blocks, still segmenting at every block
+# boundary), so the uplink path and its end-of-run check run in a few minutes on RTL.
+add_rlc_ul(multi_producer_single_consumer_double_linked_list
+           multi_producer_single_consumer_double_linked_list/main.c
+           "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 ci)
+target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci PUBLIC
+    RLC_UL_SDUS=256)
+
+# The other RLC tests are only built with RLC_ALL (make sw rlc_all=1).
+if (NOT RLC_ALL)
+  return()
+endif()
+
 # add_snitch_test(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 1000)
 # add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 2044 100)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 300)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 100)
-add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 1 1350 10)
 # TC2 multi-user peak rate: 48 UEs, 800 B packets (data_48_800_*.h)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 300)
 add_spatz_test_threeParam(multi_producer_single_consumer_double_linked_list multi_producer_single_consumer_double_linked_list/main.c 48 800 1000)
@@ -333,20 +386,6 @@ target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_p
     PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
     RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1)
 
-# Segmentation under test. The K4/G8192 payload check passed on RTL but
-# reported segments=0: four 1360 B SDUs fit inside one 8192 B grant, so the
-# whole SI / SO / partial-cursor / cross-grant-so_next path never ran. At
-# G1024 a 1360 B SDU cannot fit any grant whole, so every SDU must split and
-# so_next chaining becomes the thing under test.
-add_snitch_test(multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
-                multi_producer_single_consumer_double_linked_list/main.c)
-target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk
-                      benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_M1_N1350_K4_P2_C2_am_G1024_tbchk PUBLIC
-    DATAHEADER="data/data_1_1350_4.h"
-    PRODUCER_CORE_NUM=2 CONSUMER_CORE_NUM=2
-    RLC_TB_MODE=1 RLC_GRANT_BYTES=1024 RLC_SELF_CHECK=1)
-
 # Mirror arm: can a PASSING rung be BROKEN by layout? The M16 arm tested only
 # whether a failure can be rescued. For an address-dependent corruption those
 # are different questions, and only this one probes whether M32's success is a
@@ -483,28 +522,6 @@ foreach(M 8 16 24 32)
       RLC_TB_MODE=1 RLC_GRANT_BYTES=8192 RLC_SELF_CHECK=1 RLC_DL_COPY_SCALAR=1)
 endforeach()
 
-# ---------------------------------------------------------------------------
-# Uplink (RLC_UL_MODE=1): receive -> scan -> reassemble -> deliver.
-#
-# The consumer set runs uplink slots instead of downlink assembly, so these are
-# a separate ELF rather than a flag on the DL tests. The C1/C2/C3 ladder is the
-# measurement that matters: the scan is serial by construction (an AMD header
-# is 3 or 5 bytes depending on SI, so PDU i+1's offset needs PDU i parsed),
-# reassembly is not, and the ratio bounds what more cores can buy. Consumers
-# stay inside one tile because the TB arena is above the l1d_addr boundary and
-# therefore tile-private.
-# ---------------------------------------------------------------------------
-macro(add_rlc_ul name source dataheader prod cons exec tc tb suffix)
-  add_snitch_test(${name}_P${prod}_C${cons}_ul_${suffix} ${source})
-  target_link_libraries(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix}
-                        benchmark spin_lock mcs_lock ${SNITCH_RUNTIME})
-  target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}${name}_P${prod}_C${cons}_ul_${suffix} PUBLIC
-      DATAHEADER="${dataheader}"
-      PRODUCER_CORE_NUM=${prod} CONSUMER_CORE_NUM=${cons}
-      RLC_UL_MODE=1 RLC_UL_EXEC=${exec} RLC_UL_TC=${tc} RLC_UL_TB_BYTES=${tb}
-      RLC_SELF_CHECK=1)
-endmacro()
-
 # TC1 consumer ladder at the DOCUMENTED uplink profile: 160 B PDUs, 1 Gbps,
 # 400 slots/s -> 312,500 B and 1953 SDUs per slot. Each 8 KB block carries ~49
 # PDUs and segments at the boundary, so the serial header walk is measured on
@@ -530,14 +547,6 @@ add_rlc_ul(multi_producer_single_consumer_double_linked_list
 add_rlc_ul(multi_producer_single_consumer_double_linked_list
            multi_producer_single_consumer_double_linked_list/main.c
            "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 tc1_smallblk)
-
-# CI regression size: tc1_smallblk cut to 256 SDUs (~20 blocks, still segmenting at every block
-# boundary), so the uplink path and its end-of-run check run in a few minutes on RTL.
-add_rlc_ul(multi_producer_single_consumer_double_linked_list
-           multi_producer_single_consumer_double_linked_list/main.c
-           "data/data_1_1350_100_p1c3.h" 1 3 0 1 2048 ci)
-target_compile_definitions(${SNITCH_TEST_BIN_PREFIX}${SNITCH_TEST_PREFIX}multi_producer_single_consumer_double_linked_list_P1_C3_ul_ci PUBLIC
-    RLC_UL_SDUS=256)
 
 # Same cases with the bitmap work queue (RLC_AM_WORKQ=1), so the scan-free path
 # can be diffed against the plain one rather than replacing it.
